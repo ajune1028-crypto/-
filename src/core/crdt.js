@@ -44,7 +44,10 @@ export class Clock {
 
   see(id) {
     if (!validId(id)) return;
-    const n = parse(id)[0];
+    this.atLeast(parse(id)[0]);
+  }
+
+  atLeast(n) {
     if (n > this.n) this.n = n;
   }
 }
@@ -60,7 +63,9 @@ export class Sheet {
     this.nodes = new Map([[ROOT, this.head]]);
     this.seen = new Set();
     this.waiting = new Map();
+    this.ready = [];
     this.pendingCount = 0;
+    this.maxN = 0;
     this.mix = new Map();
     this.unknown = [];
     this.cache = null;
@@ -76,6 +81,20 @@ export class Sheet {
   }
 
   apply(op) {
+    const result = this.step(op);
+    // Ops that were waiting for a char this op created. A queue, not recursion:
+    // a long paste delivered backwards would otherwise overflow the stack.
+    while (this.ready.length) {
+      const list = this.waiting.get(this.ready.pop());
+      if (!list) continue;
+      this.waiting.delete(list.key);
+      this.pendingCount -= list.length;
+      for (const waiting of list) this.step(waiting);
+    }
+    return result;
+  }
+
+  step(op) {
     if (!op || typeof op !== "object" || !validId(op.id)) return this.setAside(op);
     if (this.seen.has(op.id)) return "dup";
     switch (op.t) {
@@ -127,7 +146,7 @@ export class Sheet {
     prev.next = node;
     this.nodes.set(op.id, node);
     this.done(op);
-    this.release(op.id);
+    this.ready.push(op.id);
     return "applied";
   }
 
@@ -142,22 +161,20 @@ export class Sheet {
   done(op) {
     this.seen.add(op.id);
     this.version++;
+    const n = parse(op.id)[0];
+    if (n > this.maxN) this.maxN = n;
   }
 
   wait(missing, op) {
-    const list = this.waiting.get(missing);
-    if (list) list.push(op);
-    else this.waiting.set(missing, [op]);
+    let list = this.waiting.get(missing);
+    if (!list) {
+      list = [];
+      list.key = missing;
+      this.waiting.set(missing, list);
+    }
+    list.push(op);
     this.pendingCount++;
     return "pending";
-  }
-
-  release(id) {
-    const list = this.waiting.get(id);
-    if (!list) return;
-    this.waiting.delete(id);
-    this.pendingCount -= list.length;
-    for (const op of list) this.apply(op);
   }
 
   setAside(op) {

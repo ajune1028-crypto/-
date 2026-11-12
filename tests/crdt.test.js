@@ -133,3 +133,21 @@ test("random scenarios converge", () => {
     }
   }
 });
+
+test("maxN is the largest counter the sheet has applied and a clock can catch up to it", () => {
+  const s = feed([ins("1@a", ROOT, "a"), ins("9@b", "1@a", "b")]);
+  assert.equal(s.maxN, 9);
+  const c = new Clock("c");
+  c.atLeast(s.maxN);
+  assert.equal(c.next(), "10@c");
+});
+
+test("a long chain delivered backwards does not overflow the stack", () => {
+  const ops = [];
+  let after = ROOT;
+  for (let i = 1; i <= 20000; i++) { ops.push(ins(i + "@a", after, "x")); after = i + "@a"; }
+  const s = new Sheet();
+  for (const op of ops.reverse()) s.apply(op);
+  assert.equal(s.text().length, 20000);
+  assert.equal(s.pendingCount, 0);
+});
