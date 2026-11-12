@@ -15,7 +15,7 @@
   --creative-b: #bccaff;
   --danger: #b3261e;
   --scrim: rgb(31 32 38 / 0.32);
-  --grain-opacity: 0.32;
+  --grain-opacity: 0.6;
   --font: "Gothic A1", "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.9 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
   color-scheme: light;
@@ -36,7 +36,7 @@
     --creative-b: #1f7391;
     --danger: #ff9b92;
     --scrim: rgb(0 0 0 / 0.55);
-    --grain-opacity: 0.4;
+    --grain-opacity: 0.7;
     color-scheme: dark;
   }
 }
@@ -55,11 +55,12 @@
   --creative-b: #1f7391;
   --danger: #ff9b92;
   --scrim: rgb(0 0 0 / 0.55);
-  --grain-opacity: 0.4;
+  --grain-opacity: 0.7;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html {
   height: 100%;
@@ -393,7 +394,7 @@ h1, h2, p { margin: 0; }
     linear-gradient(var(--paper), var(--paper)) padding-box,
     linear-gradient(135deg, var(--frame-a), var(--frame-b)) border-box;
 }
-.layers { position: relative; font-size: 1rem; font-weight: 500; line-height: 1.75; letter-spacing: 0; }
+.layers { position: relative; font-size: 1rem; font-weight: 600; line-height: 1.75; letter-spacing: 0; }
 .draw, .input { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; }
 .draw { min-height: 1.75rem; color: var(--ink); }
 .sheet.today .draw { min-height: 8.75rem; }

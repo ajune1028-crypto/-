@@ -17,6 +17,8 @@ export function makeRuntime({ db = true, room = true, hang = false } = {}) {
     snapshotDelayMs: 0,
     writeDelayMs: 0,
     failWrites: 0,
+    denyWrites: false,
+    full: false,
     writes: 0,
     sent: [],
     store,
@@ -45,6 +47,8 @@ export function makeRuntime({ db = true, room = true, hang = false } = {}) {
         rt.writes++;
         if (rt.writeDelayMs) await new Promise((r) => later(r, rt.writeDelayMs));
         if (rt.failWrites > 0) { rt.failWrites--; throw { code: "unavailable", message: "try again" }; }
+        if (rt.denyWrites) throw { code: "invalid_argument", message: "this viewer may not write" };
+        if (rt.full) throw { code: "quota_exceeded", message: "database is full" };
         if (JSON.stringify(data).length > 256 * 1024) throw { code: "invalid_argument", message: "document too large" };
         const type = store.has(path) ? "modified" : "added";
         store.set(path, clone(data));

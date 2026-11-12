@@ -50,7 +50,7 @@ export async function launch({ port = 9333 } = {}) {
     socket.send(JSON.stringify({ id, method, params, sessionId }));
   });
 
-  async function page(target, { width = 360, height = 760, dark = false, reducedMotion = false } = {}) {
+  async function page(target, { width = 360, height = 760, dark = false, reducedMotion = false, init = null } = {}) {
     const { targetId } = await send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
     const s = (method, params) => send(method, params, sessionId);
@@ -68,6 +68,7 @@ export async function launch({ port = 9333 } = {}) {
       { name: "prefers-reduced-motion", value: reduce ? "reduce" : "no-preference" },
     ] });
     await media(dark, reducedMotion);
+    if (init) await s("Page.addScriptToEvaluateOnNewDocument", { source: init });
 
     const evaluate = async (expression) => {
       const r = await s("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true });

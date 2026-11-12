@@ -533,3 +533,163 @@ scenario("overflow: a very long unbroken string wraps and never widens the page"
     if (dark) await a.shot(out("room-dark.png"));
   }
 });
+
+// ---- design and error states -----------------------------------------------------
+
+import { contrast, memberColor, INK, PAPER } from "../src/core/paint.js";
+
+const hex = (rgb) => "#" + rgb.match(/\d+/g).slice(0, 3).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
+
+scenario("contrast: ink, muted text and all eight colours read on the paper, light and dark", async ({ open }) => {
+  for (const dark of [false, true]) {
+    const theme = dark ? "dark" : "light";
+    const [a] = await together(open, [], { dark });
+    await focusEnd(a);
+    await a.type("글자색 확인");
+    await a.waitFor(`${TODAY}.querySelector(".draw .w")`);
+    const css = await a.eval(`(() => { const cs = getComputedStyle(document.documentElement); const probe = (v) => { const e = document.createElement("i"); e.style.color = v; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; };
+      return { paper: probe(cs.getPropertyValue("--paper")), ink: probe(cs.getPropertyValue("--ink")), muted: probe(cs.getPropertyValue("--muted")),
+        word: getComputedStyle(${TODAY}.querySelector(".draw .w")).color, stamp: getComputedStyle(${TODAY}.querySelector(".stamp")).color, drawInk: getComputedStyle(${TODAY}.querySelector(".draw")).color }; })()`);
+    assert.equal(hex(css.paper), PAPER[theme], "the stylesheet and the colour rules agree on the paper");
+    assert.equal(hex(css.ink), INK[theme], "and on the ink");
+    assert.equal(hex(css.word), memberColor(0, theme));
+    assert.equal(hex(css.drawInk), INK[theme]);
+    for (const [name, value] of Object.entries({ ink: css.ink, muted: css.muted, word: css.word, stamp: css.stamp })) {
+      assert.ok(contrast(hex(value), hex(css.paper)) >= 4.5, `${theme} ${name} ${contrast(hex(value), hex(css.paper)).toFixed(2)}`);
+    }
+    await click(a, "#room-settings");
+    const swatches = await a.eval(`[...document.querySelectorAll(".swatch")].map((s) => getComputedStyle(s).backgroundColor)`);
+    assert.equal(swatches.length, 8);
+    swatches.forEach((c, i) => assert.ok(contrast(hex(c), hex(css.paper)) >= 4.5, `${theme} colour ${i}`));
+  }
+});
+
+scenario("motion: the wheel turns once when a third writer joins a word, and not at all under reduced motion", async ({ open }) => {
+  for (const reducedMotion of [false, true]) {
+    const [a, b, c] = await together(open, ["나래", "다온"], { reducedMotion });
+    await focusEnd(a);
+    await a.type("가");
+    await sameOnAll([a, b, c], "가");
+    await focusEnd(b);
+    await b.type("나");
+    await sameOnAll([a, b, c], "가나");
+    await focusEnd(c);
+    await c.type("다");
+    await a.waitFor(`${TODAY}.querySelector(".draw .w").dataset.paint === "wheel"`);
+    assert.equal(await a.eval(`${TODAY}.querySelector(".draw .w").classList.contains("spin")`), !reducedMotion);
+    await a.reload();
+    await a.waitFor(`window.__app && window.__app.booted && ${TODAY} && ${TODAY}.querySelector(".draw .w")`);
+    assert.equal(await a.eval(`${TODAY}.querySelector(".draw .w").classList.contains("spin")`), false, "a wheel that was already there does not turn on load");
+  }
+});
+
+scenario("read-only: when writing is refused the tools hide and the page says so", async ({ open }) => {
+  const [a] = await together(open, []);
+  await focusEnd(a);
+  await a.type("쓸 수 있을 때 쓴 글");
+  await a.eval(`(() => { window.__app.transport.readOnly = true; window.__app.session.emit("status", "offline"); return true; })()`);
+  await a.waitFor(`document.querySelector("#banner").textContent === "보기만 할 수 있어요"`);
+  assert.equal(await a.eval(`getComputedStyle(document.querySelector(".toolbar")).display`), "none");
+  assert.equal(await a.eval(`${TODAY}.querySelector("textarea").readOnly`), true);
+  assert.equal(await drawn(a), "쓸 수 있을 때 쓴 글");
+  await a.eval(`(() => { window.__app.transport.readOnly = false; window.__app.session.emit("status", "online"); return true; })()`);
+  await a.waitFor(`document.querySelector("#banner").hidden && !${TODAY}.querySelector("textarea").readOnly`);
+});
+
+scenario("slow start: while nothing answers the home says 아직 연결 중 and still works", async ({ open }) => {
+  const page = await open({ init: "window.claude = { use: () => new Promise(() => {}) };" });
+  await page.waitFor(`document.querySelector("#connecting")?.textContent === "아직 연결 중"`, 4000);
+  await click(page, "#home-settings");
+  await page.waitFor(`document.querySelector('[data-theme-choice="dark"]')`);
+  await click(page, '[data-theme-choice="dark"]');
+  assert.equal(await page.eval("document.documentElement.dataset.theme"), "dark");
+});
+
+scenario("no store: the page says other devices cannot connect and works on its own", async ({ open }) => {
+  const page = await open({ init: "window.claude = { use: () => Promise.resolve(null) };" });
+  await page.waitFor(`document.querySelector("#notice")?.textContent === "이 화면에서는 다른 기기와 연결되지 않아요"`);
+  await createRoom(page);
+  await focusEnd(page);
+  await page.type("혼자 쓰기");
+  await sameOnAll([page], "혼자 쓰기");
+});
+
+scenario("new version: an op this app does not know shows the refresh notice", async ({ open }) => {
+  const [a] = await together(open, []);
+  await a.eval(`window.__app.session.receive("s:" + ${TODAY}.dataset.day, [{ t: "sticker", id: "999999@zzzzzz", x: 1 }])`);
+  await a.waitFor(`document.querySelector("#banner").textContent === "새 버전이 있어요. 새로고침해 주세요"`);
+  await focusEnd(a);
+  await a.type("그래도 쓸 수 있어요");
+  await sameOnAll([a], "그래도 쓸 수 있어요");
+});
+
+scenario("diagnostics: the panel names the transport, what is unsent, and the version", async ({ open }) => {
+  const [a] = await together(open, []);
+  await click(a, "#room-settings");
+  const facts = await a.eval(`Object.fromEntries([...document.querySelectorAll("#diag dt")].map((dt) => [dt.textContent, dt.nextElementSibling.textContent]))`);
+  assert.equal(facts["전송 방식"], "local");
+  assert.equal(facts["아직 못 보낸 기록"], "0");
+  assert.equal(facts["버전"], await a.eval("window.__app.version"));
+  assert.equal(facts["마지막 오류"], "없음");
+});
+
+scenario("wide screen: the column is centred and scaled to 1.4", async ({ open, out }) => {
+  const page = await open({ width: 1280, height: 800 });
+  await createRoom(page);
+  await focusEnd(page);
+  await page.type("넓은 화면에서도 가운데 종이 한 장");
+  const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); return { left: b.left, width: b.width, height: b.height, scroll: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(${TODAY}.querySelector(".draw")).fontSize) }; })()`);
+  assert.ok(Math.abs(r.width - 504) <= 1 && Math.abs(r.left - 388) <= 1, JSON.stringify(r));
+  assert.ok(Math.abs(r.font - 22.4) < 0.1 && r.height === 800 && r.scroll <= 1280, JSON.stringify(r));
+  await page.shot(out("room-wide.png"));
+});
+
+scenario("grain: the colour fields carry visible film grain", async ({ open }) => {
+  const page = await open();
+  await page.waitFor(q("#home"));
+  const g = await page.eval(`(() => { const s = getComputedStyle(document.querySelector('[data-side="daily"]'), "::after"); return { image: s.backgroundImage.slice(0, 30), opacity: Number(s.opacity), blend: s.mixBlendMode }; })()`);
+  assert.match(g.image, /^url\("data:image\/svg\+xml/);
+  assert.ok(g.opacity >= 0.5, JSON.stringify(g));
+});
+
+scenario("narrow screen: at 320 wide the column shrinks to fit and nothing scrolls sideways", async ({ open }) => {
+  const page = await open({ width: 320, height: 640 });
+  await createRoom(page);
+  await focusEnd(page);
+  await page.type("좁은 화면에서도 옆으로 밀리지 않아요");
+  const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); return { left: b.left, width: b.width, scroll: document.documentElement.scrollWidth }; })()`);
+  assert.ok(Math.abs(r.width - 320) <= 1 && Math.abs(r.left) <= 1 && r.scroll <= 320, JSON.stringify(r));
+});
+
+scenario("full store: the page says the storage is full and keeps what was typed", async ({ open }) => {
+  const [a] = await together(open, []);
+  await focusEnd(a);
+  await a.type("가득 찼을 때 쓴 글");
+  await a.eval(`(() => { window.__app.transport.full = true; window.__app.session.emit("status", "offline"); return true; })()`);
+  await a.waitFor(`document.querySelector("#banner").textContent === "저장 공간이 가득 찼어요"`);
+  assert.equal(await drawn(a), "가득 찼을 때 쓴 글");
+  assert.equal(await a.eval(`${TODAY}.querySelector("textarea").readOnly`), false);
+});
+
+scenario("stamp: tapping a time stamp tells who wrote the line and when", async ({ open }) => {
+  const [a] = await together(open, []);
+  await focusEnd(a);
+  await a.type("누가 언제 썼는지");
+  await a.waitFor(q(".sheet.today .stamp"));
+  await click(a, ".sheet.today .stamp");
+  await a.waitFor(q(".toast"));
+  assert.match(await text(a, ".toast"), /^가람 님이 (오전|오후) \d{1,2}:\d{2}에 썼어요$/);
+});
+
+scenario("speed: typing stays quick on a sheet that already holds 10,000 characters", async ({ open }) => {
+  const [a] = await together(open, []);
+  await writeAt(a, "가나다라 마바사 아자차카 타파하 ".repeat(588) + "\n".repeat(8), Date.now());
+  await a.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().length >= 10000 && ${TODAY}.querySelector("textarea").value.length >= 10000`);
+  await focusEnd(a);
+  const ms = await a.eval(`(async () => { const ta = ${TODAY}.querySelector("textarea"); const times = [];
+    for (let i = 0; i < 20; i++) { const t0 = performance.now(); document.execCommand("insertText", false, "가"); times.push(performance.now() - t0); await new Promise((r) => setTimeout(r, 0)); }
+    times.sort((x, y) => x - y); return times[10]; })()`);
+  console.log("     median keystroke " + ms.toFixed(1) + " ms");
+  assert.ok(ms < 50, "median keystroke took " + ms.toFixed(1) + " ms");
+  assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).text().length`), await a.eval(`${TODAY}.querySelector("textarea").value.length`));
+});

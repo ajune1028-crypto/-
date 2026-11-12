@@ -87,7 +87,15 @@ export function showRoom(app, roomId) {
       status.dataset.status = session.status;
       status.setAttribute("aria-label", session.status === "online" ? "연결됨" : "연결이 끊겼어요. 쓴 글은 기기에 남아 있어요");
     };
-    const say = (text) => { banner.textContent = text; banner.hidden = !text; };
+    const notices = { readOnly: false, unknown: session.room.unknown.length > 0 };
+    const drawBanner = () => {
+      notices.readOnly = !!app.transport.readOnly;
+      const text = notices.readOnly ? "보기만 할 수 있어요"
+        : app.transport.full ? "저장 공간이 가득 찼어요"
+        : notices.unknown ? "새 버전이 있어요. 새로고침해 주세요" : "";
+      banner.textContent = text;
+      banner.hidden = !text;
+    };
 
     mount(root, h("div", { class: "room field daily" },
       h("header", { class: "bar" },
@@ -107,12 +115,13 @@ export function showRoom(app, roomId) {
         remember();
       }),
       session.on("peers", drawPeople),
-      session.on("status", drawStatus),
-      session.on("unknown", () => say("새 버전이 있어요. 새로고침해 주세요")),
+      session.on("status", () => { drawStatus(); drawBanner(); }),
+      session.on("sent", drawBanner),
+      session.on("unknown", () => { notices.unknown = true; drawBanner(); }),
       app.events.on("settings", drawPeople),
-      mountTextRoom(body, app, session, { say }),
+      mountTextRoom(body, app, session),
     );
-    if (session.room.unknown.length) say("새 버전이 있어요. 새로고침해 주세요");
+    drawBanner();
   }
 
   function openSettings() {

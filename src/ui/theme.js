@@ -27,9 +27,9 @@ export function onThemeChange(fn) {
   };
 }
 
-/** Everything is sized in rem, so one number scales the whole column: 1 to 1.4. */
+/** Everything is sized in rem, so one number scales the whole 360-wide column: down to 0.8 on narrow screens, up to 1.4 on wide ones. */
 export function fitScale() {
-  const set = () => root.style.setProperty("--k", String(Math.min(1.4, Math.max(1, window.innerWidth / 360))));
+  const set = () => root.style.setProperty("--k", String(Math.min(1.4, Math.max(0.8, window.innerWidth / 360))));
   set();
   window.addEventListener("resize", set);
 }

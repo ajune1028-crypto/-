@@ -160,3 +160,25 @@ test("two sessions over the trial transport converge, and a failed write goes of
   assert.deepEqual(statuses, ["offline", "online"]);
   assert.equal(ta.info().kind, "claude");
 });
+
+test("a viewer who may not write is reported as read-only, and recovers when a write succeeds", async (t) => {
+  const { rt, ta, a } = await pair(t);
+  rt.denyWrites = true;
+  await assert.rejects(a.append(DOC, typed("가")));
+  assert.equal(ta.info().db, "read-only");
+  assert.equal(ta.readOnly, true);
+  rt.denyWrites = false;
+  await a.append(DOC, typed("가"));
+  assert.equal(ta.info().db, "ok");
+});
+
+test("a full store is reported as full until a write goes through again", async (t) => {
+  const { rt, ta, a } = await pair(t);
+  rt.full = true;
+  await assert.rejects(a.append(DOC, typed("가")));
+  assert.equal(ta.full, true);
+  assert.equal(ta.info().db, "full");
+  rt.full = false;
+  await a.append(DOC, typed("가"));
+  assert.equal(ta.full, false);
+});

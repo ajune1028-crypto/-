@@ -59,6 +59,7 @@ export class ClaudeTransport {
     this.channels = new Set();
     this.lastError = null;
     this.readOnly = false;
+    this.full = false;
   }
 
   async createRoom({ id, kind, name }) {
@@ -86,7 +87,7 @@ export class ClaudeTransport {
     const joined = channels.filter((c) => c.named);
     return {
       kind: "claude",
-      db: this.readOnly ? "read-only" : "ok",
+      db: this.readOnly ? "read-only" : this.full ? "full" : "ok",
       live: !this.live || !joined.length ? "none" : joined.every((c) => c.connected) ? "connected" : "reconnecting",
       peers: Math.max(0, ...channels.map((c) => c.peerList().length)),
       pending: channels.reduce((n, c) => n + c.queued(), 0),
@@ -259,6 +260,7 @@ class ClaudeChannel {
         } catch (err) {
           this.transport.lastError = describe(err);
           if (err?.code === "invalid_argument") this.transport.readOnly = true;
+          if (err?.code === "quota_exceeded") this.transport.full = true;
           for (const entry of batch) entry.reject(err instanceof Error ? err : new Error(describe(err)));
         }
       }
@@ -288,6 +290,7 @@ class ClaudeChannel {
       const id = docId + "~" + this.replica + "~" + writer.chunk;
       await this.logs.doc(id).set({ d: docId, r: this.replica, c: writer.chunk, ops: next });
       this.transport.readOnly = false;
+      this.transport.full = false;
       for (let j = i; j < i + take; j++) writer.ids.add(fresh[j].id);
       writer.written = next;
       writer.size = size;

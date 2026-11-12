@@ -8,14 +8,15 @@ import { cmpId } from "./crdt.js";
 
 /** Eight member colours as hue and chroma; lightness comes from the theme. */
 export const PALETTE = [
+  // Ordered so that the first people to join get colours far apart.
   { key: "coral", h: 25, c: 0.17 },
-  { key: "orange", h: 55, c: 0.15 },
-  { key: "olive", h: 100, c: 0.13 },
-  { key: "green", h: 150, c: 0.14 },
-  { key: "teal", h: 200, c: 0.12 },
   { key: "blue", h: 255, c: 0.16 },
+  { key: "green", h: 150, c: 0.14 },
   { key: "violet", h: 300, c: 0.17 },
+  { key: "orange", h: 55, c: 0.15 },
+  { key: "teal", h: 200, c: 0.12 },
   { key: "pink", h: 345, c: 0.17 },
+  { key: "olive", h: 100, c: 0.13 },
 ];
 
 export const INK = { light: "#1f2026", dark: "#f1efe9" };
@@ -202,7 +203,7 @@ export function paintFor(word, left, right, o) {
 const SPLIT_SOFT = 8; // percent of the height over which top blends into bottom
 const SEEP_REACH = 46; // percent of the width a neighbour's colour reaches
 
-function background(paint) {
+function background(paint, aspect) {
   if (paint.k === "solid") return `linear-gradient(${paint.c}, ${paint.c})`;
   if (paint.k === "split") {
     const a = 50 - SPLIT_SOFT;
@@ -211,22 +212,39 @@ function background(paint) {
   }
   // Wheel: equal sectors, the first writer centred at 12 o'clock, clockwise.
   // Each colour holds for half its sector and blends into the next.
+  // A word is wider than it is tall, and equal angles would leave the top and
+  // bottom colours a sliver. The angles are stretched by the word's shape, so
+  // that the areas stay as fair as they are on a square.
   const sector = 360 / paint.cs.length;
-  const stops = paint.cs.flatMap((c, i) => [`${c} ${round(i * sector)}deg`, `${c} ${round(i * sector + sector / 2)}deg`]);
-  stops.push(`${paint.cs[0]} 360deg`);
-  return `conic-gradient(from calc(var(--spin, 0deg) - ${round(sector / 4)}deg) at 50% 50%, ${stops.join(", ")})`;
+  const hold = sector / 4;
+  const at = (angle) => round(stretch(angle, aspect));
+  const stops = [`${paint.cs[0]} 0deg`, `${paint.cs[0]} ${at(hold)}deg`];
+  for (let i = 1; i < paint.cs.length; i++) stops.push(`${paint.cs[i]} ${at(i * sector - hold)}deg`, `${paint.cs[i]} ${at(i * sector + hold)}deg`);
+  stops.push(`${paint.cs[0]} ${at(360 - hold)}deg`, `${paint.cs[0]} 360deg`);
+  return `conic-gradient(from var(--spin, 0deg) at 50% 50%, ${stops.join(", ")})`;
+}
+
+/** The angle (clockwise from 12 o'clock) that a square's angle becomes on a box `aspect` times as wide as tall. */
+function stretch(angle, aspect) {
+  if (aspect === 1 || angle % 90 === 0) return angle;
+  const rad = (angle * Math.PI) / 180;
+  const out = (Math.atan2(aspect * Math.sin(rad), Math.cos(rad)) * 180) / Math.PI;
+  return out < 0 ? out + 360 : out;
 }
 
 const round = (n) => Math.round(n * 100) / 100;
 
-/** CSS for a paint: `color` for flat colours, `background` (clipped to the text) for the rest. */
-export function paintCss(paint) {
+/**
+ * CSS for a paint: `color` for flat colours, `background` (clipped to the text)
+ * for the rest. `aspect` is the word's width divided by its height.
+ */
+export function paintCss(paint, aspect = 1) {
   if (paint.k === "ink") return {};
   if (paint.k === "solid") return { color: paint.c };
-  if (paint.k !== "seep") return { background: background(paint) };
+  if (paint.k !== "seep") return { background: background(paint, aspect) };
   const layers = [];
   if (paint.l) layers.push(`linear-gradient(to right, ${paint.l} 0%, ${paint.l}00 ${SEEP_REACH}%)`);
   if (paint.r) layers.push(`linear-gradient(to left, ${paint.r} 0%, ${paint.r}00 ${SEEP_REACH}%)`);
-  layers.push(background(paint.base));
+  layers.push(background(paint.base, aspect));
   return { background: layers.join(", ") };
 }

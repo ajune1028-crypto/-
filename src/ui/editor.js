@@ -34,6 +34,7 @@ export class SheetEditor {
     this.lineEls = [];
     this.authorCounts = new Map();
     this.caretEls = new Map();
+    this.unshaped = [];
     this.lastTap = null;
 
     this.draw = h("div", { class: "draw", "aria-hidden": "true" });
@@ -166,13 +167,27 @@ export class SheetEditor {
     this.lines = lines;
     this.lineKeys = lines.map((l) => l.key);
     this.lineEls = lines.map((l) => l.el);
-    const same = this.draw.children.length === lines.length && lines.every((l, i) => this.draw.children[i] === l.el);
-    if (!same) this.draw.replaceChildren(...this.lineEls);
+    // Touch only the lines that changed; re-inserting a long unchanged line makes the browser lay it out again.
+    const kids = this.draw.children;
+    for (let i = 0; i < lines.length; i++) {
+      if (kids[i] !== lines[i].el) this.draw.insertBefore(lines[i].el, kids[i] || null);
+    }
+    while (kids.length > lines.length) kids[kids.length - 1].remove();
+    this.shapeWheels();
 
     const zone = this.zone();
     const labels = lineStamps(lines, zone, this.day);
     this.stamps.replaceChildren(...labels.flatMap((label, i) => (label ? [this.stamp(label, lines[i], zone)] : [])));
     this.drawCarets();
+  }
+
+  /** A wheel is fitted to its word's shape, which is only known once the word is on the page. */
+  shapeWheels() {
+    for (const span of this.unshaped) {
+      const box = span.getClientRects()[0];
+      if (box && box.height > 0) span.style.backgroundImage = paintCss(span.paint, box.width / box.height).background;
+    }
+    this.unshaped = [];
   }
 
   buildLine(text, lineStart, words, paints) {
@@ -197,6 +212,10 @@ export class SheetEditor {
       if (css.background) {
         span.classList.add("grad");
         span.style.backgroundImage = css.background;
+        if (paint.k === "wheel" || paint.base?.k === "wheel") {
+          span.paint = paint;
+          this.unshaped.push(span);
+        }
       }
       const before = this.authorCounts.get(word.anchor);
       if (paint.k === "wheel" && before !== undefined && before < 3 && !reducedMotion()) span.classList.add("spin");

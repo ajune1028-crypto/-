@@ -118,10 +118,44 @@ test("paintCss: ink is empty, solid a colour, split vertical, wheel conic, seep 
   const split = paintCss({ k: "split", top: "#aa0000", bottom: "#0000aa" }).background;
   assert.match(split, /^linear-gradient\(to bottom, #aa0000 0%, #aa0000 \d+%, #0000aa \d+%, #0000aa 100%\)$/);
   const wheel = paintCss({ k: "wheel", cs: ["#aa0000", "#0000aa", "#00aa00"] }).background;
-  assert.match(wheel, /^conic-gradient\(from calc\(var\(--spin, 0deg\) - 30deg\) at 50% 50%/);
-  assert.equal(wheel.match(/#aa0000/g).length, 3);
-  assert.equal(wheel.match(/#0000aa/g).length, 2);
-  assert.match(wheel, /#aa0000 360deg\)$/);
+  assert.equal(wheel, "conic-gradient(from var(--spin, 0deg) at 50% 50%, #aa0000 0deg, #aa0000 30deg, #0000aa 90deg, #0000aa 150deg, #00aa00 210deg, #00aa00 270deg, #aa0000 330deg, #aa0000 360deg)");
   const seep = paintCss({ k: "seep", base: { k: "solid", c: "#aa0000" }, l: "#0000aa", r: null }).background;
   assert.match(seep, /^linear-gradient\(to right, #0000aa 0%, #0000aa00 \d+%\), linear-gradient\(#aa0000, #aa0000\)$/);
+});
+
+/** Share of a w×h box that each colour of a conic gradient covers (blends split at their midpoint). */
+function wheelShares(css, w, h) {
+  const stops = [...css.matchAll(/(#[0-9a-f]{6}) ([\d.]+)deg/g)].map((m) => ({ c: m[1], a: Number(m[2]) }));
+  const share = new Map();
+  let total = 0;
+  for (let x = -w / 2 + 0.25; x < w / 2; x += 0.5) {
+    for (let y = -h / 2 + 0.25; y < h / 2; y += 0.5) {
+      const angle = ((Math.atan2(x, -y) * 180) / Math.PI + 360) % 360;
+      let k = 0;
+      while (k < stops.length - 2 && stops[k + 1].a < angle) k++;
+      const c = angle - stops[k].a < stops[k + 1].a - angle ? stops[k].c : stops[k + 1].c;
+      share.set(c, (share.get(c) || 0) + 1);
+      total++;
+    }
+  }
+  return [...share.values()].map((n) => n / total);
+}
+
+test("a wheel on a wide word still gives every writer a fair share of the letters", () => {
+  const colours = ["#aa0000", "#0000aa", "#00aa00", "#aaaa00", "#00aaaa"];
+  for (const n of [3, 4, 5]) {
+    for (const aspect of [1, 2.5, 4, 7]) {
+      const css = paintCss({ k: "wheel", cs: colours.slice(0, n) }, aspect).background;
+      const shares = wheelShares(css, 20 * aspect, 20);
+      assert.equal(shares.length, n);
+      // Fair means no slivers: on a square, equal angles already differ a little because corners reach further.
+      for (const s of shares) assert.ok(s > 0.6 / n && s < 1.5 / n, `n=${n} aspect=${aspect} shares=${shares.map((x) => x.toFixed(2))}`);
+    }
+  }
+});
+
+test("a seeping wheel keeps its fair shares too", () => {
+  const css = paintCss({ k: "seep", base: { k: "wheel", cs: ["#aa0000", "#0000aa", "#00aa00"] }, l: "#aaaa00", r: null }, 4).background;
+  assert.match(css, /^linear-gradient\(to right, #aaaa00 0%, #aaaa0000 \d+%\), conic-gradient\(/);
+  assert.notEqual(css, paintCss({ k: "seep", base: { k: "wheel", cs: ["#aa0000", "#0000aa", "#00aa00"] }, l: "#aaaa00", r: null }, 1).background);
 });

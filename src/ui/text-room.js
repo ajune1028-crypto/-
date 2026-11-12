@@ -68,10 +68,18 @@ export function mountTextRoom(body, app, session) {
     }, PRESENCE_EVERY_MS);
   };
 
+  // When this viewer may not write, the sheets become read-only and the tools go away.
+  function applyAccess() {
+    const readOnly = !!app.transport.readOnly;
+    toolbar.hidden = readOnly;
+    for (const editor of editors.values()) editor.setReadOnly(readOnly);
+  }
+
   function editorFor(day) {
     let editor = editors.get(day);
     if (!editor) {
       editor = new SheetEditor({ app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text) });
+      editor.setReadOnly(!!app.transport.readOnly);
       editors.set(day, editor);
       session.loadSheet(day).then(() => {
         if (!editors.has(day)) return;
@@ -125,6 +133,8 @@ export function mountTextRoom(body, app, session) {
       editor.syncInput();
     }),
     session.on("peers", () => { for (const editor of editors.values()) editor.drawCarets(); }),
+    session.on("status", applyAccess),
+    session.on("sent", applyAccess),
     app.events.on("settings", renderAll),
     onThemeChange(renderAll),
   ];
