@@ -33,8 +33,13 @@ export class LocalTransport {
     this.offline = offline;
     this.channels = new Set();
     this.lastError = null;
-    this.bus = new BroadcastChannel("hamkke:" + ns);
-    this.bus.onmessage = (event) => this.deliver(event.data, null);
+    try {
+      this.bus = new BroadcastChannel("hamkke:" + ns);
+      this.bus.onmessage = (event) => this.deliver(event.data, null);
+    } catch {
+      // Some sandboxed pages refuse it; this screen then only talks to itself.
+      this.bus = { postMessage() {}, close() {} };
+    }
   }
 
   read(key, fallback) {

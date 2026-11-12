@@ -195,3 +195,18 @@ test("a store keeps values across instances over the same storage, under its pre
   forgetRoom(again, "r1");
   assert.deepEqual(openStore(storage, "devA:").get("rooms", []).map((r) => r.id), ["r2"]);
 });
+
+test("the local transport works where BroadcastChannel is refused", async (t) => {
+  const real = globalThis.BroadcastChannel;
+  globalThis.BroadcastChannel = class { constructor() { throw new Error("refused"); } };
+  t.after(() => { globalThis.BroadcastChannel = real; });
+  const tr = new LocalTransport({ ns: "nobus", storage: memoryStorage() });
+  t.after(() => tr.close());
+  await tr.createRoom({ id: "roomroomroom", kind: "daily-text", name: "방" });
+  const s = new RoomSession({ transport: tr, roomId: "roomroomroom", store: openStore(memoryStorage()), retry: [5] });
+  t.after(() => s.close());
+  assert.equal(await s.open(), "ok");
+  type(s, "혼자서도 써져요");
+  await until(() => s.pending === 0);
+  assert.equal(s.sheet(DAY).text(), "혼자서도 써져요");
+});

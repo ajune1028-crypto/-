@@ -103,3 +103,26 @@ test("a person without a name yet is not listed", () => {
   room.apply({ t: "mem", id: "2@a", m: "m1", k: "name", v: "가" });
   assert.equal(room.members().length, 1);
 });
+
+test("sha256Hex matches known vectors and the platform's own digest", async () => {
+  const { sha256Hex } = await import("../src/core/room.js");
+  assert.equal(sha256Hex(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+  assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  for (const text of ["가나다라마바사 12345", "x".repeat(200), "salt1234:24680", "😀"]) {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    assert.equal(sha256Hex(text), Buffer.from(bytes).toString("hex"), text.slice(0, 12));
+  }
+});
+
+test("verifiers work where the browser offers no crypto.subtle", async () => {
+  const subtle = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(crypto), "subtle") || Object.getOwnPropertyDescriptor(crypto, "subtle");
+  Object.defineProperty(crypto, "subtle", { value: undefined, configurable: true });
+  try {
+    const v = await makeVerifier("24680");
+    assert.equal(await checkVerifier("24680", v), true);
+    assert.equal(await checkVerifier("24681", v), false);
+  } finally {
+    delete crypto.subtle;
+    if (subtle && !("subtle" in crypto)) Object.defineProperty(crypto, "subtle", subtle);
+  }
+});
