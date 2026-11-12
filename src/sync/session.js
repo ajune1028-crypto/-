@@ -191,7 +191,6 @@ export class RoomSession extends Emitter {
     const delay = this.retry[Math.min(this.fails, this.retry.length - 1)];
     this.fails++;
     this.timer = setTimeout(() => this.flush(), delay);
-    this.timer.unref?.();
   }
 
   failed(err) {
