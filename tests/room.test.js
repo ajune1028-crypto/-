@@ -1,0 +1,105 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { Clock } from "../src/core/crdt.js";
+import {
+  newRoomId, newMemberId, newReplicaId, makeVerifier, checkVerifier, validPin, Attempts,
+  RoomState, createRoomOps, joinOps, memberOps,
+} from "../src/core/room.js";
+import { rng, shuffle } from "./helpers.js";
+
+test("ids use the lowercase base32 alphabet, have fixed lengths and do not repeat", () => {
+  const seen = new Set();
+  for (let i = 0; i < 10000; i++) seen.add(newRoomId());
+  assert.equal(seen.size, 10000);
+  assert.match(newRoomId(), /^[a-z2-7]{12}$/);
+  assert.match(newMemberId(), /^[a-z2-7]{8}$/);
+  assert.match(newReplicaId(), /^[a-z2-7]{6}$/);
+});
+
+test("a verifier accepts the right secret and rejects a wrong one", async () => {
+  const v = await makeVerifier("12345");
+  assert.equal(await checkVerifier("12345", v), true);
+  assert.equal(await checkVerifier("12346", v), false);
+  assert.equal(await checkVerifier("12345", null), false);
+  assert.notEqual((await makeVerifier("12345")).hash, v.hash, "salted");
+  assert.ok(!JSON.stringify(v).includes("12345"));
+});
+
+test("validPin accepts exactly five digits", () => {
+  assert.equal(validPin("12345"), true);
+  for (const bad of ["1234", "123456", "12a45", " 12345", "", null, 12345]) assert.equal(validPin(bad), false, String(bad));
+});
+
+test("five failures lock for 30 seconds and success resets", () => {
+  const a = new Attempts();
+  for (let i = 0; i < 4; i++) a.fail(1000);
+  assert.equal(a.lockedMs(1000), 0);
+  a.fail(1000);
+  assert.equal(a.lockedMs(1000), 30000);
+  assert.equal(a.lockedMs(21000), 10000);
+  assert.equal(a.lockedMs(31000), 0);
+  for (let i = 0; i < 4; i++) a.fail(40000);
+  a.ok();
+  a.fail(40000);
+  assert.equal(a.lockedMs(40000), 0);
+});
+
+test("creating a room sets its info and its first person", () => {
+  const c = new Clock("aaaaaa");
+  const room = new RoomState();
+  room.applyAll(createRoomOps(c, { kind: "daily-text", name: "우리 방", tz: "Asia/Seoul", now: 5, memberId: "m1", memberName: "나", pin: null }));
+  assert.equal(room.meta("kind"), "daily-text");
+  assert.equal(room.meta("name"), "우리 방");
+  assert.equal(room.meta("tz"), "Asia/Seoul");
+  assert.equal(room.meta("createdBy"), "m1");
+  assert.deepEqual(room.members(), [{ id: "m1", name: "나", color: 0, pin: null, joinedAt: 5 }]);
+});
+
+test("joining takes the lowest unused colour, then the least used", () => {
+  const c = new Clock("aaaaaa");
+  const room = new RoomState();
+  room.applyAll(createRoomOps(c, { kind: "daily-text", name: "r", tz: "UTC", now: 0, memberId: "m0", memberName: "a", pin: null }));
+  for (let i = 1; i < 8; i++) {
+    assert.equal(room.freeColor(), i);
+    room.applyAll(joinOps(c, room, { memberId: "m" + i, name: "p" + i, pin: null, now: i }));
+  }
+  assert.equal(room.freeColor(), 0);
+  room.applyAll(joinOps(c, room, { memberId: "m8", name: "p8", pin: null, now: 8 }));
+  assert.equal(room.freeColor(), 1);
+  assert.equal(room.member("m8").color, 0);
+});
+
+test("room info and each person's fields are last-writer-wins in any order", () => {
+  const c = new Clock("aaaaaa");
+  const d = new Clock("bbbbbb");
+  const ops = [
+    ...createRoomOps(c, { kind: "daily-text", name: "첫 이름", tz: "UTC", now: 0, memberId: "m1", memberName: "가", pin: null }),
+    { t: "meta", id: d.next(), k: "name", v: "먼저 바꿈" },
+  ];
+  d.atLeast(c.n);
+  ops.push({ t: "meta", id: d.next(), k: "name", v: "나중에 바꿈" }, ...memberOps(d, "m1", { name: "나", color: 3 }));
+  for (let seed = 1; seed <= 50; seed++) {
+    const room = new RoomState();
+    room.applyAll(shuffle(rng(seed), [...ops, ...ops.slice(0, 3)]));
+    assert.equal(room.meta("name"), "나중에 바꿈");
+    assert.deepEqual(room.member("m1"), { id: "m1", name: "나", color: 3, pin: null, joinedAt: 0 });
+  }
+});
+
+test("malformed room ops are set aside and change nothing", () => {
+  const room = new RoomState();
+  const bad = [null, { t: "mem", id: "1@a", m: "m1", k: "color", v: 99 }, { t: "mem", id: "2@a", m: "m1", k: "name", v: "" },
+    { t: "mem", id: "3@a", m: "m1", k: "name", v: "x".repeat(21) }, { t: "mem", id: "4@a", m: "m1", k: "pin", v: "12345" },
+    { t: "meta", id: "5@a", k: "", v: 1 }, { t: "what", id: "6@a" }, { t: "mem", id: "7@a", m: "M 1", k: "name", v: "a" }];
+  for (const op of bad) assert.equal(room.apply(op), "unknown");
+  assert.deepEqual(room.members(), []);
+  assert.equal(room.unknown.length, bad.length);
+});
+
+test("a person without a name yet is not listed", () => {
+  const room = new RoomState();
+  room.apply({ t: "mem", id: "1@a", m: "m1", k: "color", v: 2 });
+  assert.deepEqual(room.members(), []);
+  room.apply({ t: "mem", id: "2@a", m: "m1", k: "name", v: "가" });
+  assert.equal(room.members().length, 1);
+});
