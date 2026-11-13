@@ -6,15 +6,45 @@ import assert from "node:assert/strict";
 export const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
-const click = (page, sel) => page.eval(`(() => { const el = ${q(sel)}; if (!el) throw new Error("no element ${sel.replace(/"/g, "'")}"); el.click(); return true; })()`);
+/**
+ * Presses an element the way a finger does: the press goes to whatever is on
+ * top at the element's centre. An element that something else covers cannot be
+ * pressed, and the scenario fails saying what is in the way. (A scripted
+ * el.click() would succeed there and hide the fault.)
+ */
+const click = async (page, sel) => {
+  const name = sel.replace(/"/g, "'");
+  const at = await page.eval(`(async () => {
+    const el = ${q(sel)};
+    if (!el) throw new Error("no element ${name}");
+    // Let a sheet that is sliding in come to rest, so the press lands where the element will be.
+    // Only motion that carries this element counts, and never for long: a screen that is not
+    // in front may not advance its animations at all.
+    const moving = document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.contains(el) && a.effect.getComputedTiming().iterations !== Infinity);
+    await Promise.race([Promise.all(moving.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 500))]);
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) throw new Error("${name} has no size on screen");
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || !(hit === el || el.contains(hit))) {
+      const what = !hit ? "nothing" : hit.id ? "#" + hit.id : hit.tagName.toLowerCase() + (hit.className ? "." + String(hit.className).split(" ").join(".") : "");
+      throw new Error("${name} cannot be pressed: " + what + " is on top of it");
+    }
+    return { x, y };
+  })()`);
+  await page.tap(at.x, at.y);
+};
+/** Taps a field, checks that the tap put the caret there, and types over what it held. */
 const fill = async (page, sel, text) => {
-  await page.eval(`(() => { const el = ${q(sel)}; if (!el) throw new Error("no element ${sel.replace(/"/g, "'")}"); el.focus(); el.select && el.select(); return true; })()`);
+  await click(page, sel);
+  await page.eval(`(() => { const el = ${q(sel)}; if (document.activeElement !== el) throw new Error("tapping ${sel.replace(/"/g, "'")} did not put the caret in it"); el.select && el.select(); return true; })()`);
   await page.type(text);
 };
 const text = (page, sel) => page.eval(`${q(sel)}?.textContent ?? null`);
 
 /** Creates a daily text room on the page and waits until it is open. Returns the room id. */
-export async function createRoom(page, { room = "우리 방", name = "가람", pin = "" } = {}) {
+export async function createRoom(page, { room = "우리 방", name = "가람", pin = "", keepInvite = false, noInvite = false } = {}) {
   await click(page, "#add-daily");
   await click(page, '[data-kind="daily-text"]');
   await fill(page, "#room-name", room);
@@ -22,6 +52,11 @@ export async function createRoom(page, { room = "우리 방", name = "가람", p
   if (pin) await fill(page, "#my-pin", pin);
   await click(page, "#create-room");
   await page.waitFor(`location.hash.startsWith("#r-") && ${q("#room-title")}`);
+  // A new room opens with its invitation showing; most scenarios put it away.
+  if (!keepInvite && !noInvite) {
+    await page.waitFor(q("#invite-done"));
+    await click(page, "#invite-done");
+  }
   return page.eval("location.hash.slice(3)");
 }
 
@@ -33,6 +68,11 @@ export async function joinNew(page, { name = "나래", pin = "" } = {}) {
   await click(page, "#enter");
   await page.waitFor(q("#room-title"));
 }
+
+/** The address a trial build was told it is published at; null for the source files and plain builds. */
+const builtBase = (page) => page.eval(`window.__app.shareBase()`);
+/** Where another test device opens a room: this server's page with the room's hash. */
+const localLink = (page, dev, id) => page.eval(`location.href.split("#")[0]`).then((base) => base.replace(/dev=[^&#]*/, "dev=" + dev) + "#r-" + id);
 
 const myColor = (page) => page.eval(`window.__app.session?.me?.color ?? null`);
 
@@ -608,7 +648,9 @@ scenario("slow start: while nothing answers the home says 아직 연결 중 and 
 scenario("no store: the page says other devices cannot connect and works on its own", async ({ open }) => {
   const page = await open({ init: "window.claude = { use: () => Promise.resolve(null) };" });
   await page.waitFor(`document.querySelector("#notice")?.textContent === "이 화면에서는 다른 기기와 연결되지 않아요"`);
-  await createRoom(page);
+  // A room made in such a view lives on this device only, so no invitation is offered.
+  await createRoom(page, { noInvite: true });
+  assert.equal(await text(page, "#banner"), "이 기기에만 있는 방이에요. 다른 기기와는 연결되지 않아요.");
   await focusEnd(page);
   await page.type("혼자 쓰기");
   await sameOnAll([page], "혼자 쓰기");
@@ -692,4 +734,272 @@ scenario("speed: typing stays quick on a sheet that already holds 10,000 charact
   console.log("     median keystroke " + ms.toFixed(1) + " ms");
   assert.ok(ms < 50, "median keystroke took " + ms.toFixed(1) + " ms");
   assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).text().length`), await a.eval(`${TODAY}.querySelector("textarea").value.length`));
+});
+
+// ---- the trial host's frame ---------------------------------------------------------
+
+scenario("sandbox: inside a scripts-only frame a room can still be created and written in", async ({ open }) => {
+  const page = await open({ sandbox: true });
+  await page.waitFor(q("#home"));
+  assert.equal(await page.eval(`(() => { try { localStorage.getItem("x"); return "storage allowed"; } catch { return "storage refused"; } })()`), "storage refused", "the frame really is sandboxed");
+  await createRoom(page, { room: "틀 안의 방", name: "가람", pin: "24680" });
+  await focusEnd(page);
+  await page.type("틀 안에서도 써져요");
+  await sameOnAll([page], "틀 안에서도 써져요");
+});
+
+scenario("sandbox: the code form answers inside the frame, by button and by the Enter key", async ({ open }) => {
+  const page = await open({ sandbox: true });
+  await click(page, "#by-code");
+  await fill(page, "#code", "zzzzzzzzzzzz");
+  await click(page, "#open-code");
+  await page.waitFor(`${q("#form-error")}?.textContent === "그 코드의 방을 찾을 수 없어요."`);
+  await fill(page, "#code", "yyyy");
+  await page.eval(`(() => { document.querySelector("#form-error").textContent = ""; return true; })()`);
+  await page.key("Enter");
+  await page.waitFor(`${q("#form-error")}?.textContent === "그 코드의 방을 찾을 수 없어요."`);
+});
+
+const FAKE_RUNTIME = `window.claude = (() => { const view = import("/__mock/claude-runtime.js").then((m) => m.makeRuntime().view()); return { use: (name) => view.then((v) => v.use(name)) }; })();`;
+
+scenario("trial frame: with the page runtime present a room is created, written, left and found again", async ({ open }) => {
+  const page = await open({ sandbox: true, init: FAKE_RUNTIME });
+  await page.waitFor(`window.__app.transport && window.__app.transport.info().kind === "claude"`);
+  assert.equal(await page.eval(`document.querySelector("#notice")?.textContent ?? ""`), "이 기기에는 방 목록이 저장되지 않아요");
+  const id = await createRoom(page, { room: "시험판 방", name: "가람" });
+  await focusEnd(page);
+  await page.type("저장소에 남는 글");
+  await sameOnAll([page], "저장소에 남는 글");
+  await page.waitFor(`window.__app.session.pending === 0`);
+  await click(page, "#back");
+  await page.waitFor(q('[data-side="daily"] .room-row'));
+  await click(page, '[data-side="daily"] .room-row');
+  await page.waitFor(`${q("#room-title")} && ${TODAY}`);
+  await sameOnAll([page], "저장소에 남는 글");
+  assert.equal(await page.eval("location.hash"), "#r-" + id);
+});
+
+scenario("invite: a new room shows a link to send, and the link opens the room on another device", async ({ open, out }) => {
+  const a = await open({ dev: "a" });
+  const id = await createRoom(a, { room: "초대하는 방", keepInvite: true });
+  const link = await text(a, "#invite-link");
+  assert.equal(link, ((await builtBase(a)) || await a.eval(`location.href.split("#")[0]`)) + "#r-" + id);
+  assert.equal(await text(a, "#invite-code"), id);
+  await a.shot(out("invite-light.png"));
+  await click(a, "#copy-link");
+  await a.waitFor(q(".toast"));
+  assert.match(await text(a, ".toast"), /^(링크를 복사했어요|링크를 길게 눌러 복사해 주세요)$/);
+  await click(a, "#invite-done");
+  assert.equal(await a.eval(`document.querySelector(".scrim") === null`), true);
+  await click(a, "#invite");
+  await a.waitFor(q("#invite-link"));
+  const b = await open({ dev: "b" });
+  await b.goto(await localLink(a, "b", id));
+  await b.waitFor("window.__app && window.__app.booted");
+  await joinNew(b, { name: "나래" });
+  assert.equal(await text(b, "#room-title"), "초대하는 방");
+  assert.equal(await b.eval(`document.querySelector(".scrim") === null`), true, "a guest is not shown the invitation");
+});
+
+scenario("invite: the published page's own address is used when the build names one", async ({ open }) => {
+  const page = await open({ init: `document.addEventListener("DOMContentLoaded", () => { if (document.querySelector('meta[name="share-base"]')) return; const m = document.createElement("meta"); m.name = "share-base"; m.content = "https://claude.ai/artifact/AbC123"; document.head.append(m); });` });
+  const id = await createRoom(page, { keepInvite: true });
+  // A trial build already names its address; the source files get the stand-in above.
+  const base = await builtBase(page);
+  assert.match(base, /^https:\/\/claude\.ai\/artifact\/\w+$/);
+  assert.equal(await text(page, "#invite-link"), base + "#r-" + id);
+  assert.equal(await text(page, "#invite-note"), "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요.");
+});
+
+const FAKE_SHARE = `navigator.share = (data) => { window.__shared = data; return Promise.resolve(); };`;
+
+scenario("invite: on a device with a share sheet, 보내기 hands it the room link", async ({ open }) => {
+  const page = await open({ init: FAKE_SHARE });
+  const id = await createRoom(page, { room: "보내는 방", keepInvite: true });
+  if (await builtBase(page)) return; // a trial build never offers the share sheet; the next scenario covers it
+  await click(page, "#send-link");
+  await page.waitFor("window.__shared");
+  const shared = await page.eval("window.__shared");
+  assert.equal(shared.url, await text(page, "#invite-link"));
+  assert.ok(shared.url.endsWith("#r-" + id));
+  assert.equal(shared.title, "보내는 방");
+});
+
+scenario("invite: the trial page offers copying only, because its frame refuses the share sheet", async ({ open }) => {
+  const page = await open({ init: FAKE_SHARE + `document.addEventListener("DOMContentLoaded", () => { const m = document.createElement("meta"); m.name = "share-base"; m.content = "https://claude.ai/artifact/AbC123"; document.head.append(m); });` });
+  await createRoom(page, { keepInvite: true });
+  assert.equal(await page.eval(`document.querySelector("#send-link") === null`), true);
+  assert.equal(await page.eval(`document.querySelector("#copy-link") !== null`), true);
+});
+
+// ---- views that misbehave: each is one way the trial page's host could differ from a plain browser ----
+
+/** The stand-in runtime, with options for makeRuntime and statements run against it as `rt`. */
+const fakeRuntime = (options = {}, tweak = "") => `window.claude = (() => { const view = import("/__mock/claude-runtime.js").then((m) => { const rt = m.makeRuntime(${JSON.stringify(options)}); ${tweak} window.__rt = rt; return rt.view(); }); return { use: (name) => view.then((v) => v.use(name)) }; })();`;
+const LOCAL_BANNER = "이 기기에만 있는 방이에요. 다른 기기와는 연결되지 않아요.";
+const usesStore = `window.__app.transport && window.__app.transport.info().kind === "claude"`;
+
+scenario("misbehaving view: when the store refuses the write, the room is made on this device and says so", async ({ open, out }) => {
+  const page = await open({ sandbox: true, init: fakeRuntime({}, `rt.rejectWrites = "capability_disabled";`) });
+  await page.waitFor(usesStore);
+  await createRoom(page, { room: "혼자 쓰는 방", noInvite: true });
+  assert.equal(await text(page, "#banner"), LOCAL_BANNER);
+  assert.equal(await page.eval(`document.querySelector(".scrim") === null`), true, "no invitation for a room nobody else can reach");
+  await focusEnd(page);
+  await page.type("그래도 써져요");
+  await sameOnAll([page], "그래도 써져요");
+  await click(page, "#invite");
+  assert.equal(await text(page, "#invite-local"), "이 방은 이 기기에만 있어서 링크로 초대할 수 없어요.");
+  assert.equal(await page.eval(`document.querySelector("#invite-link") === null`), true);
+  await click(page, "#invite-done");
+  await click(page, "#back");
+  await page.waitFor(q('[data-side="daily"] .room-row'));
+  assert.equal(await text(page, '[data-side="daily"] .room-row .room-when'), "이 기기만");
+  assert.match(await text(page, "#notice"), /다른 기기와 연결되지 않아요/);
+  await page.shot(out("home-device-only.png"));
+  await click(page, "#home-settings");
+  assert.match(await text(page, "#diag"), /create: capability_disabled/);
+  await page.shot(out("home-diagnostics.png"));
+  // the room is still there to go back into
+  await page.key("Escape");
+  await click(page, '[data-side="daily"] .room-row');
+  await page.waitFor(`${q("#room-title")} && ${TODAY}`);
+  await sameOnAll([page], "그래도 써져요");
+});
+
+scenario("misbehaving view: when the store never answers, creating stops waiting and makes the room on this device", async ({ open }) => {
+  const page = await open({ sandbox: true, query: "patience=400", init: fakeRuntime({}, `rt.hangWrites = true;`) });
+  await page.waitFor(usesStore);
+  await click(page, "#add-daily");
+  await click(page, '[data-kind="daily-text"]');
+  await fill(page, "#room-name", "기다리다 만든 방");
+  await fill(page, "#my-name", "가람");
+  await click(page, "#create-room");
+  await page.waitFor(`${q("#form-status")}?.textContent === "방을 만드는 중…"`, 300);
+  await page.waitFor(`location.hash.startsWith("#r-") && ${q("#room-title")}`, 3000);
+  assert.equal(await text(page, "#banner"), LOCAL_BANNER);
+  assert.equal(await text(page, "#room-title"), "기다리다 만든 방");
+});
+
+scenario("misbehaving view: a live channel that never answers does not hold up the store", async ({ open }) => {
+  const page = await open({ sandbox: true, init: fakeRuntime({ hangRoom: true }) });
+  await page.waitFor(usesStore, 1000);
+  const id = await createRoom(page, { room: "저장소만 있는 방" });
+  assert.equal(await page.eval(`document.querySelector("#banner").hidden`), true);
+  assert.equal((await page.eval(`window.__rt.store.has("rooms/${id}")`)), true, "the room went to the shared store");
+  await click(page, "#room-settings");
+  assert.match(await text(page, "#diag"), /실시간 채널none/);
+});
+
+scenario("misbehaving view: a page whose address change is never announced still opens the room it made", async ({ open }) => {
+  const page = await open({ init: `window.addEventListener("hashchange", (event) => event.stopImmediatePropagation(), true);` });
+  await createRoom(page, { room: "주소가 조용한 방" });
+  assert.equal(await text(page, "#room-title"), "주소가 조용한 방");
+  await click(page, "#back");
+  await page.waitFor(q('[data-side="daily"] .room-row'));
+  await click(page, '[data-side="daily"] .room-row');
+  await page.waitFor(`${q("#room-title")} && ${TODAY}`);
+});
+
+scenario("misbehaving view: when the room list cannot be read, home says so and a room can still be made", async ({ open }) => {
+  const page = await open({ sandbox: true, query: "patience=300", init: fakeRuntime({}, `rt.hangReads = true; rt.hangWrites = true;`) });
+  await page.waitFor(`${q("#notice")}?.textContent.includes("다른 기기와 연결되지 않아요")`, 3000);
+  await createRoom(page, { room: "목록 없이 만든 방", noInvite: true });
+  assert.equal(await text(page, "#banner"), LOCAL_BANNER);
+});
+
+scenario("home: the settings sheet shows how this view is connected and what happened so far", async ({ open }) => {
+  const page = await open({ sandbox: true, init: fakeRuntime() });
+  await page.waitFor(usesStore);
+  await click(page, "#home-settings");
+  const diag = await text(page, "#diag");
+  assert.match(diag, /전송 방식claude/);
+  assert.match(diag, /저장소ok/);
+  assert.match(diag, /runtime found/);
+  assert.match(diag, /db ok/);
+  const plain = await open({ dev: "b" });
+  await click(plain, "#home-settings");
+  assert.match(await text(plain, "#diag"), /전송 방식local/);
+  assert.match(await text(plain, "#diag"), /runtime absent/);
+});
+
+// ---- what a person sees and can touch ----------------------------------------------------------
+
+/** For every text field on screen: is it a visible box, with visible text and caret, sitting where its label is? */
+const fieldFaults = (page) => page.eval(`(() => {
+  const alpha = (c) => { const m = /rgba?\\(([^)]+)\\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? parseFloat(p[3]) : 1; };
+  const faults = [];
+  const fields = [...document.querySelectorAll('.scrim input[type="text"], .join input[type="text"]')];
+  if (!fields.length) faults.push("no fields found");
+  for (const el of fields) {
+    const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); const id = "#" + el.id;
+    if (cs.position !== "static" && cs.position !== "relative") faults.push(id + " is positioned " + cs.position);
+    if (alpha(cs.color) < 1 || alpha(cs.webkitTextFillColor) < 1) faults.push(id + " shows its text as " + cs.webkitTextFillColor);
+    if (alpha(cs.caretColor) === 0) faults.push(id + " has an invisible caret");
+    if (parseFloat(cs.borderTopWidth) < 1) faults.push(id + " has no border");
+    if (r.height < 36 || r.height > 60) faults.push(id + " is " + Math.round(r.height) + "px tall");
+    const label = document.querySelector('label[for="' + el.id + '"]');
+    if (label && Math.abs(r.top - label.getBoundingClientRect().bottom) > 12) faults.push(id + " is not under its label");
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (hit !== el) faults.push(id + " is covered by " + (hit ? hit.id || hit.className || hit.tagName : "nothing"));
+  }
+  for (let i = 0; i < fields.length; i++) for (let j = i + 1; j < fields.length; j++) {
+    const a = fields[i].getBoundingClientRect(), b = fields[j].getBoundingClientRect();
+    if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) faults.push("#" + fields[i].id + " and #" + fields[j].id + " overlap");
+  }
+  return faults;
+})()`);
+/** Waits for a sheet to finish sliding in (never long: a screen that is not in front may not animate). */
+const settled = (page) => page.eval(`(() => { const moving = document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.matches(".panel, .toast")); return Promise.race([Promise.all(moving.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 500))]).then(() => true); })()`);
+
+scenario("forms: every field is a visible box that a tap reaches, on every screen that has one", async ({ open, out }) => {
+  for (const dark of [false, true]) {
+    const tag = dark ? "dark" : "light";
+    const a = await open({ dev: "a" + tag, dark });
+    await click(a, "#add-daily");
+    await settled(a);
+    await a.shot(out(`kinds-${tag}.png`));
+    await click(a, '[data-kind="daily-text"]');
+    await settled(a);
+    assert.deepEqual(await fieldFaults(a), [], "new room form");
+    await fill(a, "#room-name", "보이는 방");
+    await fill(a, "#my-name", "가람");
+    await fill(a, "#my-pin", "13579");
+    assert.deepEqual(await a.eval(`["room-name", "my-name", "my-pin"].map((id) => document.getElementById(id).value)`), ["보이는 방", "가람", "13579"]);
+    await a.shot(out(`form-create-${tag}.png`));
+    await click(a, "#create-room");
+    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+    await settled(a);
+    await a.shot(out(`invite-${tag}.png`));
+    const roomId = await a.eval("location.hash.slice(3)");
+    await click(a, "#invite-done");
+    await click(a, "#room-settings");
+    await settled(a);
+    assert.deepEqual(await fieldFaults(a), [], "room settings");
+    await a.shot(out(`settings-${tag}.png`));
+    await a.key("Escape");
+    await click(a, "#back");
+    await a.waitFor(q("#by-code"));
+    await click(a, "#by-code");
+    await settled(a);
+    assert.deepEqual(await fieldFaults(a), [], "code form");
+    await fill(a, "#code", "abcdefgh2345");
+    assert.equal(await a.eval(`document.getElementById("code").value`), "abcdefgh2345");
+    await a.shot(out(`form-code-${tag}.png`));
+    await click(a, "#open-code");
+    await a.waitFor(`${q("#form-error")}?.textContent === "그 코드의 방을 찾을 수 없어요."`);
+
+    const b = await open({ dev: "b" + tag, dark });
+    await b.goto(await localLink(a, "b" + tag, roomId));
+    await b.waitFor("window.__app && window.__app.booted");
+    await b.waitFor(q("#join-name"));
+    await settled(b);
+    assert.deepEqual(await fieldFaults(b), [], "join screen");
+    await fill(b, "#join-name", "나래");
+    await b.shot(out(`join-${tag}.png`));
+    await click(b, "#join-back");
+    await b.waitFor(q("#back-pin"));
+    assert.deepEqual(await fieldFaults(b), [], "join screen, returning");
+    await b.shot(out(`join-back-${tag}.png`));
+  }
 });

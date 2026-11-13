@@ -224,3 +224,8 @@ export function createRoomOps(clock, { kind, name, tz, now, memberId, memberName
 export function joinOps(clock, room, { memberId, name, pin, now }) {
   return memberOps(clock, memberId, { name, color: room.freeColor(), pin: pin ?? null, joinedAt: now });
 }
+
+/** The address that opens a room: the page's own address with the room after the #. */
+export function roomLink(base, roomId) {
+  return String(base).split("#")[0] + "#r-" + roomId;
+}

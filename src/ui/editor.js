@@ -41,7 +41,7 @@ export class SheetEditor {
     this.carets = h("div", { class: "carets", "aria-hidden": "true" });
     this.stamps = h("div", { class: "stamps" });
     this.input = h("textarea", {
-      class: "input", id: "sheet-" + day, spellcheck: false, autocomplete: "off", autocapitalize: "off",
+      class: "typing", id: "sheet-" + day, spellcheck: false, autocomplete: "off", autocapitalize: "off",
       "aria-label": dayLabel(day) + "에 쓴 글", placeholder: isToday ? "오늘의 첫 글을 써 보세요" : "",
     });
     this.input.setAttribute("autocorrect", "off");

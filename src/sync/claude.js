@@ -19,6 +19,28 @@ const encoder = new TextEncoder();
 const byteLength = (text) => encoder.encode(text).length;
 const randomKey = () => Math.random().toString(36).slice(2, 10).padEnd(8, "0");
 const describe = (err) => String(err?.code || "") + (err?.message ? " " + err.message : "") || String(err);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Runs one store call with a time limit. The store may never answer in some
+ * views; a call that waits forever would leave a button dead with no reason.
+ * `fn` may also throw at once (the path builders do for a malformed path).
+ */
+function bounded(fn, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject({ code: "timeout", message: "no answer in " + ms + " ms" }), ms);
+    Promise.resolve().then(fn).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 /** Resolves with the value, or null when it rejects or takes too long. */
 function settle(promise, ms) {
@@ -38,8 +60,14 @@ function settle(promise, ms) {
 }
 
 export class ClaudeTransport {
-  /** Null when this view has no store: the caller falls back to another transport. */
-  static async connect(claude, { timeoutMs = 10000, coalesceMs = 250, firstSnapshotMs = 10000 } = {}) {
+  /**
+   * Null when this view has no store: the caller falls back to another transport.
+   * Only the store is waited for. The live channel joins whenever it answers,
+   * so a view where it never does is not held up.
+   */
+  static async connect(claude, { timeoutMs = 10000, coalesceMs = 250, firstSnapshotMs = 10000, callTimeoutMs = 8000, retryMs = 300, log = () => {} } = {}) {
+    const started = Date.now();
+    const took = () => Date.now() - started + " ms";
     const use = (name) => {
       try {
         return settle(claude.use(name), timeoutMs);
@@ -47,34 +75,76 @@ export class ClaudeTransport {
         return Promise.resolve(null);
       }
     };
-    const [db, live] = await Promise.all([use("db"), use("room")]);
-    return db ? new ClaudeTransport(db, live, { coalesceMs, firstSnapshotMs }) : null;
+    const liveAnswer = use("room");
+    const db = await use("db");
+    log((db ? "db ok " : "db none ") + took());
+    if (!db) return null;
+    const transport = new ClaudeTransport(db, null, { coalesceMs, firstSnapshotMs, callTimeoutMs, retryMs, log });
+    liveAnswer.then((live) => {
+      log((live ? "live ok " : "live none ") + took());
+      transport.setLive(live);
+    });
+    return transport;
   }
 
-  constructor(db, live, { coalesceMs, firstSnapshotMs }) {
+  constructor(db, live, { coalesceMs, firstSnapshotMs, callTimeoutMs = 8000, retryMs = 300, log = () => {} }) {
     this.db = db;
     this.live = live;
     this.coalesceMs = coalesceMs;
     this.firstSnapshotMs = firstSnapshotMs;
+    this.callTimeoutMs = callTimeoutMs;
+    this.retryMs = retryMs;
+    this.log = log;
     this.channels = new Set();
     this.lastError = null;
     this.readOnly = false;
     this.full = false;
   }
 
+  setLive(live) {
+    this.live = live;
+    if (live) for (const channel of this.channels) channel.joinLive();
+  }
+
+  /** One store call outside a room's log: time-limited, and tried once more on "unavailable". */
+  async call(label, fn) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await bounded(fn, this.callTimeoutMs);
+      } catch (err) {
+        if (err?.code === "unavailable" && attempt === 0) {
+          await sleep(this.retryMs * (1 + Math.random()));
+          continue;
+        }
+        this.lastError = label + ": " + describe(err);
+        this.log(this.lastError);
+        throw err;
+      }
+    }
+  }
+
   async createRoom({ id, kind, name }) {
-    await this.db.doc("rooms/" + id).set({ id, kind, name, at: Date.now() });
+    await this.call("create", () => this.db.doc("rooms/" + id).set({ id, kind, name, at: Date.now() }));
+  }
+
+  /** Best effort: takes back a room whose creation could not be finished. */
+  async dropRoom(id) {
+    try {
+      await bounded(() => this.db.doc("rooms/" + id).delete(), this.callTimeoutMs);
+    } catch {
+      // Nothing to do: the room simply stays listed.
+    }
   }
 
   async listRooms() {
-    const snap = await this.db.collection("rooms").get();
+    const snap = await this.call("list", () => this.db.collection("rooms").get());
     return snap.docs
       .map((doc) => doc.data())
       .filter((r) => r && typeof r.id === "string" && typeof r.name === "string" && typeof r.kind === "string");
   }
 
   async openRoom(id) {
-    const snap = await this.db.doc("rooms/" + id).get();
+    const snap = await this.call("open", () => this.db.doc("rooms/" + id).get());
     if (!snap.exists) return null;
     const channel = new ClaudeChannel(this, id);
     this.channels.add(channel);
@@ -130,15 +200,24 @@ class ClaudeChannel {
         },
       ),
     );
-    if (!this.transport.live) return;
+    await this.joinLive();
+  }
+
+  /** Joins this room's live channel once the view has one. Safe to call again. */
+  async joinLive() {
+    if (!this.transport.live || this.named || this.joining || this.closed) return;
+    this.joining = true;
     let named = null;
     try {
       named = await settle(this.transport.live.join(this.room), JOIN_TIMEOUT_MS);
     } catch {
       named = null;
     }
-    if (!named || this.closed) return;
+    this.joining = false;
+    if (!named) return;
+    if (this.closed) return void Promise.resolve(named.leave()).catch(() => {});
     this.named = named;
+    if (Object.keys(this.state).length) Promise.resolve(named.presence(this.state)).catch(() => {});
     const dead = (err) => {
       // This view cannot use the live channel; the store alone still works.
       this.transport.lastError = describe(err);
@@ -288,7 +367,7 @@ class ClaudeChannel {
       }
       const next = writer.written.concat(fresh.slice(i, i + take));
       const id = docId + "~" + this.replica + "~" + writer.chunk;
-      await this.logs.doc(id).set({ d: docId, r: this.replica, c: writer.chunk, ops: next });
+      await bounded(() => this.logs.doc(id).set({ d: docId, r: this.replica, c: writer.chunk, ops: next }), this.transport.callTimeoutMs);
       this.transport.readOnly = false;
       this.transport.full = false;
       for (let j = i; j < i + take; j++) writer.ids.add(fresh[j].id);

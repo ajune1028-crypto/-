@@ -47,7 +47,13 @@ const swap = (needle, replacement) => {
   html = html.replace(needle, () => replacement);
 };
 swap('<link rel="stylesheet" href="./src/ui/theme.css">', `<style>\n${css}</style>`);
+// --share-base=URL: the address people open this build at, used for invitation links.
+const shareBase = process.argv.slice(2).find((a) => a.startsWith("--share-base="))?.slice(13) || "";
+if (shareBase) {
+  if (!/^https:\/\/[\w.-]+\/[\w./-]*$/.test(shareBase)) throw new Error("--share-base must be a plain https address");
+  swap("<title>", `<meta name="share-base" content="${shareBase}">\n<title>`);
+}
 swap('<script type="module" src="./src/main.js"></script>', `<script>\n${script}\n</script>`);
 mkdirSync(join(root, "dist"), { recursive: true });
 writeFileSync(join(root, "dist/index.html"), html);
-console.log(`dist/index.html: ${order.length} modules, ${Math.round(html.length / 1024)} KB`);
+console.log(`dist/index.html: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}`);

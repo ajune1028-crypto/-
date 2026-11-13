@@ -24,6 +24,23 @@ export function displaySettings(app, { withColors }) {
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }
 
+/** How this view is connected, and what happened on the way. Shown on home and in a room. */
+export function diagnostics(app, session) {
+  const transport = session?.transport || app.transport;
+  const info = transport ? transport.info() : null;
+  const facts = [
+    ["전송 방식", info ? info.kind : "연결 중"],
+    ["저장소", info ? info.db : "-"],
+    ["실시간 채널", info ? info.live : "-"],
+    session && ["접속 중인 화면", String(session.peers.length)],
+    session && ["아직 못 보낸 기록", String(session.pending)],
+    ["마지막 오류", session?.lastError || info?.lastError || "없음"],
+    ["버전", app.version],
+    ["기록", app.traceText() || "없음"],
+  ].filter(Boolean);
+  return h("dl", { class: "diag", id: "diag" }, facts.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })]));
+}
+
 export function showRoom(app, roomId) {
   const root = app.root;
   let alive = true;
@@ -40,7 +57,7 @@ export function showRoom(app, roomId) {
   }, 2000);
 
   (async () => {
-    const transport = await app.ready;
+    const transport = await app.transportFor(roomId);
     if (!alive) return;
     if (app.handoff && app.handoff.roomId === roomId) session = app.handoff;
     else {
@@ -58,6 +75,7 @@ export function showRoom(app, roomId) {
     else offs.push(showJoin(app, session, enter));
   })().catch((err) => {
     console.warn(err);
+    app.trace("room did not open: " + (err?.code || err?.message || err));
     if (alive) mount(root, centered("failed", "방을 열지 못했어요", "연결을 확인하고 다시 해 주세요.",
       h("button", { class: "btn small", type: "button", text: "다시 열기", onclick: () => app.go("r-" + roomId) })));
   });
@@ -89,9 +107,10 @@ export function showRoom(app, roomId) {
     };
     const notices = { readOnly: false, unknown: session.room.unknown.length > 0 };
     const drawBanner = () => {
-      notices.readOnly = !!app.transport.readOnly;
-      const text = notices.readOnly ? "보기만 할 수 있어요"
-        : app.transport.full ? "저장 공간이 가득 찼어요"
+      notices.readOnly = !!session.transport.readOnly;
+      const text = isLocal() ? "이 기기에만 있는 방이에요. 다른 기기와는 연결되지 않아요."
+        : notices.readOnly ? "보기만 할 수 있어요"
+        : session.transport.full ? "저장 공간이 가득 찼어요"
         : notices.unknown ? "새 버전이 있어요. 새로고침해 주세요" : "";
       banner.textContent = text;
       banner.hidden = !text;
@@ -101,6 +120,7 @@ export function showRoom(app, roomId) {
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
+        iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
       banner, body));
     drawTitle();
@@ -122,6 +142,45 @@ export function showRoom(app, roomId) {
       mountTextRoom(body, app, session),
     );
     drawBanner();
+    if (app.fresh === roomId) openInvite();
+    app.fresh = null;
+  }
+
+  const isLocal = () => !!roomEntry(app.store, roomId)?.local;
+
+  function copy(text, done, failed) {
+    // The clipboard may refuse (it does in some frames); the text stays on screen to long-press.
+    Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => toast(root, done), () => toast(root, failed));
+  }
+
+  function openInvite() {
+    openSheet(root, "친구 초대", (panel, close) => {
+      if (isLocal()) {
+        return void panel.append(h("div", { class: "form" },
+          h("p", { class: "help", id: "invite-local", text: "이 방은 이 기기에만 있어서 링크로 초대할 수 없어요." }),
+          h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));
+      }
+      const link = app.linkFor(roomId);
+      const name = session.room.meta("name") || "방";
+      // The system share sheet exists on phones outside the trial page, which refuses it.
+      const canSend = !app.shareBase() && typeof navigator.share === "function";
+      const send = () => Promise.resolve().then(() => navigator.share({ title: name, text: name + " 방으로 들어와요", url: link }))
+        .catch((err) => { if (err?.name !== "AbortError") copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요"); });
+      panel.append(h("div", { class: "form" },
+        h("p", { class: "help", text: "이 링크를 받은 사람은 바로 이 방으로 들어와요." }),
+        h("p", { class: "link-box", id: "invite-link", text: link }),
+        h("div", { class: "btn-row" },
+          canSend && h("button", { class: "btn", id: "send-link", type: "button", text: "보내기", onclick: send }),
+          h("button", { class: canSend ? "btn quiet" : "btn", id: "copy-link", type: "button", text: "링크 복사",
+            onclick: () => copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요") })),
+        h("div", { class: "row" }, h("span", { class: "label", text: "링크 대신 홈의 '코드로 들어가기'에 넣는 방 코드" }),
+          h("div", { class: "with-btn", style: { alignItems: "center" } },
+            h("span", { class: "code", id: "invite-code", style: { flex: "1" }, text: roomId }),
+            h("button", { class: "btn small quiet", id: "copy-invite-code", type: "button", text: "코드 복사",
+              onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") }))),
+        app.shareBase() && h("p", { class: "help", id: "invite-note", text: "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요." }),
+        h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));
+    });
   }
 
   function openSettings() {
@@ -151,10 +210,6 @@ export function showRoom(app, roomId) {
         toast(root, "개인 식별 코드를 저장했어요");
       };
 
-      const info = app.transport.info();
-      const facts = [["전송 방식", info.kind], ["저장소", info.db], ["실시간 채널", info.live], ["접속 중인 화면", String(session.peers.length)],
-        ["아직 못 보낸 기록", String(session.pending)], ["마지막 오류", session.lastError || info.lastError || "없음"], ["버전", app.version]];
-
       panel.append(
         h("div", { class: "form" }, isOwner && roomName.row, myName.row,
           h("div", { class: "row" }, h("span", { class: "label", text: "내 색" }), swatches),
@@ -168,12 +223,9 @@ export function showRoom(app, roomId) {
             h("p", { class: "help", text: "다른 기기의 홈에서 '코드로 들어가기'에 이 코드를 넣어요." }),
             h("div", { class: "with-btn", style: { alignItems: "center" } },
               h("span", { class: "code", id: "room-code", style: { flex: "1" }, text: roomId }),
-              h("button", { class: "btn small quiet", id: "copy-code", type: "button", text: "코드 복사", onclick: () => {
-                Promise.resolve().then(() => navigator.clipboard.writeText(roomId))
-                  .then(() => toast(root, "코드를 복사했어요"), () => toast(root, "코드를 길게 눌러 복사해 주세요"));
-              } })))),
-        h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }),
-          h("dl", { class: "diag", id: "diag" }, facts.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })]))),
+              h("button", { class: "btn small quiet", id: "copy-code", type: "button", text: "코드 복사",
+                onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") })))),
+        h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }), diagnostics(app, session)),
         h("div", { class: "section" },
           h("button", { class: "btn quiet", id: "leave", type: "button", text: "방 나가기", onclick: () => { close(); forgetRoom(app.store, roomId); app.go(""); } }),
           h("p", { class: "help", style: { marginTop: "0.5rem" }, text: "내 목록에서만 빠져요. 방과 글은 그대로 남아요." })));

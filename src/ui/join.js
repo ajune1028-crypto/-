@@ -1,7 +1,7 @@
 // Entering a room for the first time on this device: as a new person, or as
 // someone already in the room, proven with their personal code.
 
-import { h, iconButton, mount, inputRow, segmented } from "./dom.js";
+import { h, iconButton, mount, inputRow, segmented, formBox } from "./dom.js";
 import { currentTheme } from "./theme.js";
 import { memberColor } from "../core/paint.js";
 import { Attempts, newMemberId, makeVerifier, checkVerifier, validPin, joinOps } from "../core/room.js";
@@ -21,11 +21,11 @@ export function showJoin(app, session, onDone) {
   function newForm() {
     const name = inputRow("join-name", "별명", { maxLength: 20, value: typed.name, oninput: () => { typed.name = name.input.value; } });
     const pin = inputRow("join-pin", "개인 식별 코드 (숫자 5자리, 안 정해도 돼요)", { maxLength: 5, inputMode: "numeric", value: typed.pin, oninput: () => { typed.pin = pin.input.value; } });
-    return h("form", { class: "form", onsubmit: enterNew }, name.row,
+    return formBox(enterNew, name.row,
       h("p", { class: "preview" }, dot(session.room.freeColor()), "내 글은 이 색으로 써져요. 들어온 뒤에 바꿀 수 있어요."),
       pin.row,
       h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }),
-      error, h("button", { class: "btn", id: "enter", type: "submit", text: "들어가기" }));
+      error, h("button", { class: "btn", id: "enter", type: "button", text: "들어가기", onclick: enterNew }));
   }
 
   function backForm() {
@@ -35,8 +35,8 @@ export function showJoin(app, session, onDone) {
     const list = h("div", {}, people.map((m) =>
       h("button", { class: "who", type: "button", data: { id: m.id }, "aria-pressed": String(m.id === chosen), onclick: () => { chosen = m.id; for (const b of list.children) b.setAttribute("aria-pressed", String(b.dataset.id === chosen)); pin.input.focus(); } },
         dot(m.color), h("span", { class: "who-name", text: m.name }))));
-    return h("form", { class: "form", onsubmit: enterBack }, h("div", { class: "row" }, h("span", { class: "label", text: "내 이름을 골라 주세요" }), list), pin.row, error,
-      h("button", { class: "btn", id: "enter", type: "submit", text: "들어가기" }));
+    return formBox(enterBack, h("div", { class: "row" }, h("span", { class: "label", text: "내 이름을 골라 주세요" }), list), pin.row, error,
+      h("button", { class: "btn", id: "enter", type: "button", text: "들어가기", onclick: enterBack }));
   }
 
   function drawBody() {
@@ -44,8 +44,7 @@ export function showJoin(app, session, onDone) {
     mount(body, mode === "new" ? newForm() : backForm());
   }
 
-  async function enterNew(event) {
-    event.preventDefault();
+  async function enterNew() {
     const name = typed.name.trim();
     const pin = typed.pin.trim();
     if (!name) return void (error.textContent = "별명을 적어 주세요.");
@@ -56,8 +55,7 @@ export function showJoin(app, session, onDone) {
     onDone(memberId);
   }
 
-  async function enterBack(event) {
-    event.preventDefault();
+  async function enterBack() {
     const wait = (ms) => `5번 틀렸어요. ${Math.ceil(ms / 1000)}초 뒤에 다시 해 주세요.`;
     const locked = attempts.lockedMs(Date.now());
     if (locked) return void (error.textContent = wait(locked));

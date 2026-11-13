@@ -182,3 +182,105 @@ test("a full store is reported as full until a write goes through again", async 
   await a.append(DOC, typed("가"));
   assert.equal(ta.full, false);
 });
+
+// ---- a store that misbehaves ---------------------------------------------------
+
+test("the store is ready as soon as it answers, even when the live channel never does", async () => {
+  const log = [];
+  const t0 = Date.now();
+  const t = await ClaudeTransport.connect(makeRuntime({ hangRoom: true }).view(), { ...opts, timeoutMs: 400, log: (line) => log.push(line) });
+  assert.ok(t, "connected");
+  assert.ok(Date.now() - t0 < 200, "did not wait for the live channel: " + (Date.now() - t0) + " ms");
+  assert.equal(t.info().live, "none");
+  await t.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  const channel = await t.openRoom(ROOM);
+  await channel.append(DOC, typed("가"));
+  // load() reads what the store's snapshots have delivered, which follows the write.
+  await until(async () => (await channel.load(DOC)).length === 1);
+  assert.deepEqual((await channel.load(DOC)).map((o) => o.v), ["가"]);
+  channel.close();
+  await until(() => log.some((line) => line.startsWith("live none")));
+  assert.ok(log.some((line) => line.startsWith("db ok")), log.join(" | "));
+});
+
+test("a live channel that answers late is joined by rooms that are already open", async (t) => {
+  const rt = makeRuntime({ roomDelayMs: 60 });
+  const ta = await ClaudeTransport.connect(rt.view(), opts);
+  const tb = await ClaudeTransport.connect(rt.view(), opts);
+  await ta.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  const a = await ta.openRoom(ROOM);
+  const b = await tb.openRoom(ROOM);
+  t.after(() => { a.close(); b.close(); });
+  assert.equal(ta.info().live, "none");
+  await until(() => ta.info().live === "connected" && tb.info().live === "connected");
+  rt.writeDelayMs = 300;
+  const got = [];
+  b.subscribe((doc, ops) => got.push(...ops));
+  const writing = a.append(DOC, typed("가"));
+  await until(() => got.length === 1, 150);
+  await writing;
+});
+
+test("creating a room gives up with code timeout when the store never answers", async () => {
+  const rt = makeRuntime();
+  const t = await ClaudeTransport.connect(rt.view(), { ...opts, callTimeoutMs: 40 });
+  rt.hangWrites = true;
+  const t0 = Date.now();
+  await assert.rejects(t.createRoom({ id: ROOM, kind: "daily-text", name: "방" }), (err) => err.code === "timeout");
+  assert.ok(Date.now() - t0 < 400);
+  assert.match(t.info().lastError, /^create: timeout/);
+});
+
+test("listing and opening rooms give up with code timeout when reads never answer", async () => {
+  const rt = makeRuntime();
+  const t = await ClaudeTransport.connect(rt.view(), { ...opts, callTimeoutMs: 40 });
+  await t.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  rt.hangReads = true;
+  await assert.rejects(t.listRooms(), (err) => err.code === "timeout");
+  await assert.rejects(t.openRoom(ROOM), (err) => err.code === "timeout");
+});
+
+test("creating a room tries once more when the platform says unavailable, and reports any other refusal", async () => {
+  const rt = makeRuntime();
+  const t = await ClaudeTransport.connect(rt.view(), { ...opts, retryMs: 5 });
+  rt.failWrites = 1;
+  await t.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  assert.equal(rt.writes, 2);
+  assert.equal((await t.listRooms()).length, 1);
+  rt.rejectWrites = "capability_disabled";
+  await assert.rejects(t.createRoom({ id: "otherotherxx", kind: "daily-text", name: "방" }), (err) => err.code === "capability_disabled");
+  assert.match(t.info().lastError, /^create: capability_disabled/);
+});
+
+test("a chunk write that never answers rejects the append instead of blocking the room", async (t) => {
+  const rt = makeRuntime();
+  const ta = await ClaudeTransport.connect(rt.view(), { ...opts, callTimeoutMs: 40 });
+  await ta.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  const a = await ta.openRoom(ROOM);
+  t.after(() => a.close());
+  rt.hangWrites = true;
+  await assert.rejects(a.append(DOC, typed("가")), /timeout/);
+  rt.hangWrites = false;
+  await a.append(DOC, typed("가"));
+  await until(async () => (await a.load(DOC)).length === 1);
+  assert.deepEqual((await a.load(DOC)).map((o) => o.v), ["가"]);
+});
+
+test("a room that could not be finished can be dropped from the store", async () => {
+  const rt = makeRuntime();
+  const t = await ClaudeTransport.connect(rt.view(), opts);
+  await t.createRoom({ id: ROOM, kind: "daily-text", name: "방" });
+  await t.dropRoom(ROOM);
+  assert.equal((await t.listRooms()).length, 0);
+});
+
+test("the stand-in store is as strict as the real one about paths and frozen data", async () => {
+  const rt = makeRuntime();
+  const db = await rt.view().use("db");
+  assert.throws(() => db.doc("rooms"), TypeError);
+  assert.throws(() => db.collection("rooms/abc"), TypeError);
+  assert.throws(() => db.doc("rooms/has space"), TypeError);
+  await db.doc("rooms/abc").set({ list: [{ n: 1 }] });
+  const data = (await db.doc("rooms/abc").get()).data();
+  assert.throws(() => { data.list[0].n = 2; }, TypeError);
+});

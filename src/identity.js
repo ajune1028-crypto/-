@@ -51,11 +51,15 @@ export function setSetting(store, key, value) {
   store.set("settings", { ...getSettings(store), [key]: value });
 }
 
-/** Adds the room to this device's list, or updates it in place. */
-export function rememberRoom(store, { id, kind, name, memberId }, now = Date.now()) {
+/**
+ * Adds the room to this device's list, or updates it in place.
+ * `local` marks a room that lives on this device only; once set it stays.
+ */
+export function rememberRoom(store, { id, kind, name, memberId, local }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
+  if (local || (i >= 0 && rooms[i].local)) entry.local = true;
   if (i >= 0) rooms[i] = entry;
   else rooms.push(entry);
   store.set("rooms", rooms);

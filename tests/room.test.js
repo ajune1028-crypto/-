@@ -126,3 +126,9 @@ test("verifiers work where the browser offers no crypto.subtle", async () => {
     if (subtle && !("subtle" in crypto)) Object.defineProperty(crypto, "subtle", subtle);
   }
 });
+
+test("roomLink appends the room to the page address and drops any old hash", async () => {
+  const { roomLink } = await import("../src/core/room.js");
+  assert.equal(roomLink("https://claude.ai/artifact/AbC123", "abcdefgh2345"), "https://claude.ai/artifact/AbC123#r-abcdefgh2345");
+  assert.equal(roomLink("https://example.com/app/?x=1#r-oldoldoldold", "abcdefgh2345"), "https://example.com/app/?x=1#r-abcdefgh2345");
+});

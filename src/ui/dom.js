@@ -7,6 +7,7 @@ const ICONS = {
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
   redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
   palette: '<circle cx="9" cy="10" r="5"/><circle cx="15" cy="14" r="5"/>',
+  invite: '<circle cx="10" cy="8" r="3.6"/><path d="M3.5 19.5c.7-3.6 3.3-5.5 6.5-5.5 1.3 0 2.5.3 3.5.9"/><path d="M18 13.5v6M15 16.5h6"/>',
 };
 
 export function h(tag, props, ...children) {
@@ -45,6 +46,21 @@ export function mount(root, ...nodes) {
 export function inputRow(id, label, attrs = {}) {
   const input = h("input", { class: "input", id, type: "text", autocomplete: "off", ...attrs });
   return { input, row: h("div", { class: "row" }, h("label", { for: id, text: label }), input) };
+}
+
+/**
+ * A group of fields with one action. Not a <form>: the trial page runs in a
+ * sandboxed frame where forms never fire their submit event, so the action is
+ * wired to the button's click and to the Enter key.
+ */
+export function formBox(onSubmit, ...children) {
+  const el = h("div", { class: "form", role: "group" }, ...children);
+  el.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing || event.target.tagName !== "INPUT") return;
+    event.preventDefault();
+    onSubmit();
+  });
+  return el;
 }
 
 /** A two-or-more way choice. `options` is [[value, label, id?]]. */

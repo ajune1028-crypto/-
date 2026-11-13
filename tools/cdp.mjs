@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const KEYS = {
+  Escape: { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 },
   Backspace: { key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 },
   Enter: { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" },
   ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", windowsVirtualKeyCode: 37 },

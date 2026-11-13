@@ -24,8 +24,8 @@ for (const { name, run } of scenarios) {
   if (only.length && !only.some((word) => name.includes(word))) continue;
   const ns = "e2e" + Date.now().toString(36) + ++seq;
   const pages = [];
-  const open = async ({ dev = "a", hash = "", ...view } = {}) => {
-    const page = await browser.page(`http://127.0.0.1:${PORT}/index.html?ns=${ns}&dev=${dev}${hash ? "#" + hash : ""}`, view);
+  const open = async ({ dev = "a", hash = "", sandbox = false, query = "", ...view } = {}) => {
+    const page = await browser.page(`http://127.0.0.1:${PORT}/index.html?ns=${ns}&dev=${dev}${sandbox ? "&sandbox=1" : ""}${query ? "&" + query : ""}${hash ? "#" + hash : ""}`, view);
     pages.push(page);
     await page.waitFor("window.__app && window.__app.booted");
     return page;
