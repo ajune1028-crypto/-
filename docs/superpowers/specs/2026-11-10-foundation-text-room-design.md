@@ -297,23 +297,27 @@
 ```js
 /**
  * @typedef {Object} RoomChannel
+ * @property {() => Promise<string[]>} docs                  이 방에 기록이 있는 문서 id들
  * @property {(docId: string) => Promise<Op[]>} load        저장된 기록 불러오기
  * @property {(docId: string, ops: Op[]) => Promise<void>} append  저장하고 다른 기기에 전달
- * @property {(docId: string, onOps: (ops: Op[]) => void) => Unsubscribe} subscribe  다른 기기의 기록 받기
+ * @property {(onOps: (docId: string, ops: Op[]) => void) => Unsubscribe} subscribe  방 전체의 새 기록 받기
  * @property {(state: object) => void} setPresence          내 상태(커서 위치 등) 알리기
  * @property {(onPeers: (peers: Peer[]) => void) => Unsubscribe} onPresence  접속 중인 사람들
- * @property {(blob: Blob) => Promise<string>} putBlob      파일 올리고 id 받기
- * @property {(blobId: string) => Promise<string>} blobUrl  파일을 보여 줄 주소
  * @property {(onStatus: (s: "online" | "offline") => void) => Unsubscribe} onStatus
  * @property {() => void} close
  */
 
 /**
  * @typedef {Object} Transport
- * @property {(roomId: string) => Promise<RoomChannel>} openRoom
  * @property {(room: RoomMeta) => Promise<void>} createRoom
+ * @property {() => Promise<RoomMeta[]>} listRooms           이 저장소에 있는 방들
+ * @property {(roomId: string) => Promise<RoomChannel | null>} openRoom  없는 방이면 null
+ * @property {(roomId: string) => Promise<void>} [dropRoom]  끝내지 못한 방 만들기를 되돌림 (있으면)
+ * @property {() => object} info                             진단 화면에 보일 상태
  */
 ```
+
+구현하며 바뀐 점: 구독은 문서별이 아니라 방 전체로 한다(날짜 종이가 생길 때마다 구독을 늘리지 않으려고). `docs()`가 생겼다. 파일(`putBlob`, `blobUrl`)은 2차에서 넣는다. 시험판 전송 계층의 저장소 호출은 8초 안에 대답이 없으면 그만 기다리고, "unavailable"이면 한 번 더 해 본다. 실시간 채널은 저장소를 기다리게 하지 않고 대답이 오는 대로 붙는다.
 
 - `append`는 같은 기록을 두 번 보내도 안전하다.
 - `subscribe`는 내가 보낸 기록을 다시 받을 수 있다. 받는 쪽이 `id`로 걸러 낸다.

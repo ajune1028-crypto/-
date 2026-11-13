@@ -347,11 +347,11 @@ wide screen: at 1280×800 the column is centred and zoomed 1.4
 
 **Files:** Create `tools/bundle.mjs`; modify `tools/e2e.mjs` (accept `--dist`), spec files.
 
-- [ ] **Step 1:** `tools/bundle.mjs` writes `dist/index.html`: inlined CSS, modules wrapped in dependency order inside one script, imports and exports rewritten.
-- [ ] **Step 2:** Run `node tools/bundle.mjs && node tools/e2e.mjs --dist`. Expected: every scenario PASS against the bundle.
-- [ ] **Step 3:** Publish `dist/index.html` as an artifact, then declare `{db: {}, user: {}, room: {topics: {ops: "interact"}}}`.
-- [ ] **Step 4:** Tick the finished items in the overview's section 8, record deviations in section 9, re-read section 11.
-- [ ] **Step 5:** Commit `feat: bundle and trial page`.
+- [x] **Step 1:** `tools/bundle.mjs` writes `dist/index.html`: inlined CSS, modules wrapped in dependency order inside one script, imports and exports rewritten.
+- [x] **Step 2:** Run `node tools/bundle.mjs && node tools/e2e.mjs --dist`. Expected: every scenario PASS against the bundle.
+- [x] **Step 3:** Publish `dist/index.html` as an artifact, then declare `{db: {}, user: {}, room: {topics: {ops: "interact"}}}`.
+- [x] **Step 4:** Tick the finished items in the overview's section 8, record deviations in section 9, re-read section 11.
+- [x] **Step 5:** Commit `feat: bundle and trial page`.
 
 ---
 
