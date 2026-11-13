@@ -19,12 +19,15 @@ export const PALETTE = [
   { key: "olive", h: 100, c: 0.13 },
 ];
 
-export const INK = { light: "#1f2026", dark: "#f1efe9" };
-export const PAPER = { light: "#fbf9f6", dark: "#17181e" };
+// Must equal --ink and --paper in the stylesheet; a browser scenario checks that they agree.
+export const INK = { light: "#1b2030", dark: "#f2f5fb" };
+export const PAPER = { light: "#f8fafd", dark: "#111624" };
 
 // Text lightness per theme, and the range a mixed colour may land in.
 const TONE = { light: { l: 0.5, min: 0.4, max: 0.52 }, dark: { l: 0.8, min: 0.76, max: 0.88 } };
-const MIN_CONTRAST = 4.5;
+// Measured on plain paper. The writing sheet is frosted and lets a little of the
+// colour field behind it through, so 4.5:1 on the sheet needs this margin here.
+const MIN_CONTRAST = 4.75;
 
 const cache = new Map();
 

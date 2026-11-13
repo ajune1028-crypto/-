@@ -416,8 +416,8 @@ scenario("mix: switched off, a mixed word shows one colour and a double tap does
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("하나 ");
-  await focusEnd(b);
   await sameOnAll([a, b], "하나 ");
+  await focusEnd(b);
   await b.type("둘");
   await sameOnAll([a, b], "하나 둘");
   await focusEnd(a);
@@ -439,8 +439,8 @@ scenario("colours off: every word is ink, and the toolbar button brings colour b
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("가나 ");
-  await focusEnd(b);
   await sameOnAll([a, b], "가나 ");
+  await focusEnd(b);
   await b.type("다라");
   await sameOnAll([a, b], "가나 다라");
   await click(a, "#toggle-colors");
@@ -1001,5 +1001,85 @@ scenario("forms: every field is a visible box that a tap reaches, on every scree
     await b.waitFor(q("#back-pin"));
     assert.deepEqual(await fieldFaults(b), [], "join screen, returning");
     await b.shot(out(`join-back-${tag}.png`));
+  }
+});
+
+// ---- glass ---------------------------------------------------------------------------------------
+
+/** "rgb(1, 2, 3)" or "rgba(1, 2, 3, 0.5)" → [r, g, b, a]. */
+const rgba = (css) => { const p = /rgba?\(([^)]+)\)/.exec(css)[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+/** One colour laid over another, as a hex. */
+const over = (top, bottom) => { const [r, g, b, a] = top; const hx = (v) => Math.round(v).toString(16).padStart(2, "0"); return "#" + hx(r * a + bottom[0] * (1 - a)) + hx(g * a + bottom[1] * (1 - a)) + hx(b * a + bottom[2] * (1 - a)); };
+const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16), 1];
+
+scenario("glass: the chrome is frosted and blue, and text stays readable on the sheet and on the colour fields", async ({ open, out }) => {
+  for (const dark of [false, true]) {
+    const theme = dark ? "dark" : "light";
+    const [a] = await together(open, [], { dark });
+    await focusEnd(a);
+    await a.type("유리 위의 글");
+    await a.waitFor(`${TODAY}.querySelector(".draw .w")`);
+    const css = await a.eval(`(() => {
+      const cs = getComputedStyle(document.documentElement);
+      const probe = (name) => { const e = document.createElement("i"); e.style.color = "var(" + name + ")"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; };
+      const look = (sel) => { const e = document.querySelector(sel); if (!e) return null; const s = getComputedStyle(e); return { filter: s.backdropFilter || s.webkitBackdropFilter || "", bg: s.backgroundColor, image: s.backgroundImage, color: s.color }; };
+      const tokens = {};
+      for (const name of ["--paper", "--ink", "--muted", "--soft", "--sheet", "--accent", "--base", "--daily-a", "--daily-b", "--creative-a", "--creative-b", "--sky"]) tokens[name] = probe(name);
+      return { tokens, strength: parseFloat(cs.getPropertyValue("--field-strength")), bar: look(".room > .bar"), toolbar: look(".toolbar"), paper: look(".paper"), day: look(".day"), stamp: look(".stamp") };
+    })()`);
+    const t = Object.fromEntries(Object.entries(css.tokens).map(([k, v]) => [k, rgba(v)]));
+    const paper = t["--paper"];
+    // The colour fields at their strongest, as painted over the paper.
+    const fields = ["--daily-a", "--daily-b", "--creative-a", "--creative-b", "--sky"].map((name) => [name, hexRgb(over([...t[name].slice(0, 3), css.strength], paper))]);
+    assert.ok(css.strength > 0.5 && css.strength <= 1, "field strength " + css.strength);
+
+    // 1. Text on the writing sheet: the sheet is frosted, so the field behind shows through a little.
+    assert.ok(t["--sheet"][3] < 1 && t["--sheet"][3] >= 0.85, "the sheet is translucent but mostly solid: " + t["--sheet"][3]);
+    const inks = { ink: hex(css.tokens["--ink"]), muted: hex(css.tokens["--muted"]) };
+    for (let i = 0; i < 8; i++) inks["colour " + i] = memberColor(i, theme);
+    for (const [fieldName, field] of fields) {
+      const surface = over(t["--sheet"], field);
+      for (const [name, colour] of Object.entries(inks)) {
+        const c = contrast(colour, surface);
+        assert.ok(c >= 4.5, `${theme}: ${name} on the sheet over ${fieldName} is ${c.toFixed(2)}`);
+      }
+    }
+    assert.equal(hex(css.stamp.color), hex(css.tokens["--muted"]), "time stamps sit on the sheet");
+
+    // 2. Text straight on a colour field uses ink or the soft tone, and both read at the field's strongest.
+    for (const [fieldName, field] of fields) {
+      for (const name of ["--ink", "--soft"]) {
+        const c = contrast(hex(css.tokens[name]), over([0, 0, 0, 0], field));
+        assert.ok(c >= 4.5, `${theme}: ${name} on ${fieldName} is ${c.toFixed(2)}`);
+      }
+    }
+    assert.equal(hex(css.day.color), hex(css.tokens["--soft"]), "the date above a sheet sits on the field");
+
+    // 3. The chrome is glass: it blurs what is behind it and lets it through.
+    for (const [name, el] of [["top bar", css.bar], ["toolbar", css.toolbar]]) {
+      assert.match(el.filter, /blur\(/, `${theme}: the ${name} blurs what is behind it`);
+      assert.ok(el.image.includes("gradient") || rgba(el.bg)[3] < 1, `${theme}: the ${name} is see-through`);
+    }
+    // 4. Blue: the accent is a blue, and the ground outside the column leans blue.
+    const [ar, ag, ab] = t["--accent"];
+    assert.ok(ab > ar + 60 && ab > ag, `${theme}: accent ${css.tokens["--accent"]} is blue`);
+    assert.ok(t["--base"][2] > t["--base"][0], `${theme}: the ground leans blue`);
+    assert.ok(contrast("#ffffff", hex(css.tokens["--accent"])) >= 4.5, `${theme}: white reads on the accent`);
+    await a.shot(out(`glass-room-${theme}.png`));
+
+    await click(a, "#room-settings");
+    await settled(a);
+    const panel = await a.eval(`(() => { const s = getComputedStyle(document.querySelector(".panel")); return { filter: s.backdropFilter || s.webkitBackdropFilter || "", bg: s.backgroundColor, image: s.backgroundImage, button: getComputedStyle(document.querySelector("#save-pin")).backgroundImage + getComputedStyle(document.querySelector("#save-pin")).backgroundColor }; })()`);
+    assert.match(panel.filter, /blur\(/, `${theme}: sheets that slide up are frosted`);
+    await a.shot(out(`glass-settings-${theme}.png`));
+    await a.key("Escape");
+    await click(a, "#back");
+    await a.waitFor(q("#by-code"));
+    const home = await a.eval(`(() => { const g = (sel) => { const e = document.querySelector(sel); const s = getComputedStyle(e); return { filter: s.backdropFilter || s.webkitBackdropFilter || "", color: s.color }; };
+      return { add: g("#add-daily"), pill: g("#by-code"), note: g(".half-note"), when: g(".room-when") }; })()`);
+    assert.match(home.add.filter, /blur\(/, `${theme}: the + button is glass`);
+    assert.match(home.pill.filter, /blur\(/, `${theme}: the code pill is glass`);
+    assert.equal(hex(home.note.color), hex(css.tokens["--soft"]), "notes on the home fields use the soft tone");
+    await a.shot(out(`glass-home-${theme}.png`));
   }
 });
