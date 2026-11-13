@@ -3,6 +3,8 @@
 Every decision taken on the owner's behalf while carrying out `2026-11-12-text-room-phase1.md`, in the order made.
 Each line ends with what it costs if the decision turns out wrong.
 
+## Rulings
+
 - Setup: Ruling: no separate worktree; work in place on branch feat/text-room-phase1 — the repo is a fresh single-purpose checkout in a private workspace and the user said not to ask — cost if wrong: none, nothing else shares this checkout.
 - Setup: Ruling: final review will be a self-review — the user did not ask for subagents and the session is told not to spawn them unasked — cost if wrong: author blind spots stay until the user or a later reviewer looks.
 - Setup: Ruling: a task brief is re-read only when the plan text is no longer verbatim in context — the plan was written in this session and briefs are extracts of it — cost if wrong: a missed value, caught by the task's tests.
@@ -33,3 +35,22 @@ Each line ends with what it costs if the decision turns out wrong.
 - Glass: Ruling: "퍼런 애플글라스" is read as: content stays solid, chrome becomes glass — the writing sheet is 92% (light) / 90% (dark) solid so all eight colours keep 4.5:1; bars, toolbar, + buttons, pill, room cards and slide-up sheets are blue-tinted frosted glass with a bright rim; primary buttons and switches are blue; the two home hues stay (일상 yellow/orange, 창작 lavender) with a sky blue under both — cost if wrong: one more restyle of tokens.
 - Glass: Ruling: member colours now need 4.75:1 on plain paper (was 4.5) so that 4.5:1 still holds on the frosted sheet over the strongest field colour; text lying straight on a field uses a stronger secondary tone (--soft); dark field colours were darkened so white text reads on them — scenario "glass: …" RED→GREEN checks every pair — cost if wrong: colours a shade deeper than strictly needed.
 - Test: Ruling: two scenarios placed a caret before the other screen's text had arrived (the caret rightly stays in front of text that arrives after it); they now wait for agreement first — a race in the test, not in the app — cost if wrong: none.
+- Final: Ruling: the final message lists the rulings that change what the owner sees, and the complete list is committed as docs/superpowers/plans/2026-11-12-text-room-phase1-rulings.md — the owner reads on a phone and asked not to be consulted on details — cost if wrong: a decision they would have questioned goes unnoticed until they open the file.
+- Finish: Ruling: the branch feat/text-room-phase1 is kept as it is, nothing merged or pushed — there is no remote and the next pieces (text room part 2, song room) continue from here — cost if wrong: none.
+
+## The 13 November outage
+
+- Debug: ROOT CAUSE FOUND (2026-11-13 23:10, after the user's second report: "+ 눌러도 식별 코드 같은 게 하나도 안 되고, 코드를 쳐도 쳐지는지 모르겠고, 들어가기를 눌러도 안 된다"). Measured in a real browser: every form field was position:absolute, transparent text, transparent caret, no border, stretched over the whole sheet; a press at the centre of 방 만들기 landed on #my-pin. Cause: the text room's typing layer and the form fields shared the class name `input`, and the typing layer's rules (written in Task 8, unscoped) applied to every form field. Every scenario passed because the helpers pressed with el.click() and focused by script, which skip hit-testing. The earlier guesses (submit event, store, address) were not the cause.
+- Debug: fixed — typing layer renamed to .typing; scenario helpers now press at the element's centre through the browser's own hit test and fail naming what covers it; new scenario "forms: every field is a visible box that a tap reaches" RED→GREEN (light and dark; create, code, join, settings). The real presses also exposed a second fault, fixed the same way: a two-line home notice covered the ⋯ button → the notice now has its own row.
+
+## Final review and verification
+
+- Final review: self-review (session rules allow no reviewer agent unless the owner asks). Scope: everything since b0a72f6. No Critical or Important finding left open; the two found on the way (fields covering the forms; notice covering the settings button) were fixed RED→GREEN inside Task 10.
+- Final: verified 2026-11-13 23:4x — node --test 101/101; scenarios 57/57 on the source and 57/57 on the trial build; the live artifact file has the same sha256 as that build (b18326f7…, version 1794580122-d96e); the trial's own store holds a room made at 23:19 KST with its logs (4 documents), so making a room and writing works in the real runtime.
+
+## Deferred minors
+
+- Final: minor (deferred): a store write that lands after the app stopped waiting can leave an empty room of the same name listed on other devices.
+- Final: minor (deferred): on home the diagnostics read "실시간 채널 none" while no room is open, even when the channel is available.
+- Final: minor (deferred): the top edge of the blue button is 4.2:1 against white; the label sits where it is 4.6:1 or more.
+- Final: minor (deferred): in a frame that refuses storage, a reload forgets "who I am" in a room unless a personal code was set; the store's per-viewer area could keep it (needs the `user` capability).
