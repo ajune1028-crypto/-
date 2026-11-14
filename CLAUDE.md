@@ -11,6 +11,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 - **소리 넣기 세 가지 (11월 14일 밤, 가장 중요하다고 한 것)**: ① 앱 안에서 녹음(https 주소나 localhost의 브라우저), ② **폰 녹음 앱으로 녹음**(`<input type=file accept="audio/*" capture>`: 안드로이드에서 삼성 녹음 같은 기본 녹음 앱이 열리고 끝나면 바로 들어옴), ③ 파일 가져오기(m4a·mp3·wav·webm 등). 녹음 버튼은 늘 보이고, 마이크를 못 쓰는 화면(Claude 시험판)에서는 이유를 말하고 ②를 권한다. 빈 방에는 세 가지가 처음부터 보인다. 파일 선택은 `<label>`로만 연다(스크립트 click·await 뒤 열기는 일부 폰/앱 화면에서 막힘).
 - **화이트보드 방**: 노래 카드(노래 방의 '보내기' 또는 복사 후 '+ 노래'), 메모 카드, 모드 전체/이동/잇기(카드를 차례로 누르면 1, 2, 3 순서 줄, 빨주노초파남보검 색, 번호를 누르면 끊김), 순서대로 재생(줄로 이은 것, 나머지는 왼쪽부터), 확대·이동, 실행취소.
 - **레퍼런스(첫 조각)**: 나만 보는 메모. 이 기기에만 있고 방으로 가지 않는다. 홈과 모든 방의 책 버튼에서 열고, '이 방에 붙이기'로 텍스트 방(오늘 장에 한 줄)이나 화이트보드(메모 카드)에 넣는다. 설정에서 끌 수 있다.
+- **마무리 점검 (11월 14일 밤)**: 두 손가락 확대를 직사각형·음 편집의 음·화이트보드 카드 **위에서** 해도 확대만 된다(전에는 화면이 튀고, 음이 옮겨지거나 늘어나고, 오므리면 음이 생기고, 카드가 옮겨지거나 잇기 줄이 생겼다). 그리는 중에 손바닥이나 다른 손가락이 닿아도 선이 망가지지 않는다. 손가락으로 꾹 눌러 옮기기, 글라스 색 10가지(밝게·어둡게)도 시나리오로 확인.
 - **그리기(텍스트 방)**: 펜·연필(결)·마커·형광펜, 빨주노초파남보검, 굵기 3, 지우개 두 가지(부분 = 지나간 곳만, 획 = 획 통째). 획은 `k:<날짜>` 문서.
 - **모양**: 다크는 고급 검정(그래파이트). 글라스 색(빨주노초파남보갈핑·흑백·직접 고르기)이 유리·그림자·종이 테두리·하늘색 필드까지 물들인다. 밝게·어둡게에서 같은 색. 글자 크기 4단계. **가로·세로 화면** 둘 다(가로·PC는 너비를 쓰고 높이로 크기를 맞춤; 글 종이는 360 너비 그대로).
 - **공개 주소**: `.github/workflows/pages.yml`이 GitHub Pages에 올린다. 저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 한 번 바꾸고 `main`에 합치면 `https://ajune1028-crypto.github.io/-/`에서 Claude 없이 열리고 앱 안 녹음도 된다. **서버가 아직 없어 방은 그 기기에만 있다.**
@@ -34,12 +35,13 @@ Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 �
 ```
 npm test                                    # node --test. 단위 테스트 211개 (음 인식, 노래·화이트보드·그림 문서, 피아노, 늘이기, 재생 예약 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 82개. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 88개. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일로 묶는다
 ```
 
 - 화면 시나리오는 Chrome이나 Edge가 필요하다. 자동으로 찾고, 못 찾으면 `CHROME_BIN`에 실행 파일 경로를 넣는다.
 - 시나리오 브라우저는 가짜 마이크로 뜬다: `out/fixtures/mic.wav`(합성한 노랫소리, 정답 음을 안다)를 마이크로 들려준다. `out/fixtures/doremi.wav`는 "소리 가져오기"용이고, ffmpeg가 있으면 같은 노래를 m4a(삼성 녹음 형식)·mp3·webm으로도 만들어 가져오기를 시험한다(없으면 그 시나리오만 건너뜀). 모두 `tools/e2e.mjs`가 매번 만든다.
+- 손가락은 `page.touch("start"|"move"|"end", [[x, y], …])`와 `page.pinch(from, to)`로 한다. Chrome의 실제 터치 경로를 지나서 포인터·터치 이벤트가 폰과 같은 차례로 온다.
 - 끌기(꾹 눌러 옮기기, 펜)는 `page.press/moveTo/release`로 한다. Chrome은 뒤에 있는 페이지에 움직임을 프레임마다만 넘기므로 `press`가 페이지를 앞으로 가져온다. 그림이나 화면 캡처를 뒤쪽 페이지에서 할 때는 `page.front()`.
 - 로컬에서 두 사람 흉내: 같은 주소로 탭 두 개를 `?dev=a`, `?dev=b`로 연다. `?dev`가 없으면 공개 주소처럼 "이 기기만" 방이 된다. `?ns=이름`은 저장 공간을 분리한다(테스트용).
 - `dist/`와 `out/`은 git에 없다.
@@ -51,7 +53,7 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 - `core/`: `crdt.js`(글자 목록 RGA와 시계), `edit.js`, `paint.js`(사람 색, 섞기, 명암비, 글라스 색 계산 `accentColors`), `room.js`, `time.js`, `undo.js`, `b64.js`, **`song.js`**(노래 문서: 소리 `src`, 클립 `clip`/`cset`/`crm`, 음 편집 `nfix`/`nadd`와 `notesOf`, 잇기, 겹침 해소, 재생할 음 계산, 되돌리기), **`ink.js`**(그림 획 `stroke`/`srm`, 붓 `b`, 부분 지우개 = `b:"erase"` 획), **`board.js`**(화이트보드: 카드 `item`/`iset`/`irm`, 순서 줄 `link`/`lrm`, `playOrder`, `boardSong`, `cardFromClip`)
 - **`audio/`**: `dsp.js`(모노, 16 kHz로 리샘플), `pitch.js`(YIN, 10ms마다 음높이), `notes.js`(음표로 묶기: 반음 0.6/60ms, 소리 크기 꺼짐(라-라), 비브라토 묶기, 80ms 미만 버림, 도레미 이름), `analyze.js`(실시간으로 먹이는 Analyzer와 파일 전체 분석), `peaks.js`(파형 요약, base64), `wav.js`, `piano.js`(직접 만드는 피아노 소리, 밝게/어둡게, 울림), `stretch.js`(WSOLA: 빠르기를 바꿔도 음높이 그대로), `engine.js`(재생 예약, 원본/피아노, 빠르기), `recorder.js`(마이크), `decode.js`(파일 읽기)
 - `sync/`: `transport.js`, `local.js`, `claude.js`(시험판), `session.js`(방 하나. 문서 종류는 `DOC_TYPES` 표: `room`, `s:<날짜>` 장, `song`, `k:<날짜>` 그림, `board`), **`blobs.js`**(기기에 파일 보관, IndexedDB)
-- `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층: 붓·지우개), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치·확대), **`note-editor.js`**(음 편집 피아노 롤), **`board-room.js`**(화이트보드), **`reference.js`**(레퍼런스 시트), `theme.css`, `theme.js`(가로/세로 크기, 글라스 색, 글자 크기)
+- `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층: 붓·지우개), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치·확대), **`note-editor.js`**(음 편집 피아노 롤), **`board-room.js`**(화이트보드), **`reference.js`**(레퍼런스 시트), **`fingers.js`**(두 손가락은 늘 확대: 한 손가락 동작이 비켜 준다), `theme.css`, `theme.js`(가로/세로 크기, 글라스 색, 글자 크기)
 - `identity.js`(기기 설정: 테마, 색, 노래 방 모드·음색·파형·싱크 보정·빠르기, 붓·지우개, 글라스 색, 글자 크기, 레퍼런스 켜기), **`clipboard.js`**(기기 클립보드: 방 사이 복사), **`reference.js`**(나만 보는 메모, 기기에만), `main.js`
 
 핵심 약속: 모든 변경은 op 하나이고, op는 어떤 순서로 몇 번 받아도 결과가 같다. 그래서 서버는 저장하고 전달만 하면 된다. 새 방 종류는 (1) `core/`에 문서, (2) `session.js`의 `DOC_TYPES`에 한 줄, (3) `ui/`에 화면, (4) `kinds.js`에 한 줄이다. 앱 본체는 `Transport` 약속만 알고, 실제 배포에서는 `sync/supabase.js` 하나를 더하면 된다(로드맵 4절).
@@ -76,6 +78,7 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 - 끝났다고 말하기 전에 실제로 돌린다: `npm test`, `node tools/e2e.mjs`, 묶음 파일은 `--dist`로 한 번 더.
 - 화면 시나리오는 실제 탭(브라우저의 hit test)으로 누른다. `el.click()`과 스크립트 포커스는 무엇이 가리는지 못 잡는다.
 - 폼 칸(`.input`)과 글 쓰는 층(`.typing`)의 CSS는 절대 섞지 않는다.
+- 한 손가락 동작(끌기·탭·두 번 누르기)은 자기 포인터(`pointerId`)만 따르고, 두 번째 손가락이 닿으면 `ui/fingers.js`의 `watchFingers`로 비켜 준다(하던 것을 되돌리고 저장하지 않는다). 손가락 밑에 있을 수 있는 요소는 다시 그릴 때 새로 만들지 말고 옮긴다: 터치는 시작한 요소에 붙어 있어서, 바뀐 요소에서는 이벤트가 화면까지 오지 않는다.
 - `core/paint.js`의 `INK`/`PAPER` 값은 `theme.css`의 `--ink`/`--paper`와 같아야 한다(시나리오가 검사한다). 사람 색 글자는 모든 배경에서 명암비 4.5:1 이상.
 - 외부 라이브러리 없이 간다. 묶는 도구(`tools/bundle.mjs`)는 `import { a, b } from "…"`와 `export function/class/const/let/async function`만 안다(`export default`, `import *` 안 됨).
 - 코드 주석은 영어, 사용자에게 보이는 글자와 문서는 한국어. 커밋 제목은 `feat:` `fix:` `docs:` `chore:`로 시작한다.
@@ -105,3 +108,5 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 - 홈의 연결 진단이 방이 없을 때 "실시간 채널 none"으로 보인다.
 - 저장소를 거부하는 틀에서는 새로고침하면 "내가 누구인지"를 잊는다(개인 코드를 정한 사람은 괜찮다).
 - 실제 안드로이드 폰의 한글 입력(조합)과 화면은 사람이 직접 확인하지 않았다.
+- 텍스트 방에는 두 손가락 확대가 없고, 그리기를 켠 동안에는 종이 위에서 손가락으로 화면을 밀 수 없다(첫 손가락만 그린다). 밀려면 펜을 끈다.
+- 터치는 헤드리스 Chrome의 터치 흉내로만 시험했다. 실제 폰의 꾹 누르기(글자 선택·메뉴)는 CSS로 막아 두었지만 사람이 확인하지 않았다.

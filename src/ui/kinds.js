@@ -13,7 +13,10 @@ import { mountTextRoom } from "./text-room.js";
 import { mountSongRoom } from "./song-room.js";
 import { mountBoardRoom } from "./board-room.js";
 
-/** The halves of home. A third place (레퍼런스) is planned; see docs/superpowers/specs. */
+/**
+ * The halves of home. 레퍼런스 is not a half: it is a private sheet opened from
+ * home and from every room's bar (ui/reference.js), kept on the device only.
+ */
 export const SIDES = {
   daily: { title: "일상", note: "가볍게, 매일" },
   creative: { title: "창작", note: "같이 만들기" },

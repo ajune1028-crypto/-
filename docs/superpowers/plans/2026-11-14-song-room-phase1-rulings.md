@@ -35,9 +35,9 @@ Every decision taken on the owner's behalf in this session, in the order made. E
 
 - Ruling: rows are 5.25 rem tall; note bars may be taller than a semitone step (one voice sings one note at a time, so bars never sit side by side) so the 도레미 names fit; each sound has a fixed pitch window of at least 10 semitones so a cut clip keeps its bar heights — cost if wrong: very wide melodies look flatter.
 - Ruling: a tap on a clip chooses it and opens its menu; a second tap closes it; hold 380 ms then drag moves it; a drag without holding scrolls (clips handle panning themselves, since touch-action must be none on them for the hold) — cost if wrong: one more tap.
-- Ruling: the record button gives way to 소리 가져오기 where there is no microphone; with a microphone, importing is in the settings sheet, as the spec says — cost if wrong: one more step to import on phones.
+- Ruling: the record button gives way to 소리 가져오기 where there is no microphone; with a microphone, importing is in the settings sheet, as the spec says — cost if wrong: one more step to import on phones. (Replaced in the second round below: the record button always shows, and the toolbar's 소리 넣기 offers all three ways in.)
 - Ruling: copy puts the clip on a device-wide clipboard, so it pastes into other song rooms too (the sound's notes and waveform travel; the recording stays on the device) — the first piece of "moving work between rooms" — cost if wrong: none.
-- Ruling: "음 보기" lists each note with its name, start and length to 0.01 s, and plays a note when tapped — this answers "0.5초인지 0.4초인지" directly — cost if wrong: none.
+- Ruling: "음 보기" lists each note with its name, start and length to 0.01 s, and plays a note when tapped — this answers "0.5초인지 0.4초인지" directly — cost if wrong: none. (In the second round the list moved under 음 편집's piano roll; the menu item 음 보기 is gone.)
 
 ## Skeleton
 
@@ -76,3 +76,12 @@ Every decision taken on the owner's behalf in this session, in the order made. E
 - Ruling: 잇기 on the board is "tap cards one after another" (the original idea's numbered taps), not a freehand brush; a freehand order brush can be added on top — cost if wrong: one more input mode.
 - Ruling: 보내기 opens the chosen whiteboard's session in the background, adds the card and closes it after the store has it — cost if wrong: none.
 - Ruling: 레퍼런스 starts as private notes kept on the device only (never synced, so nobody else can see them), with 이 방에 붙이기 for text rooms and boards and a settings switch that hides it everywhere — cost if wrong: notes do not follow the person to another device until the server exists.
+
+## Final check (14 November, night)
+
+- Ruling: two fingers always mean zoom, never an edit. A second finger landing cancels whatever the first began (a clip's hold or scroll, a note's move or stretch, a card's move, a time-bar scrub) without saving, and the lifts that end a pinch are no taps or double taps. One helper, ui/fingers.js (watchFingers), serves the timeline, 음 편집 and the whiteboard; every one-finger gesture follows only its own pointerId. Found by testing with real touch events: before, a pinch on a rectangle scrolled from the wrong finger (104 px off with one thumb held still), a pinch on notes stopped after one step, pinching in on empty roll space added a note, and a pinch on cards moved them or made an order line — cost if wrong: none.
+- Ruling: 음 편집 keeps its keys, row stripes and notes from one draw to the next and only moves them, as the timeline already did for clips: a touch stays with the element it began on, so an element replaced under a finger stops reaching the roll — cost if wrong: none.
+- Ruling: on the whiteboard, 잇기 counts a tap (lifted without moving), not a touch, so a pinch that starts on a card joins nothing — cost if wrong: none; mouse clicks behave as before.
+- Ruling: a drawn line belongs to the finger or pen that began it; a resting palm or a second finger is left out (before, it threw the line away and joined both fingers into a zigzag). Two-finger scrolling while the pen is on is not offered yet; turning the pen off scrolls — cost if wrong: someone wanting to scroll mid-drawing turns the pen off first.
+- Ruling: the timeline and the piano roll select no text (user-select: none, no touch callout), so a long press picks a clip or a note up instead of selecting its name, which cancels the touch on phones — cost if wrong: none; nothing there is text to copy.
+- Ruling: the test driver drives fingers through Input.dispatchTouchEvent (page.touch, page.pinch), which passes Chrome's own touch path, so pointer and touch events arrive in a phone's order; a real phone's long press was not checked by a person — cost if wrong: a phone-only long-press quirk would show up only on the device.
