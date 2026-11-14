@@ -1,3 +1,5 @@
 out/
 dist/
 .superpowers/
+# The owner's raw words and reference images stay off this public repository until they say it may be public.
+docs/superpowers/source/
