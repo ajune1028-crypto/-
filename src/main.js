@@ -30,10 +30,12 @@ async function findRuntime() {
   return null;
 }
 
-async function chooseTransport(app, patience) {
+async function chooseTransport(app, patience, testing) {
   const runtime = await findRuntime();
   app.trace(`page ${window.parent !== window ? "framed" : "top"}, runtime ${runtime ? "found" : "absent"}`);
-  if (!runtime) return { transport: app.local(), limited: false };
+  // On a public address with no server yet (GitHub Pages), rooms live on this device only, and the
+  // screens say so. Test devices (?dev=…) share one browser, so for them the local rooms are shared.
+  if (!runtime) return { transport: app.local(), limited: !testing };
   const transport = await ClaudeTransport.connect(runtime, { callTimeoutMs: patience, log: app.trace });
   return transport ? { transport, limited: false } : { transport: app.local(), limited: true };
 }
@@ -86,7 +88,7 @@ export function boot(root) {
   applyTheme(getSettings(store).theme);
   applyAccent(getSettings(store).accent);
   applyTextScale(getSettings(store).textScale);
-  app.ready = chooseTransport(app, patience).then(({ transport, limited }) => {
+  app.ready = chooseTransport(app, patience, !!dev).then(({ transport, limited }) => {
     app.transport = transport;
     app.limited = limited;
     app.connecting = false;

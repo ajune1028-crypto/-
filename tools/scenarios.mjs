@@ -647,13 +647,23 @@ scenario("slow start: while nothing answers the home says 아직 연결 중 and 
 
 scenario("no store: the page says other devices cannot connect and works on its own", async ({ open }) => {
   const page = await open({ init: "window.claude = { use: () => Promise.resolve(null) };" });
-  await page.waitFor(`document.querySelector("#notice")?.textContent === "이 화면에서는 다른 기기와 연결되지 않아요"`);
+  await page.waitFor(`document.querySelector("#notice")?.textContent === "아직 서버가 없어서 방은 이 기기에만 있어요"`);
   // A room made in such a view lives on this device only, so no invitation is offered.
   await createRoom(page, { noInvite: true });
   assert.equal(await text(page, "#banner"), "이 기기에만 있는 방이에요. 다른 기기와는 연결되지 않아요.");
   await focusEnd(page);
   await page.type("혼자 쓰기");
   await sameOnAll([page], "혼자 쓰기");
+});
+
+scenario("public page: with no server yet, rooms stay on this device and the screens say so", async ({ open }) => {
+  // No ?dev: the page as people open it on a public address (GitHub Pages), before a server exists.
+  const page = await open({ dev: "" });
+  await page.waitFor(`document.querySelector("#notice")?.textContent === "아직 서버가 없어서 방은 이 기기에만 있어요"`);
+  await createRoom(page, { noInvite: true });
+  assert.equal(await text(page, "#banner"), "이 기기에만 있는 방이에요. 다른 기기와는 연결되지 않아요.");
+  await click(page, "#invite");
+  await page.waitFor(q("#invite-local"));
 });
 
 scenario("new version: an op this app does not know shows the refresh notice", async ({ open }) => {
