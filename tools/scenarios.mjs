@@ -122,6 +122,38 @@ scenario("create: an empty room name or a bad code is refused with a reason", as
   assert.equal(await page.eval("location.hash"), "");
 });
 
+scenario("home: each room says what kind it is; nothing flashes blue; corners take the glass colour, the middle colours stay in dark", async ({ open, out }) => {
+  const page = await open();
+  await createSongRoom(page, { room: "노래 방" });
+  await click(page, "#back");
+  await createBoard(page, { room: "보드 방" });
+  await click(page, "#back");
+  await createRoom(page, { room: "글 방" });
+  await click(page, "#back");
+  await page.waitFor(`document.querySelectorAll(".room-row").length === 3`);
+  const rows = await page.eval(`[...document.querySelectorAll(".room-row")].map((r) => [r.querySelector(".room-name").textContent, r.querySelector(".room-kind")?.textContent ?? "", !!r.querySelector(".room-kind svg")]).sort()`);
+  assert.deepEqual(rows, [["글 방", "텍스트", true], ["노래 방", "노래 만들기", true], ["보드 방", "화이트보드", true]]);
+  // No blue flash where a finger lands (Android draws one on anything tappable unless told not to).
+  const flash = await page.eval(`[...document.querySelectorAll(".room-row, .add, .icon-btn")].map((el) => getComputedStyle(el).webkitTapHighlightColor)`);
+  assert.ok(flash.length > 3 && flash.every((c) => c === "rgba(0, 0, 0, 0)"), JSON.stringify(flash));
+  // The fields: corner and bottom washes are the glass colour; the middle is 일상's orange or 창작's periwinkle.
+  const washes = () => page.eval(`(() => {
+    const of = (side) => [...getComputedStyle(document.querySelector(".field." + side), "::before").backgroundImage.matchAll(/radial-gradient\\([^,]*,\\s*(color\\([^)]*\\)|rgba?\\([^)]*\\))/g)].map((m) => m[1]);
+    return { daily: of("daily"), creative: of("creative") };
+  })()`);
+  const light = await washes();
+  await page.shot(out("home-kinds-light.png"));
+  await page.media(true, false);
+  const dark = await washes();
+  await page.shot(out("home-kinds-dark.png"));
+  for (const [theme, w] of [["light", light], ["dark", dark]]) {
+    assert.equal(w.daily[1], "rgb(255, 178, 125)", theme + ": 일상's middle is the light orange");
+    assert.equal(w.creative[1], "rgb(185, 198, 255)", theme + ": 창작's middle is the light periwinkle");
+    assert.ok(w.daily[0] === w.daily[2] && w.creative[0] === w.daily[0] && w.creative[2] === w.daily[0], theme + ": every corner is the one glass colour: " + JSON.stringify(w));
+  }
+  assert.notEqual(light.daily[0], dark.daily[0], "the glass wash is lighter in light mode and deeper in dark");
+});
+
 scenario("create: on the creative side 노래 만들기 and 화이트보드 are open and 글쓰기 says 준비 중", async ({ open }) => {
   const page = await open();
   await click(page, "#add-creative");
@@ -1056,14 +1088,16 @@ scenario("glass: the chrome is frosted and blue, and text stays readable on the 
       const probe = (name) => { const e = document.createElement("i"); e.style.color = "var(" + name + ")"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; };
       const look = (sel) => { const e = document.querySelector(sel); if (!e) return null; const s = getComputedStyle(e); return { filter: s.backdropFilter || s.webkitBackdropFilter || "", bg: s.backgroundColor, image: s.backgroundImage, color: s.color }; };
       const tokens = {};
-      for (const name of ["--paper", "--ink", "--muted", "--soft", "--sheet", "--accent", "--base", "--daily-a", "--daily-b", "--creative-a", "--creative-b", "--sky"]) tokens[name] = probe(name);
+      for (const name of ["--paper", "--ink", "--muted", "--soft", "--sheet", "--accent", "--base", "--daily-b", "--creative-b", "--sky"]) tokens[name] = probe(name);
       return { tokens, strength: parseFloat(cs.getPropertyValue("--field-strength")), bar: look(".room > .bar"), toolbar: look(".toolbar"), paper: look(".paper"), day: look(".day"), stamp: look(".stamp") };
     })()`);
     const t = Object.fromEntries(Object.entries(css.tokens).map(([k, v]) => [k, rgba(v)]));
     const paper = t["--paper"];
     // The colour fields at their strongest, as painted over the paper.
-    const fields = ["--daily-a", "--daily-b", "--creative-a", "--creative-b", "--sky"].map((name) => [name, hexRgb(over([...t[name].slice(0, 3), css.strength], paper))]);
-    assert.ok(css.strength > 0.5 && css.strength <= 1, "field strength " + css.strength);
+    // (Corners are the glass colour, --sky; the middle is 일상's orange or 창작's periwinkle, the same in both themes,
+    // so on near-black the field glows at half strength.)
+    const fields = ["--daily-b", "--creative-b", "--sky"].map((name) => [name, hexRgb(over([...t[name].slice(0, 3), css.strength], paper))]);
+    assert.ok(css.strength >= 0.45 && css.strength <= 1, "field strength " + css.strength);
 
     // 1. Text on the writing sheet: the sheet is frosted, so the field behind shows through a little.
     assert.ok(t["--sheet"][3] < 1 && t["--sheet"][3] >= 0.85, "the sheet is translucent but mostly solid: " + t["--sheet"][3]);

@@ -22,6 +22,12 @@ const ICONS = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
   pen: '<path d="M4.5 19.5l1.2-4.4L15.6 5.2a2.1 2.1 0 013 3l-9.9 9.9z"/><path d="M13.8 7l3 3"/>',
   eraser: '<path d="M8.6 19.5h10.9"/><path d="M4.9 15.3l8.4-8.4a2 2 0 012.8 0l2.9 2.9a2 2 0 010 2.8l-6.6 6.6H8.5z"/>',
+  // Room kinds.
+  lines: '<path d="M5 7h14M5 12h14M5 17h9"/>',
+  note: '<path d="M9 17.5V6.5l10-2.2V15.5"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.6" r="2.4"/>',
+  board: '<rect x="3.5" y="4.5" width="8" height="6.5" rx="1.6"/><rect x="12.5" y="13" width="8" height="6.5" rx="1.6"/><path d="M11.5 7.8c3.2 0 4.8 1.6 5 5.2"/>',
+  photo: '<rect x="4" y="5.5" width="16" height="13" rx="2.6"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.4-3.9 3.4 2.9 2.6-2.1 3.6 3.1"/>',
+  mixed: '<path d="M4.5 7.5h7M4.5 11.5h7M4.5 15.5h4.5"/><rect x="14" y="7" width="6" height="9" rx="1.6"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
 };

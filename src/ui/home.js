@@ -6,7 +6,7 @@ import { rememberRoom } from "../identity.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
-import { SIDES, kindsOf, sideOf } from "./kinds.js";
+import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { getSettings } from "../identity.js";
 
@@ -25,10 +25,14 @@ export function showHome(app) {
   let slow = false;
   let closeSheet = null;
 
+  // A room's row says what kind of room it is, so a whiteboard is told from a song room at a glance.
   function roomRow(room, when) {
-    return h("button", { class: "room-row", type: "button", data: { id: room.id }, onclick: () => app.go("r-" + room.id) },
+    const kind = kindInfo(room.kind);
+    return h("button", { class: "room-row", type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: () => app.go("r-" + room.id) },
       h("span", { class: "room-name", text: room.name }),
-      when && h("span", { class: "room-when", text: when }));
+      h("span", { class: "room-meta" },
+        h("span", { class: "room-kind" }, icon(kind?.icon || "lines"), kind?.name || "새 버전의 방"),
+        when && h("span", { class: "room-when", text: when })));
   }
 
   function half(side, title, note, emptyText) {
@@ -78,6 +82,7 @@ export function showHome(app) {
     sheet("어떤 방을 만들까요?", (panel, close) => {
       panel.append(h("div", { class: "kinds" }, kindsOf(side).map((k) =>
         h("button", { class: "kind", type: "button", data: { kind: k.kind }, disabled: !k.mount, onclick: () => { close(); roomForm(k); } },
+          h("span", { class: "kind-icon" }, icon(k.icon)),
           h("span", { class: "kind-name" }, k.name, h("span", { class: "kind-note", text: k.note })),
           !k.mount && h("span", { class: "soon", text: "준비 중" })))));
     });

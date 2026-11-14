@@ -23,12 +23,12 @@ export const SIDES = {
 };
 
 export const ROOM_KINDS = [
-  { kind: "daily-text", side: "daily", name: "텍스트", note: "같은 종이에 같이 써요", mount: mountTextRoom },
-  { kind: "daily-photo", side: "daily", name: "사진", note: "시간대별 사진과 3초 영상" },
-  { kind: "daily-both", side: "daily", name: "통합", note: "텍스트와 사진을 한 방에" },
-  { kind: "creative-song", side: "creative", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요", mount: mountSongRoom },
-  { kind: "creative-writing", side: "creative", name: "글쓰기", note: "같이 쓰는 문서" },
-  { kind: "creative-board", side: "creative", name: "화이트보드", note: "노래 카드를 놓고 재생 순서를 이어요", mount: mountBoardRoom },
+  { kind: "daily-text", side: "daily", name: "텍스트", icon: "lines", note: "같은 종이에 같이 써요", mount: mountTextRoom },
+  { kind: "daily-photo", side: "daily", name: "사진", icon: "photo", note: "시간대별 사진과 3초 영상" },
+  { kind: "daily-both", side: "daily", name: "통합", icon: "mixed", note: "텍스트와 사진을 한 방에" },
+  { kind: "creative-song", side: "creative", name: "노래 만들기", icon: "note", note: "흥얼거리면 피아노 음이 돼요", mount: mountSongRoom },
+  { kind: "creative-writing", side: "creative", name: "글쓰기", icon: "pen", note: "같이 쓰는 문서" },
+  { kind: "creative-board", side: "creative", name: "화이트보드", icon: "board", note: "노래 카드를 놓고 재생 순서를 이어요", mount: mountBoardRoom },
 ];
 
 export function kindsOf(side) {
