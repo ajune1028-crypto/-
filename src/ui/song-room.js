@@ -17,7 +17,7 @@ import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
 import { memberColor, INK } from "../core/paint.js";
 import {
-  MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps,
+  MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps,
   joinClipOps, joinWithSourceOps, combinedSource,
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
@@ -323,8 +323,15 @@ export function mountSongRoom(body, app, session, frame) {
           rec.notes = rec.analyzer.notes();
           timeline.render(model());
         } else timeline.drawRecording(model().recording);
-      } else if (player?.playing) playhead = player.position;
-      else return void draw();
+      } else if (player?.playing) {
+        playhead = player.position;
+        // What sounds now glows.
+        const now = song.layout().filter((c) => !c.muted && c.start <= playhead && playhead < c.start + c.length).map((c) => c.id);
+        if (now.join() !== sounding.join()) timeline.markPlaying(sounding = now);
+      } else {
+        if (sounding.length) timeline.markPlaying(sounding = []);
+        return void draw();
+      }
       timeline.setPlayhead(playhead);
       timeline.follow(playhead);
       clockTime.textContent = timeText(playhead);
@@ -335,6 +342,43 @@ export function mountSongRoom(body, app, session, frame) {
 
   function stopFrames() {
     cancelAnimationFrame(frameReq);
+    if (sounding.length && !soloClip) timeline.markPlaying(sounding = []);
+  }
+
+  // ▶ 듣기 in a clip's menu: just that clip, on a player of its own. Again stops it.
+  let sounding = [];
+  let soloClip = null;
+  let soloPlayer = null;
+  async function playClipAlone(id) {
+    if (soloPlayer?.playing) {
+      const was = soloClip;
+      stopSolo();
+      if (was === id) return;
+    }
+    if (player?.playing) await togglePlay();
+    const clip = song.clip(id);
+    const src = clip && song.source(clip.src);
+    const ctx = src && (await ready());
+    if (!ctx) return;
+    const one = new SongDoc();
+    one.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map((n) => [Math.round(n.t), Math.max(1, Math.round(n.d)), n.p, Math.round(Math.min(1, Math.max(0, n.v)) * 100)]), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
+    one.apply({ t: "clip", id: clip.id, src: src.id, row: 0, start: 0, offset: clip.offset, length: clip.length, by: clip.by, at: 0 });
+    soloPlayer?.close();
+    soloPlayer = new SongPlayer(ctx, { song: () => one, audioFor: (sid) => audio.get(sid) || null, onEnd: () => stopSolo() });
+    soloPlayer.setMode(settings().songMode);
+    soloPlayer.setTone(settings().pianoTone);
+    soloPlayer.setSpeed(settings().songSpeed || 1);
+    soloClip = id;
+    soloPlayer.play(0);
+    timeline.markPlaying(sounding = [id]);
+    placeMenu();
+  }
+
+  function stopSolo() {
+    soloPlayer?.stop();
+    soloClip = null;
+    timeline.markPlaying(sounding = []);
+    if (alive) placeMenu();
   }
 
   function setMode(mode) {
@@ -660,6 +704,7 @@ export function mountSongRoom(body, app, session, frame) {
     }
     const item = (id, text, onclick, disabled = false) => h("button", { type: "button", id, text, disabled, onclick: (e) => { e.stopPropagation(); onclick(); } });
     menu.replaceChildren(
+      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !!rec),
       item("clip-copy", "복사", () => copyClip(clip.id)),
       item("clip-paste", "붙여넣기", () => pasteClip(), !clipboardItem(app.store, "song-clip") || readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), readOnly()),
@@ -898,6 +943,7 @@ export function mountSongRoom(body, app, session, frame) {
       if (rec) rec.recorder.stop();
       rec = null;
       player?.close();
+      soloPlayer?.close();
       editor?.close();
       closeAdd?.();
       stopPickerWatch();

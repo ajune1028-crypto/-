@@ -2121,6 +2121,43 @@ scenario("whiteboard 노래 모드: cut a card where it is tapped, mute it, edit
   assert.deepEqual(fresh.data.notes.map((n) => n[2]), [60, 62, 64, 65, 67], "its notes were found");
 });
 
+scenario("playing made simple: tap a card and its menu is by it; ▶ 듣기 plays just that one, which glows with a moving line; in the song room the same for a clip", async ({ open, fixtures }) => {
+  const page = await open();
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  await click(page, "#my-songs");
+  await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+  await click(page, "#song-drawer .song-pick");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
+  await click(page, ".card.song");
+  await page.waitFor(q("#card-menu #card-play"));
+  const near = await page.eval(`(() => { const m = document.getElementById("card-menu").getBoundingClientRect(); const c = document.querySelector(".card.song").getBoundingClientRect(); return { gap: Math.min(Math.abs(m.bottom - c.top), Math.abs(m.top - c.bottom)), overlapX: Math.min(m.right, c.right) - Math.max(m.left, c.left) }; })()`);
+  assert.ok(near.gap < 20 && near.overlapX > 0, "the menu stands by the card: " + JSON.stringify(near));
+  assert.ok(!(await page.eval(q("#board-rail #card-cut"))), "the side keeps only the mode's tools");
+  await click(page, "#card-play");
+  await page.waitFor(`document.querySelector(".card.song.playing .card-line")`, 4000);
+  const l1 = await page.eval(`parseFloat(document.querySelector(".card-line").style.left)`);
+  await page.waitFor(`parseFloat(document.querySelector(".card-line")?.style.left) > ${l1 + 5}`, 4000);
+  assert.equal(await text(page, "#card-play"), "■ 멈춤");
+  await click(page, "#card-play");
+  await page.waitFor(`!document.querySelector(".card.playing") && !document.querySelector(".card-line")`);
+  // The song room: ▶ 듣기 in the clip's menu, and what sounds glows.
+  await click(page, "#back");
+  await page.waitFor(q('[data-side="creative"] .room-row'));
+  await click(page, '.room-row[data-room-kind="creative-song"]');
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-play");
+  await page.waitFor(`document.querySelector(".clip[data-id].playing") && ${q("#clip-play")}.textContent === "■ 멈춤"`, 4000);
+  await click(page, "#clip-play");
+  await page.waitFor(`!document.querySelector(".clip.playing")`);
+  await click(page, "#to-start");
+  await click(page, "#play");
+  await page.waitFor(`document.querySelector(".clip[data-id].playing")`, 4000);
+  await click(page, "#play");
+  await page.waitFor(`!document.querySelector(".clip.playing")`);
+});
+
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);

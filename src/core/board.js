@@ -257,10 +257,15 @@ export function playOrder(board) {
 
 /** The song cards in order as one song, one after another, for the player. */
 export function boardSong(board) {
+  return cardsSong(playOrder(board));
+}
+
+/** Any song cards (one alone, to hear just it) as one song, back to back. */
+export function cardsSong(cards) {
   const song = new SongDoc();
   const clock = new Clock("board");
   let at = 0;
-  for (const card of playOrder(board)) {
+  for (const card of cards) {
     const d = card.data;
     const src = { t: "src", id: clock.next(), dur: d.dur, notes: d.notes, peaks: d.peaks, by: card.by, at: 0 };
     if (d.blob) src.blob = d.blob;

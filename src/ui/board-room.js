@@ -23,7 +23,7 @@ import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
 import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
 import {
-  addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong,
+  addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
 } from "../core/board.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
@@ -61,7 +61,9 @@ export function mountBoardRoom(body, app, session, frame) {
   let linkFrom = null;
   let cutting = false; // 분할: the next tap on a song card cuts it there
   let player = null;
-  let playing = null;
+  let playing = null; // the card sounding now
+  let solo = null; // a card played alone (▶ 듣기)
+  let menu = null; // the chosen card's menu, by the card
   let frameReq = 0;
   let busy = null;
   let editor = null;
@@ -117,6 +119,7 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function place() {
     content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    if (menu) placeMenu(false);
   }
 
   function draw() {
@@ -155,6 +158,7 @@ export function mountBoardRoom(body, app, session, frame) {
     for (const el of [...content.querySelectorAll(".card")]) if (!keep.has(el.dataset.id)) el.remove();
     drawLines();
     drawRail();
+    placeMenu(true);
     hint.textContent = hintText(items);
     hint.hidden = !hint.textContent;
     toolbar.querySelector("#board-undo").disabled = !undo.canUndo;
@@ -238,8 +242,8 @@ export function mountBoardRoom(body, app, session, frame) {
 
   // ---- the tools on the right ------------------------------------------------------
 
-  function railButton(id, iconName, label, onclick, { text, pressed, card } = {}) {
-    const b = h("button", { class: "rail-btn" + (card ? " for-card" : ""), id, type: "button", "aria-label": label, title: label, onclick },
+  function railButton(id, iconName, label, onclick, { text, pressed } = {}) {
+    const b = h("button", { class: "rail-btn", id, type: "button", "aria-label": label, title: label, onclick },
       text ? h("span", { class: "rail-text", text }) : icon(iconName),
       h("span", { class: "rail-cap", text: label }));
     if (pressed !== undefined) b.setAttribute("aria-pressed", String(pressed));
@@ -271,13 +275,49 @@ export function mountBoardRoom(body, app, session, frame) {
         railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
       ],
     }[mode];
-    const forCard = song && can && (mode === "song" || mode === "all") ? [
-      railButton("card-cut", "scissors", "분할", () => { cutting = !cutting; draw(); }, { pressed: cutting, card: true }),
-      railButton("card-notes", "roll", "음 편집", () => editCardNotes(song.id), { card: true }),
-      railButton("card-mute", "muted", song.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, song.id, { muted: !song.muted })), { pressed: !!song.muted, card: true }),
-      railButton("card-copy", "copy", "복사", () => copyCard(song.id), { card: true }),
-    ] : [];
-    rail.replaceChildren(...tools.filter(Boolean), ...forCard);
+    rail.replaceChildren(...tools.filter(Boolean));
+  }
+
+  // ---- a card's menu: tap a card, act on it right there (as in the song room) ----------
+
+  /** Builds (when asked) and places the chosen card's menu above the card, or below it near the top. */
+  function placeMenu(build) {
+    const item = selected ? board.item(selected) : null;
+    const el = item && !item.removed && !cutting && mode !== "link" ? content.querySelector(`.card[data-id="${item.id}"]`) : null;
+    if (!el) {
+      menu?.remove();
+      menu = null;
+      return;
+    }
+    if (!menu) {
+      menu = h("div", { class: "clip-menu card-menu", id: "card-menu", role: "toolbar", "aria-label": "카드 메뉴" });
+      body.append(menu);
+      build = true;
+    }
+    if (build) {
+      const can = !readOnly();
+      const one = (id, text, onclick) => h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
+      menu.replaceChildren(...(item.kind === "song" ? [
+        one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
+        can && one("card-cut", "분할", () => { cutting = true; draw(); }),
+        one("card-notes", "음 편집", () => editCardNotes(item.id)),
+        can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
+        one("card-copy", "복사", () => copyCard(item.id)),
+        can && one("card-delete", "지우기", () => removeSelected()),
+      ] : [
+        can && one("card-edit", "고치기", () => editNote(item.id)),
+        can && one("card-delete", "지우기", () => removeSelected()),
+      ]).filter(Boolean));
+    }
+    const area = body.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const w = menu.offsetWidth;
+    const hgt = menu.offsetHeight;
+    const left = Math.max(6, Math.min(area.width - w - 6, box.left - area.left + box.width / 2 - w / 2));
+    let top = box.top - area.top - hgt - 8;
+    if (top < 4) top = box.bottom - area.top + 8;
+    menu.style.left = left + "px";
+    menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
   }
 
   // ---- looking around ----------------------------------------------------------------
@@ -853,7 +893,7 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!ctx) return null;
     player?.close();
     const s = settings();
-    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playing = null; draw(); } });
+    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playing = null; solo = null; draw(); } });
     player.setMode(s.songMode);
     player.setTone(s.pianoTone);
     player.setSpeed(s.songSpeed || 1);
@@ -865,18 +905,8 @@ export function mountBoardRoom(body, app, session, frame) {
     player?.preview(p, seconds);
   }
 
-  async function togglePlay() {
-    if (player?.playing) {
-      player.stop();
-      playing = null;
-      cancelAnimationFrame(frameReq);
-      return void draw();
-    }
-    const order = playOrder(board);
-    if (!order.length) return void toast(root, "재생할 노래 카드가 없어요");
-    const ctx = await audioContext();
-    if (!ctx) return;
-    const song = boardSong(board);
+  /** This device's recordings for the song's sounds, for 원본. */
+  async function recordingsOf(song, ctx) {
     const audio = new Map();
     for (const src of song.sources.values()) {
       if (!src.blob) continue;
@@ -884,22 +914,85 @@ export function mountBoardRoom(body, app, session, frame) {
       const wav = kept && decodeWav(kept.data);
       if (wav) audio.set(src.id, bufferFromSamples(ctx, toMono(wav.channels), wav.rate));
     }
-    if (!(await makePlayer(song, audio))) return;
-    player.play(0);
-    const ends = [];
-    let at = 0;
-    for (const card of order) ends.push([card.id, (at += card.data.dur)]);
+    return audio;
+  }
+
+  function stopPlaying() {
+    player?.stop();
+    playing = null;
+    solo = null;
+    cancelAnimationFrame(frameReq);
+    for (const line of content.querySelectorAll(".card-line")) line.remove();
+    draw();
+  }
+
+  /**
+   * Shows what sounds: the card glows and a line runs through its notes.
+   * ends: [[card id, end ms on the song]] in playing order.
+   */
+  function follow(ends) {
     const tick = () => {
-      if (!alive || !player?.playing) return;
+      if (!alive || !player?.playing) {
+        for (const line of content.querySelectorAll(".card-line")) line.remove();
+        return;
+      }
       const pos = player.position;
-      const now = ends.find(([, end]) => pos < end);
-      if (now && now[0] !== playing) {
-        playing = now[0];
-        draw();
+      let from = 0;
+      for (const [id, end] of ends) {
+        if (pos < end) {
+          if (id !== playing) {
+            for (const line of content.querySelectorAll(".card-line")) line.remove();
+            playing = id;
+            draw();
+          }
+          const notes = content.querySelector(`.card[data-id="${id}"] .card-notes`);
+          if (notes) {
+            let line = notes.querySelector(".card-line");
+            if (!line) notes.append(line = h("i", { class: "card-line", "aria-hidden": "true" }));
+            line.style.left = Math.min(100, ((pos - from) / (end - from)) * 100) + "%";
+          }
+          break;
+        }
+        from = end;
       }
       frameReq = requestAnimationFrame(tick);
     };
     frameReq = requestAnimationFrame(tick);
+  }
+
+  /** ▶ in the toolbar: every song card in order. */
+  async function togglePlay() {
+    if (player?.playing) return stopPlaying();
+    const order = playOrder(board);
+    if (!order.length) return void toast(root, "재생할 노래 카드가 없어요");
+    const ctx = await audioContext();
+    if (!ctx) return;
+    const song = boardSong(board);
+    if (!(await makePlayer(song, await recordingsOf(song, ctx)))) return;
+    player.play(0);
+    const ends = [];
+    let at = 0;
+    for (const card of order) ends.push([card.id, (at += card.data.dur)]);
+    follow(ends);
+    draw();
+  }
+
+  /** ▶ 듣기 in a card's menu: just that card. Again stops it. */
+  async function playCard(id) {
+    if (player?.playing) {
+      const was = solo;
+      stopPlaying();
+      if (was === id) return;
+    }
+    const card = board.item(id);
+    if (!card || card.kind !== "song") return;
+    const ctx = await audioContext();
+    if (!ctx) return;
+    const song = cardsSong([card]);
+    if (!(await makePlayer(song, await recordingsOf(song, ctx)))) return;
+    solo = id;
+    player.play(0);
+    follow([[id, card.data.dur]]);
     draw();
   }
 
@@ -920,6 +1013,7 @@ export function mountBoardRoom(body, app, session, frame) {
       alive = false;
       cancelAnimationFrame(frameReq);
       closeExtra?.();
+      menu?.remove();
       editor?.close();
       stopPickers();
       fingers.stop();

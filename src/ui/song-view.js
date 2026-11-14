@@ -505,6 +505,11 @@ export class Timeline {
     });
   }
 
+  /** The clips sounding now glow (ids). */
+  markPlaying(ids) {
+    for (const [id, entry] of this.clipEls) entry.el.classList.toggle("playing", ids.includes(id));
+  }
+
   /** A second finger landed: the clip under the first one is let go, back where it was. */
   dropDrag() {
     const d = this.drag;

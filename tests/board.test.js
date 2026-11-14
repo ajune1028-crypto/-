@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock } from "../src/core/crdt.js";
-import { BoardDoc, addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, ORDER_COLORS, songCardData, boardSong, splitCardOps, saveSlotOps, useSlotOps } from "../src/core/board.js";
+import { BoardDoc, addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, ORDER_COLORS, songCardData, boardSong, splitCardOps, saveSlotOps, useSlotOps, cardsSong } from "../src/core/board.js";
 import { rng, shuffle } from "./helpers.js";
 
 const NOTES = [{ t: 0, d: 0.4, p: 60, v: 0.8 }, { t: 0.5, d: 0.4, p: 64, v: 0.8 }];
@@ -193,4 +193,13 @@ test("order slots: save the lines, change them, bring a slot back, undo it; save
   assert.deepEqual(other.slots(), board.slots());
   assert.deepEqual(board.slots()[0].pairs, [[c.id, b.id]]);
   void one;
+});
+
+test("one card alone is a song of its own, for hearing just it", () => {
+  const { board, song } = setup();
+  song(0);
+  const b = song(300);
+  const alone = cardsSong([board.item(b.id)]);
+  assert.deepEqual(alone.layout().map((c) => [c.start, c.length]), [[0, 1000]]);
+  assert.equal(alone.end(), 1000);
 });
