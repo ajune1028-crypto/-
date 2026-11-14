@@ -65,8 +65,10 @@ export class InkLayer {
    * onStroke ({ pts, color, width, brush }) when a stroke is finished
    * onErase  (strokeId) when the stroke eraser touches a stroke
    */
-  constructor({ host, ink, onStroke, onErase }) {
+  /** blocked(): true while two fingers zoom, so no new line starts then. */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false }) {
     this.host = host;
+    this.blocked = blocked;
     this.ink = ink;
     this.onStroke = onStroke;
     this.onErase = onErase;
@@ -97,9 +99,21 @@ export class InkLayer {
   /** Points in hundredths of a rem from the host's top left. */
   point(e) {
     const r = this.host.getBoundingClientRect();
-    const rem = remPx();
+    // The page may be zoomed (text room pinch): on-screen size over laid-out size is the zoom.
+    const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
+    const rem = remPx() * zoom;
     const pressure = e.pointerType === "pen" || (e.pressure > 0 && e.pressure !== 0.5) ? e.pressure : 0.5;
     return [Math.round(((e.clientX - r.left) / rem) * 100), Math.round(((e.clientY - r.top) / rem) * 100), Math.round(pressure * 100)];
+  }
+
+  /**
+   * Two fingers began a zoom: a line a finger was drawing is dropped. A stylus's
+   * line goes on (the second touch is a resting palm).
+   */
+  cancelTouch() {
+    if (!this.live || this.live.kind === "pen") return;
+    this.live = null;
+    this.render();
   }
 
   wire() {
@@ -107,14 +121,14 @@ export class InkLayer {
     // A line belongs to the finger (or pen) that began it. Another touch while it is
     // being drawn, such as a resting palm or a second finger, is left out of it.
     c.addEventListener("pointerdown", (e) => {
-      if (!this.tool || this.live) return;
+      if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
       if (this.tool === "eraser-stroke") {
-        this.live = { pointer: e.pointerId, erase: new Set() };
+        this.live = { pointer: e.pointerId, kind: e.pointerType, erase: new Set() };
         this.eraseAt(e);
       } else {
-        this.live = { pointer: e.pointerId, pts: this.point(e), brush: this.tool === "eraser" ? "erase" : this.brush };
+        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: this.point(e), brush: this.tool === "eraser" ? "erase" : this.brush };
         this.render();
       }
     });
@@ -161,7 +175,9 @@ export class InkLayer {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, hgt);
-    const scale = (remPx() / 100) * ratio;
+    // Drawn at the zoomed size (sharp), in the page's own units.
+    const zoom = this.host.offsetWidth ? rect.width / this.host.offsetWidth : 1;
+    const scale = (remPx() / 100) * ratio * zoom;
     g.setTransform(scale, 0, 0, scale, 0, 0);
     for (const s of this.ink().strokes()) this.paint(g, s.pts, s.c, s.w, s.b || "pen");
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);

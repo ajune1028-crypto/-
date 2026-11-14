@@ -510,6 +510,8 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .status { width: 0.45rem; height: 0.45rem; margin: 0 0.35rem; border-radius: 50%; background: #2fa36b; flex: none; }
 .status[data-status="offline"] { background: var(--muted); }
 .room-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The text room zooms its own page (two fingers): the browser keeps its hands off, and a zoomed page scrolls sideways too. */
+.room-body.text-body { overflow-x: auto; touch-action: pan-x pan-y; }
 .banner { flex: none; margin: 0 0.9rem 0.5rem; padding: 0.5rem 0.85rem; border-radius: 0.9rem; font-size: 0.78rem; }
 
 .center {

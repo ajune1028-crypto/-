@@ -1,6 +1,7 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
 import { h, iconButton, mount, toast } from "./dom.js";
+import { watchFingers } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
@@ -37,6 +38,67 @@ export function mountTextRoom(body, app, session) {
   const toolbar = h("div", { class: "toolbar" }, undoButton, redoButton, colorsButton, penButton);
   body.append(list);
   body.after(inkTools, toolbar);
+
+  // Two fingers zoom the page, words and drawings together; Ctrl+wheel or a trackpad
+  // pinch on a computer. The page keeps its width while zoomed, so nothing reflows and
+  // drawings stay with their words; the spot between the fingers stays under them.
+  const MIN_PAGE = 0.75;
+  const MAX_PAGE = 3;
+  let pageZoom = 1;
+  body.classList.add("text-body");
+  function setPageZoom(z, cx, cy) {
+    let next = Math.min(MAX_PAGE, Math.max(MIN_PAGE, z));
+    if (Math.abs(next - 1) < 0.03) next = 1;
+    if (Math.abs(next - pageZoom) < 0.001) return;
+    const r = body.getBoundingClientRect();
+    const l = list.getBoundingClientRect();
+    const ax = (cx ?? r.left + r.width / 2) - r.left;
+    const ay = (cy ?? r.top + r.height / 2) - r.top;
+    // Where the column starts in the scrolled content (its own zoom does not move it),
+    // and the page point under the fingers in the column's own units.
+    const ox = l.left - r.left + body.scrollLeft;
+    const oy = l.top - r.top + body.scrollTop;
+    const px = (body.scrollLeft + ax - ox) / pageZoom;
+    const py = (body.scrollTop + ay - oy) / pageZoom;
+    if (pageZoom === 1) {
+      // Zoomed, the page keeps its width (no reflow) and is at least a screen tall, so it
+      // can grow around the fingers even when little is written.
+      list.style.width = list.offsetWidth + "px";
+      list.style.minHeight = body.clientHeight + "px";
+    }
+    pageZoom = next;
+    list.style.zoom = pageZoom === 1 ? "" : String(pageZoom);
+    if (pageZoom === 1) {
+      list.style.width = "";
+      list.style.minHeight = "";
+    }
+    body.scrollLeft = ox + px * pageZoom - ax;
+    body.scrollTop = oy + py * pageZoom - ay;
+    for (const editor of editors.values()) {
+      editor.ink?.render();
+      editor.drawCarets?.();
+    }
+  }
+  // A second finger stops a line being drawn: two fingers mean zoom.
+  const fingers = watchFingers(body, () => { for (const editor of editors.values()) editor.ink?.cancelTouch(); });
+  let pinch = null;
+  const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom }; };
+  const onTouchMove = (e) => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    setPageZoom(pinch.z * (spread(e.touches) / pinch.d), (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
+  };
+  const onTouchEnd = (e) => { if (e.touches.length < 2) pinch = null; };
+  const onWheel = (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    setPageZoom(pageZoom * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
+  };
+  body.addEventListener("touchstart", onTouchStart, { passive: true });
+  body.addEventListener("touchmove", onTouchMove, { passive: false });
+  body.addEventListener("touchend", onTouchEnd);
+  body.addEventListener("wheel", onWheel, { passive: false });
 
   function setTool(tool) {
     pen.tool = tool;
@@ -128,6 +190,7 @@ export function mountTextRoom(body, app, session) {
       const inkDoc = "k:" + day;
       editor.ink = new InkLayer({
         host: editor.paper,
+        blocked: () => fingers.pinching,
         ink: () => session.doc(inkDoc),
         onStroke: ({ pts, color, width, brush }) => {
           const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
@@ -227,6 +290,12 @@ export function mountTextRoom(body, app, session) {
   }
 
   const close = () => {
+    body.removeEventListener("touchstart", onTouchStart);
+    body.removeEventListener("touchmove", onTouchMove);
+    body.removeEventListener("touchend", onTouchEnd);
+    body.removeEventListener("wheel", onWheel);
+    body.classList.remove("text-body");
+    fingers.stop();
     for (const off of offs) off();
     clearInterval(midnight);
     clearTimeout(presenceTimer);

@@ -179,6 +179,11 @@ export async function launch({ port = 9333, args = [] } = {}) {
         }
       },
       release: (x, y) => mouse("mouseReleased", x, y, 1),
+      /** A stylus on the glass: kind is "down", "move" or "up". */
+      stylus: (kind, x, y) => s("Input.dispatchMouseEvent", {
+        type: { down: "mousePressed", move: "mouseMoved", up: "mouseReleased" }[kind], x, y, button: "left",
+        buttons: kind === "up" ? 0 : 1, clickCount: 1, pointerType: "pen", force: kind === "up" ? 0 : 0.5,
+      }),
       /** On: a tapped file input opens a chooser that Chrome holds open (no dialog) until setFiles answers it. */
       interceptChooser: (on) => s("Page.setInterceptFileChooserDialog", { enabled: on }),
       /** Puts files into a file input, as if picked in the file chooser. */

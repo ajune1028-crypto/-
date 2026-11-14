@@ -280,9 +280,11 @@ export class SheetEditor {
     const line = lines[li];
     const offset = Math.min(Math.max(index - line.start, 0), line.len);
     const base = this.layers.getBoundingClientRect();
+    // On-screen distances, back in the page's own units when the page is zoomed.
+    const z = this.layers.offsetWidth ? base.width / this.layers.offsetWidth : 1;
     if (!line.len) {
       const r = line.el.getBoundingClientRect();
-      return { x: r.left - base.left, y: r.top - base.top, h: r.height };
+      return { x: (r.left - base.left) / z, y: (r.top - base.top) / z, h: r.height / z };
     }
     const atEnd = offset >= line.len;
     const target = atEnd ? line.len - 1 : offset;
@@ -293,7 +295,7 @@ export class SheetEditor {
     range.setEnd(seg.node, target - seg.start + 1);
     const rects = range.getClientRects();
     const r = rects[atEnd ? rects.length - 1 : 0] || range.getBoundingClientRect();
-    return { x: (atEnd ? r.right : r.left) - base.left, y: r.top - base.top, h: r.height };
+    return { x: ((atEnd ? r.right : r.left) - base.left) / z, y: (r.top - base.top) / z, h: r.height / z };
   }
 
   drawCarets() {

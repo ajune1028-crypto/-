@@ -1546,34 +1546,86 @@ scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints th
 
 // ---- drawing -----------------------------------------------------------------------------------------
 
-scenario("drawing: a second finger or a resting palm leaves the line being drawn alone", async ({ open }) => {
+scenario("text room: two fingers zoom the page, words and drawings together; nothing reflows; the spot between the fingers stays; a line drawn zoomed lands under the finger", async ({ open }) => {
+  const [a] = await together(open, []);
+  await focusEnd(a);
+  await a.type("확대해서 보는 글");
+  await a.waitFor(`${TODAY}.querySelector(".draw .w")`);
+  const word = () => a.eval(`(() => { const w = ${TODAY}.querySelector(".draw .w"); const r = w.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2, lines: ${TODAY}.querySelectorAll(".draw .ln").length }; })()`);
+  const w0 = await word();
+  const mid = [w0.cx + 30, w0.cy + 30];
+  await a.pinch([[mid[0] - 40, mid[1]], [mid[0] + 40, mid[1]]], [[mid[0] - 80, mid[1]], [mid[0] + 80, mid[1]]]);
+  await frames(a);
+  const w1 = await word();
+  assert.ok(Math.abs(w1.w / w0.w - 2) < 0.15, `words twice as big: ${w0.w} → ${w1.w}`);
+  assert.equal(w1.lines, w0.lines, "nothing reflowed");
+  const drift = Math.hypot(w1.cx - (mid[0] + (w0.cx - mid[0]) * 2), w1.cy - (mid[1] + (w0.cy - mid[1]) * 2));
+  assert.ok(drift < 10, `the page grew around the fingers (off by ${drift.toFixed(1)} px)`);
+  // Drawing while zoomed: the line starts where the finger did.
+  await click(a, "#pen");
+  await a.waitFor(`!${q("#ink-tools")}.hidden`);
+  const y = w1.y + w1.h + 24;
+  const x0 = Math.max(w1.x, 20);
+  await a.press(x0, y);
+  for (let i = 1; i <= 8; i++) await a.moveTo(x0 + (60 * i) / 8, y);
+  await a.release(x0 + 60, y);
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
+  const back = await a.eval(`(() => { const s = window.__app.session.doc("k:${day}").strokes()[0]; const p = ${TODAY}.querySelector(".paper"); const r = p.getBoundingClientRect(); const z = r.width / p.offsetWidth; const rem = parseFloat(getComputedStyle(document.documentElement).fontSize); return { x: r.left + (s.pts[0] / 100) * rem * z, y: r.top + (s.pts[1] / 100) * rem * z, z }; })()`);
+  assert.ok(Math.abs(back.x - x0) < 4 && Math.abs(back.y - y) < 4, `the line starts under the finger: ${JSON.stringify(back)} vs ${x0}, ${y}`);
+  // A computer: Ctrl+wheel (and a trackpad pinch) zoom back out.
+  await click(a, "#pen");
+  await a.wheel(w1.cx, w1.cy, 400, { ctrl: true });
+  await frames(a);
+  assert.ok((await word()).w < w1.w * 0.8, "Ctrl+wheel zooms out");
+});
+
+scenario("drawing: a stylus's line ignores a resting palm; with a finger, a second finger zooms and draws nothing", async ({ open }) => {
   const [a] = await together(open, []);
   const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   await click(a, "#pen");
   await a.waitFor(`!${q("#ink-tools")}.hidden`);
   const day = await a.eval(`${TODAY}.dataset.day`);
+  const strokes = `window.__app.session.doc("k:${day}").strokes()`;
+  const zoom = () => a.eval(`(() => { const p = ${TODAY}.querySelector(".paper"); return p.getBoundingClientRect().width / p.offsetWidth; })()`);
   const x0 = box.x + box.w * 0.15;
   const x1 = box.x + box.w * 0.85;
   const y = box.y + box.h * 0.4;
   const palm = [box.x + box.w * 0.5, box.y + box.h * 0.8];
   const at = (i) => [x0 + ((x1 - x0) * i) / 12, y];
-  await a.touch("start", [at(0)]);
-  for (let i = 1; i <= 4; i++) await a.touch("move", [at(i)]);
-  // A palm comes down and shifts a little while the finger keeps drawing.
-  await a.touch("start", [at(4), palm]);
-  for (let i = 5; i <= 12; i++) await a.touch("move", [at(i), [palm[0] + i, palm[1] - i]]);
+  // A stylus draws; a palm comes down and shifts a little: the line is whole, the page does not zoom.
+  await a.front();
+  await a.stylus("down", ...at(0));
+  for (let i = 1; i <= 4; i++) await a.stylus("move", ...at(i));
+  await a.touch("start", [palm]);
+  for (let i = 5; i <= 12; i++) {
+    await a.touch("move", [[palm[0] + i, palm[1] - i]]);
+    await a.stylus("move", ...at(i));
+  }
+  await a.stylus("up", ...at(12));
   await a.touch("end");
-  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length >= 1`);
+  await a.waitFor(`${strokes}.length >= 1`);
   const s = await a.eval(`(() => {
-    const list = window.__app.session.doc("k:${day}").strokes();
+    const list = ${strokes};
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const xs = [], ys = [];
     for (let i = 0; i < list[0].pts.length; i += 3) { xs.push((list[0].pts[i] * rem) / 100); ys.push((list[0].pts[i + 1] * rem) / 100); }
     return { n: list.length, wide: Math.max(...xs) - Math.min(...xs), tall: Math.max(...ys) - Math.min(...ys) };
   })()`);
   assert.equal(s.n, 1, "one line, nothing from the palm: " + JSON.stringify(s));
-  assert.ok(s.tall < 3, "every point lies on the finger's line: " + JSON.stringify(s));
+  assert.ok(s.tall < 3, "every point lies on the stylus's line: " + JSON.stringify(s));
   assert.ok(Math.abs(s.wide - (x1 - x0)) < 6, "the whole line was kept, start to end: " + JSON.stringify(s));
+  assert.ok(Math.abs((await zoom()) - 1) < 0.01, "a palm does not zoom");
+  // A finger starts a line, a second finger lands and they spread: a zoom, no line from either.
+  const f = [box.x + box.w * 0.3, box.y + box.h * 0.6];
+  await a.touch("start", [f]);
+  await a.touch("move", [[f[0] + 12, f[1]]]);
+  await a.touch("start", [[f[0] + 12, f[1]], [f[0] + 92, f[1]]]);
+  for (let i = 1; i <= 6; i++) await a.touch("move", [[f[0] + 12 - i * 8, f[1]], [f[0] + 92 + i * 8, f[1]]]);
+  await a.touch("end");
+  await frames(a);
+  assert.ok((await zoom()) > 1.3, "two fingers zoomed the page");
+  assert.equal(await a.eval(`${strokes}.length`), 1, "and drew nothing");
 });
 
 scenario("drawing: pen, brushes and both erasers on today's sheet; the other device sees it; undo works", async ({ open, out }) => {
