@@ -210,3 +210,32 @@ test("the local transport works where BroadcastChannel is refused", async (t) =>
   await until(() => s.pending === 0);
   assert.equal(s.sheet(DAY).text(), "혼자서도 써져요");
 });
+
+test("a song document travels between screens like the sheets do", async (t) => {
+  const { SongDoc, sourceOp, addClipOps } = await import("../src/core/song.js");
+  const w = world(t);
+  const a = await makeRoom(w.transport(), w.session);
+  const b = w.session(w.transport(), "roomroomroom");
+  await b.open();
+  const songB = await b.load("song");
+  assert.ok(songB instanceof SongDoc);
+  const songA = await a.load("song");
+  const src = sourceOp(a.clock, songA, { duration: 1, notes: [{ t: 0, d: 0.5, p: 60, v: 1 }], peaks: "", by: "m1", at: 1 });
+  a.commit("song", [src]);
+  a.commit("song", addClipOps(a.clock, songA, { src: src.id, row: 0, start: 0, length: 1000, by: "m1", at: 1 }).ops);
+  await until(() => songB.layout().length === 1);
+  assert.equal(songB.source(src.id).notes[0].p, 60);
+  // A third screen opened later reads the whole song from storage.
+  await until(() => a.pending === 0);
+  const c = w.session(w.transport(), "roomroomroom");
+  await c.open();
+  assert.equal((await c.load("song")).layout().length, 1);
+});
+
+test("documents no type claims are ignored", async (t) => {
+  const w = world(t);
+  const a = await makeRoom(w.transport(), w.session);
+  assert.equal(a.doc("nonsense"), null);
+  a.commit("nonsense", [{ t: "x", id: a.clock.next() }]);
+  assert.equal(a.doc("nonsense"), null);
+});

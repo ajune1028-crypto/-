@@ -3,7 +3,7 @@
 import { h, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
 import { applyTheme, currentTheme } from "./theme.js";
 import { showJoin } from "./join.js";
-import { mountTextRoom } from "./text-room.js";
+import { kindInfo, sideOf } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { memberColor, PALETTE } from "../core/paint.js";
@@ -45,6 +45,7 @@ export function showRoom(app, roomId) {
   const root = app.root;
   let alive = true;
   let session = null;
+  let screen = {};
   const offs = [];
 
   const centered = (id, title, text, action) => h("div", { class: "center field daily", id },
@@ -116,13 +117,15 @@ export function showRoom(app, roomId) {
       banner.hidden = !text;
     };
 
-    mount(root, h("div", { class: "room field daily" },
+    const kind = session.room.meta("kind") || "daily-text";
+    const top = h("div", { class: "room-top", id: "room-top" });
+    mount(root, h("div", { class: "room field " + sideOf(kind), data: { kind } },
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
-      banner, body));
+      banner, top, body));
     drawTitle();
     drawPeople();
     drawStatus();
@@ -139,14 +142,25 @@ export function showRoom(app, roomId) {
       session.on("sent", drawBanner),
       session.on("unknown", () => { notices.unknown = true; drawBanner(); }),
       app.events.on("settings", drawPeople),
-      mountTextRoom(body, app, session),
     );
+    // The kind's own screen goes into the body. A kind this version does not know says so.
+    const info = kindInfo(kind);
+    const made = info?.mount ? info.mount(body, app, session, { top }) : unsupported(body);
+    screen = typeof made === "function" ? { close: made } : made || {};
+    offs.push(() => screen.close?.());
     drawBanner();
     if (app.fresh === roomId) openInvite();
     app.fresh = null;
   }
 
   const isLocal = () => !!roomEntry(app.store, roomId)?.local;
+
+  function unsupported(body) {
+    body.append(h("div", { class: "center", id: "unsupported" },
+      h("h1", { text: "이 방은 새 버전에서 열려요" }),
+      h("p", { text: "새로고침하면 열 수 있을 거예요." })));
+    return () => {};
+  }
 
   function copy(text, done, failed) {
     // The clipboard may refuse (it does in some frames); the text stays on screen to long-press.
@@ -218,6 +232,7 @@ export function showRoom(app, roomId) {
             pinError,
             h("p", { class: "help", text: "다른 기기에서 내 이름을 고르고 이 코드를 넣으면 같은 사람으로 들어와요." }))),
         h("div", { class: "section" }, h("p", { class: "section-title", text: "화면" }), displaySettings(app, { withColors: true })),
+        screen.settings?.(close),
         h("div", { class: "section" }, h("p", { class: "section-title", text: "초대" }),
           h("div", { class: "form" },
             h("p", { class: "help", text: "다른 기기의 홈에서 '코드로 들어가기'에 이 코드를 넣어요." }),

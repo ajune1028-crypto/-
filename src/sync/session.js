@@ -3,24 +3,41 @@
 // Changes are applied here first, so the screen never waits for the network,
 // then handed to the transport. What could not be sent stays in an outbox that
 // is saved on the device and sent when the connection returns.
+//
+// A room holds several documents, each a list of ops: "room" (name, people),
+// and whatever its kind needs: "s:<day>" sheets for text, "song" for songs.
+// DOC_TYPES says which object holds which document. A new room kind adds a
+// line there; nothing else in the session changes.
 
 import { Emitter } from "./transport.js";
 import { Clock, Sheet } from "../core/crdt.js";
 import { RoomState, newReplicaId } from "../core/room.js";
+import { SongDoc } from "../core/song.js";
 
 const SHEET = "s:";
 const ROOM = "room";
 
+/**
+ * Which object holds a document, by its id. Every holder takes ops with
+ * applyAll(ops) → changed?, and keeps ops it cannot read in `unknown`.
+ */
+export const DOC_TYPES = [
+  { test: (doc) => doc === ROOM, make: () => new RoomState() },
+  { test: (doc) => doc.startsWith(SHEET) && doc.length > SHEET.length, make: () => new Sheet() },
+  { test: (doc) => doc === "song", make: () => new SongDoc() },
+];
+
 export class RoomSession extends Emitter {
-  constructor({ transport, roomId, store, clock = new Clock(newReplicaId()), retry = [1000, 2000, 5000, 10000] }) {
+  constructor({ transport, roomId, store, clock = new Clock(newReplicaId()), retry = [1000, 2000, 5000, 10000], types = DOC_TYPES }) {
     super();
     this.transport = transport;
     this.roomId = roomId;
     this.store = store;
     this.clock = clock;
     this.retry = retry;
-    this.room = new RoomState();
-    this.sheets = new Map();
+    this.types = types;
+    this.docs = new Map();
+    this.room = this.doc(ROOM);
     this.known = new Set();
     this.loading = new Map();
     this.outbox = [];
@@ -70,12 +87,13 @@ export class RoomSession extends Emitter {
       this.outbox.push(entry);
     }
     await this.loadDoc(ROOM);
-    await this.refreshDays();
+    await this.refreshDocs();
     this.flush();
     return "ok";
   }
 
-  async refreshDays() {
+  /** Learns which documents the room has, so day sheets can be listed before they are read. */
+  async refreshDocs() {
     try {
       for (const doc of await this.channel.docs()) if (doc.startsWith(SHEET)) this.known.add(doc.slice(SHEET.length));
     } catch (err) {
@@ -83,24 +101,40 @@ export class RoomSession extends Emitter {
     }
   }
 
+  /** The object holding a document, made on first use; null for an id no type claims. */
+  doc(id) {
+    let held = this.docs.get(id);
+    if (!held) {
+      const type = typeof id === "string" ? this.types.find((t) => t.test(id)) : null;
+      if (!type) return null;
+      held = type.make();
+      this.docs.set(id, held);
+    }
+    return held;
+  }
+
+  /** Reads a document's stored ops (once) and resolves with its holder. */
+  async load(id) {
+    await this.loadDoc(id);
+    return this.doc(id);
+  }
+
+  // ---- day sheets of the text room ------------------------------------------------
+
   /** Days that have a sheet, oldest first. */
   days() {
     return [...this.known].sort();
   }
 
   sheet(day) {
-    let sheet = this.sheets.get(day);
-    if (!sheet) {
-      sheet = new Sheet();
-      this.sheets.set(day, sheet);
-    }
-    return sheet;
+    return this.doc(SHEET + day);
   }
 
   async loadSheet(day) {
-    await this.loadDoc(SHEET + day);
-    return this.sheet(day);
+    return this.load(SHEET + day);
   }
+
+  // ---- receiving --------------------------------------------------------------------
 
   loadDoc(doc) {
     if (!this.loading.has(doc)) {
@@ -117,11 +151,9 @@ export class RoomSession extends Emitter {
   }
 
   target(doc) {
-    if (doc === ROOM) return this.room;
-    if (typeof doc !== "string" || !doc.startsWith(SHEET)) return null;
-    const day = doc.slice(SHEET.length);
-    this.known.add(day);
-    return this.sheet(day);
+    const held = this.doc(doc);
+    if (held && doc.startsWith(SHEET)) this.known.add(doc.slice(SHEET.length));
+    return held;
   }
 
   /** Applies ops to the right doc and tells listeners what changed. */
@@ -138,11 +170,13 @@ export class RoomSession extends Emitter {
     if (changed) this.emit("change", { doc });
   }
 
-  /** Ops from another screen. */
+  /** Ops from another screen. A document nobody read yet is read in full first. */
   receive(doc, ops) {
-    if (typeof doc === "string" && doc.startsWith(SHEET) && !this.loading.has(doc)) this.loadDoc(doc);
+    if (typeof doc === "string" && doc !== ROOM && this.doc(doc) && !this.loading.has(doc)) this.loadDoc(doc);
     this.absorb(doc, ops);
   }
+
+  // ---- sending ----------------------------------------------------------------------
 
   /** My own change: shown at once, then sent. */
   commit(doc, ops) {
@@ -210,11 +244,11 @@ export class RoomSession extends Emitter {
 
   /** After a gap, read everything again; ops already applied are ignored. */
   catchUp() {
-    const docs = new Set([ROOM, ...this.loading.keys(), ...[...this.sheets.keys()].map((day) => SHEET + day)]);
+    const docs = new Set([ROOM, ...this.loading.keys(), ...this.docs.keys()]);
     for (const doc of docs) {
       this.channel.load(doc).then((ops) => this.absorb(doc, ops), (err) => this.failed(err));
     }
-    this.refreshDays().then(() => this.emit("change", { doc: ROOM }));
+    this.refreshDocs().then(() => this.emit("change", { doc: ROOM }));
   }
 
   setPresence(state) {

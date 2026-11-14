@@ -1,0 +1,41 @@
+// Every kind of room, in one place. Home offers them under its halves; the
+// room frame mounts the one a room was made as. Adding a kind of room is one
+// entry here plus its screen module.
+//
+// A screen module exports mount(body, app, session, frame):
+//   body     the room's scrolling area, empty
+//   frame    { top }: an empty row between the room's bar and the body, for
+//            controls that stay in view (the song room's 원본 | 피아노)
+// and returns a cleanup function, or { close, settings } where settings(close)
+// gives extra sections for the room's settings sheet.
+
+import { mountTextRoom } from "./text-room.js";
+
+/** The halves of home. A third place (레퍼런스) is planned; see docs/superpowers/specs. */
+export const SIDES = {
+  daily: { title: "일상", note: "가볍게, 매일" },
+  creative: { title: "창작", note: "같이 만들기" },
+};
+
+export const ROOM_KINDS = [
+  { kind: "daily-text", side: "daily", name: "텍스트", note: "같은 종이에 같이 써요", mount: mountTextRoom },
+  { kind: "daily-photo", side: "daily", name: "사진", note: "시간대별 사진과 3초 영상" },
+  { kind: "daily-both", side: "daily", name: "통합", note: "텍스트와 사진을 한 방에" },
+  { kind: "creative-song", side: "creative", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요" },
+  { kind: "creative-writing", side: "creative", name: "글쓰기", note: "같이 쓰는 문서" },
+  { kind: "creative-board", side: "creative", name: "화이트보드", note: "큰 종이에 전부 올려요" },
+];
+
+export function kindsOf(side) {
+  return ROOM_KINDS.filter((k) => k.side === side);
+}
+
+/** The kind's entry; rooms made before kinds were recorded are text rooms. */
+export function kindInfo(kind) {
+  return ROOM_KINDS.find((k) => k.kind === (kind || "daily-text")) || null;
+}
+
+/** Which half of home a kind belongs to, also for kinds this version does not know. */
+export function sideOf(kind) {
+  return kindInfo(kind)?.side || (String(kind).startsWith("creative") ? "creative" : "daily");
+}

@@ -6,19 +6,7 @@ import { rememberRoom } from "../identity.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
-
-const KINDS = {
-  daily: [
-    { kind: "daily-text", name: "텍스트", note: "같은 종이에 같이 써요", ready: true },
-    { kind: "daily-photo", name: "사진", note: "시간대별 사진과 3초 영상" },
-    { kind: "daily-both", name: "통합", note: "텍스트와 사진을 한 방에" },
-  ],
-  creative: [
-    { kind: "creative-song", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요" },
-    { kind: "creative-writing", name: "글쓰기", note: "같이 쓰는 문서" },
-    { kind: "creative-board", name: "화이트보드", note: "큰 종이에 전부 올려요" },
-  ],
-};
+import { SIDES, kindsOf, sideOf } from "./kinds.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -42,9 +30,9 @@ export function showHome(app) {
   }
 
   function half(side, title, note, emptyText) {
-    const mine = app.store.get("rooms", []).filter((r) => r.kind.startsWith(side)).sort((a, b) => b.at - a.at);
+    const mine = app.store.get("rooms", []).filter((r) => sideOf(r.kind) === side).sort((a, b) => b.at - a.at);
     const known = new Set(app.store.get("rooms", []).map((r) => r.id));
-    const elsewhere = others.filter((r) => r.kind.startsWith(side) && !known.has(r.id));
+    const elsewhere = others.filter((r) => sideOf(r.kind) === side && !known.has(r.id));
     return h("section", { class: "half field " + side, data: { side } },
       h("div", { class: "half-scroll" },
         h("h1", { class: "half-title", text: title }),
@@ -69,8 +57,8 @@ export function showHome(app) {
       notice && h("div", { class: "notice", id: "notice", role: "status", text: notice }),
       h("div", { class: "home-wrap" },
         h("div", { class: "home", id: "home" },
-          half("daily", "일상", "가볍게, 매일", "아직 방이 없어요. 아래 +로 만들어 보세요."),
-          half("creative", "창작", "같이 만들기", "노래 만들기가 곧 열려요.")),
+          half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 만들어 보세요."),
+          half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 노래 방을 만들어 보세요.")),
         h("div", { class: "home-top" }, iconButton("home-settings", "more", "설정", openSettings)),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
@@ -84,10 +72,10 @@ export function showHome(app) {
 
   function chooseKind(side) {
     sheet("어떤 방을 만들까요?", (panel, close) => {
-      panel.append(h("div", { class: "kinds" }, KINDS[side].map((k) =>
-        h("button", { class: "kind", type: "button", data: { kind: k.kind }, disabled: !k.ready, onclick: () => { close(); roomForm(k); } },
+      panel.append(h("div", { class: "kinds" }, kindsOf(side).map((k) =>
+        h("button", { class: "kind", type: "button", data: { kind: k.kind }, disabled: !k.mount, onclick: () => { close(); roomForm(k); } },
           h("span", { class: "kind-name" }, k.name, h("span", { class: "kind-note", text: k.note })),
-          !k.ready && h("span", { class: "soon", text: "준비 중" })))));
+          !k.mount && h("span", { class: "soon", text: "준비 중" })))));
     });
   }
 
