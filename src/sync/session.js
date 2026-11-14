@@ -14,6 +14,7 @@ import { Clock, Sheet } from "../core/crdt.js";
 import { RoomState, newReplicaId } from "../core/room.js";
 import { SongDoc } from "../core/song.js";
 import { InkDoc } from "../core/ink.js";
+import { BoardDoc } from "../core/board.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -28,6 +29,8 @@ export const DOC_TYPES = [
   { test: (doc) => doc === "song", make: () => new SongDoc() },
   // Drawings on a day's sheet.
   { test: (doc) => doc.startsWith("k:") && doc.length > 2, make: () => new InkDoc() },
+  // The whiteboard's cards and lines.
+  { test: (doc) => doc === "board", make: () => new BoardDoc() },
 ];
 
 export class RoomSession extends Emitter {

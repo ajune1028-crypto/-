@@ -1,0 +1,323 @@
+// The whiteboard: cards on a big surface, and 잇기 lines that say in which
+// order the song cards play.
+//
+// Cards (items) are notes (text) or songs (a sound's notes and waveform,
+// carried in the card, so a board plays on its own). Lines (links) join one
+// card to the next; each card has at most one line out and one in, and lines
+// never loop. Unjoined song cards play from the leftmost; a chain plays where
+// its first card stands. Lines are numbered in playing order and coloured
+// 빨주노초파남보검 in turn.
+//
+//   item  { id, kind, x, y, data, by, at }      kept forever, hidden by irm
+//   iset  { id, i, f: { x, y, w, text } }       per field, larger id wins
+//   irm   { id, i, n }                          removes counter, odd = hidden
+//   link  { id, a, b, by }                      a then b
+//   lrm   { id, l, n }                          removes counter for a line
+
+import { cmpId, validId, Clock } from "./crdt.js";
+import { SongDoc } from "./song.js";
+import { fromBase64, toBase64 } from "./b64.js";
+
+/** 빨 주 노 초 파 남 보 검. */
+export const ORDER_COLORS = ["#e5484d", "#f2802a", "#e8b422", "#2f9e5b", "#2f7bf0", "#3b45c4", "#9a4fd8", "#2b2b30"];
+export const ITEM_KINDS = ["note", "song"];
+const MAX_UNKNOWN = 300;
+const MAX_MS = 600000;
+const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+const isText = (v, max) => typeof v === "string" && v.length <= max;
+
+const FIELD_OK = {
+  x: (v) => isInt(v, -1000000, 1000000),
+  y: (v) => isInt(v, -1000000, 1000000),
+  w: (v) => isInt(v, 60, 2000),
+  text: (v) => isText(v, 4000),
+};
+
+function validData(kind, d) {
+  if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+  if (kind === "note") return isText(d.text, 4000);
+  return isInt(d.dur, 1, MAX_MS) && typeof d.peaks === "string" && d.peaks.length <= 40000 &&
+    Array.isArray(d.notes) && d.notes.length <= 3000 &&
+    d.notes.every((n) => Array.isArray(n) && n.length === 4 && isInt(n[0], 0, MAX_MS) && isInt(n[1], 1, MAX_MS) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100)) &&
+    (d.name === undefined || isText(d.name, 60)) && (d.blob === undefined || isText(d.blob, 80));
+}
+
+/** A song card's data from a sound (notes in seconds, as the analysis and the clipboard keep them). */
+export function songCardData({ duration, notes, peaks, name, blob }) {
+  const ms = (s) => Math.max(0, Math.round(s * 1000));
+  const data = {
+    dur: Math.max(1, ms(duration)), peaks: peaks || "",
+    notes: notes.slice(0, 3000).map((n) => [ms(n.t), Math.max(1, ms(n.d)), Math.round(n.p), Math.round(Math.min(1, Math.max(0, n.v)) * 100)]),
+  };
+  if (name) data.name = String(name).slice(0, 60);
+  if (blob) data.blob = blob;
+  return data;
+}
+
+/**
+ * A song card's data for the part of a sound a clip plays: the clipboard's
+ * { source (notes in seconds), offset, length (ms) }. The recording travels
+ * only when the card is the whole of it; a part plays as piano.
+ */
+export function cardFromClip({ source, offset, length }) {
+  const lo = offset / 1000;
+  const hi = (offset + length) / 1000;
+  const notes = source.notes
+    .map((n) => ({ ...n, s: Math.max(n.t, lo), e: Math.min(n.t + n.d, hi) }))
+    .filter((n) => n.e - n.s >= 0.02)
+    .map((n) => ({ t: n.s - lo, d: n.e - n.s, p: n.p, v: n.v }));
+  const bytes = fromBase64(source.peaks || "");
+  const peaks = toBase64(bytes.subarray(Math.floor(offset / 40), Math.ceil((offset + length) / 40)));
+  const whole = offset === 0 && Math.abs(length - source.duration * 1000) < 50;
+  return songCardData({ duration: length / 1000, notes, peaks, name: source.name, blob: whole ? source.blob : undefined });
+}
+
+export class BoardDoc {
+  constructor() {
+    this.version = 0;
+    this.byId = new Map();
+    this.linksById = new Map();
+    this.waiting = new Map();
+    this.seen = new Set();
+    this.unknown = [];
+    this.maxN = 0;
+    this.cache = null;
+  }
+
+  apply(op) {
+    const result = this.step(op);
+    if (result === "applied") this.wake(op.id);
+    return result;
+  }
+
+  applyAll(ops) {
+    const before = this.version;
+    for (const op of ops) this.apply(op);
+    return this.version !== before;
+  }
+
+  step(op) {
+    if (!op || typeof op !== "object" || !validId(op.id)) return this.setAside(op);
+    if (this.seen.has(op.id)) return "dup";
+    switch (op.t) {
+      case "item": {
+        if (!ITEM_KINDS.includes(op.kind) || !FIELD_OK.x(op.x) || !FIELD_OK.y(op.y) || !validData(op.kind, op.data) || !isText(op.by, 40) || !Number.isFinite(op.at)) return this.setAside(op);
+        const fields = new Map([["x", { v: op.x, at: op.id }], ["y", { v: op.y, at: op.id }], ["w", { v: op.kind === "song" ? 240 : 200, at: op.id }]]);
+        if (op.kind === "note") fields.set("text", { v: op.data.text, at: op.id });
+        this.byId.set(op.id, { id: op.id, kind: op.kind, data: op.data, by: op.by, at: op.at, fields, rm: 0 });
+        return this.done(op);
+      }
+      case "iset": {
+        const f = op.f;
+        const ok = validId(op.i) && f && typeof f === "object" && Object.keys(f).length > 0 && Object.entries(f).every(([k, v]) => FIELD_OK[k] && FIELD_OK[k](v));
+        if (!ok) return this.setAside(op);
+        const item = this.byId.get(op.i);
+        if (!item) return this.wait(op.i, op);
+        for (const [k, v] of Object.entries(f)) {
+          const cur = item.fields.get(k);
+          if (!cur || cmpId(op.id, cur.at) > 0) item.fields.set(k, { v, at: op.id });
+        }
+        return this.done(op);
+      }
+      case "irm":
+      case "lrm": {
+        const target = op.t === "irm" ? op.i : op.l;
+        if (!validId(target) || !isInt(op.n, 1, 1e9)) return this.setAside(op);
+        const thing = (op.t === "irm" ? this.byId : this.linksById).get(target);
+        if (!thing) return this.wait(target, op);
+        if (op.n > thing.rm) thing.rm = op.n;
+        return this.done(op);
+      }
+      case "link": {
+        if (!validId(op.a) || !validId(op.b) || op.a === op.b || !isText(op.by, 40)) return this.setAside(op);
+        if (!this.byId.has(op.a)) return this.wait(op.a, op);
+        if (!this.byId.has(op.b)) return this.wait(op.b, op);
+        this.linksById.set(op.id, { id: op.id, a: op.a, b: op.b, rm: 0 });
+        return this.done(op);
+      }
+      default:
+        return this.setAside(op);
+    }
+  }
+
+  done(op) {
+    this.seen.add(op.id);
+    this.version++;
+    const n = Number(op.id.slice(0, op.id.indexOf("@")));
+    if (n > this.maxN) this.maxN = n;
+    return "applied";
+  }
+
+  wait(missing, op) {
+    if (!this.waiting.has(missing)) this.waiting.set(missing, []);
+    this.waiting.get(missing).push(op);
+    return "pending";
+  }
+
+  wake(id) {
+    const queue = [id];
+    while (queue.length) {
+      const key = queue.pop();
+      const list = this.waiting.get(key);
+      if (!list) continue;
+      this.waiting.delete(key);
+      for (const op of list) if (this.step(op) === "applied") queue.push(op.id);
+    }
+  }
+
+  setAside(op) {
+    if (this.unknown.length < MAX_UNKNOWN) this.unknown.push(op);
+    return "unknown";
+  }
+
+  item(id) {
+    const it = this.byId.get(id);
+    if (!it) return null;
+    const out = { id: it.id, kind: it.kind, data: it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
+    for (const [k, { v }] of it.fields) out[k] = v;
+    return out;
+  }
+
+  /** Visible cards, oldest first (the order they are drawn in). */
+  items() {
+    return this.view().items;
+  }
+
+  /** Visible lines in playing order: { id, a, b, n (1, 2, 3…), color }. */
+  links() {
+    return this.view().links;
+  }
+
+  view() {
+    if (this.cache && this.cache.version === this.version) return this.cache;
+    const items = [...this.byId.keys()].map((id) => this.item(id)).filter((i) => !i.removed).sort((p, q) => cmpId(p.id, q.id));
+    const shown = new Set(items.map((i) => i.id));
+    // Lines in id order; one that would give a card a second line out or in, or close a loop, is left out.
+    const next = new Map();
+    const prev = new Map();
+    for (const l of [...this.linksById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id))) {
+      if (!shown.has(l.a) || !shown.has(l.b) || next.has(l.a) || prev.has(l.b)) continue;
+      let walk = l.b;
+      let loop = false;
+      while (next.has(walk)) {
+        walk = next.get(walk).b;
+        if (walk === l.a) { loop = true; break; }
+      }
+      if (loop) continue;
+      next.set(l.a, l);
+      prev.set(l.b, l);
+    }
+    // Chains, each placed where its first card stands; then numbered as they will play.
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const heads = items.filter((i) => !prev.has(i.id)).sort((p, q) => p.x - q.x || cmpId(p.id, q.id));
+    const order = [];
+    const links = [];
+    for (const head of heads) {
+      let at = head;
+      order.push(at);
+      while (next.has(at.id)) {
+        const l = next.get(at.id);
+        links.push({ id: l.id, a: l.a, b: l.b, n: links.length + 1, color: ORDER_COLORS[links.length % ORDER_COLORS.length] });
+        at = byId.get(l.b);
+        order.push(at);
+      }
+    }
+    this.cache = { version: this.version, items, links, order };
+    return this.cache;
+  }
+}
+
+/** Song cards in the order they play. */
+export function playOrder(board) {
+  return board.view().order.filter((i) => i.kind === "song");
+}
+
+/** The song cards in order as one song, one after another, for the player. */
+export function boardSong(board) {
+  const song = new SongDoc();
+  const clock = new Clock("board");
+  let at = 0;
+  for (const card of playOrder(board)) {
+    const d = card.data;
+    const src = { t: "src", id: clock.next(), dur: d.dur, notes: d.notes, peaks: d.peaks, by: card.by, at: 0 };
+    if (d.blob) src.blob = d.blob;
+    song.apply(src);
+    song.apply({ t: "clip", id: clock.next(), src: src.id, row: 0, start: at, offset: 0, length: d.dur, by: card.by, at: 0 });
+    at += d.dur;
+  }
+  return song;
+}
+
+// ---- ops -----------------------------------------------------------------------
+
+export function addItemOps(clock, board, { kind, x, y, data, by, at = Date.now() }) {
+  clock.atLeast(board.maxN);
+  const op = { t: "item", id: clock.next(), kind, x: Math.round(x), y: Math.round(y), data, by, at };
+  return { ops: [op], atoms: [{ k: "add", item: op.id }], id: op.id };
+}
+
+export function setItemOps(clock, board, itemId, fields) {
+  const item = board.item(itemId);
+  if (!item) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  const next = {};
+  const prev = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (!FIELD_OK[k]) continue;
+    next[k] = k === "text" ? String(v).slice(0, 4000) : Math.round(v);
+    prev[k] = item[k];
+  }
+  return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
+}
+
+export function removeItemOps(clock, board, itemId) {
+  const item = board.item(itemId);
+  if (!item || item.removed) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "irm", id: clock.next(), i: itemId, n: item.rm + 1 }], atoms: [{ k: "del", item: itemId }] };
+}
+
+/** A line from card a to card b; nothing when a already leads somewhere, b is already led to, or it would loop. */
+export function linkOps(clock, board, a, b, by) {
+  const { links } = board.view();
+  if (a === b || !board.item(a) || !board.item(b) || links.some((l) => l.a === a || l.b === b)) return { ops: [], atoms: [] };
+  let walk = b;
+  const next = new Map(links.map((l) => [l.a, l.b]));
+  while (next.has(walk)) {
+    walk = next.get(walk);
+    if (walk === a) return { ops: [], atoms: [] };
+  }
+  clock.atLeast(board.maxN);
+  const op = { t: "link", id: clock.next(), a, b, by };
+  return { ops: [op], atoms: [{ k: "ladd", link: op.id }], id: op.id };
+}
+
+export function unlinkOps(clock, board, linkId) {
+  const link = board.linksById.get(linkId);
+  if (!link || link.rm % 2 === 1) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "lrm", id: clock.next(), l: linkId, n: link.rm + 1 }], atoms: [{ k: "ldel", link: linkId }] };
+}
+
+export function invertBoardOps(board, clock, atoms, dir) {
+  clock.atLeast(board.maxN);
+  const undo = dir === "undo";
+  const ops = [];
+  const counters = new Map();
+  const show = (map, t, key, id, shown) => {
+    const thing = map.get(id);
+    if (!thing) return;
+    const rm = counters.has(id) ? counters.get(id) : thing.rm;
+    if ((rm % 2 === 0) === shown) return;
+    counters.set(id, rm + 1);
+    ops.push({ t, id: clock.next(), [key]: id, n: rm + 1 });
+  };
+  for (const atom of undo ? atoms.slice().reverse() : atoms) {
+    if (atom.k === "add") show(board.byId, "irm", "i", atom.item, !undo);
+    else if (atom.k === "del") show(board.byId, "irm", "i", atom.item, undo);
+    else if (atom.k === "ladd") show(board.linksById, "lrm", "l", atom.link, !undo);
+    else if (atom.k === "ldel") show(board.linksById, "lrm", "l", atom.link, undo);
+    else if (atom.k === "set") ops.push({ t: "iset", id: clock.next(), i: atom.item, f: { ...(undo ? atom.prev : atom.next) } });
+  }
+  return ops;
+}

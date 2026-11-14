@@ -11,6 +11,7 @@
 
 import { mountTextRoom } from "./text-room.js";
 import { mountSongRoom } from "./song-room.js";
+import { mountBoardRoom } from "./board-room.js";
 
 /** The halves of home. A third place (레퍼런스) is planned; see docs/superpowers/specs. */
 export const SIDES = {
@@ -24,7 +25,7 @@ export const ROOM_KINDS = [
   { kind: "daily-both", side: "daily", name: "통합", note: "텍스트와 사진을 한 방에" },
   { kind: "creative-song", side: "creative", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요", mount: mountSongRoom },
   { kind: "creative-writing", side: "creative", name: "글쓰기", note: "같이 쓰는 문서" },
-  { kind: "creative-board", side: "creative", name: "화이트보드", note: "큰 종이에 전부 올려요" },
+  { kind: "creative-board", side: "creative", name: "화이트보드", note: "노래 카드를 놓고 재생 순서를 이어요", mount: mountBoardRoom },
 ];
 
 export function kindsOf(side) {

@@ -20,7 +20,7 @@ import {
   MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps,
   joinClipOps, joinWithSourceOps, combinedSource,
 } from "../core/song.js";
-import { getSettings, setSetting } from "../identity.js";
+import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { Analyzer, analyzeSamples } from "../audio/analyze.js";
@@ -30,6 +30,8 @@ import { encodeWav, decodeWav } from "../audio/wav.js";
 import { resample, toMono } from "../audio/dsp.js";
 import { toBase64 } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
+import { RoomSession } from "../sync/session.js";
+import { addItemOps, cardFromClip } from "../core/board.js";
 
 const KEEP_RATE = 24000; // recordings are kept at this rate: clear voice, a quarter of CD size
 const MIN_TAKE_MS = 250;
@@ -675,6 +677,7 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-split", "분할", () => splitClip(clip.id), locked || !insideClip(clip.id)),
       item("clip-join", "잇기", () => joinClip(clip.id), locked || !next || next.locked || !!busy),
       item("clip-notes", "음 편집", () => editNotes(clip.id)),
+      item("clip-send", "보내기", () => sendClip(clip.id)),
       item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), readOnly()),
       item("clip-delete", "삭제", () => deleteClip(clip.id), locked));
     const w = menu.offsetWidth;
@@ -685,6 +688,44 @@ export function mountSongRoom(body, app, session, frame) {
     if (top < 4) top = box.bottom - area.top + 6;
     menu.style.left = left + "px";
     menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
+  }
+
+  /** 보내기: puts the clip on a whiteboard as a song card, straight into that room. */
+  function sendClip(id) {
+    const clip = song.clip(id);
+    const src = clip && song.source(clip.src);
+    if (!src) return;
+    const boards = app.store.get("rooms", []).filter((r) => r.kind === "creative-board");
+    openSheet(root, "화이트보드로 보내기", (panel, close) => {
+      if (!boards.length) return void panel.append(h("p", { class: "help", id: "no-boards", text: "화이트보드 방이 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
+      panel.append(h("div", { class: "kinds", id: "send-boards" }, boards.map((r) => h("button", { class: "kind", type: "button", data: { room: r.id }, onclick: () => { close(); deliver(r, clip, src); } },
+        h("span", { class: "kind-name", text: r.name })))));
+    });
+  }
+
+  async function deliver(room, clip, src) {
+    showStatus("보내는 중…");
+    let other = null;
+    try {
+      const transport = await app.transportFor(room.id);
+      other = new RoomSession({ transport, roomId: room.id, store: app.store });
+      if ((await other.open()) !== "ok") throw new Error("room did not open");
+      const target = await other.load("board");
+      const items = target.items();
+      const right = items.reduce((a, b) => (!a || b.x + b.w > a.x + a.w ? b : a), null);
+      const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
+      const data = cardFromClip({ source, offset: clip.offset, length: clip.length });
+      const by = roomEntry(app.store, room.id)?.memberId || session.memberId;
+      other.commit("board", addItemOps(other.clock, target, { kind: "song", x: right ? right.x + right.w + 60 : 40, y: right ? right.y : 40, data, by }).ops);
+      for (let i = 0; i < 40 && other.pending; i++) await new Promise((r) => setTimeout(r, 100));
+      toast(root, `'${room.name}' 화이트보드로 보냈어요`);
+    } catch (err) {
+      console.warn(err);
+      toast(root, "보내지 못했어요. 그 화이트보드를 한 번 열었다가 다시 해 주세요.", 3600);
+    } finally {
+      other?.close();
+      showStatus(null);
+    }
   }
 
   /** 음 편집: the clip's notes as a piano roll. Edits go through the undo stack like any other step. */

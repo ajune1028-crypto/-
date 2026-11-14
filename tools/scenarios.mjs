@@ -122,11 +122,11 @@ scenario("create: an empty room name or a bad code is refused with a reason", as
   assert.equal(await page.eval("location.hash"), "");
 });
 
-scenario("create: on the creative side 노래 만들기 is open and the unfinished kinds say 준비 중", async ({ open }) => {
+scenario("create: on the creative side 노래 만들기 and 화이트보드 are open and 글쓰기 says 준비 중", async ({ open }) => {
   const page = await open();
   await click(page, "#add-creative");
   const kinds = await page.eval(`[...document.querySelectorAll(".kind")].map((b) => [b.dataset.kind, b.disabled, b.querySelector(".soon")?.textContent ?? ""])`);
-  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", true, "준비 중"]]);
+  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", false, ""]]);
 });
 
 scenario("second device: finds the room, joins as a new person with another colour", async ({ open }) => {
@@ -1604,4 +1604,68 @@ scenario("song: while a friend records, their row shows it growing with their na
   await a.front();
   await click(a, "#record");
   await b.waitFor(`!document.querySelector(".clip.other-rec") && document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+});
+
+// ---- whiteboard -----------------------------------------------------------------------------------
+
+async function createBoard(page, { room = "우리 보드", name = "가람" } = {}) {
+  await click(page, "#add-creative");
+  await click(page, '[data-kind="creative-board"]');
+  await fill(page, "#room-name", room);
+  await fill(page, "#my-name", name);
+  await click(page, "#create-room");
+  await page.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(page, "#invite-done");
+  await page.waitFor(q("#board"));
+  return page.eval("location.hash.slice(3)");
+}
+
+scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 sets the playing order with numbered rainbow lines", async ({ open, out, fixtures }) => {
+  const page = await open();
+  const boardId = await createBoard(page, { room: "순서 보드" });
+  assert.match(await text(page, "#board-hint"), /보내기/);
+  await click(page, "#back");
+  const songId = await createSongRoom(page, { room: "흥얼 방" });
+  await importSound(page, fixtures.doremi);
+  // 보내기: straight onto the board.
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-send");
+  await page.waitFor(q(`#send-boards [data-room="${boardId}"]`));
+  await click(page, `#send-boards [data-room="${boardId}"]`);
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("화이트보드로 보냈어요")`, 6000);
+  // 복사, then + 노래 on the board.
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-copy");
+  await page.goto(await page.eval(`location.href.split("#")[0] + "#r-${boardId}"`));
+  await page.waitFor("window.__app && window.__app.booted");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1`);
+  await click(page, "#add-song");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 2`);
+  assert.equal(await page.eval(`document.querySelector(".card.song .note").textContent`), "도");
+  // Without lines the leftmost plays first; 잇기 the right one first, then the left.
+  const ids = await page.eval(`window.__app.session.doc("board").items().sort((a, b) => a.x - b.x).map((i) => i.id)`);
+  await click(page, "#mode-link");
+  await click(page, `.card[data-id="${ids[1]}"]`);
+  await click(page, `.card[data-id="${ids[0]}"]`);
+  await page.waitFor(`window.__app.session.doc("board").links().length === 1`);
+  const line = await page.eval(`(() => { const l = window.__app.session.doc("board").links()[0]; return [l.a, l.b, l.n, l.color, document.querySelector(".board-lines .badge text").textContent]; })()`);
+  assert.deepEqual(line, [ids[1], ids[0], 1, "#e5484d", "1"], "line 1 is 빨강");
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".card.song")].map((c) => [c.dataset.id, c.querySelector(".card-order").textContent]).sort((a, b) => a[1] - b[1]).map((x) => x[0])`), [ids[1], ids[0]]);
+  await page.shot(out("board.png"));
+  // Play in order: the first card lights up first.
+  await click(page, "#board-play");
+  await page.waitFor(`document.querySelector(".card.playing")?.dataset.id === ${JSON.stringify(ids[1])}`, 3000);
+  await click(page, "#board-play");
+  // A memo card.
+  await click(page, "#mode-all");
+  await click(page, "#add-note");
+  await page.waitFor(q("#note-text"));
+  await fill(page, "#note-text", "후렴은 여기서부터");
+  await click(page, "#note-save");
+  await page.waitFor(`document.querySelector(".card.note .card-text")?.textContent === "후렴은 여기서부터"`);
+  // Undo takes the memo away again, step by step.
+  await click(page, "#board-undo");
+  await click(page, "#board-undo");
+  await page.waitFor(`!document.querySelector(".card.note")`);
+  void songId;
 });
