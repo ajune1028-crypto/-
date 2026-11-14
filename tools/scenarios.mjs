@@ -2228,6 +2228,103 @@ scenario("playing made simple: tap a card and its menu is by it; ▶ 듣기 play
   await page.waitFor(`!document.querySelector(".clip.playing")`);
 });
 
+scenario("whiteboard 올가미: a loop drawn round one card with a finger closes itself; its ▶ plays only that card; dragged over the other it plays that one; ✕ takes it off; undo; a second finger draws nothing", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 2; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#lasso-tool");
+  await page.waitFor(`${q("#lasso-tool")}.getAttribute("aria-pressed") === "true" && ${q("#board-hint")}.textContent.includes("둘러")`);
+  const first = await cardBox(page, 0);
+  const second = await cardBox(page, 1);
+  // One finger round the first card, the end stopping short of the start.
+  const ring = (c, pad, upto) => {
+    const pts = [];
+    for (let i = 0; i <= 24 * upto; i++) {
+      const a = -Math.PI / 2 + (i / 24) * Math.PI * 2;
+      pts.push([c.cx + Math.cos(a) * (c.w / 2 + pad), c.cy + Math.sin(a) * (c.h / 2 + pad)]);
+    }
+    return pts;
+  };
+  const stroke = ring(first, 14, 0.86);
+  const placed = await page.eval(`${board}.items().map((i) => [i.x, i.y])`);
+  await page.touch("start", [stroke[0]]);
+  for (const pt of stroke.slice(1)) await page.touch("move", [pt]);
+  await page.touch("end");
+  await page.waitFor(`${board}.lassos().length === 1`);
+  const loopId = await page.eval(`${board}.lassos()[0].id`);
+  const play = `[id="lasso-play-${loopId}"]`;
+  await page.waitFor(`${q(play)}?.textContent === "▶ 1곡"`);
+  assert.deepEqual(await page.eval(`${board}.items().map((i) => [i.x, i.y])`), placed, "drawing over a card did not move it");
+  assert.ok(!(await page.eval(q("#card-menu"))), "nor choose it");
+  await settled(page);
+  await page.shot(out("board-lasso.png"));
+  // ▶ on the loop: the first card sounds, the second never does.
+  await page.eval(`(() => { window.__played = []; new MutationObserver(() => { for (const c of document.querySelectorAll(".card.song.playing")) if (!window.__played.includes(c.dataset.id)) window.__played.push(c.dataset.id); }).observe(document.getElementById("board-content"), { subtree: true, attributes: true, attributeFilter: ["class"] }); return true; })()`);
+  await click(page, play);
+  await page.waitFor(`${q(play)}.textContent === "■ 멈춤" && document.querySelector(".card.song.playing")`, 4000);
+  await page.waitFor(`${q(play)}.textContent === "▶ 1곡"`, 15000);
+  assert.deepEqual(await page.eval(`window.__played`), [first.id], "only the card inside played");
+  // Dragged by its chip over the second card, the loop holds that one instead.
+  const chip = await page.eval(`(() => { const r = ${q(play)}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const dx = second.cx - first.cx;
+  const dy = second.cy - first.cy;
+  await page.touch("start", [[chip.x, chip.y]]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[chip.x + (dx * i) / 8, chip.y + (dy * i) / 8]]);
+  await page.touch("end");
+  await page.waitFor(`${board}.lassos()[0].x !== 0 || ${board}.lassos()[0].y !== 0`);
+  const holds = (c) => page.eval(`(() => { const r = document.querySelector('.board-loops path[data-lasso]').getBoundingClientRect(); return r.left < ${c.cx} && r.right > ${c.cx} && r.top < ${c.cy} && r.bottom > ${c.cy}; })()`);
+  assert.ok(await holds(second) && !(await holds(first)), "the loop moved over the second card");
+  await page.waitFor(`${q(play)}.textContent === "▶ 1곡"`);
+  await page.eval(`(window.__played = [], true)`);
+  await click(page, play);
+  await page.waitFor(`document.querySelector(".card.song.playing")`, 4000);
+  await click(page, play);
+  assert.deepEqual(await page.eval(`window.__played`), [second.id], "now the second card plays");
+  // Undo puts the loop back; ✕ takes it off; undo brings it again.
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.lassos()[0].x === 0 && ${board}.lassos()[0].y === 0`);
+  await click(page, `[id="lasso-remove-${loopId}"]`);
+  await page.waitFor(`${board}.lassos().length === 0 && !document.querySelector(".lasso-chip")`);
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.lassos().length === 1 && document.querySelector(".lasso-chip")`);
+  // A second finger while drawing means zoom: no loop is made.
+  const other = ring(second, 14, 0.5);
+  await page.touch("start", [other[0]]);
+  for (const pt of other.slice(1, 6)) await page.touch("move", [pt]);
+  await page.touch("start", [other[5], [other[5][0] + 80, other[5][1] + 40]]);
+  await page.touch("move", [other[5], [other[5][0] + 120, other[5][1] + 60]]);
+  await page.touch("end");
+  await frames(page);
+  assert.equal(await page.eval(`${board}.lassos().length`), 1, "a pinch draws no loop");
+  // A tap with the tool on still chooses a card; with the tool off a drag moves the board, not a loop.
+  // (The pinch moved the board: tap the part of the card still in view.)
+  const now = await cardBox(page, 0);
+  const seen = await page.eval(`(() => { const b = document.getElementById("board").getBoundingClientRect(); const r = document.getElementById("board-rail").getBoundingClientRect(); return { l: b.left + 8, r: r.left - 8, t: b.top + 8, b: b.bottom - 8 }; })()`);
+  const tapAt = [(Math.max(now.x, seen.l) + Math.min(now.x + now.w, seen.r)) / 2, Math.min(Math.max(now.cy, seen.t + 20), seen.b - 20)];
+  assert.ok(tapAt[0] > seen.l && tapAt[0] < seen.r, "part of the card is in view: " + JSON.stringify({ now, seen }));
+  await page.touch("start", [tapAt]);
+  await page.touch("end");
+  await page.waitFor(q("#card-menu #card-play"));
+  await click(page, "#lasso-tool");
+  await page.waitFor(`${q("#lasso-tool")}.getAttribute("aria-pressed") === "false"`);
+  const pan0 = await page.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
+  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = b.getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 150; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
+  assert.ok(empty, "an empty spot on the board");
+  await page.touch("start", [empty]);
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[empty[0] - i * 20, empty[1]]]);
+  await page.touch("end");
+  await frames(page);
+  assert.notEqual(await page.eval(`getComputedStyle(document.getElementById("board-content")).transform`), pan0, "the board moved");
+  assert.equal(await page.eval(`${board}.lassos().length`), 1, "and no loop was drawn");
+});
+
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);

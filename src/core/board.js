@@ -13,6 +13,10 @@
 //   irm   { id, i, n }                          removes counter, odd = hidden
 //   link  { id, a, b, by }                      a then b
 //   lrm   { id, l, n }                          removes counter for a line
+//   slot  { id, n, pairs, by }                  a saved order (잇기 순서 칸), latest wins
+//   lasso { id, pts: [x, y, x, y…], by }        올가미: a loop; only the cards inside play
+//   lamv  { id, la, x, y }                      where a loop stands (an offset), larger id wins
+//   larm  { id, la, n }                         removes counter for a loop
 
 import { cmpId, validId, Clock } from "./crdt.js";
 import { SongDoc } from "./song.js";
@@ -22,6 +26,7 @@ import { fromBase64, toBase64 } from "./b64.js";
 export const ORDER_COLORS = ["#e5484d", "#f2802a", "#e8b422", "#2f9e5b", "#2f7bf0", "#3b45c4", "#9a4fd8", "#2b2b30"];
 export const ITEM_KINDS = ["note", "song"];
 const MAX_UNKNOWN = 300;
+const MAX_LOOP_POINTS = 300;
 const MAX_MS = 600000;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const isText = (v, max) => typeof v === "string" && v.length <= max;
@@ -86,6 +91,7 @@ export class BoardDoc {
     this.byId = new Map();
     this.linksById = new Map();
     this.slotsByN = new Map(); // order slot number → { id, pairs }: the latest save wins
+    this.lassosById = new Map(); // 올가미 loops
     this.waiting = new Map();
     this.seen = new Set();
     this.unknown = [];
@@ -130,10 +136,11 @@ export class BoardDoc {
         return this.done(op);
       }
       case "irm":
-      case "lrm": {
-        const target = op.t === "irm" ? op.i : op.l;
+      case "lrm":
+      case "larm": {
+        const target = op.t === "irm" ? op.i : op.t === "lrm" ? op.l : op.la;
         if (!validId(target) || !isInt(op.n, 1, 1e9)) return this.setAside(op);
-        const thing = (op.t === "irm" ? this.byId : this.linksById).get(target);
+        const thing = (op.t === "irm" ? this.byId : op.t === "lrm" ? this.linksById : this.lassosById).get(target);
         if (!thing) return this.wait(target, op);
         if (op.n > thing.rm) thing.rm = op.n;
         return this.done(op);
@@ -144,6 +151,20 @@ export class BoardDoc {
         if (!ok) return this.setAside(op);
         const cur = this.slotsByN.get(op.n);
         if (!cur || cmpId(op.id, cur.id) > 0) this.slotsByN.set(op.n, { id: op.id, pairs: op.pairs.map((pair) => [pair[0], pair[1]]) });
+        return this.done(op);
+      }
+      case "lasso": {
+        const ok = Array.isArray(op.pts) && op.pts.length >= 6 && op.pts.length <= MAX_LOOP_POINTS * 2 && op.pts.length % 2 === 0 &&
+          op.pts.every((v) => isInt(v, -1000000, 1000000)) && isText(op.by, 40);
+        if (!ok) return this.setAside(op);
+        this.lassosById.set(op.id, { id: op.id, pts: op.pts.slice(), by: op.by, x: 0, y: 0, at: op.id, rm: 0 });
+        return this.done(op);
+      }
+      case "lamv": {
+        if (!validId(op.la) || !FIELD_OK.x(op.x) || !FIELD_OK.y(op.y)) return this.setAside(op);
+        const loop = this.lassosById.get(op.la);
+        if (!loop) return this.wait(op.la, op);
+        if (cmpId(op.id, loop.at) > 0) Object.assign(loop, { x: op.x, y: op.y, at: op.id });
         return this.done(op);
       }
       case "link": {
@@ -199,6 +220,12 @@ export class BoardDoc {
   /** Saved orders, by slot number: [{ n, pairs: [[from, to], …] }]. */
   slots() {
     return [...this.slotsByN.entries()].sort((p, q) => p[0] - q[0]).map(([n, { pairs }]) => ({ n, pairs: pairs.map((pair) => [...pair]) }));
+  }
+
+  /** 올가미 loops as they stand now, oldest first: { id, pts: [x, y, x, y…], by, x, y }. */
+  lassos() {
+    return [...this.lassosById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id))
+      .map((l) => ({ id: l.id, by: l.by, x: l.x, y: l.y, pts: l.pts.map((v, i) => v + (i % 2 ? l.y : l.x)) }));
   }
 
   /** Visible cards, oldest first (the order they are drawn in). */
@@ -348,6 +375,12 @@ export function invertBoardOps(board, clock, atoms, dir) {
     else if (atom.k === "ladd") show(board.linksById, "lrm", "l", atom.link, !undo);
     else if (atom.k === "ldel") show(board.linksById, "lrm", "l", atom.link, undo);
     else if (atom.k === "set") ops.push({ t: "iset", id: clock.next(), i: atom.item, f: { ...(undo ? atom.prev : atom.next) } });
+    else if (atom.k === "lasso-add") show(board.lassosById, "larm", "la", atom.lasso, !undo);
+    else if (atom.k === "lasso-del") show(board.lassosById, "larm", "la", atom.lasso, undo);
+    else if (atom.k === "lasso-move") {
+      const [x, y] = undo ? atom.prev : atom.next;
+      ops.push({ t: "lamv", id: clock.next(), la: atom.lasso, x, y });
+    }
   }
   return ops;
 }
@@ -429,4 +462,125 @@ export function useSlotOps(clock, board, n, by) {
     atoms.push({ k: "ladd", link: op.id });
   }
   return { ops, atoms };
+}
+
+// ---- 올가미: a loop drawn round cards; only what is inside plays ------------------------
+
+/** How high a song card stands on the board, for what is inside a loop (its middle counts). */
+export const SONG_CARD_H = 100;
+
+const area2 = (pts) => {
+  let a = 0;
+  for (let i = 0, n = pts.length / 2; i < n; i++) {
+    const j = (i + 1) % n;
+    a += pts[2 * i] * pts[2 * j + 1] - pts[2 * j] * pts[2 * i + 1];
+  }
+  return a / 2;
+};
+
+/** Whether (x, y) is inside the loop: any winding counts, so a loop drawn twice round still holds. */
+export function insideLoop(pts, x, y) {
+  let wn = 0;
+  for (let i = 0, n = pts.length / 2; i < n; i++) {
+    const j = (i + 1) % n;
+    const [x1, y1, x2, y2] = [pts[2 * i], pts[2 * i + 1], pts[2 * j], pts[2 * j + 1]];
+    const side = (x2 - x1) * (y - y1) - (x - x1) * (y2 - y1);
+    if (y1 <= y) { if (y2 > y && side > 0) wn++; }
+    else if (y2 <= y && side < 0) wn--;
+  }
+  return wn !== 0;
+}
+
+/** Where segment p1-p2 crosses p3-p4 (strictly inside both), or null. */
+function crossing(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+  if (d === 0) return null;
+  const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d;
+  const u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+  return t > 0 && t < 1 && u > 0 && u < 1 ? [x1 + t * (x2 - x1), y1 + t * (y2 - y1)] : null;
+}
+
+/**
+ * A stroke made into a loop the shortest way. The end need not reach the start:
+ * where the stroke crosses itself, the biggest loop it makes is kept and the
+ * tails go; where the end comes back close to an earlier part of the stroke, the
+ * loop closes there and the lead-in goes; otherwise the end joins the start.
+ * pts: [x, y, x, y…]; returns the same.
+ */
+export function closeLoop(pts) {
+  const n = pts.length / 2;
+  const P = (i) => [pts[2 * i], pts[2 * i + 1]];
+  let best = null;
+  for (let j = 2; j < n - 1; j++) {
+    for (let i = 0; i < j - 1; i++) {
+      const x = crossing(...P(i), ...P(i + 1), ...P(j), ...P(j + 1));
+      if (!x) continue;
+      const loop = [...x, ...pts.slice(2 * (i + 1), 2 * (j + 1))];
+      const a = Math.abs(area2(loop));
+      if (!best || a > best.a) best = { a, loop };
+    }
+  }
+  if (best) return best.loop;
+  // No crossing: does the end come back near an earlier part (a "6"), nearer than to the start?
+  const along = [0];
+  for (let i = 1; i < n; i++) along.push(along[i - 1] + Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]));
+  const total = along[n - 1];
+  const xs = pts.filter((_, i) => i % 2 === 0);
+  const ys = pts.filter((_, i) => i % 2 === 1);
+  const near = Math.max(24, 0.12 * Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)));
+  const [ex, ey] = P(n - 1);
+  const toStart = Math.hypot(ex - pts[0], ey - pts[1]);
+  let at = 0;
+  let closest = toStart;
+  for (let i = 1; i < n - 1; i++) {
+    if (total - along[i] < 0.3 * total) break;
+    const d = Math.hypot(ex - pts[2 * i], ey - pts[2 * i + 1]);
+    if (d < closest) { closest = d; at = i; }
+  }
+  return at > 0 && closest <= near ? pts.slice(2 * at) : pts.slice();
+}
+
+/** At most MAX_LOOP_POINTS points, the start and the end kept. */
+function thinLoop(pts) {
+  const n = pts.length / 2;
+  if (n <= MAX_LOOP_POINTS) return pts;
+  const out = [];
+  for (let k = 0; k < MAX_LOOP_POINTS; k++) {
+    const i = Math.round((k * (n - 1)) / (MAX_LOOP_POINTS - 1));
+    out.push(pts[2 * i], pts[2 * i + 1]);
+  }
+  return out;
+}
+
+/** A loop from a stroke (board coordinates), closed the shortest way; nothing when it is too small. */
+export function lassoOps(clock, board, stroke, by) {
+  if (!Array.isArray(stroke) || stroke.length < 6 || stroke.length % 2 || !stroke.every(Number.isFinite)) return { ops: [], atoms: [] };
+  const pts = closeLoop(thinLoop(stroke.map((v) => Math.round(v)))).map((v) => Math.round(v));
+  if (pts.length < 6 || Math.abs(area2(pts)) < 600) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  const op = { t: "lasso", id: clock.next(), pts, by };
+  return { ops: [op], atoms: [{ k: "lasso-add", lasso: op.id }], id: op.id };
+}
+
+export function moveLassoOps(clock, board, lassoId, dx, dy) {
+  const loop = board.lassosById.get(lassoId);
+  if (!loop || loop.rm % 2 === 1) return { ops: [], atoms: [] };
+  const next = [loop.x + Math.round(dx), loop.y + Math.round(dy)];
+  if (next[0] === loop.x && next[1] === loop.y) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "lamv", id: clock.next(), la: lassoId, x: next[0], y: next[1] }], atoms: [{ k: "lasso-move", lasso: lassoId, prev: [loop.x, loop.y], next }] };
+}
+
+export function removeLassoOps(clock, board, lassoId) {
+  const loop = board.lassosById.get(lassoId);
+  if (!loop || loop.rm % 2 === 1) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "larm", id: clock.next(), la: lassoId, n: loop.rm + 1 }], atoms: [{ k: "lasso-del", lasso: lassoId }] };
+}
+
+/** The song cards inside a loop (their middles), in the order they play: lines first, then from the left. */
+export function lassoOrder(board, lassoId) {
+  const loop = board.lassos().find((l) => l.id === lassoId);
+  if (!loop) return [];
+  return playOrder(board).filter((card) => insideLoop(loop.pts, card.x + card.w / 2, card.y + SONG_CARD_H / 2));
 }

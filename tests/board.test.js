@@ -203,3 +203,48 @@ test("one card alone is a song of its own, for hearing just it", () => {
   assert.deepEqual(alone.layout().map((c) => [c.start, c.length]), [[0, 1000]]);
   assert.equal(alone.end(), 1000);
 });
+
+test("올가미: a loop drawn round cards plays only those, in order; it closes itself, moves, comes off, all undoable, in any order", async () => {
+  const { lassoOps, moveLassoOps, removeLassoOps, lassoOrder } = await import("../src/core/board.js");
+  const board = new BoardDoc();
+  const clock = new Clock("a");
+  const log = [];
+  const commit = (made) => { for (const op of made.ops) { board.apply(op); log.push(op); } return made; };
+  const song = (x, y = 0) => commit(addItemOps(clock, board, { kind: "song", x, y, data: card(1), by: "m1" }));
+  const [a, b, c] = [song(0), song(200), song(600)];
+  // An open stroke round the first two (its end does not meet its start).
+  const loop = commit(lassoOps(clock, board, [-20, -20, 380, -20, 380, 120, -20, 120, -20, 40], "m1"));
+  assert.deepEqual(board.lassos().map((l) => l.id), [loop.id]);
+  assert.deepEqual(lassoOrder(board, loop.id).map((i) => i.id), [a.id, b.id], "only what is inside, left first");
+  commit(linkOps(clock, board, b.id, a.id, "m1"));
+  assert.deepEqual(lassoOrder(board, loop.id).map((i) => i.id), [b.id, a.id], "the order lines count inside too");
+  const moved = commit(moveLassoOps(clock, board, loop.id, 400, 0));
+  assert.deepEqual(lassoOrder(board, loop.id).map((i) => i.id), [c.id], "moved over the third");
+  commit({ ops: invertBoardOps(board, clock, moved.atoms, "undo") });
+  assert.deepEqual(lassoOrder(board, loop.id).map((i) => i.id), [b.id, a.id]);
+  const gone = commit(removeLassoOps(clock, board, loop.id));
+  assert.equal(board.lassos().length, 0);
+  commit({ ops: invertBoardOps(board, clock, gone.atoms, "undo") });
+  assert.equal(board.lassos().length, 1);
+  const other = new BoardDoc();
+  for (const op of shuffle(rng(5), log)) other.apply(op);
+  assert.deepEqual(other.lassos(), board.lassos());
+  assert.deepEqual(lassoOps(clock, board, [0, 0, 10, 10], "m1").ops, [], "too small to be a loop");
+});
+
+test("올가미 closes the shortest way: a crossing keeps the loop, a near end trims the lead-in, an open end joins the start", async () => {
+  const { lassoOps } = await import("../src/core/board.js");
+  const board = new BoardDoc();
+  const clock = new Clock("a");
+  const loopOf = (stroke) => {
+    const made = lassoOps(clock, board, stroke, "m1");
+    for (const op of made.ops) board.apply(op);
+    return board.lassos().find((l) => l.id === made.id).pts;
+  };
+  // The end runs across the beginning: the tails go.
+  assert.deepEqual(loopOf([50, -30, 50, 200, 250, 200, 250, 0, -30, 0]), [50, 0, 50, 200, 250, 200, 250, 0]);
+  // Never closed (a C): the end joins the start.
+  assert.deepEqual(loopOf([0, 0, 300, 0, 300, 200, 0, 200, 0, 120]), [0, 0, 300, 0, 300, 200, 0, 200, 0, 120]);
+  // A "6": the end comes back near the middle of the stroke, not the start.
+  assert.deepEqual(loopOf([-200, 100, 0, 100, 0, 0, 200, 0, 200, 200, 10, 110]), [0, 100, 0, 0, 200, 0, 200, 200, 10, 110]);
+});

@@ -33,6 +33,7 @@ const ICONS = {
   fit: '<path d="M4 9V4.5h4.5M20 9V4.5h-4.5M4 15v4.5h4.5M20 15v4.5h-4.5"/>',
   slots: '<rect x="4" y="4.5" width="16" height="4" rx="1.3"/><rect x="4" y="10" width="16" height="4" rx="1.3"/><rect x="4" y="15.5" width="10" height="4" rx="1.3"/>',
   stretch: '<path d="M3.5 12h17M7.5 8l-4 4 4 4M16.5 8l4 4-4 4"/>',
+  lasso: '<path d="M7.6 15.4C5.3 14.4 3.8 12.7 3.8 10.6 3.8 7.3 7.5 4.8 12 4.8s8.2 2.5 8.2 5.8-3.7 5.8-8.2 5.8c-1.1 0-2.2-.1-3.2-.4" stroke-dasharray="2.6 2.4"/><path d="M8.8 15.9c-1.2.7-1.6 2.1-.7 3.3"/>',
   squeeze: '<path d="M3 12h6.5M14.5 12H21M6 8.5l3.5 3.5L6 15.5M18 8.5L14.5 12l3.5 3.5"/>',
   wave: '<path d="M3 12h2.2l2-5 3 10 3-12 3 9 1.8-2H21"/>',
   scissors: '<circle cx="6.5" cy="7" r="2.4"/><circle cx="6.5" cy="17" r="2.4"/><path d="M8.6 8.3L19.5 17M8.6 15.7L19.5 7"/>',
