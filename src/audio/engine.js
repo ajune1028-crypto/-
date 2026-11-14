@@ -14,16 +14,21 @@ const TAIL_MS = 400; // after the last clip ends, before stopping
 
 let shared = null;
 
-/** The app's audio context. Call from inside a tap. Null where the browser has none. */
-export async function audioContext() {
+/**
+ * The app's audio context; null where the browser has none. To make sound it
+ * must be woken from inside a tap (`wake`). Reading files does not need that,
+ * so importing never waits on it. Some app views never answer a wake, so the
+ * wait is capped.
+ */
+export async function audioContext({ wake = true } = {}) {
   if (!shared) {
     const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Ctx) return null;
     shared = new Ctx({ latencyHint: "interactive" });
   }
-  if (shared.state === "suspended") {
+  if (wake && shared.state === "suspended") {
     try {
-      await shared.resume();
+      await Promise.race([shared.resume(), new Promise((resolve) => setTimeout(resolve, 1500))]);
     } catch {
       // Some browsers refuse outside a tap; the next tap tries again.
     }

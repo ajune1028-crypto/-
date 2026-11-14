@@ -7,7 +7,9 @@ export const DEFAULT_SETTINGS = {
   // Your own accent colour (null: the app's blue) and the size of written text.
   accent: null, textScale: 1,
   // Song room: what to hear and see, the piano's tone, a faint waveform behind the notes, and the overdub delay fix in ms.
-  songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0,
+  songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0, songSpeed: 1,
+  // Drawing: the brush, and whether the eraser rubs out an area or whole strokes.
+  inkBrush: "pen", inkEraser: "area",
 };
 
 export function openStore(storage, prefix = "") {

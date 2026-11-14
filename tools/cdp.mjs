@@ -142,6 +142,11 @@ export async function launch({ port = 9333, args = [] } = {}) {
       // on its animation frames, which a page in the background hardly gets: come to the front first.
       press: async (x, y) => { await s("Page.bringToFront"); await mouse("mousePressed", x, y, 1); },
       front: () => s("Page.bringToFront"),
+      /** A mouse wheel turn at a point; modifiers like a held Shift or Alt. */
+      wheel: async (x, y, deltaY, { shift = false, alt = false, ctrl = false } = {}) => {
+        await s("Page.bringToFront");
+        await s("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY, modifiers: (alt ? 1 : 0) | (ctrl ? 2 : 0) | (shift ? 8 : 0), pointerType: "mouse" });
+      },
       moveTo: (x, y) => s("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1, pointerType: "mouse" }),
       release: (x, y) => mouse("mouseReleased", x, y, 1),
       /** Puts files into a file input, as if picked in the file chooser. */

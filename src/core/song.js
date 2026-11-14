@@ -44,6 +44,8 @@ const FIELD_OK = {
   length: (v) => isInt(v, 1, MAX_SOURCE_MS),
   muted: (v) => typeof v === "boolean",
   locked: (v) => typeof v === "boolean",
+  // Who locked it: they and the room's owner may unlock it.
+  lockBy: (v) => v === null || (typeof v === "string" && v.length > 0 && v.length <= 40),
 };
 export const CLIP_FIELDS = Object.keys(FIELD_OK);
 
@@ -118,6 +120,7 @@ export class SongDoc {
         for (const k of ["row", "start", "offset", "length"]) fields.set(k, { v: op[k], at: op.id });
         fields.set("muted", { v: false, at: op.id });
         fields.set("locked", { v: false, at: op.id });
+        fields.set("lockBy", { v: null, at: op.id });
         this.clipsById.set(op.id, { id: op.id, src: op.src, by: op.by, at: op.at, fields, rm: 0 });
         return this.done(op);
       }

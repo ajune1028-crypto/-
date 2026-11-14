@@ -5,6 +5,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { serve } from "./serve.mjs";
 import { launch } from "./cdp.mjs";
 import { scenarios } from "./scenarios.mjs";
@@ -25,6 +26,13 @@ mkdirSync(dirname(fixtures.doremi), { recursive: true });
   writeFileSync(fixtures.doremi, encodeWav(sing(melody, { rate: 44100 }).samples, 44100));
   const take = [67, 64, 64, 65, 62, 62].map((midi, i) => ({ midi, dur: i === 2 || i === 5 ? 0.6 : 0.3, gap: 0.04 }));
   writeFileSync(fixtures.mic, encodeWav(sing(take, { rate: 48000, lead: 0.3, tail: 3 }).samples, 48000));
+  // The formats phones save recordings in (Samsung 녹음 keeps .m4a), made with ffmpeg when it is installed.
+  const codecs = { m4a: ["-c:a", "aac", "-b:a", "96k"], mp3: ["-c:a", "libmp3lame", "-b:a", "96k"], webm: ["-c:a", "libopus", "-b:a", "64k"] };
+  for (const [ext, args] of Object.entries(codecs)) {
+    const file = join(root, "out", "fixtures", "doremi." + ext);
+    const made = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", fixtures.doremi, ...args, file]);
+    fixtures[ext] = made.status === 0 ? file : null;
+  }
 }
 
 const server = await serve(dist ? join(root, "dist") : root, PORT);

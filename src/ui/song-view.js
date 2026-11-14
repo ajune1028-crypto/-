@@ -18,21 +18,13 @@ export const MAX_PPS = 320;
 
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
-function median(values) {
-  const a = values.slice().sort((x, y) => x - y);
-  return a.length ? a[a.length >> 1] : 60;
-}
-
-/** Fixed pitch window per sound so a clip's bars keep their heights however it is cut. */
-function pitchWindow(source) {
-  if (source.window) return source.window;
-  const ps = source.notes.map((n) => n.p);
+/** One pitch window per sound, so a clip's bars keep their heights however it is cut. */
+function pitchWindow(notes) {
+  const ps = notes.map((n) => n.p);
   const lo = ps.length ? Math.min(...ps) : 60;
   const hi = ps.length ? Math.max(...ps) : 60;
   const span = Math.max(10, hi - lo + 2);
-  const mid = ps.length ? (lo + hi) / 2 : median(ps);
-  source.window = { top: mid + span / 2, span };
-  return source.window;
+  return { top: (lo + hi) / 2 + span / 2, span };
 }
 
 function peaksOf(source) {
@@ -64,6 +56,7 @@ export class Timeline {
   constructor(handlers) {
     this.on = handlers;
     this.pps = 64;
+    this.rowScale = 1; // two fingers up and down (or Alt+wheel) make rows taller for a closer look
     this.model = null;
     this.clipEls = new Map();
     this.drag = null;
@@ -79,7 +72,7 @@ export class Timeline {
   }
 
   get rowH() {
-    return 5.25 * remPx();
+    return 5.25 * remPx() * this.rowScale;
   }
 
   get rulerH() {
@@ -176,6 +169,26 @@ export class Timeline {
       this.clipEls.delete(id);
     }
     this.drawRecording(model.recording);
+    this.drawOthers(model.others || []);
+  }
+
+  /** Friends recording right now: a growing outline on their row, with their name. */
+  drawOthers(list) {
+    const old = [...this.lanes.querySelectorAll(".clip.other-rec")];
+    old.slice(list.length).forEach((el) => el.remove());
+    list.forEach((r, i) => {
+      let el = old[i];
+      if (!el) {
+        el = h("div", { class: "clip other-rec", "aria-label": "친구가 녹음 중" }, h("span", { class: "rec-name" }));
+        this.lanes.append(el);
+      }
+      el.style.left = this.xOf(r.start) + "px";
+      el.style.top = r.row * this.rowH + this.inset + "px";
+      el.style.width = Math.max(4, (r.ms / 1000) * this.pps) + "px";
+      el.style.height = this.rowH - 2 * this.inset + "px";
+      el.style.setProperty("--c", r.color);
+      el.firstChild.textContent = r.name + " 녹음 중";
+    });
   }
 
   placeClip(entry, clip, model) {
@@ -192,16 +205,17 @@ export class Timeline {
     el.classList.toggle("selected", clip.id === model.selected);
     el.classList.toggle("peer", !!peer);
     el.classList.toggle("muted", clip.muted);
-    el.setAttribute("aria-label", clipLabel(clip, source));
+    const notes = source ? model.notesOf(clip.src) : [];
+    el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, hasAudio, clip.muted, clip.locked, model.color(clip.by), source ? source.notes.length : -1].join("|");
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip.by), notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
-    el.replaceChildren(...this.clipInside(clip, source, model, hasAudio));
-    el.classList.toggle("no-notes", model.mode === "piano" && !!source && !source.notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
+    el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
+    el.classList.toggle("no-notes", model.mode === "piano" && !!source && !notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
   }
 
-  clipInside(clip, source, model, hasAudio) {
+  clipInside(clip, source, model, hasAudio, notes) {
     if (!source) return [];
     const parts = [];
     const piano = model.mode === "piano";
@@ -215,12 +229,12 @@ export class Timeline {
       }
     }
     if (piano) {
-      const win = pitchWindow(source);
+      const win = pitchWindow(notes);
       const pxPerMs = this.pps / 1000;
       const barH = this.barHeight(win.span);
-      const notes = h("span", { class: "notes" });
+      const bars = h("span", { class: "notes" });
       let any = false;
-      for (const n of source.notes) {
+      for (const n of notes) {
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
         if (e - s < 20) continue;
@@ -238,9 +252,9 @@ export class Timeline {
           },
         });
         if (widthPx >= 14) bar.textContent = solfege(n.p);
-        notes.append(bar);
+        bars.append(bar);
       }
-      parts.push(notes);
+      parts.push(bars);
       if (!any) parts.push(h("span", { class: "clip-note", text: "음을 찾지 못했어요" }));
     } else if (!hasAudio) {
       parts.push(h("span", { class: "clip-note", text: "원본은 이 기기에 없어요" }));
@@ -351,23 +365,49 @@ export class Timeline {
     });
     this.lanes.addEventListener("pointercancel", () => { down = null; });
 
-    // Two fingers: zoom around the point between them.
+    // Two fingers: spreading sideways zooms time, spreading up and down makes rows taller.
     let pinch = null;
-    const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const spread = (t) => ({ x: Math.abs(t[0].clientX - t[1].clientX), y: Math.abs(t[0].clientY - t[1].clientY) });
     this.el.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 2) pinch = { d: spread(e.touches), pps: this.pps, at: this.msAt((e.touches[0].clientX + e.touches[1].clientX) / 2) };
+      if (e.touches.length === 2) pinch = { ...spread(e.touches), pps: this.pps, rows: this.rowScale, at: this.msAt((e.touches[0].clientX + e.touches[1].clientX) / 2) };
     }, { passive: true });
     this.el.addEventListener("touchmove", (e) => {
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();
-      this.setZoom(pinch.pps * (spread(e.touches) / pinch.d), pinch.at);
+      const now = spread(e.touches);
+      if (pinch.y > 40) this.rowScale = Math.min(2.6, Math.max(0.7, pinch.rows * (now.y / pinch.y)));
+      this.setZoom(pinch.x > 40 ? pinch.pps * (now.x / pinch.x) : this.pps, pinch.at);
     }, { passive: false });
     this.el.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; });
+
+    // A computer's wheel zooms time where the pointer is; Shift+wheel moves sideways,
+    // Alt+wheel makes rows taller. Sideways swipes on a touchpad scroll as usual.
     this.el.addEventListener("wheel", (e) => {
-      if (!e.ctrlKey) return;
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
-      this.setZoom(this.pps * Math.exp(-e.deltaY / 300), this.msAt(e.clientX));
+      if (e.shiftKey) {
+        this.el.scrollLeft += e.deltaY;
+        return;
+      }
+      const f = Math.exp(-e.deltaY / 300);
+      if (e.altKey) {
+        this.rowScale = Math.min(2.6, Math.max(0.7, this.rowScale * f));
+        this.setZoom(this.pps);
+      } else this.setZoom(this.pps * f, this.msAt(e.clientX));
     }, { passive: false });
+
+    // A mouse dragged across empty space moves the view, like a finger does.
+    let pan = null;
+    this.lanes.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.target.closest(".clip")) return;
+      pan = { x: e.clientX, y: e.clientY, sl: this.el.scrollLeft, st: this.el.scrollTop };
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!pan || e.pointerType !== "mouse") return;
+      this.el.scrollLeft = pan.sl - (e.clientX - pan.x);
+      this.el.scrollTop = pan.st - (e.clientY - pan.y);
+    });
+    window.addEventListener("pointerup", () => { pan = null; });
   }
 
   wireClip(el, id) {
@@ -451,8 +491,8 @@ function iconSvg(name) {
   return span.firstChild;
 }
 
-function clipLabel(clip, source) {
-  const n = source ? source.notes.filter((x) => x.t < clip.offset + clip.length && x.t + x.d > clip.offset).length : 0;
+function clipLabel(clip, notes) {
+  const n = notes.filter((x) => x.t < clip.offset + clip.length && x.t + x.d > clip.offset).length;
   return `클립 ${timeText(clip.start)}부터 ${(clip.length / 1000).toFixed(1)}초, 음 ${n}개${clip.muted ? ", 음소거" : ""}`;
 }
 

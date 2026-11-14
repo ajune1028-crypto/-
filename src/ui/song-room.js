@@ -1,17 +1,25 @@
 // The song room: sing or hum, and it becomes piano notes with the timing you
 // sang. Takes become clips on rows; rows play together; clips can be copied,
-// pasted, muted, split, moved and deleted, and every step can be undone.
+// pasted, muted, split, joined, locked, moved and deleted, their notes edited,
+// and every step undone.
 //
-// Top right: 원본 | 피아노 decides what you hear and see (the recording's
-// waveform, or note bars by pitch). The tone button switches the piano
-// between 밝게 and 어둡게. Both are this device's own choice.
+// Sound comes in three ways, all on screen from the start: recording in the
+// app (where the page may use the microphone), recording with the phone's
+// own recorder app (Samsung 녹음 and the like, through the file picker's
+// capture), and picking a file. Top right, 원본 | 피아노 decides what is heard
+// and seen; the speed button plays 0.5x to 3x; the tone button switches the
+// piano between 밝게 and 어둡게. Those three are this device's own choice.
 
 import { h, icon, iconButton, segmented, toggle, openSheet, toast } from "./dom.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { Timeline, timeText } from "./song-view.js";
+import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
 import { memberColor, INK } from "../core/paint.js";
-import { MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps } from "../core/song.js";
+import {
+  MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps,
+  joinClipOps, joinWithSourceOps, combinedSource,
+} from "../core/song.js";
 import { getSettings, setSetting } from "../identity.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
@@ -21,13 +29,22 @@ import { decodeAudioFile, bufferFromSamples } from "../audio/decode.js";
 import { encodeWav, decodeWav } from "../audio/wav.js";
 import { resample, toMono } from "../audio/dsp.js";
 import { toBase64 } from "../audio/peaks.js";
-import { noteLabel } from "../audio/notes.js";
 import { newBlobId } from "../sync/blobs.js";
 
 const KEEP_RATE = 24000; // recordings are kept at this rate: clear voice, a quarter of CD size
 const MIN_TAKE_MS = 250;
 const PRESENCE_EVERY_MS = 120;
 const LIVE_EVERY_MS = 150;
+export const SPEEDS = [1, 1.5, 2, 3, 0.5];
+const AUDIO_TYPES = "audio/*,.m4a,.mp3,.wav,.aac,.ogg,.oga,.opus,.webm,.3gp,.amr,.flac";
+
+/** Why this page cannot record in the app, in words a person can act on. */
+function micReason(reason) {
+  if (reason === "blocked") return "이 화면은 Claude 안의 시험판이라 마이크를 쓸 수 없어요. 아래 '폰 녹음 앱으로 녹음하기'로 녹음하면 바로 이 방에 들어와요. 크롬에서 공개 주소로 열면 앱 안에서 바로 녹음돼요.";
+  if (reason === "insecure") return "이 주소에서는 브라우저가 마이크를 열어 주지 않아요(https 주소에서만 돼요). 아래 '폰 녹음 앱으로 녹음하기'를 써 주세요.";
+  if (reason === "unsupported") return "이 브라우저는 앱 안 녹음을 지원하지 않아요. 아래 '폰 녹음 앱으로 녹음하기'를 써 주세요.";
+  return reason || "";
+}
 
 export function mountSongRoom(body, app, session, frame) {
   const song = session.doc("song");
@@ -45,6 +62,9 @@ export function mountSongRoom(body, app, session, frame) {
   let frameReq = 0;
   let alive = true;
   let menu = null;
+  let editor = null;
+  let closeAdd = null;
+  const peerRecs = new Map(); // peer key → { row, at, since, name, color }
 
   body.classList.add("song-body");
   const timeline = new Timeline({
@@ -76,23 +96,56 @@ export function mountSongRoom(body, app, session, frame) {
   const playButton = iconButton("play", "play", "재생", () => togglePlay());
   const recordButton = iconButton("record", "record", "녹음", () => toggleRecord());
   recordButton.classList.add("rec-btn");
-  const importButton = iconButton("import", "upload", "소리 가져오기", () => pickFile());
+  const addButton = iconButton("import", "upload", "소리 넣기", () => openAddSheet());
   const undoButton = iconButton("undo", "undo", "실행취소", () => step("undo"));
   const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"));
+  const speedButton = h("button", { class: "icon-btn speed-btn", id: "speed", type: "button", "aria-label": "재생 빠르기", onclick: () => nextSpeed() });
   const toneButton = iconButton("tone", "sun", "피아노 음색", () => setTone(settings().pianoTone === "dark" ? "bright" : "dark"));
-  const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, importButton, undoButton, redoButton, toneButton);
+  const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, addButton, undoButton, redoButton, speedButton, toneButton);
   body.after(toolbar);
-  const fileInput = h("input", { type: "file", accept: "audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm", id: "song-file", hidden: true, onchange: () => {
-    const file = fileInput.files?.[0];
-    fileInput.value = "";
-    if (file) importFile(file);
-  } });
-  body.append(fileInput);
+
+  // The pickers are opened by <label>s, never by a script: some phones and app
+  // views only open a file chooser straight from a person's tap.
+  const pickers = [
+    h("input", { type: "file", accept: AUDIO_TYPES, id: "song-file", class: "vh", tabindex: "-1" }),
+    h("input", { type: "file", accept: "audio/*", capture: "user", id: "song-capture", class: "vh", tabindex: "-1" }),
+  ];
+  for (const input of pickers) {
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      input.value = "";
+      closeAdd?.();
+      if (file) importFile(file);
+    });
+  }
+  body.append(...pickers);
   const status = h("div", { class: "song-status", id: "song-status", role: "status", hidden: true });
-  body.append(status);
+  const start = h("div", { class: "song-start", id: "song-start", hidden: true });
+  body.append(status, start);
 
   const readOnly = () => !!app.transport?.readOnly || !!session.transport.readOnly;
   const mic = micSupport();
+
+  /** The three ways in, as buttons. Used by the start card and the 소리 넣기 sheet. */
+  function waysIn(prefix, after = () => {}) {
+    return [
+      h("button", { type: "button", class: "btn rec-way", id: prefix + "record", disabled: readOnly() || !mic.ok, onclick: () => { after(); toggleRecord(); } }, h("span", { class: "dot-rec" }), "지금 이 앱에서 녹음"),
+      !mic.ok && h("p", { class: "help warn", id: prefix + "mic-reason", text: micReason(mic.reason) }),
+      h("label", { class: "btn quiet way", id: prefix + "capture", for: "song-capture" }, "폰 녹음 앱으로 녹음하기"),
+      h("p", { class: "help", text: "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
+      h("label", { class: "btn quiet way", id: prefix + "file", for: "song-file" }, "파일에서 가져오기"),
+      h("p", { class: "help", text: "녹음 앱에 저장된 파일(m4a), mp3, wav 모두 돼요." }),
+    ];
+  }
+
+  function openAddSheet() {
+    if (readOnly() || rec) return;
+    closeAdd?.();
+    closeAdd = openSheet(root, "소리 넣기", (panel, close, onClose) => {
+      panel.append(h("div", { class: "form", id: "add-sound" }, ...waysIn("add-", close)));
+      onClose(() => { closeAdd = null; });
+    });
+  }
 
   // ---- drawing ------------------------------------------------------------------
 
@@ -111,29 +164,44 @@ export function mountSongRoom(body, app, session, frame) {
     return map;
   }
 
+  /** Friends recording right now: where they started, growing from when this screen heard of it. */
+  function trackPeerRecordings() {
+    const live = new Set();
+    for (const p of session.peers) {
+      const r = p.state?.rec;
+      if (p.isMe || !r || typeof r !== "object" || !Number.isFinite(r.row) || !Number.isFinite(r.at)) continue;
+      live.add(p.key);
+      const m = session.room.member(p.state.m);
+      if (!peerRecs.has(p.key)) peerRecs.set(p.key, { row: r.row, at: r.at, since: performance.now() });
+      Object.assign(peerRecs.get(p.key), { name: m?.name || "친구", color: m ? memberColor(m.color, currentTheme()) : "#e5484d" });
+    }
+    for (const key of [...peerRecs.keys()]) if (!live.has(key)) peerRecs.delete(key);
+  }
+
   function model() {
     const clips = song.layout();
     let empty = null;
-    if (loaded && !clips.length && !rec) {
-      empty = mic.ok
-        ? "아래 빨간 녹음 버튼을 누르고 흥얼거려 보세요.\n부른 음과 길이 그대로 피아노 음이 돼요."
-        : "아래 버튼으로 녹음 파일을 가져와 보세요.\n부른 음과 길이 그대로 피아노 음이 돼요.";
-    }
     if (!loaded) empty = "노래를 불러오는 중…";
     return {
-      clips, source: (id) => song.source(id), color: colorOf, mode: settings().songMode, showWave: settings().showWave,
-      selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1),
+      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: colorOf, mode: settings().songMode, showWave: settings().showWave,
+      selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
+      others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
       playhead, empty,
     };
   }
 
   function draw() {
     if (!alive) return;
+    trackPeerRecordings();
     timeline.render(model());
+    const showStart = loaded && !song.layout().length && !rec && !readOnly();
+    if (showStart && !start.childNodes.length) start.append(h("p", { class: "start-title", text: "소리를 넣어 보세요" }), h("p", { class: "help", text: "흥얼거린 음과 길이 그대로 피아노 음이 돼요." }), ...waysIn("start-"));
+    start.hidden = !showStart;
     drawButtons();
     placeMenu();
+    editor?.refresh();
   }
 
   function drawButtons() {
@@ -144,11 +212,13 @@ export function mountSongRoom(body, app, session, frame) {
     recordButton.replaceChildren(icon(rec ? "stop" : "record"));
     recordButton.setAttribute("aria-label", rec ? "녹음 끝내기" : "녹음");
     recordButton.classList.toggle("on", !!rec);
-    recordButton.hidden = !mic.ok;
-    importButton.hidden = mic.ok;
-    recordButton.disabled = importButton.disabled = readOnly() || !!busy;
+    recordButton.classList.toggle("no-mic", !mic.ok);
+    recordButton.disabled = readOnly() || (!!busy && !rec);
+    addButton.disabled = readOnly() || !!busy || !!rec;
     undoButton.disabled = !undo.canUndo || !!rec;
     redoButton.disabled = !undo.canRedo || !!rec;
+    speedButton.textContent = speedLabel(settings().songSpeed || 1);
+    speedButton.setAttribute("aria-label", "재생 빠르기 " + speedLabel(settings().songSpeed || 1));
     const dark = settings().pianoTone === "dark";
     toneButton.replaceChildren(icon(dark ? "moon" : "sun"));
     toneButton.setAttribute("aria-label", "피아노 음색: " + (dark ? "어둡게" : "밝게"));
@@ -156,6 +226,8 @@ export function mountSongRoom(body, app, session, frame) {
     for (const b of modeSwitch.children) b.setAttribute("aria-pressed", String(b.dataset.value === settings().songMode));
     clock.textContent = timeText(playhead);
   }
+
+  const speedLabel = (s) => (s === 1 ? "1×" : String(s) + "×");
 
   function showStatus(text) {
     status.hidden = !text;
@@ -170,12 +242,23 @@ export function mountSongRoom(body, app, session, frame) {
     if (!src?.blob) return false;
     if (!localBlobs.has(src.blob)) {
       localBlobs.set(src.blob, false);
-      app.blobs.get(src.blob).then((rec) => {
-        localBlobs.set(src.blob, !!rec);
-        if (rec) draw();
+      app.blobs.get(src.blob).then((kept) => {
+        localBlobs.set(src.blob, !!kept);
+        if (kept) draw();
       });
     }
     return localBlobs.get(src.blob);
+  }
+
+  /** A sound's recording as samples at KEEP_RATE, or null when this device does not have it. */
+  async function samplesOf(srcId) {
+    const src = song.source(srcId);
+    if (!src?.blob) return null;
+    const kept = await app.blobs.get(src.blob);
+    const wav = kept && decodeWav(kept.data);
+    if (!wav) return null;
+    const mono = toMono(wav.channels);
+    return wav.rate === KEEP_RATE ? mono : resample(mono, wav.rate, KEEP_RATE);
   }
 
   /** Decodes every recording this device holds, so 원본 can play them. */
@@ -188,17 +271,23 @@ export function mountSongRoom(body, app, session, frame) {
     }
   }
 
+  function makePlayer(ctx) {
+    if (player) return player;
+    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playhead = player.position; stopFrames(); draw(); } });
+    player.setMode(settings().songMode);
+    player.setTone(settings().pianoTone);
+    player.setSpeed(settings().songSpeed || 1);
+    return player;
+  }
+
+  /** Wakes the sound (from a tap) and has the player ready. */
   async function ready() {
     const ctx = await audioContext();
     if (!ctx) {
       toast(root, "이 브라우저는 소리를 낼 수 없어요");
       return null;
     }
-    if (!player) {
-      player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playhead = player.position; stopFrames(); draw(); } });
-      player.setMode(settings().songMode);
-      player.setTone(settings().pianoTone);
-    }
+    makePlayer(ctx);
     if (settings().songMode === "original") await loadRecordings(ctx);
     return ctx;
   }
@@ -276,12 +365,27 @@ export function mountSongRoom(body, app, session, frame) {
     drawButtons();
   }
 
+  function nextSpeed() {
+    const now = settings().songSpeed || 1;
+    const speed = SPEEDS[(SPEEDS.indexOf(now) + 1) % SPEEDS.length];
+    setSetting(app.store, "songSpeed", speed);
+    if (player && settings().songMode === "original" && speed !== 1) showStatus("빠르기를 맞추는 중…");
+    // Stretching a long recording takes a moment; let the words show first.
+    setTimeout(() => {
+      player?.setSpeed(speed);
+      showStatus(null);
+    }, 30);
+    toast(root, "재생 빠르기 " + speedLabel(speed), 1400);
+    drawButtons();
+  }
+
   // ---- recording ----------------------------------------------------------------
 
   async function toggleRecord() {
     if (rec) return stopRecording();
     if (readOnly() || busy) return;
-    if (!mic.ok) return pickFile();
+    // Where the page may not use the microphone, say why and offer the phone's recorder.
+    if (!mic.ok) return openAddSheet();
     if (!song.canAddClip()) return void toast(root, "클립은 방 하나에 200개까지예요");
     const ctx = await ready();
     if (!ctx) return;
@@ -296,8 +400,9 @@ export function mountSongRoom(body, app, session, frame) {
     } catch (err) {
       busy = null;
       console.warn(err);
-      toast(root, micProblem(err), 4200);
-      return void drawButtons();
+      toast(root, micProblem(err) + " 폰 녹음 앱으로도 넣을 수 있어요.", 4200);
+      drawButtons();
+      return void openAddSheet();
     }
     busy = null;
     if (!alive) return void recorder.stop();
@@ -331,26 +436,21 @@ export function mountSongRoom(body, app, session, frame) {
     // What you heard while singing reached you late, and your voice reached the
     // page late again: move the take back by that much.
     const shift = r.overdub ? r.recorder.latency() * 1000 + Number(settings().syncMs || 0) : 0;
-    const start = Math.max(0, Math.round(r.start - shift));
-    await addTake({ samples: take.samples, rate: take.rate, result, start, row: r.row, name: null });
-    playhead = start + Math.round(result.duration * 1000);
+    const begin = Math.max(0, Math.round(r.start - shift));
+    await addTake({ samples: take.samples, rate: take.rate, result, start: begin, row: r.row, name: null });
+    playhead = begin + Math.round(result.duration * 1000);
     draw();
   }
 
   // ---- importing ----------------------------------------------------------------
 
-  async function pickFile() {
-    if (readOnly() || busy || rec) return;
-    // Woken here, inside the tap: the file picker's answer comes too late for that.
-    await audioContext();
-    fileInput.click();
-  }
-
   async function importFile(file) {
     if (busy) return;
     if (!song.canAddClip()) return void toast(root, "클립은 방 하나에 200개까지예요");
-    const ctx = await ready();
-    if (!ctx) return;
+    // Reading a file needs no sound, so nothing here waits for the audio to wake.
+    const ctx = await audioContext({ wake: false });
+    if (!ctx) return void toast(root, "이 브라우저는 소리 파일을 읽을 수 없어요");
+    makePlayer(ctx);
     busy = "import";
     drawButtons();
     showStatus("소리를 읽는 중…");
@@ -376,8 +476,8 @@ export function mountSongRoom(body, app, session, frame) {
   }
 
   /** Keeps the recording on this device, then adds its sound and a clip to the song. */
-  async function addTake({ samples, rate, result, start, row, name }) {
-    const ctx = await audioContext();
+  async function addTake({ samples, rate, result, start: at, row, name }) {
+    const ctx = await audioContext({ wake: false });
     const kept = rate === KEEP_RATE ? samples : resample(samples, rate, KEEP_RATE);
     const blob = newBlobId();
     await app.blobs.put(blob, encodeWav(kept, KEEP_RATE), "audio/wav");
@@ -386,8 +486,8 @@ export function mountSongRoom(body, app, session, frame) {
     const src = sourceOp(session.clock, song, { duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), by, at: Date.now(), blob, name });
     if (ctx) audio.set(src.id, bufferFromSamples(ctx, samples, rate));
     const length = Math.max(1, Math.round(result.duration * 1000));
-    const place = song.freeRow(start, length, row) ?? row;
-    const clip = addClipOps(session.clock, song, { src: src.id, row: place, start, length, by, at: Date.now() });
+    const place = song.freeRow(at, length, row) ?? row;
+    const clip = addClipOps(session.clock, song, { src: src.id, row: place, start: at, length, by, at: Date.now() });
     session.commit("song", [src, ...clip.ops]);
     record(clip.atoms);
     selectedRow = place;
@@ -403,7 +503,7 @@ export function mountSongRoom(body, app, session, frame) {
     draw();
   }
 
-  const presence = () => ({ m: session.memberId, sel: selected, rec: rec ? rec.row : null });
+  const presence = () => ({ m: session.memberId, sel: selected, rec: rec ? { row: rec.row, at: rec.start } : null });
 
   function record(atoms) {
     if (!atoms.length) return;
@@ -412,7 +512,7 @@ export function mountSongRoom(body, app, session, frame) {
   }
 
   function apply(made) {
-    if (!made || !made.ops.length) return false;
+    if (!made || !made.ops || !made.ops.length) return false;
     session.commit("song", made.ops);
     record(made.atoms);
     return true;
@@ -426,14 +526,14 @@ export function mountSongRoom(body, app, session, frame) {
     draw();
   }
 
-  function moveClip(id, start, row) {
+  function moveClip(id, at, row) {
     const clip = song.clip(id);
     if (!clip || clip.locked || readOnly()) return;
     const lane = Math.min(row, MAX_ROWS - 1);
-    const place = song.freeRow(start, clip.length, lane, id);
+    const place = song.freeRow(at, clip.length, lane, id);
     if (place === null) return void toast(root, "그 자리에는 놓을 수 없어요");
-    if (place === clip.row && start === clip.start) return;
-    apply(setClipOps(session.clock, song, id, { start, row: place }));
+    if (place === clip.row && at === clip.start) return;
+    apply(setClipOps(session.clock, song, id, { start: at, row: place }));
     selected = id;
     selectedRow = place;
     draw();
@@ -445,7 +545,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!src) return;
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length,
-      source: { duration: src.dur / 1000, notes: src.notes.map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name },
+      source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name },
     });
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
     draw();
@@ -485,7 +585,61 @@ export function mountSongRoom(body, app, session, frame) {
     draw();
   }
 
+  /** 잇기: this clip and the next one on its row become one. */
+  async function joinClip(id) {
+    const plan = joinClipOps(session.clock, song, id, session.memberId);
+    if (!plan) return void toast(root, "이 줄에서 뒤에 이을 클립이 없어요");
+    if (plan.ops) {
+      apply(plan);
+      return void draw();
+    }
+    const { a, b } = plan.combine;
+    if (a.locked || b.locked) return void toast(root, "잠긴 클립은 이을 수 없어요");
+    busy = "join";
+    showStatus("잇는 중…");
+    try {
+      const combined = combinedSource(song, a, b);
+      // The joined recording too, when this device has both.
+      let blob = null;
+      let pcm = null;
+      const [one, two] = await Promise.all([samplesOf(a.src), samplesOf(b.src)]);
+      if (one && two) {
+        const at = (ms) => Math.round((ms / 1000) * KEEP_RATE);
+        pcm = new Float32Array(at(b.start + b.length - a.start));
+        pcm.set(one.subarray(at(a.offset), at(a.offset + a.length)), 0);
+        pcm.set(two.subarray(at(b.offset), at(b.offset + b.length)).subarray(0, pcm.length - at(b.start - a.start)), at(b.start - a.start));
+        blob = newBlobId();
+        await app.blobs.put(blob, encodeWav(pcm, KEEP_RATE), "audio/wav");
+        localBlobs.set(blob, true);
+      }
+      const src = sourceOp(session.clock, song, { ...combined, by: session.memberId, at: Date.now(), blob, name: "이은 소리" });
+      const made = joinWithSourceOps(session.clock, song, a, b, src, session.memberId);
+      const ctx = await audioContext({ wake: false });
+      if (pcm && ctx) audio.set(src.id, bufferFromSamples(ctx, pcm, KEEP_RATE));
+      apply(made);
+      selected = made.id;
+    } finally {
+      busy = null;
+      showStatus(null);
+      draw();
+    }
+  }
+
+  /** 잠금: nobody moves, cuts or deletes it; whoever locked it and the room's owner can unlock. */
+  function toggleLock(id) {
+    const clip = song.clip(id);
+    if (!clip) return;
+    const me = session.memberId;
+    if (clip.locked) {
+      const owner = session.room.meta("createdBy") === me;
+      if (clip.lockBy && clip.lockBy !== me && !owner) return void toast(root, "잠근 사람과 방장만 풀 수 있어요");
+      apply(setClipOps(session.clock, song, id, { locked: false, lockBy: null }));
+    } else apply(setClipOps(session.clock, song, id, { locked: true, lockBy: me }));
+    draw();
+  }
+
   function deleteClip(id) {
+    if (song.clip(id)?.locked) return void toast(root, "잠긴 클립은 지울 수 없어요");
     if (apply(removeClipOps(session.clock, song, id))) selected = null;
     draw();
   }
@@ -495,7 +649,7 @@ export function mountSongRoom(body, app, session, frame) {
     return !!c && playhead > c.start + 50 && playhead < c.start + c.length - 50;
   }
 
-  // The small menu above a chosen clip.
+  // The small menu by a chosen clip.
   function placeMenu() {
     if (!selected || rec) {
       menu?.remove();
@@ -508,6 +662,7 @@ export function mountSongRoom(body, app, session, frame) {
     const area = body.getBoundingClientRect();
     if (!box) return;
     const locked = clip.locked || readOnly();
+    const next = song.nextOnRow(clip.id);
     if (!menu) {
       menu = h("div", { class: "clip-menu", id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
       body.append(menu);
@@ -518,7 +673,9 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-paste", "붙여넣기", () => pasteClip(), !clipboardItem(app.store, "song-clip") || readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), readOnly()),
       item("clip-split", "분할", () => splitClip(clip.id), locked || !insideClip(clip.id)),
-      item("clip-notes", "음 보기", () => showNotes(clip.id)),
+      item("clip-join", "잇기", () => joinClip(clip.id), locked || !next || next.locked || !!busy),
+      item("clip-notes", "음 편집", () => editNotes(clip.id)),
+      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), readOnly()),
       item("clip-delete", "삭제", () => deleteClip(clip.id), locked));
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
@@ -527,26 +684,18 @@ export function mountSongRoom(body, app, session, frame) {
     let top = box.top - area.top - hgt - 6;
     if (top < 4) top = box.bottom - area.top + 6;
     menu.style.left = left + "px";
-    menu.style.top = Math.min(top, area.height - hgt - 4) + "px";
+    menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
   }
 
-  /** "음 보기": every note of a clip with its name, when it starts and how long it was sung. */
-  function showNotes(id) {
+  /** 음 편집: the clip's notes as a piano roll. Edits go through the undo stack like any other step. */
+  function editNotes(id) {
     const clip = song.clip(id);
-    const src = clip && song.source(clip.src);
-    if (!src) return;
-    const notes = src.notes
-      .map((n) => ({ ...n, s: Math.max(n.t, clip.offset), e: Math.min(n.t + n.d, clip.offset + clip.length) }))
-      .filter((n) => n.e - n.s >= 20);
-    openSheet(root, "음 보기", (panel) => {
-      if (!notes.length) return void panel.append(h("p", { class: "help", text: "이 클립에서는 음을 찾지 못했어요. 원본으로 들을 수 있어요." }));
-      panel.append(
-        h("p", { class: "help", text: `음 ${notes.length}개. 누르면 그 음이 피아노로 울려요.` }),
-        h("ol", { class: "note-list", id: "note-list" }, notes.map((n) => h("li", {},
-          h("button", { type: "button", class: "note-row", onclick: async () => { if (await ready()) player.preview(n.p, Math.min(1.2, (n.e - n.s) / 1000)); } },
-            h("span", { class: "note-name", text: noteLabel(n.p) }),
-            h("span", { class: "note-at", text: timeText(clip.start + n.s - clip.offset) }),
-            h("span", { class: "note-len", text: ((n.e - n.s) / 1000).toFixed(2) + "초" }))))));
+    if (!clip) return;
+    editor = openNoteEditor(root, {
+      song, clipId: id, clock: session.clock, color: colorOf(clip.by),
+      commit: (made) => apply(made),
+      preview: async (p, seconds) => { if (await ready()) player.preview(p, seconds); },
+      canEdit: () => !readOnly() && !song.clip(id)?.locked,
     });
   }
 
@@ -566,7 +715,7 @@ export function mountSongRoom(body, app, session, frame) {
           segmented([["bright", "밝게", "tone-bright"], ["dark", "어둡게", "tone-dark"]], s.pianoTone, (v) => setTone(v), "toneChoice")),
         toggle("set-wave", "피아노로 볼 때 원본 파형도 흐리게 보기", s.showWave, (on) => { setSetting(app.store, "showWave", on); app.events.emit("settings"); draw(); }),
         h("div", { class: "row" }, h("label", { for: "set-sync", text: "싱크 보정: 겹쳐 녹음한 소리가 늦거나 이르게 놓일 때" }), sync, syncText),
-        h("button", { class: "btn quiet", id: "settings-import", type: "button", text: "소리 가져오기 (녹음 파일)", onclick: () => { close(); pickFile(); } })));
+        h("button", { class: "btn quiet", id: "settings-import", type: "button", text: "소리 넣기 (녹음·녹음 앱·파일)", onclick: () => { close(); openAddSheet(); } })));
   }
 
   const syncLabel = (v) => (v === 0 ? "자동" : v > 0 ? `${v}ms 앞으로 당겨요` : `${-v}ms 뒤로 밀어요`);
@@ -586,6 +735,8 @@ export function mountSongRoom(body, app, session, frame) {
   // ---- life ---------------------------------------------------------------------------
 
   let presenceTimer = null;
+  // While a friend records, their growing placeholder needs a steady redraw.
+  const friendTimer = setInterval(() => { if (peerRecs.size) draw(); }, 250);
   const offs = [
     session.on("change", ({ doc }) => {
       if (doc !== "song" && doc !== "room") return;
@@ -622,9 +773,12 @@ export function mountSongRoom(body, app, session, frame) {
       alive = false;
       stopFrames();
       clearTimeout(presenceTimer);
+      clearInterval(friendTimer);
       if (rec) rec.recorder.stop();
       rec = null;
       player?.close();
+      editor?.close();
+      closeAdd?.();
       for (const off of offs) off();
       document.removeEventListener("visibilitychange", onVisibility);
       document.removeEventListener("keydown", onKey);

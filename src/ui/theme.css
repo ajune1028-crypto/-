@@ -814,3 +814,86 @@ h1, h2, p { margin: 0; }
 .ink-tools .icon-btn { width: 1.9rem; height: 1.9rem; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+
+/* ---- song room: ways in, speed, friends, note editor ---------------------------- */
+
+/* A file input the eye does not see, opened by its <label>. */
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+label.btn { display: grid; place-items: center; cursor: pointer; text-align: center; -webkit-user-select: none; user-select: none; }
+.btn.rec-way { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.dot-rec { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: #ff5a5f; box-shadow: 0 0 0 2px rgb(255 255 255 / 0.6); }
+.help.warn { padding: 0.6rem 0.75rem; border-radius: 0.8rem; background: color-mix(in srgb, #e5484d 12%, transparent); color: var(--ink); }
+.song-start {
+  position: absolute;
+  left: 1.1rem;
+  right: 1.1rem;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: 1rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: 1.4rem;
+  background: var(--panel-bg);
+  box-shadow: var(--glass-shine), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  transform: translateY(-45%);
+  --muted: var(--muted-tone);
+}
+.song-start .start-title { font-size: 1.05rem; font-weight: 800; }
+.song-start .btn { height: 2.6rem; font-size: 0.9rem; }
+.song-start .help { font-size: 0.7rem; }
+.speed-btn { width: auto; min-width: 2.5rem; padding: 0 0.35rem; font-size: 0.8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.song-tools { gap: 0; padding: 0.2rem 0.25rem; }
+.song-tools .icon-btn { width: 2.4rem; }
+.song-tools .rec-btn.no-mic { opacity: 0.75; }
+.clip.other-rec { z-index: 2; border: 2px dashed var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); animation: rec-glow 1.4s ease-in-out infinite; }
+.rec-name { position: absolute; top: 0.25rem; left: 0.4rem; font-size: 0.66rem; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.clip-menu { flex-wrap: wrap; justify-content: center; max-width: calc(100% - 0.75rem); border-radius: 1.2rem; }
+
+/* 음 편집: a piano roll. Keys on the left name the notes; bars are the notes. */
+.panel.editor-panel { max-height: 94%; }
+.roll-tools { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0; align-items: center; }
+.chip { height: 2rem; padding: 0 0.7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--well); font-size: 0.78rem; font-weight: 700; }
+.roll-tools .btn.small { height: 2rem; margin-left: auto; }
+.roll {
+  position: relative;
+  display: flex;
+  height: min(48vh, 22rem);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--sheet);
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+.keys { position: sticky; left: 0; z-index: 3; flex: none; width: 2.6rem; background: var(--paper); box-shadow: 1px 0 0 var(--line); }
+.key { display: flex; align-items: center; justify-content: flex-end; padding-right: 0.3rem; font-size: 0.6rem; color: var(--muted); border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.key.black { background: color-mix(in srgb, var(--ink) 9%, var(--paper)); }
+.key.c { color: var(--ink); font-weight: 800; }
+.grid { position: relative; flex: none; }
+.lane-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.lane-row.black { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.rnote {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.4rem;
+  color: var(--paper);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: inset -5px 0 0 rgb(255 255 255 / 0.35);
+}
+.rnote.chosen { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 2; }
+.roll-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.note-row.chosen .note-name { color: var(--accent-ink); }

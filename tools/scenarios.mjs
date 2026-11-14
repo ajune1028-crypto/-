@@ -1139,8 +1139,11 @@ scenario("song: a hummed recording becomes a clip whose bars are the notes sung,
   for (const dark of [false, true]) {
     const page = await open({ dark, dev: dark ? "d" : "a" });
     await createSongRoom(page);
-    assert.match(await text(page, "#song-empty"), /흥얼거려/);
+    // An empty room offers every way in at once: record here, the phone's recorder app, a file.
+    await page.waitFor(`!${q("#song-start")}.hidden`);
+    assert.equal(await page.eval(`[${q("#start-record")}, ${q("#start-capture")}, ${q("#start-file")}].every((e) => e && e.getBoundingClientRect().height > 30)`), true);
     await importSound(page, fixtures.doremi);
+    assert.equal(await page.eval(`${q("#song-start")}.hidden`), true, "the start card goes once there is a clip");
     assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
     const notes = await page.eval(`[...window.__app.session.doc("song").sources.values()][0].notes.map((n) => [n.p, n.d])`);
     assert.deepEqual(notes.map(([p]) => p), [60, 62, 64, 65, 67]);
@@ -1292,15 +1295,42 @@ scenario("song: the tone button switches the piano between 밝게 and 어둡게 
   assert.equal(await page.eval(`${q("#tone")}.dataset.tone`), "bright");
 });
 
-scenario("song: where there is no microphone, the record button gives way to importing", async ({ open, fixtures }) => {
+scenario("song: where the page may not use the microphone, the record button says why and offers the phone's recorder app", async ({ open, fixtures }) => {
   const page = await open({ init: "Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });" });
   await createSongRoom(page);
-  assert.equal(await page.eval(`${q("#record")}.hidden`), true);
-  assert.equal(await page.eval(`${q("#import")}.hidden`), false);
-  assert.match(await text(page, "#song-empty"), /가져와/);
-  await importSound(page, fixtures.doremi);
+  assert.equal(await page.eval(`${q("#record")}.hidden`), false, "the record button is always there");
+  assert.match(await text(page, "#start-mic-reason"), /폰 녹음 앱/);
+  await click(page, "#record");
+  await page.waitFor(q("#add-sound"));
+  assert.match(await text(page, "#add-mic-reason"), /폰 녹음 앱/);
+  assert.equal(await page.eval(`${q("#add-record")}.disabled`), true);
+  assert.equal(await page.eval(`${q("#add-capture")}.htmlFor + "|" + ${q("#add-file")}.htmlFor`), "song-capture|song-file");
+  // What the phone's recorder app hands back comes in like any file.
+  await page.setFiles("#song-capture", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1 && ${q("#song-status")}.hidden`, 20000);
+  assert.equal(await page.eval(`!!document.querySelector("#add-sound")`), false, "the sheet closed by itself");
   assert.equal((await noteNames(page)).length, 5);
 });
+
+scenario("song: the phone's recorder app is asked for with an audio capture picker, opened by a tap on a label", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page);
+  const picker = await page.eval(`(() => { const i = document.getElementById("song-capture"); return { type: i.type, accept: i.accept, capture: i.getAttribute("capture"), shown: getComputedStyle(i).display !== "none" }; })()`);
+  assert.deepEqual(picker, { type: "file", accept: "audio/*", capture: "user", shown: true }, "a real (if invisible) input, so the label can open it");
+  const file = await page.eval(`document.getElementById("song-file").accept`);
+  assert.match(file, /audio\/\*/);
+  assert.match(file, /\.m4a/);
+});
+
+for (const ext of ["m4a", "mp3", "webm"]) {
+  scenario(`song: a ${ext} recording (as phones save them) is read and its notes found`, async ({ open, fixtures }) => {
+    if (!fixtures[ext]) return console.log(`     (skipped: ffmpeg could not make a ${ext} file here)`);
+    const page = await open();
+    await createSongRoom(page);
+    await importSound(page, fixtures[ext]);
+    assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
+  });
+}
 
 scenario("song: a friend's device shows the same clips and plays them as piano", async ({ open, fixtures }) => {
   const a = await open({ dev: "a" });
@@ -1389,4 +1419,138 @@ scenario("drawing: the pen draws on today's sheet, the other device sees it, the
   await focusEnd(a);
   await a.type("글");
   await a.waitFor(`window.__app.session.sheet("${day}").text() === "글"`);
+});
+
+scenario("song: 잇기 joins the two halves of a split back into one, and two takes into one clip", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const [first] = await songClips(page);
+  await tapTime(page, first.start + 1000);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-split");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+  const [front] = await songClips(page);
+  await choose(page, `.clip[data-id="${front.id}"]`);
+  await page.waitFor(`!${q("#clip-join")}.disabled`);
+  await click(page, "#clip-join");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
+  assert.equal((await songClips(page))[0].length, first.length);
+  // A second take further along the same row, then join the two.
+  await tapTime(page, first.length + 1500);
+  await click(page, "#import");
+  await page.waitFor(q("#add-sound"));
+  await page.setFiles("#song-file", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2 && ${q("#song-status")}.hidden`, 20000);
+  const clips = await songClips(page);
+  assert.deepEqual(clips.map((c) => c.lane), [0, 0], "both on the first row");
+  await choose(page, `.clip[data-id="${clips[0].id}"]`);
+  await click(page, "#clip-join");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+  assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔", "도", "레", "미", "파", "솔"]);
+  const kept = await page.eval(`(async () => { const s = window.__app.session.doc("song"); const c = s.layout()[0]; const src = s.source(c.src); return !!(src.blob && await window.__app.blobs.get(src.blob)); })()`);
+  assert.ok(kept, "the joined recording is kept too, so 원본 plays it");
+  await click(page, "#undo");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+});
+
+scenario("song: 음 편집 moves a note up a step, adds one, removes one, and undo puts each back", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-notes");
+  await page.waitFor(`document.querySelectorAll("#roll-grid .rnote").length === 5`);
+  await settled(page);
+  await page.shot(out("note-editor.png"));
+  // Drag 도 up by two rows: 레.
+  const at = await page.eval(`(() => { const n = document.querySelector('#roll-grid .rnote[data-p="60"]'); const r = n.getBoundingClientRect(); return { x: r.left + r.width / 3, y: r.top + r.height / 2, h: r.height + 2 }; })()`);
+  await page.press(at.x, at.y);
+  for (let i = 1; i <= 6; i++) await page.moveTo(at.x, at.y - (at.h * 2 * i) / 6);
+  await page.release(at.x, at.y - at.h * 2);
+  await page.waitFor(`window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src)[0].p === 62`);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note")[0].textContent === "레"`);
+  // Double-tap an empty spot high up: a new note.
+  const spot = await page.eval(`(() => { const g = document.getElementById("roll-grid").getBoundingClientRect(); return { x: g.left + 30, y: g.top + 8 }; })()`);
+  await page.dblTap(spot.x, spot.y);
+  await page.waitFor(`window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src).length === 6`);
+  // Choose 솔 and delete it.
+  await click(page, '#roll-grid .rnote[data-p="67"]');
+  await click(page, "#note-delete");
+  await page.waitFor(`window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src).length === 5`);
+  await page.key("Escape");
+  for (let i = 0; i < 3; i++) await click(page, "#undo");
+  await page.waitFor(`JSON.stringify(window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src).map((n) => n.p)) === "[60,62,64,65,67]"`);
+});
+
+scenario("song: the speed button plays 1.5x, 2x, 3x and 0.5x, and at 2x the playhead runs twice as fast", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  assert.equal(await text(page, "#speed"), "1×");
+  await click(page, "#speed");
+  assert.equal(await text(page, "#speed"), "1.5×");
+  await click(page, "#speed");
+  assert.equal(await text(page, "#speed"), "2×");
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).songSpeed`), 2);
+  await tapTime(page, 0);
+  await click(page, "#play");
+  const t0 = Date.now();
+  await page.waitFor(`document.getElementById("song-clock").textContent >= "0:01.6"`, 4000);
+  assert.ok(Date.now() - t0 < 1500, "1.6 s of song in well under 1.6 s");
+  await click(page, "#play");
+  await click(page, "#speed");
+  assert.equal(await text(page, "#speed"), "3×");
+  await click(page, "#speed");
+  assert.equal(await text(page, "#speed"), "0.5×");
+});
+
+scenario("song: on a computer the wheel zooms time, Alt+wheel makes rows taller, Shift+wheel moves sideways", async ({ open, fixtures }) => {
+  const page = await open({ width: 1024, height: 700 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const pps = () => page.eval(`Number(document.getElementById("timeline").dataset.pps)`);
+  const before = await pps();
+  // Low on the timeline, away from the clip and its menu.
+  const box = await page.eval(`(() => { const r = document.getElementById("timeline").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom - 30 }; })()`);
+  await page.wheel(box.x, box.y, -300);
+  assert.ok((await pps()) > before * 1.5, "zoomed in");
+  const tall = await page.eval(`document.querySelector(".clip[data-id]").getBoundingClientRect().height`);
+  await page.wheel(box.x, box.y, -300, { alt: true });
+  assert.ok((await page.eval(`document.querySelector(".clip[data-id]").getBoundingClientRect().height`)) > tall * 1.5, "rows taller");
+  await page.wheel(box.x, box.y, 200, { shift: true });
+  assert.ok((await page.eval(`document.getElementById("timeline").scrollLeft`)) > 0, "moved sideways");
+});
+
+scenario("song: a locked clip cannot be deleted, cut or moved, and its locker unlocks it", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-lock");
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].locked === true`);
+  await page.waitFor(`${q("#clip-delete")}.disabled && ${q("#clip-split")}.disabled && ${q("#clip-lock")}.textContent === "잠금 풀기"`);
+  await click(page, "#clip-lock");
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].locked === false && !${q("#clip-delete")}.disabled`);
+});
+
+scenario("song: while a friend records, their row shows it growing with their name", async ({ open }) => {
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a, { room: "같이 녹음" });
+  const b = await open({ dev: "b" });
+  await b.goto(await localLink(a, "b", id));
+  await b.waitFor("window.__app && window.__app.booted");
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(q("#timeline"));
+  await a.front();
+  await click(a, "#record");
+  await a.waitFor(q("#rec-clip"), 8000);
+  await b.waitFor(`document.querySelector(".clip.other-rec .rec-name")?.textContent === "가람 녹음 중"`, 8000);
+  const w1 = await b.eval(`document.querySelector(".clip.other-rec").getBoundingClientRect().width`);
+  await new Promise((r) => setTimeout(r, 700));
+  const w2 = await b.eval(`document.querySelector(".clip.other-rec").getBoundingClientRect().width`);
+  assert.ok(w2 > w1, "it grows");
+  await a.front();
+  await click(a, "#record");
+  await b.waitFor(`!document.querySelector(".clip.other-rec") && document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
 });
