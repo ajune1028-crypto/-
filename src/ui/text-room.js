@@ -74,10 +74,20 @@ export function mountTextRoom(body, app, session) {
     }
     body.scrollLeft = ox + px * pageZoom - ax;
     body.scrollTop = oy + py * pageZoom - ay;
-    for (const editor of editors.values()) {
-      editor.ink?.render();
-      editor.drawCarets?.();
-    }
+    repaintSoon();
+  }
+  // While two fingers zoom, the drawings and carets are repainted once per frame, not per move.
+  let repaintQueued = false;
+  function repaintSoon() {
+    if (repaintQueued) return;
+    repaintQueued = true;
+    requestAnimationFrame(() => {
+      repaintQueued = false;
+      for (const editor of editors.values()) {
+        editor.ink?.render();
+        editor.drawCarets?.();
+      }
+    });
   }
   // A second finger stops a line being drawn: two fingers mean zoom.
   const fingers = watchFingers(body, () => { for (const editor of editors.values()) editor.ink?.cancelTouch(); });

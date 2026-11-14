@@ -122,6 +122,17 @@ export function mountBoardRoom(body, app, session, frame) {
     if (menu) placeMenu(false);
   }
 
+  // Continuous gestures (a pinch, the wheel) ask for a draw once per frame at most.
+  let drawQueued = false;
+  function drawSoon() {
+    if (drawQueued) return;
+    drawQueued = true;
+    requestAnimationFrame(() => {
+      drawQueued = false;
+      draw();
+    });
+  }
+
   function draw() {
     if (!alive) return;
     place();
@@ -230,7 +241,10 @@ export function mountBoardRoom(body, app, session, frame) {
       const my = (y1 + y2) / 2;
       parts.push(`<g class="badge" data-link="${l.id}" transform="translate(${mx} ${my})"><circle r="13" fill="${l.color}" /><text text-anchor="middle" dy="4.5">${l.n}</text></g>`);
     }
-    lines.innerHTML = parts.join("");
+    const html = parts.join("");
+    if (lines.dataset.html === html) return;
+    lines.dataset.html = html;
+    lines.innerHTML = html;
     for (const g of lines.querySelectorAll(".badge")) {
       g.addEventListener("pointerdown", (e) => {
         if (mode !== "link" || readOnly()) return;
@@ -253,6 +267,10 @@ export function mountBoardRoom(body, app, session, frame) {
   function drawRail() {
     const s = settings();
     const can = !readOnly();
+    // Built again only when what it shows changes, not on every draw.
+    const key = [mode, can, s.songSpeed || 1, s.songMode].join("|");
+    if (rail.dataset.key === key) return;
+    rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
     const song = chosen && !chosen.removed && chosen.kind === "song" ? chosen : null;
     const tools = {
@@ -294,7 +312,9 @@ export function mountBoardRoom(body, app, session, frame) {
       body.append(menu);
       build = true;
     }
-    if (build) {
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly()].join("|");
+    if (build && menu.dataset.key !== key) {
+      menu.dataset.key = key;
       const can = !readOnly();
       const one = (id, text, onclick) => h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
       menu.replaceChildren(...(item.kind === "song" ? [
@@ -346,14 +366,15 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   /** 노래: song cards longer or shorter in time, around a point (the middle by default). */
-  function stretchAt(f, cx) {
+  function stretchAt(f, cx, soon = false) {
     const r = surface.getBoundingClientRect();
     const ax = cx ?? r.left + r.width / 2;
     const ay = r.top + r.height / 2;
     const at = toBoard(ax, ay);
     sx = clamp(sx * f, MIN_SX, MAX_SX);
     keepUnder(ax, ay, at);
-    draw();
+    if (soon) drawSoon();
+    else draw();
   }
 
   /** 이동: every card in view. */
@@ -507,7 +528,7 @@ export function mountBoardRoom(body, app, session, frame) {
       if (pinch.dx > 40) sx = clamp(pinch.sx * (dx / pinch.dx), MIN_SX, MAX_SX);
       if (pinch.dy > 40) zoom = clamp(pinch.zoom * (dy / pinch.dy), MIN_ZOOM, MAX_ZOOM);
       keepUnder(mx, my, pinch.at);
-      draw();
+      drawSoon();
     } else {
       zoom = clamp(pinch.zoom * (spread(e.touches) / pinch.d), MIN_ZOOM, MAX_ZOOM);
       keepUnder(mx, my, pinch.at);
@@ -520,7 +541,7 @@ export function mountBoardRoom(body, app, session, frame) {
     e.preventDefault();
     if (e.shiftKey) { panX -= e.deltaY; place(); return; }
     const f = Math.exp(-e.deltaY / 400);
-    if (mode === "song" && !e.altKey) stretchAt(f, e.clientX);
+    if (mode === "song" && !e.altKey) stretchAt(f, e.clientX, true);
     else zoomAt(f, e.clientX, e.clientY);
   }, { passive: false });
 
