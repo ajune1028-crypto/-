@@ -598,7 +598,7 @@ scenario("contrast: ink, muted text and all eight colours read on the paper, lig
       assert.ok(contrast(hex(value), hex(css.paper)) >= 4.5, `${theme} ${name} ${contrast(hex(value), hex(css.paper)).toFixed(2)}`);
     }
     await click(a, "#room-settings");
-    const swatches = await a.eval(`[...document.querySelectorAll(".swatch")].map((s) => getComputedStyle(s).backgroundColor)`);
+    const swatches = await a.eval(`[...document.querySelectorAll(".swatch[data-color]")].map((s) => getComputedStyle(s).backgroundColor)`);
     assert.equal(swatches.length, 8);
     swatches.forEach((c, i) => assert.ok(contrast(hex(c), hex(css.paper)) >= 4.5, `${theme} colour ${i}`));
   }

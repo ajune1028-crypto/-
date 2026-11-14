@@ -20,7 +20,7 @@ export const PALETTE = [
 ];
 
 // Must equal --ink and --paper in the stylesheet; a browser scenario checks that they agree.
-export const INK = { light: "#1b2030", dark: "#f2f5fb" };
+export const INK = { light: "#1b2030", dark: "#f4f4f7" };
 export const PAPER = { light: "#f8fafd", dark: "#0b0b0e" };
 
 // Text lightness per theme, and the range a mixed colour may land in.

@@ -4,54 +4,68 @@
 안드로이드 폰이 첫 대상이고, 링크만 있으면 아이폰·아이패드·PC 브라우저에서도 된다. 로그인은 없다. 링크가 곧 방이고, 방마다 별명과 색이 있고, 숫자 5자리 개인 식별 코드로 다른 기기에서도 같은 사람이 된다.
 Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 
-## 지금 어디까지 왔나
+## 지금 어디까지 왔나 (2026-11-14)
 
-- **만들어 둔 것**: 조각 1의 1차. 홈(일상/창작 반반), 방 만들기·입장·초대 링크·연결 진단, 일상 텍스트 방(한 장의 종이를 같이 쓴다: 어절마다 사람 색, 색 섞기, 시간 표지, 날짜별 장, 실행취소), 라이트·다크, 파란 유리(glass) 디자인.
-- **올라가 있는 곳**: Claude 안의 시험판 페이지(아티팩트) https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef . Claude 계정으로 공유받은 사람만 열 수 있다.
-- **다음**: 노래 만들기 방. 설계는 있고(`docs/superpowers/specs/2026-11-10-song-room-design.md`) 코드는 아직 없다. 0차(음 인식 실험, 합성 시험음으로) → 1차(혼자 쓰는 방) → 2차(같이 쓰기) 순서.
-- **그다음**: 텍스트 방 2차(배경, 반짝이는 글자, 표시·낙서, 잠금, 비밀번호 화면) → 사진 방·통합 방 → 글쓰기 → 화이트보드. 중간에 실제 배포(GitHub Pages + Supabase. 사용자가 무료 계정 둘을 만들어야 한다)와 스토어 출시.
-- **브랜치**: 모든 작업이 `feat/text-room-phase1`에 있다. 원격 저장소가 없고 아무것도 합치거나 올리지 않았다. 갈라져 나온 곳은 `specs/2026-11-10-design`.
+- **조각 1의 1차 (11월 12~13일)**: 홈(일상/창작 반반), 방 만들기·입장·초대 링크·연결 진단, 일상 텍스트 방(한 장의 종이를 같이 쓴다: 어절마다 사람 색, 색 섞기, 시간 표지, 날짜별 장, 실행취소), 라이트·다크, 파란 유리(glass) 디자인.
+- **조각 2의 1차, 노래 만들기 방 (11월 14일, 이 세션)**: 녹음(마이크) 또는 파일 가져오기 → 음 인식 → 부른 음과 길이 그대로 피아노 음. 클립은 높이가 같은 직사각형이고 안에 음 막대가 음높이대로 놓이며 이름(도레미)이 적힌다. 노래하는 동안 음이 바로 나타난다. 오른쪽 위 [원본 | 피아노], 피아노 음색 밝게/어둡게, 줄 쌓기, 복사·붙여넣기(다른 노래 방에도)·음소거·분할·삭제·옮기기(꾹 눌러 끌기)·실행취소, 음 보기(음마다 몇 초 불렀는지). 친구 기기에서도 같은 클립이 보이고 피아노로 들린다(원본 녹음 파일 공유는 서버가 생긴 뒤).
+- **뼈대 정리 (이 세션)**: 방 종류 목록 한 곳(`src/ui/kinds.js`), 세션이 문서 종류를 표로 다룸(`DOC_TYPES`), 방 화면의 공통 틀이 방마다 위쪽 줄과 설정 칸을 열어 줌, 기기 클립보드(방 사이 옮기기의 첫 조각), 기기 파일 저장(IndexedDB).
+- **모양 (이 세션)**: 다크 모드를 남색에서 고급스러운 검정(그래파이트)으로, 다크에서 버튼은 유리 + 그라데이션(주요 동작 하나만 진한 색), 포인트 색 직접 고르기(밝게·어둡게에서 같은 색), 글자 크기 4단계.
+- **그리기 (이 세션)**: 텍스트 방에서 펜(빨주노초파남보검, 굵기 3, 지우개, 필압). 획은 날짜별 `k:<날짜>` 문서. 사진 방·화이트보드에서 다시 쓸 수 있게 따로 만들었다.
+- **공개 주소 (이 세션)**: `.github/workflows/pages.yml`이 GitHub Pages에 올린다. 저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 한 번 바꾸고 `main`에 합치면 `https://ajune1028-crypto.github.io/-/`에서 Claude 없이 열린다. 거기서는 마이크 녹음이 된다. **아직 서버가 없어서 방은 그 기기에만 있다**(홈에 그렇게 적힌다).
+- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef . Claude 계정으로 공유받은 사람만 열 수 있다. 저장소(`db`)와 실시간 채널(`room`)이 있어 기기끼리 같이 쓰인다. **마이크는 없다**(그 페이지가 주는 능력 목록에 없음): 노래 방은 "소리 가져오기"로만 넣는다.
+- **다음**: `docs/superpowers/specs/2026-11-14-roadmap.md`. 사용자가 미뤄 두라고 한 것(레퍼런스, 일상↔창작 옮기기, 노래→화이트보드 잇기)과 실제 서버(Supabase), 텍스트 방 2차, 노래 방 2차가 순서와 설계 스케치로 정리돼 있다.
+- **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소). 이 세션의 작업은 `claude/voice-piano-conversion-scaffold-fnjrk8`에 있다. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
 
 ## 사용자와 일하는 법 (가장 중요)
 
 - 한국어로 답한다. 사용자는 구어체·음성 받아쓰기로 말하고(오타와 반복이 많다) 보통 폰으로 읽는다. 결론부터, 짧게.
-- 사용자의 말: "나한테 맞냐고 묻지 말고, 이 방향이 본질에 맞는지, 내가 한 모든 말과 들어맞는지 스스로 계속 확인해라. 알아서 다 해라." 세부는 묻지 말고 정한다. 정한 것은 `docs/superpowers/plans/2026-11-12-text-room-phase1-rulings.md`처럼 한 줄씩 남긴다. 되돌릴 수 없는 일(삭제, 푸시, 배포, 계정 만들기)만 먼저 묻는다.
-- 기준은 사용자의 원문이다: `docs/superpowers/source/2026-11-10-original-idea.txt`, 같은 폴더의 참고 이미지 3장, 그리고 그 뒤 대화에서 한 말을 옮겨 둔 `user-messages.md`(최근 것은 원문, 앞선 것은 발췌). 한 조각이 끝날 때마다 원문과 개요 설계 8절의 체크리스트에 대조한다.
-- 사용자가 폰에서 직접 눌러 본다. "된다"고 말하기 전에 실제로 돌려 본다. 11월 13일에 "방이 안 만들어진다"는 사고가 있었다. 테스트가 `el.click()`으로 눌러서 가려진 입력칸을 못 잡았고, 원인은 CSS 클래스 이름 충돌이었다(rulings의 "The 13 November outage").
+- 사용자의 말: "나한테 맞냐고 묻지 말고, 이 방향이 본질에 맞는지, 내가 한 모든 말과 들어맞는지 스스로 계속 확인해라. 알아서 다 해라." 세부는 묻지 말고 정한다. 정한 것은 `docs/superpowers/plans/*-rulings.md`에 한 줄씩 남긴다. 되돌릴 수 없는 일(삭제, `main`에 푸시, 배포, 계정 만들기, 공개)만 먼저 묻는다.
+- 사용자의 계획: Opus로 뼈대를 잡고, **Fable로 나머지를 마무리**한다. 이어받는 쪽은 뼈대(모듈 경계, op 규칙, 방 종류 목록, 테스트 방식)를 그대로 쓰고 넓힌다. 처음부터 다시 만들지 않는다.
+- 기준은 사용자의 원문이다. 원문 폴더 `docs/superpowers/source/`(첫 설명 전문, 참고 이미지 3장, 대화에서 한 말 모음)는 **이 저장소가 공개여서 올리지 않았다**(.gitignore). 사용자에게 공개해도 되는지 아직 묻는 중이다. 없으면 설계 문서들이 원문을 정리한 것이니 그것을 기준으로 한다(개요 8절 체크리스트, 로드맵 1절의 11월 14일 요청).
+- 사용자가 폰에서 직접 눌러 본다. "된다"고 말하기 전에 실제로 돌려 본다. 11월 13일에 "방이 안 만들어진다"는 사고가 있었다(rulings의 "The 13 November outage").
 
 ## 명령
 
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 107개
+npm test                                    # node --test. 단위 테스트 186개 (음 인식, 노래 문서, 피아노, 재생 예약 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 57개. --dist는 먼저 bundle을 돌려야 한다
-node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일로 묶는다(시험판용)
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 69개. --dist는 먼저 bundle을 돌려야 한다
+node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일로 묶는다
 ```
 
-- 화면 시나리오는 Chrome이나 Edge가 필요하다. 자동으로 찾고, 못 찾으면 `CHROME_BIN`에 실행 파일 경로를 넣는다. macOS·Windows 경로는 목록만 테스트했고 실제 실행은 Linux에서만 해 봤다.
-- 로컬에서 두 사람 흉내: 같은 주소로 탭 두 개를 `?dev=a`, `?dev=b`로 연다(기기 둘). 같은 브라우저 안에서 BroadcastChannel로 서로 보인다. 한쪽에서 방을 만들고 초대 창의 방 코드를 다른 쪽 홈의 "코드로 들어가기"에 넣는다. `?ns=이름`은 저장 공간을 분리한다(테스트용).
-- `dist/`는 git에 없다. 지금 올라가 있는 시험판과 똑같은 파일은 `node tools/bundle.mjs --share-base=https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef`로 만든다. sha256이 `b18326f7704af883c2a036feb3ff9e01664c6a6b0ae795e0e9410f75c012c84a`이면 같은 파일이다.
-- Claude 없이 모양만 보려면 `dist/index.html`을 브라우저로 열면 된다. 방은 그 기기에만 생긴다.
+- 화면 시나리오는 Chrome이나 Edge가 필요하다. 자동으로 찾고, 못 찾으면 `CHROME_BIN`에 실행 파일 경로를 넣는다.
+- 시나리오 브라우저는 가짜 마이크로 뜬다: `out/fixtures/mic.wav`(합성한 노랫소리, 정답 음을 안다)를 마이크로 들려준다. `out/fixtures/doremi.wav`는 "소리 가져오기"용. 둘 다 `tools/e2e.mjs`가 매번 만든다.
+- 끌기(꾹 눌러 옮기기, 펜)는 `page.press/moveTo/release`로 한다. Chrome은 뒤에 있는 페이지에 움직임을 프레임마다만 넘기므로 `press`가 페이지를 앞으로 가져온다. 그림이나 화면 캡처를 뒤쪽 페이지에서 할 때는 `page.front()`.
+- 로컬에서 두 사람 흉내: 같은 주소로 탭 두 개를 `?dev=a`, `?dev=b`로 연다. `?dev`가 없으면 공개 주소처럼 "이 기기만" 방이 된다. `?ns=이름`은 저장 공간을 분리한다(테스트용).
+- `dist/`와 `out/`은 git에 없다.
 
 ## 구조
 
-`src/`는 의존 방향이 ui → sync → core다. core는 화면도 네트워크도 모른다.
+`src/`는 의존 방향이 ui → sync → core, ui → audio다. core와 audio는 화면도 네트워크도 모른다(audio의 engine/recorder/decode만 브라우저 오디오를 쓴다).
 
-- `core/`: `crdt.js`(글자 목록을 합치는 규칙 RGA와 시계), `edit.js`(입력을 op로, 되돌리기용 역 op), `paint.js`(어절 색, 색 섞기, 명암비), `room.js`(방 정보·사람·비밀번호·코드 검사, `roomLink`), `time.js`(날짜와 시간 표지), `undo.js`(내 단계만 쌓는 스택)
-- `sync/`: `transport.js`(전송 약속과 Emitter), `local.js`(한 브라우저 안: localStorage + BroadcastChannel. 테스트와 "이 기기만" 방), `claude.js`(시험판: Claude 페이지의 저장소와 실시간 채널), `session.js`(방 하나를 연 화면. 내 변경을 먼저 적용하고, 못 보낸 것은 기기에 쌓았다가 다시 보내고, 받은 기록을 합친다)
-- `ui/`: `dom.js`(작은 도우미: `h()`, 아이콘, 시트, 토스트. 글자는 항상 텍스트로 넣는다), `home.js`, `join.js`, `room-shell.js`(방의 공통 틀, 설정, 초대, 연결 진단), `text-room.js`, `editor.js`(그려진 층 `.draw` 아래에 투명한 `textarea.typing`), `theme.css`, `theme.js`
-- `identity.js`(이 기기가 기억하는 것), `main.js`(시작: 전송을 고르고 홈이나 방을 보여 준다. `window.__app`은 테스트가 쓴다)
+- `core/`: `crdt.js`(글자 목록 RGA와 시계), `edit.js`, `paint.js`(사람 색, 섞기, 명암비, 포인트 색 계산 `accentColors`), `room.js`, `time.js`, `undo.js`, **`song.js`**(노래 문서: 소리 `src`, 클립 `clip`/`cset`/`crm`, 겹침 해소, 재생할 음 계산, 되돌리기), **`ink.js`**(그림 획 `stroke`/`srm`)
+- **`audio/`**: `dsp.js`(모노, 16 kHz로 리샘플), `pitch.js`(YIN, 10ms마다 음높이), `notes.js`(음표로 묶기: 반음 0.6/60ms, 소리 크기 꺼짐(라-라), 비브라토 묶기, 80ms 미만 버림, 도레미 이름), `analyze.js`(실시간으로 먹이는 Analyzer와 파일 전체 분석), `peaks.js`(파형 요약, base64), `wav.js`, `piano.js`(직접 만드는 피아노 소리, 밝게/어둡게, 울림), `engine.js`(재생 예약, 원본/피아노), `recorder.js`(마이크), `decode.js`(파일 읽기)
+- `sync/`: `transport.js`, `local.js`, `claude.js`(시험판), `session.js`(방 하나. 문서 종류는 `DOC_TYPES` 표: `room`, `s:<날짜>` 장, `song`, `k:<날짜>` 그림), **`blobs.js`**(기기에 파일 보관, IndexedDB)
+- `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치), `theme.css`, `theme.js`
+- `identity.js`(기기 설정: 테마, 색, 노래 방 모드·음색·파형·싱크 보정, 포인트 색, 글자 크기), **`clipboard.js`**(기기 클립보드: 방 사이 복사), `main.js`
 
-핵심 약속: 모든 변경은 op 하나이고, op는 어떤 순서로 몇 번 받아도 결과가 같다. 그래서 서버는 저장하고 전달만 하면 된다. 새 방 종류(노래, 사진…)도 같은 방식으로 얹는다. 앱 본체는 `Transport` 약속만 알고, 실제 배포에서는 `sync/supabase.js` 하나를 더하면 된다.
+핵심 약속: 모든 변경은 op 하나이고, op는 어떤 순서로 몇 번 받아도 결과가 같다. 그래서 서버는 저장하고 전달만 하면 된다. 새 방 종류는 (1) `core/`에 문서, (2) `session.js`의 `DOC_TYPES`에 한 줄, (3) `ui/`에 화면, (4) `kinds.js`에 한 줄이다. 앱 본체는 `Transport` 약속만 알고, 실제 배포에서는 `sync/supabase.js` 하나를 더하면 된다(로드맵 4절).
+
+## 노래 방에서 알아 둘 것
+
+- 음 인식 정확도: 합성한 노래(포먼트·떨림·숨소리 섞음)로 채점한다. 음높이 전부 맞음, 시작 오차 평균 0.6ms·최대 12.5ms, 길이 오차 표준편차 9ms. **실제 사람 목소리로는 아직 채점하지 않았다**(사용자 녹음이 필요). 한 번, 가짜 마이크의 첫 실행에서 긴 음 하나가 두 개로 갈린 적이 있다(오디오가 순간 끊긴 것으로 보임, 4번 다시 해서 재현 안 됨). 실제 기기에서 끊김이 잦으면 `notes.js`의 꺼짐 기준(`DIP`)에 폭 조건을 더한다.
+- 녹음 원본은 24 kHz 16비트 WAV로 그 기기의 IndexedDB에만 있다. 음표와 파형 요약은 노래 문서(op)에 들어가서 모든 기기에 간다. 그래서 친구 기기는 피아노로 바로 듣고, 원본 모드에서는 "원본은 이 기기에 없어요"가 보인다.
+- 겹쳐 녹음할 때만 기기 지연(`baseLatency+outputLatency+입력 지연`)과 설정의 "싱크 보정"만큼 클립을 앞으로 당긴다. 실제 폰 값은 아직 재 보지 않았다.
+- 피아노 소리는 `piano.js`가 키마다 한 번 계산해 버퍼로 둔다. 녹음된 피아노로 바꾸려면 `PianoVoice.buffer()`만 바꾸면 된다.
 
 ## 시험판(Claude 안의 페이지)이라서 생기는 제약. 코드에 이미 반영돼 있다
 
-- 페이지는 막힌 틀 안에서 돈다: `alert/confirm/prompt` 없음, 마이크·카메라 없음, 서비스 워커 없음, `localStorage`가 던질 수 있음, 클립보드는 클릭 안에서만, `navigator.share` 거부, 주소는 평범한 `#이름` 해시만 통과, 다른 호스트로의 fetch·WebSocket 차단.
-- 공유 저장소는 문서 하나 256 KiB, 전체 25,000개라서 기록을 묶음 문서로 모은다. **주인과 이메일로 초대된 편집자만 쓸 수 있고, 링크로만 본 사람은 읽기만 된다.** 실시간 채널은 이벤트 4 KiB, 초당 약 40개이고 주제를 `interact`로 열어야 한다. `claude.use()`는 10초 뒤에 null을 줄 수 있다.
-- 그래서 저장소가 대답하지 않으면 그 기기에만 방을 만든다("이 기기만"). "친구 누구나 링크로"는 실제 배포 단계에서만 된다.
-- 시험판 다시 올리기는 아티팩트 도구가 있는 claude.ai 대화에서 한다(`mcp__claude-artifacts__publish_files`, slug `f0d7436c-510d-4c4a-be1a-680ce3cfc39c`, 지금 버전 `1794580122-d96e`, 올릴 파일 `dist/index.html`). 로컬 Claude Code에 그 도구가 없으면 `dist/index.html`을 만들어 두고 claude.ai 대화에서 올려 달라고 한다.
+- 페이지는 막힌 틀 안에서 돈다: `alert/confirm/prompt` 없음, **마이크·카메라 없음**, 서비스 워커 없음, `localStorage`가 던질 수 있음, 클립보드는 클릭 안에서만, `navigator.share` 거부, 주소는 평범한 `#이름` 해시만 통과, 다른 호스트로의 fetch·WebSocket 차단.
+- 공유 저장소는 문서 하나 256 KiB, 전체 25,000개라서 기록을 묶음 문서로 모은다. 주인과 이메일로 초대된 편집자만 쓸 수 있고, 링크로만 본 사람은 읽기만 된다. 실시간 채널은 이벤트 4 KiB, 초당 약 40개이고 주제(`ops`)를 `interact`로 열어야 한다. `claude.use()`는 10초 뒤에 null을 줄 수 있다. 런타임 계약 0.2.96에서 `room`의 `join/emit/on/presence/onPeers/onConnection/leave`가 그대로인 것을 확인했다.
+- 그래서 저장소가 대답하지 않으면 그 기기에만 방을 만든다("이 기기만"). "친구 누구나 링크로"는 실제 서버 단계에서만 된다.
+- 시험판 다시 올리기: Claude Code의 Artifact 도구로 위 주소에 그대로 올린다(`capabilities`를 생략하면 앞서 정한 db·room 설정이 유지된다). 올릴 파일은 `node tools/bundle.mjs --share-base=https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef`로 만든 `dist/index.html`.
 
 ## 이 프로젝트의 규칙
 
@@ -59,24 +73,29 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 - 끝났다고 말하기 전에 실제로 돌린다: `npm test`, `node tools/e2e.mjs`, 묶음 파일은 `--dist`로 한 번 더.
 - 화면 시나리오는 실제 탭(브라우저의 hit test)으로 누른다. `el.click()`과 스크립트 포커스는 무엇이 가리는지 못 잡는다.
 - 폼 칸(`.input`)과 글 쓰는 층(`.typing`)의 CSS는 절대 섞지 않는다.
-- `core/paint.js`의 `INK`/`PAPER` 값은 `theme.css`의 `--ink`/`--paper`와 같아야 한다(시나리오가 검사한다). 글자는 모든 배경에서 명암비 4.5:1 이상.
-- 외부 라이브러리 없이 간다(처음에 패키지 설치가 막힌 환경이어서 시작한 방식이다). 바꾸려면 이유를 rulings에 적는다.
-- 코드 주석은 영어, 사용자에게 보이는 글자와 문서는 한국어. 커밋 제목은 `feat:` `fix:` `docs:`로 시작한다.
-- 이 프로젝트는 superpowers 플러그인의 절차(brainstorming → writing-plans → executing-plans → test-driven-development → verification)로 만들어 왔다. 설치돼 있으면 그대로 쓰고, 없으면 위 규칙만 지켜도 된다.
-- 사용자의 이메일 같은 개인 정보를 외부 서비스에 보내지 않는다. 비밀번호와 키는 코드에 넣지 않는다.
+- `core/paint.js`의 `INK`/`PAPER` 값은 `theme.css`의 `--ink`/`--paper`와 같아야 한다(시나리오가 검사한다). 사람 색 글자는 모든 배경에서 명암비 4.5:1 이상.
+- 외부 라이브러리 없이 간다. 묶는 도구(`tools/bundle.mjs`)는 `import { a, b } from "…"`와 `export function/class/const/let/async function`만 안다(`export default`, `import *` 안 됨).
+- 코드 주석은 영어, 사용자에게 보이는 글자와 문서는 한국어. 커밋 제목은 `feat:` `fix:` `docs:` `chore:`로 시작한다.
+- 이 프로젝트는 superpowers 플러그인의 절차(brainstorming → writing-plans → executing-plans → test-driven-development → verification)로 만들어 왔다.
+- 사용자의 이메일 같은 개인 정보를 외부 서비스에 보내지 않는다. 비밀번호와 키는 코드에 넣지 않는다. 저장소가 공개이므로 원문 폴더는 사용자가 허락하기 전에 올리지 않는다.
 
 ## 문서 (이 순서로 읽는다)
 
-1. `docs/superpowers/source/`: `2026-11-10-original-idea.txt`(사용자 원문), 참고 이미지 3장, `user-messages.md`(그 뒤 대화에서 한 말). 저장소를 공개로 올리기 전에는 이 폴더를 공개해도 되는지 사용자에게 먼저 묻는다.
+1. `docs/superpowers/specs/2026-11-14-roadmap.md`: 11월 14일 요청 정리, 미룬 것들의 설계 스케치, 다음 순서
 2. `docs/superpowers/specs/2026-11-10-app-overview-design.md`: 전체 결정, 공통 규칙, 8절 기능 체크리스트, 9절 가정
-3. `docs/superpowers/specs/2026-11-10-foundation-text-room-design.md`: 바탕과 텍스트 방(전송 약속은 6.4절)
-4. `docs/superpowers/specs/2026-11-10-song-room-design.md`: 다음에 만들 노래 방
-5. `docs/superpowers/plans/2026-11-12-text-room-phase1.md`(1차 구현 계획, 끝남)와 `…-rulings.md`(만들면서 내린 판단 전부, 13일 사고, 미룬 사소한 문제)
+3. `docs/superpowers/specs/2026-11-10-song-room-design.md`: 노래 방(12절에 이번에 만들며 달라진 것)
+4. `docs/superpowers/specs/2026-11-10-foundation-text-room-design.md`: 바탕과 텍스트 방(전송 약속은 6.4절)
+5. `docs/superpowers/plans/2026-11-14-song-room-phase1-rulings.md`(이번 세션의 판단 전부), `2026-11-12-text-room-phase1.md`와 `…-rulings.md`(앞선 세션)
+6. (있으면) `docs/superpowers/source/`: 사용자 원문. 공개 저장소라 올리지 않았다.
 
 ## 알려진 빈틈
 
+- 공개 주소에는 아직 서버가 없다: 방이 그 기기에만 있다. 친구와 같이 쓰려면 서버(Supabase, 사용자가 무료 계정을 만들어야 함)가 필요하다. 시험판에서는 Claude 계정이 있는 편집자끼리만 같이 쓴다.
+- 녹음 원본 파일은 다른 기기로 가지 않는다(서버의 파일 저장이 생긴 뒤에).
+- 실제 사람 목소리와 실제 폰의 마이크 지연으로는 확인하지 않았다.
+- 그림은 장(종이)의 좌표에 붙는다. 위에서 글이 늘어나 줄이 밀리면 그림은 따라가지 않는다(설계는 "줄에 붙는다"; 로드맵 6절).
+- 사람 색을 팔레트 밖에서 직접 고르는 것은 아직 없다(포인트 색은 있음). 로드맵 7절.
 - 저장소 쓰기가 늦게 도착하면 같은 이름의 빈 방이 다른 기기 목록에 남을 수 있다.
 - 홈의 연결 진단이 방이 없을 때 "실시간 채널 none"으로 보인다.
-- 파란 버튼 윗부분 명암비가 4.2:1이다(글자 자리는 4.6:1 이상).
 - 저장소를 거부하는 틀에서는 새로고침하면 "내가 누구인지"를 잊는다(개인 코드를 정한 사람은 괜찮다).
-- 실제 안드로이드 폰의 한글 입력(조합)과 화면은 사람이 직접 확인하지 않았다. 자동 테스트는 조합 이벤트를 흉내 낼 뿐이다.
+- 실제 안드로이드 폰의 한글 입력(조합)과 화면은 사람이 직접 확인하지 않았다.
