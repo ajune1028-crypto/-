@@ -12,7 +12,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 - **모양 (이 세션)**: 다크 모드를 남색에서 고급스러운 검정(그래파이트)으로, 다크에서 버튼은 유리 + 그라데이션(주요 동작 하나만 진한 색), 포인트 색 직접 고르기(밝게·어둡게에서 같은 색), 글자 크기 4단계.
 - **그리기 (이 세션)**: 텍스트 방에서 펜(빨주노초파남보검, 굵기 3, 지우개, 필압). 획은 날짜별 `k:<날짜>` 문서. 사진 방·화이트보드에서 다시 쓸 수 있게 따로 만들었다.
 - **공개 주소 (이 세션)**: `.github/workflows/pages.yml`이 GitHub Pages에 올린다. 저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 한 번 바꾸고 `main`에 합치면 `https://ajune1028-crypto.github.io/-/`에서 Claude 없이 열린다. 거기서는 마이크 녹음이 된다. **아직 서버가 없어서 방은 그 기기에만 있다**(홈에 그렇게 적힌다).
-- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef . Claude 계정으로 공유받은 사람만 열 수 있다. 저장소(`db`)와 실시간 채널(`room`)이 있어 기기끼리 같이 쓰인다. **마이크는 없다**(그 페이지가 주는 능력 목록에 없음): 노래 방은 "소리 가져오기"로만 넣는다.
+- **시험판(Claude 안의 페이지)**: 노래 방이 들어간 11월 14일 판은 https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (새 주소. 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판 그대로). Claude 계정으로 공유받은 사람만 열 수 있다. 저장소(`db`)와 실시간 채널(`room`)이 있어 기기끼리 같이 쓰인다. **마이크는 없다**(그 페이지가 주는 능력 목록에 없음): 노래 방은 "소리 가져오기"로만 넣는다.
 - **다음**: `docs/superpowers/specs/2026-11-14-roadmap.md`. 사용자가 미뤄 두라고 한 것(레퍼런스, 일상↔창작 옮기기, 노래→화이트보드 잇기)과 실제 서버(Supabase), 텍스트 방 2차, 노래 방 2차가 순서와 설계 스케치로 정리돼 있다.
 - **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소). 이 세션의 작업은 `claude/voice-piano-conversion-scaffold-fnjrk8`에 있다. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
 
@@ -65,7 +65,7 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 - 페이지는 막힌 틀 안에서 돈다: `alert/confirm/prompt` 없음, **마이크·카메라 없음**, 서비스 워커 없음, `localStorage`가 던질 수 있음, 클립보드는 클릭 안에서만, `navigator.share` 거부, 주소는 평범한 `#이름` 해시만 통과, 다른 호스트로의 fetch·WebSocket 차단.
 - 공유 저장소는 문서 하나 256 KiB, 전체 25,000개라서 기록을 묶음 문서로 모은다. 주인과 이메일로 초대된 편집자만 쓸 수 있고, 링크로만 본 사람은 읽기만 된다. 실시간 채널은 이벤트 4 KiB, 초당 약 40개이고 주제(`ops`)를 `interact`로 열어야 한다. `claude.use()`는 10초 뒤에 null을 줄 수 있다. 런타임 계약 0.2.96에서 `room`의 `join/emit/on/presence/onPeers/onConnection/leave`가 그대로인 것을 확인했다.
 - 그래서 저장소가 대답하지 않으면 그 기기에만 방을 만든다("이 기기만"). "친구 누구나 링크로"는 실제 서버 단계에서만 된다.
-- 시험판 다시 올리기: Claude Code의 Artifact 도구로 위 주소에 그대로 올린다(`capabilities`를 생략하면 앞서 정한 db·room 설정이 유지된다). 올릴 파일은 `node tools/bundle.mjs --share-base=https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef`로 만든 `dist/index.html`.
+- 시험판 다시 올리기: Claude Code의 Artifact 도구로 `url: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n`에 올린다(다른 대화에서는 먼저 read; `capabilities`를 생략하면 db·room(`ops` 주제는 interact) 설정이 유지된다). 올릴 파일은 `node tools/bundle.mjs --share-base=https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n`로 만든 `dist/index.html`.
 
 ## 이 프로젝트의 규칙
 
