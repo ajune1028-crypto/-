@@ -28,6 +28,16 @@ const ICONS = {
   board: '<rect x="3.5" y="4.5" width="8" height="6.5" rx="1.6"/><rect x="12.5" y="13" width="8" height="6.5" rx="1.6"/><path d="M11.5 7.8c3.2 0 4.8 1.6 5 5.2"/>',
   photo: '<rect x="4" y="5.5" width="16" height="13" rx="2.6"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.4-3.9 3.4 2.9 2.6-2.1 3.6 3.1"/>',
   mixed: '<path d="M4.5 7.5h7M4.5 11.5h7M4.5 15.5h4.5"/><rect x="14" y="7" width="6" height="9" rx="1.6"/>',
+  // The whiteboard's tools.
+  library: '<path d="M4 6.5h10M4 11h10M4 15.5h6"/><path d="M17.5 17.5V8l3.5-1"/><circle cx="15.8" cy="17.6" r="1.9"/>',
+  fit: '<path d="M4 9V4.5h4.5M20 9V4.5h-4.5M4 15v4.5h4.5M20 15v4.5h-4.5"/>',
+  slots: '<rect x="4" y="4.5" width="16" height="4" rx="1.3"/><rect x="4" y="10" width="16" height="4" rx="1.3"/><rect x="4" y="15.5" width="10" height="4" rx="1.3"/>',
+  stretch: '<path d="M3.5 12h17M7.5 8l-4 4 4 4M16.5 8l4 4-4 4"/>',
+  squeeze: '<path d="M3 12h6.5M14.5 12H21M6 8.5l3.5 3.5L6 15.5M18 8.5L14.5 12l3.5 3.5"/>',
+  wave: '<path d="M3 12h2.2l2-5 3 10 3-12 3 9 1.8-2H21"/>',
+  scissors: '<circle cx="6.5" cy="7" r="2.4"/><circle cx="6.5" cy="17" r="2.4"/><path d="M8.6 8.3L19.5 17M8.6 15.7L19.5 7"/>',
+  roll: '<rect x="4" y="4.5" width="16" height="15" rx="2.2"/><path d="M7.5 9h4M10.5 12.5h5.5M13 16h3.5"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M5 15.5V6.4c0-.8.6-1.4 1.4-1.4h9.1"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
 };
