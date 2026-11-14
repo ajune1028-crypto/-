@@ -897,3 +897,14 @@ label.btn { display: grid; place-items: center; cursor: pointer; text-align: cen
 .rnote.chosen { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 2; }
 .roll-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); }
 .note-row.chosen .note-name { color: var(--accent-ink); }
+
+/* ---- lying down (가로) and computers ------------------------------------------ */
+/* The app takes the width; the song timeline gets all of it. The writing sheet
+   keeps its 360 column, so text wraps and drawings sit exactly as upright. */
+html[data-orient="landscape"] #app { width: min(100%, 75rem); }
+html[data-orient="landscape"] .sheets { max-width: 22.5rem; width: 100%; margin-inline: auto; }
+html[data-orient="landscape"] .scrim { justify-content: center; }
+html[data-orient="landscape"] .panel { width: min(100%, 32rem); border-radius: 1.8rem 1.8rem 0 0; }
+html[data-orient="landscape"] .panel.editor-panel { width: min(100%, 52rem); }
+html[data-orient="landscape"] .join, html[data-orient="landscape"] .center { width: min(100%, 30rem); margin-inline: auto; }
+html[data-orient="landscape"] .song-start { max-width: 26rem; }

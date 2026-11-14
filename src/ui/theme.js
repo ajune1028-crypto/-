@@ -29,11 +29,25 @@ export function onThemeChange(fn) {
   };
 }
 
-/** Everything is sized in rem, so one number scales the whole 360-wide column: down to 0.8 on narrow screens, up to 1.4 on wide ones. */
+/**
+ * Everything is sized in rem, so one number scales the whole layout. Upright
+ * (세로), the app is a 360-wide column scaled to the screen: 0.8 to 1.4.
+ * Lying down (가로) or on a computer, it takes the width (up to 75 rem) and is
+ * scaled by the height instead, so a phone on its side keeps room for the
+ * timeline. Writing sheets keep their 360 column either way.
+ */
 export function fitScale() {
-  const set = () => root.style.setProperty("--k", String(Math.min(1.4, Math.max(0.8, window.innerWidth / 360))));
+  const set = () => {
+    const w = window.innerWidth;
+    const hgt = window.innerHeight;
+    const landscape = w > hgt * 1.05;
+    root.dataset.orient = landscape ? "landscape" : "portrait";
+    const k = landscape ? Math.min(1.25, Math.max(0.85, hgt / 520)) : Math.min(1.4, Math.max(0.8, w / 360));
+    root.style.setProperty("--k", String(k));
+  };
   set();
   window.addEventListener("resize", set);
+  window.addEventListener("orientationchange", set);
 }
 
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;

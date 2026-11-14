@@ -685,15 +685,27 @@ scenario("diagnostics: the panel names the transport, what is unsent, and the ve
   assert.equal(facts["마지막 오류"], "없음");
 });
 
-scenario("wide screen: the column is centred and scaled to 1.4", async ({ open, out }) => {
+scenario("wide screen: lying down or on a computer the app takes the width; the writing stays a 360 column", async ({ open, out }) => {
   const page = await open({ width: 1280, height: 800 });
   await createRoom(page);
   await focusEnd(page);
   await page.type("넓은 화면에서도 가운데 종이 한 장");
-  const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); return { left: b.left, width: b.width, height: b.height, scroll: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(${TODAY}.querySelector(".draw")).fontSize) }; })()`);
-  assert.ok(Math.abs(r.width - 504) <= 1 && Math.abs(r.left - 388) <= 1, JSON.stringify(r));
-  assert.ok(Math.abs(r.font - 22.4) < 0.1 && r.height === 800 && r.scroll <= 1280, JSON.stringify(r));
+  const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); const s = document.querySelector(".sheets").getBoundingClientRect(); return { orient: document.documentElement.dataset.orient, width: b.width, height: b.height, sheetLeft: s.left, sheetWidth: s.width, scroll: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(${TODAY}.querySelector(".draw")).fontSize), rem: parseFloat(getComputedStyle(document.documentElement).fontSize) }; })()`);
+  assert.equal(r.orient, "landscape");
+  assert.ok(r.width === 1280 && r.height === 800 && r.scroll <= 1280, JSON.stringify(r));
+  assert.ok(Math.abs(r.rem - 20) < 0.01 && Math.abs(r.font - 20) < 0.1, "scaled by the height: " + JSON.stringify(r));
+  assert.ok(Math.abs(r.sheetWidth - 22.5 * r.rem) <= 1 && Math.abs(r.sheetLeft + r.sheetWidth / 2 - 640) <= 1, "the writing column is 360 wide and centred: " + JSON.stringify(r));
   await page.shot(out("room-wide.png"));
+});
+
+scenario("landscape phone: the song room's timeline uses the width and the controls fit the height", async ({ open, out, fixtures }) => {
+  const page = await open({ width: 780, height: 360 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const m = await page.eval(`(() => { const t = document.getElementById("timeline").getBoundingClientRect(); const tools = document.getElementById("song-tools").getBoundingClientRect(); return { orient: document.documentElement.dataset.orient, tw: t.width, th: t.height, toolsBottom: tools.bottom, scroll: document.documentElement.scrollWidth }; })()`);
+  assert.equal(m.orient, "landscape");
+  assert.ok(m.tw > 700 && m.th > 120 && m.toolsBottom <= 360 && m.scroll <= 780, JSON.stringify(m));
+  await page.shot(out("song-landscape.png"));
 });
 
 scenario("grain: the colour fields carry visible film grain", async ({ open }) => {
