@@ -139,3 +139,28 @@ test("changing the tone while playing switches the piano sound from the playhead
   assert.ok(keys.includes("dark:64") && keys.includes("dark:67"));
   assert.ok(!keys.includes("bright:67"));
 });
+
+test("at 2× the notes come twice as fast and the playhead runs twice as fast", () => {
+  const w = world();
+  w.commit(addClipOps(w.clock, w.song, { src: w.src, row: 0, start: 1000, length: 1500, by: "m", at: 1 }).ops);
+  w.player.setSpeed(2);
+  w.player.play(0);
+  w.run(1.5);
+  assert.deepEqual(pianoKeys(w.player, w.ctx), [[500, 60], [750, 64], [1000, 67]]);
+  w.player.stop();
+  assert.ok(w.player.position >= 2400, "1.5 s of listening covered 3 s of song: " + w.player.position);
+});
+
+test("at 3× a recording is stretched, not sped up like a chipmunk", () => {
+  const w = world({ audio: true });
+  w.commit(addClipOps(w.clock, w.song, { src: w.src, row: 0, start: 0, offset: 300, length: 900, by: "m", at: 1 }).ops);
+  w.player.setMode("original");
+  w.player.setSpeed(3);
+  w.player.play(0);
+  w.run(1);
+  const [rec] = w.ctx.started.filter((s) => s.buffer && s.buffer !== w.recording && s.buffer.length < 96000 && s.buffer.length > 20000);
+  assert.ok(rec, "a stretched copy of the recording plays");
+  assert.ok(Math.abs(rec.buffer.length - 96000 / 3) <= 2);
+  assert.ok(Math.abs(rec.started.offset - 0.1) < 1e-9, "the offset is in stretched time");
+  assert.ok(Math.abs(rec.started.duration - (0.3 + 0.01)) < 1e-9);
+});

@@ -6,6 +6,7 @@
 // only allow sound after a tap, so it is made (or woken) from a tap.
 
 import { PianoVoice, reverbImpulse, reverbMix } from "./piano.js";
+import { timeStretch } from "./stretch.js";
 
 const LOOKAHEAD = 0.25; // seconds booked ahead
 const TICK_MS = 40;
@@ -50,6 +51,8 @@ export class SongPlayer {
     this.voice = new PianoVoice(ctx);
     this.mode = "piano";
     this.tone = "bright";
+    this.speed = 1;
+    this.stretched = new Map();
     this.playing = false;
     this.nodes = new Set();
     this.timer = null;
@@ -88,10 +91,32 @@ export class SongPlayer {
     if (this.playing) this.restart();
   }
 
-  /** Where the playhead is, in ms. */
+  /** 0.5 to 3: notes come closer together; recordings are stretched so their pitch stays. */
+  setSpeed(speed) {
+    if (this.playing) {
+      const at = this.position;
+      this.speed = speed;
+      this.play(at, { keepGoing: this.keepGoing });
+    } else this.speed = speed;
+  }
+
+  /** A recording at the current speed, made once per sound and speed. */
+  atSpeed(src, buf) {
+    if (this.speed === 1) return buf;
+    const key = src + ":" + this.speed;
+    if (!this.stretched.has(key)) {
+      const samples = timeStretch(buf.getChannelData(0), buf.sampleRate, this.speed);
+      const out = this.ctx.createBuffer(1, Math.max(1, samples.length), buf.sampleRate);
+      out.getChannelData(0).set(samples);
+      this.stretched.set(key, out);
+    }
+    return this.stretched.get(key);
+  }
+
+  /** Where the playhead is, in ms of the song. */
   get position() {
     if (!this.playing) return this.from;
-    return this.from + (this.ctx.currentTime - this.startedAt) * 1000;
+    return this.from + (this.ctx.currentTime - this.startedAt) * 1000 * this.speed;
   }
 
   /**
@@ -119,20 +144,20 @@ export class SongPlayer {
 
   /** Ctx time of a timeline position in ms. */
   when(ms) {
-    return this.startedAt + (ms - this.from) / 1000;
+    return this.startedAt + (ms - this.from) / 1000 / this.speed;
   }
 
   book(first) {
     if (!this.playing) return;
     const song = this.song();
-    const until = this.from + (this.ctx.currentTime - this.startedAt + LOOKAHEAD) * 1000;
+    const until = this.from + (this.ctx.currentTime - this.startedAt + LOOKAHEAD) * 1000 * this.speed;
     if (until <= this.booked) return;
     const from = this.booked;
     const opts = { ongoing: first };
     if (this.mode === "original") {
       for (const seg of song.audioSegments(from, until, opts)) {
         const buf = this.audioFor(seg.src);
-        if (buf) this.playAudio(buf, seg);
+        if (buf) this.playAudio(this.atSpeed(seg.src, buf), seg);
         // A clip whose recording is not on this device plays as piano.
         else this.fallback.add(seg.clip);
       }
@@ -148,7 +173,7 @@ export class SongPlayer {
   }
 
   playNote(ev) {
-    this.track(this.voice.play(this.bus, ev.p, this.when(ev.at), ev.d / 1000, ev.v, this.tone));
+    this.track(this.voice.play(this.bus, ev.p, this.when(ev.at), ev.d / 1000 / this.speed, ev.v, this.tone));
   }
 
   playAudio(buf, seg) {
@@ -157,7 +182,7 @@ export class SongPlayer {
     src.buffer = buf;
     const gain = ctx.createGain();
     const at = this.when(seg.at);
-    const end = at + seg.d / 1000;
+    const end = at + seg.d / 1000 / this.speed;
     // Short fades so a cut clip does not click.
     gain.gain.setValueAtTime(0, at);
     gain.gain.linearRampToValueAtTime(1, at + 0.006);
@@ -165,7 +190,7 @@ export class SongPlayer {
     gain.gain.linearRampToValueAtTime(0, end);
     src.connect(gain);
     gain.connect(this.dry);
-    src.start(at, seg.offset / 1000, seg.d / 1000 + 0.01);
+    src.start(at, seg.offset / 1000 / this.speed, seg.d / 1000 / this.speed + 0.01);
     src.onended = () => gain.disconnect();
     this.track(src);
   }

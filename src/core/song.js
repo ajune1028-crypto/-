@@ -12,10 +12,16 @@
 //   clip  adds a clip (kept forever; hidden by its removes counter)
 //   cset  sets clip fields; per field, the op with the larger id wins
 //   crm   sets a clip's removes counter; the larger counter wins, odd = removed
+//   nfix  changes a note of a sound (pitch, start, length, loudness, gone);
+//         per field, the op with the larger id wins
+//   nadd  adds a note to a sound: { note: { t, d, p, v } }
+// A sound's own notes never change; edits lie over them, so every device
+// agrees and every edit can be undone. notesOf(src) gives the result.
 //
 // All times in this module are whole milliseconds.
 
 import { cmpId, validId } from "./crdt.js";
+import { toBase64, fromBase64 } from "./b64.js";
 
 export const MAX_ROWS = 16;
 export const MAX_CLIPS = 200;
@@ -41,6 +47,16 @@ const FIELD_OK = {
 };
 export const CLIP_FIELDS = Object.keys(FIELD_OK);
 
+const NOTE_FIELD_OK = {
+  t: (v) => isInt(v, 0, MAX_SOURCE_MS),
+  d: (v) => isInt(v, 1, MAX_SOURCE_MS),
+  p: (v) => isInt(v, 0, 127),
+  v: (v) => isInt(v, 0, 100),
+  gone: (v) => typeof v === "boolean",
+};
+const NOTE_KEY = /^\d{1,5}$/;
+const PEAK_MS = 40; // one waveform value per 40 ms (25 a second)
+
 function validNotes(notes) {
   return Array.isArray(notes) && notes.length <= MAX_NOTES && notes.every((n) =>
     Array.isArray(n) && n.length === 4 && isInt(n[0], 0, MAX_SOURCE_MS) && isInt(n[1], 1, MAX_SOURCE_MS) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100));
@@ -62,6 +78,9 @@ export class SongDoc {
     this.unknown = [];
     this.maxN = 0;
     this.cache = null;
+    this.added = new Map();
+    this.fixes = new Map();
+    this.noteCache = null;
   }
 
   apply(op) {
@@ -109,6 +128,30 @@ export class SongDoc {
         for (const [k, v] of Object.entries(op.f)) {
           const cur = clip.fields.get(k);
           if (!cur || cmpId(op.id, cur.at) > 0) clip.fields.set(k, { v, at: op.id });
+        }
+        return this.done(op);
+      }
+      case "nadd": {
+        const n = op.note;
+        const ok = validId(op.src) && n && typeof n === "object" && NOTE_FIELD_OK.t(n.t) && NOTE_FIELD_OK.d(n.d) && NOTE_FIELD_OK.p(n.p) && NOTE_FIELD_OK.v(n.v) && cmpId(op.id, op.src) > 0;
+        if (!ok) return this.setAside(op);
+        if (!this.sources.has(op.src)) return this.wait(op.src, op);
+        this.added.set(op.id, { key: op.id, src: op.src, t: n.t, d: n.d, p: n.p, v: n.v / 100 });
+        return this.done(op);
+      }
+      case "nfix": {
+        const f = op.f;
+        const fieldsOk = f && typeof f === "object" && !Array.isArray(f) && Object.keys(f).length > 0 && Object.entries(f).every(([k, v]) => NOTE_FIELD_OK[k] && NOTE_FIELD_OK[k](v));
+        const keyOk = typeof op.n === "string" && (NOTE_KEY.test(op.n) || validId(op.n));
+        if (!validId(op.src) || !keyOk || !fieldsOk) return this.setAside(op);
+        if (!this.sources.has(op.src)) return this.wait(op.src, op);
+        if (!NOTE_KEY.test(op.n) && !this.added.has(op.n)) return this.wait(op.n, op);
+        const at = op.src + "|" + op.n;
+        if (!this.fixes.has(at)) this.fixes.set(at, new Map());
+        const fields = this.fixes.get(at);
+        for (const [k, v] of Object.entries(f)) {
+          const cur = fields.get(k);
+          if (!cur || cmpId(op.id, cur.at) > 0) fields.set(k, { v, at: op.id });
         }
         return this.done(op);
       }
@@ -174,6 +217,41 @@ export class SongDoc {
     const out = { id: c.id, src: c.src, by: c.by, at: c.at, rm: c.rm, removed: c.rm % 2 === 1 };
     for (const [k, { v }] of c.fields) out[k] = v;
     return out;
+  }
+
+  /**
+   * A sound's notes with every edit applied, by start time. Each note has a
+   * `key`: its index among the sound's own notes ("0", "1"…) or, for an added
+   * note, the id of the op that added it. `withGone` keeps removed notes too.
+   */
+  notesOf(srcId, { withGone = false } = {}) {
+    if (!this.noteCache || this.noteCache.version !== this.version) this.noteCache = { version: this.version, by: new Map() };
+    const key = srcId + (withGone ? "+" : "");
+    if (this.noteCache.by.has(key)) return this.noteCache.by.get(key);
+    const src = this.sources.get(srcId);
+    if (!src) return [];
+    const list = src.notes.map((n, i) => ({ key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false }));
+    for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false });
+    for (const n of list) {
+      const fields = this.fixes.get(srcId + "|" + n.key);
+      if (fields) for (const [k, { v }] of fields) n[k] = k === "v" ? v / 100 : v;
+    }
+    const out = list.filter((n) => withGone || !n.gone).sort((a, b) => a.t - b.t || a.p - b.p);
+    this.noteCache.by.set(key, out);
+    return out;
+  }
+
+  /** The clip right after this one on the same drawn row, or null. */
+  nextOnRow(clipId) {
+    const clips = this.layout();
+    const me = clips.find((c) => c.id === clipId);
+    if (!me) return null;
+    let best = null;
+    for (const c of clips) {
+      if (c.id === me.id || c.lane !== me.lane || c.start < me.start + me.length) continue;
+      if (!best || c.start < best.start) best = c;
+    }
+    return best;
   }
 
   /**
@@ -245,7 +323,7 @@ export class SongDoc {
       if (!src) continue;
       const lo = clip.offset;
       const hi = clip.offset + clip.length;
-      for (const n of src.notes) {
+      for (const n of this.notesOf(clip.src)) {
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
         if (e - s < MIN_EVENT_MS) continue;
@@ -365,6 +443,87 @@ export function invertSongOps(song, clock, atoms, dir) {
     if (atom.k === "add") show(atom.clip, !undo);
     else if (atom.k === "del") show(atom.clip, undo);
     else if (atom.k === "set") ops.push({ t: "cset", id: clock.next(), c: atom.clip, f: { ...(undo ? atom.prev : atom.next) } });
+    else if (atom.k === "nset") ops.push({ t: "nfix", id: clock.next(), src: atom.src, n: atom.n, f: { ...(undo ? atom.prev : atom.next) } });
+    else if (atom.k === "nadd") ops.push({ t: "nfix", id: clock.next(), src: atom.src, n: atom.n, f: { gone: undo } });
   }
   return ops;
+}
+
+// ---- note edits -------------------------------------------------------------------
+
+const toStored = (k, v) => (k === "v" ? Math.round(Math.min(1, Math.max(0, v)) * 100) : k === "gone" ? !!v : Math.max(k === "d" ? 1 : 0, Math.round(v)));
+
+/** Changes fields of one note (t, d, p in ms and key numbers, v 0..1, gone). */
+export function noteSetOps(clock, song, src, key, fields) {
+  const note = song.notesOf(src, { withGone: true }).find((n) => n.key === key);
+  if (!note) return { ops: [], atoms: [] };
+  clock.atLeast(song.maxN);
+  const next = {};
+  const prev = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (!NOTE_FIELD_OK[k]) continue;
+    next[k] = toStored(k, v);
+    prev[k] = toStored(k, note[k]);
+  }
+  if (!Object.keys(next).length) return { ops: [], atoms: [] };
+  return { ops: [{ t: "nfix", id: clock.next(), src, n: key, f: next }], atoms: [{ k: "nset", src, n: key, prev, next }] };
+}
+
+/** Adds a note to a sound (t and d in ms). */
+export function noteAddOps(clock, song, src, { t, d, p, v = 0.8 }) {
+  clock.atLeast(song.maxN);
+  const op = { t: "nadd", id: clock.next(), src, note: { t: toStored("t", t), d: toStored("d", d), p: Math.min(127, Math.max(0, Math.round(p))), v: toStored("v", v) } };
+  return { ops: [op], atoms: [{ k: "nadd", src, n: op.id }], key: op.id };
+}
+
+// ---- joining ----------------------------------------------------------------------
+
+/**
+ * Joins a clip with the next one on its row (잇기). Two pieces of one recording
+ * lying end to end become one clip again: returns { ops, atoms }. Anything else
+ * needs a new sound made of both: returns { combine: { a, b } } for the caller
+ * to build with combinedSource (and the recordings, when this device has them)
+ * and finish with joinWithSourceOps. Null when no clip follows.
+ */
+export function joinClipOps(clock, song, clipId, by, now = Date.now()) {
+  const a = song.layout().find((c) => c.id === clipId);
+  const b = a && song.nextOnRow(clipId);
+  if (!a || !b) return null;
+  if (a.src === b.src && b.start === a.start + a.length && b.offset === a.offset + a.length && !a.locked && !b.locked) {
+    const grow = setClipOps(clock, song, a.id, { length: a.length + b.length });
+    const drop = removeClipOps(clock, song, b.id);
+    return { ops: [...grow.ops, ...drop.ops], atoms: [...grow.atoms, ...drop.atoms], id: a.id };
+  }
+  void by;
+  void now;
+  return { combine: { a, b } };
+}
+
+/** The notes and waveform of two clips as one sound, the gap between them kept as silence. */
+export function combinedSource(song, a, b) {
+  const total = b.start + b.length - a.start;
+  const part = (clip, shift) => song.notesOf(clip.src)
+    .map((n) => ({ s: Math.max(n.t, clip.offset), e: Math.min(n.t + n.d, clip.offset + clip.length), n }))
+    .filter((x) => x.e - x.s >= 20)
+    .map((x) => ({ t: (x.s - clip.offset + shift) / 1000, d: (x.e - x.s) / 1000, p: x.n.p, v: x.n.v }));
+  const peaks = new Uint8Array(Math.ceil(total / PEAK_MS));
+  const lay = (clip, shift) => {
+    const bytes = fromBase64(song.source(clip.src)?.peaks || "");
+    const first = Math.floor(clip.offset / PEAK_MS);
+    const count = Math.ceil(clip.length / PEAK_MS);
+    const at = Math.round(shift / PEAK_MS);
+    for (let i = 0; i < count && at + i < peaks.length; i++) peaks[at + i] = bytes[first + i] || 0;
+  };
+  lay(a, 0);
+  lay(b, b.start - a.start);
+  return { duration: total / 1000, notes: [...part(a, 0), ...part(b, b.start - a.start)], peaks: toBase64(peaks) };
+}
+
+/** Finishes a join with the new sound: one clip where the two were. */
+export function joinWithSourceOps(clock, song, a, b, srcOp, by, now = Date.now()) {
+  clock.atLeast(song.maxN);
+  const clip = { t: "clip", id: clock.next(), src: srcOp.id, row: a.row, start: a.start, offset: 0, length: b.start + b.length - a.start, by, at: now };
+  const dropA = { t: "crm", id: clock.next(), c: a.id, n: (song.clip(a.id)?.rm ?? 0) + 1 };
+  const dropB = { t: "crm", id: clock.next(), c: b.id, n: (song.clip(b.id)?.rm ?? 0) + 1 };
+  return { ops: [srcOp, clip, dropA, dropB], atoms: [{ k: "add", clip: clip.id }, { k: "del", clip: a.id }, { k: "del", clip: b.id }], id: clip.id };
 }

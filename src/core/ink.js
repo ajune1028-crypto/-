@@ -19,6 +19,12 @@ import { cmpId, validId } from "./crdt.js";
 /** Pen colours: 빨주노초파남보 and 검정 (drawn white in the dark theme). */
 export const INK_COLORS = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black"];
 export const INK_WIDTHS = [1, 2, 3];
+/**
+ * How a stroke is laid down. "erase" rubs out the strokes under it (an area
+ * eraser); whole strokes are hidden with srm instead (the stroke eraser).
+ * A stroke without `b` is a pen, as strokes were before brushes.
+ */
+export const BRUSHES = ["pen", "pencil", "marker", "highlighter", "erase"];
 const MAX_POINTS = 3000;
 const MAX_UNKNOWN = 300;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -41,9 +47,10 @@ export class InkDoc {
     if (op.t === "stroke") {
       const ok = Array.isArray(op.pts) && op.pts.length >= 3 && op.pts.length % 3 === 0 && op.pts.length <= MAX_POINTS * 3 &&
         op.pts.every((v, i) => (i % 3 === 2 ? isInt(v, 0, 100) : isInt(v, -100000, 1000000))) &&
-        COLOR_OK(op.c) && INK_WIDTHS.includes(op.w) && typeof op.by === "string" && op.by.length <= 40 && Number.isFinite(op.at);
+        COLOR_OK(op.c) && INK_WIDTHS.includes(op.w) && typeof op.by === "string" && op.by.length <= 40 && Number.isFinite(op.at) &&
+        (op.b === undefined || BRUSHES.includes(op.b));
       if (!ok) return this.setAside(op);
-      this.byId.set(op.id, { id: op.id, pts: op.pts, c: op.c, w: op.w, by: op.by, at: op.at, rm: 0 });
+      this.byId.set(op.id, { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 });
       this.done(op);
       for (const waiting of this.waiting.get(op.id) || []) this.apply(waiting);
       this.waiting.delete(op.id);
@@ -98,6 +105,7 @@ export class InkDoc {
   strokeAt(x, y, radius) {
     const list = this.strokes();
     for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].b === "erase") continue;
       const pts = list[i].pts;
       const reach = radius + list[i].w * 12;
       for (let j = 0; j < pts.length; j += 3) {
@@ -130,9 +138,11 @@ export function thinPoints(pts, min = 25) {
   return out;
 }
 
-export function strokeOps(clock, ink, { pts, color, width, by, at = Date.now() }) {
+export function strokeOps(clock, ink, { pts, color, width, by, at = Date.now(), brush = "pen" }) {
   clock.atLeast(ink.maxN);
   const op = { t: "stroke", id: clock.next(), pts: thinPoints(pts).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
+  // Pen strokes leave `b` out, so devices from before brushes draw them as they always did.
+  if (brush !== "pen") op.b = brush;
   return { ops: [op], atoms: [{ k: "ink+", s: op.id }] };
 }
 

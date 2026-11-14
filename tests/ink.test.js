@@ -81,3 +81,27 @@ test("thinning keeps the ends and drops points that crowd together", () => {
   assert.deepEqual(thin.slice(0, 3), pts.slice(0, 3));
   assert.deepEqual(thin.slice(-3), pts.slice(-3));
 });
+
+test("brushes are kept per stroke; a stroke without one is a pen", async () => {
+  const { BRUSHES } = await import("../src/core/ink.js");
+  assert.deepEqual(BRUSHES, ["pen", "pencil", "marker", "highlighter", "erase"]);
+  const ink = new InkDoc();
+  const clock = new Clock("a");
+  ink.applyAll(strokeOps(clock, ink, { pts: line(0, 0, 500, 0), color: "green", width: 2, by: "m1", brush: "pencil" }).ops);
+  ink.apply({ t: "stroke", id: "50@old", pts: [0, 0, 50, 10, 10, 50], c: "red", w: 1, by: "m", at: 1 });
+  assert.deepEqual(ink.strokes().map((s) => s.b), ["pencil", "pen"]);
+  assert.equal(ink.apply({ t: "stroke", id: "60@a", pts: [0, 0, 50], c: "red", w: 1, b: "crayon", by: "m", at: 1 }), "unknown");
+});
+
+test("the area eraser is a stroke of its own: it rubs out what lies under it, and the stroke eraser passes over it", () => {
+  const ink = new InkDoc();
+  const clock = new Clock("a");
+  const drawn = strokeOps(clock, ink, { pts: line(0, 0, 1000, 0), color: "blue", width: 2, by: "m1" });
+  ink.applyAll(drawn.ops);
+  const rub = strokeOps(clock, ink, { pts: line(400, -100, 400, 100), color: "black", width: 3, by: "m1", brush: "erase" });
+  ink.applyAll(rub.ops);
+  assert.deepEqual(ink.strokes().map((s) => s.b), ["pen", "erase"]);
+  assert.equal(ink.strokeAt(400, 0, 20), drawn.ops[0].id, "the stroke eraser does not pick the rubbing");
+  ink.applyAll(invertInkOps(ink, clock, rub.atoms, "undo"));
+  assert.deepEqual(ink.strokes().map((s) => s.b), ["pen"]);
+});
