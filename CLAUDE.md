@@ -44,7 +44,7 @@ Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 �
 ```
 npm test                                    # node --test. 단위 테스트 224개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 97개. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 96개. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일로 묶는다
 ```
 
