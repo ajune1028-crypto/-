@@ -935,6 +935,21 @@ export function mountSongRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 레퍼런스 → 이 방에 붙이기: a recording becomes a clip at the playhead (its sound is already on this device). */
+    insertSound(memo) {
+      if (readOnly() || !song.canAddClip()) return void toast(root, "여기에는 붙일 수 없어요");
+      const length = Math.max(1, Math.round(memo.dur * 1000));
+      const row = song.freeRow(playhead, length, selectedRow);
+      if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요");
+      const by = session.memberId;
+      const src = sourceOp(session.clock, song, { duration: memo.dur, notes: memo.notes, peaks: memo.peaks, by, at: Date.now(), blob: memo.blob, name: memo.name });
+      localBlobs.set(memo.blob, true);
+      const clip = addClipOps(session.clock, song, { src: src.id, row, start: playhead, length, by, at: Date.now() });
+      session.commit("song", [src, ...clip.ops]);
+      record(clip.atoms);
+      selectedRow = row;
+      select(clip.id);
+    },
     close() {
       alive = false;
       stopFrames();

@@ -2229,6 +2229,43 @@ scenario("whiteboard: two fingers zoom the board; they never move a card or star
 
 // ---- 레퍼런스 -----------------------------------------------------------------------------------------
 
+scenario("레퍼런스 녹음: a file and an in-app take are kept on this device, heard, and put into a song room as a clip and onto a whiteboard as a card", async ({ open, fixtures }) => {
+  const page = await open();
+  await page.waitFor(q("#home"));
+  await click(page, "#home-reference");
+  await page.waitFor(q("#ref-ways"));
+  await page.setFiles("#ref-file", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".ref-sound").length === 1`, 20000);
+  assert.equal(await text(page, ".ref-sound .pick-name"), "doremi.wav");
+  assert.equal(await page.eval(`document.querySelectorAll(".ref-sound .note").length`), 5, "its notes were found");
+  // Recorded in the app (the test browser has a microphone).
+  await click(page, "#ref-record");
+  await page.waitFor(q("#ref-stop"));
+  await pause(2500);
+  await click(page, "#ref-stop");
+  await page.waitFor(`document.querySelectorAll(".ref-sound").length === 2`, 20000);
+  const id = await page.eval(`[...document.querySelectorAll(".ref-sound")].find((r) => r.querySelector(".pick-name").textContent === "doremi.wav").dataset.id`);
+  await click(page, `#ref-play-${id}`);
+  await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "■ 멈춤"`);
+  await click(page, `#ref-play-${id}`);
+  await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "▶ 듣기"`);
+  await page.key("Escape");
+  // Into a song room: a clip with its notes.
+  await createSongRoom(page);
+  await click(page, "#room-reference");
+  await page.waitFor(q(`[data-put-sound="${id}"]`));
+  await click(page, `[data-put-sound="${id}"]`);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
+  assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
+  // Onto a whiteboard: a song card.
+  await click(page, "#back");
+  await createBoard(page);
+  await click(page, "#room-reference");
+  await page.waitFor(q(`[data-put-sound="${id}"]`));
+  await click(page, `[data-put-sound="${id}"]`);
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1`);
+});
+
 scenario("레퍼런스: private notes from home and from a room; put into the room only when asked; the switch hides it", async ({ open }) => {
   const [a, b] = await together(open);
   await click(a, "#room-reference");

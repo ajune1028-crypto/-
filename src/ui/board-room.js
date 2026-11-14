@@ -1025,6 +1025,10 @@ export function mountBoardRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 레퍼런스 → 이 방에 붙이기, a recording: a song card (its sound is already on this device). */
+    insertSound(memo) {
+      placeCard(songCardData({ duration: memo.dur, notes: memo.notes, peaks: memo.peaks, name: memo.name, blob: memo.blob }));
+    },
     /** 레퍼런스 → 이 방에 붙이기: a memo card. */
     insertText(text) {
       const at = spotFor("note");

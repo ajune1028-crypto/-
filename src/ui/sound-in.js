@@ -43,7 +43,8 @@ export function soundPickers(name, { onFile, onSilent }) {
 
 /** 크롬에서 열기 and 링크 복사 for the same room. */
 export function elsewhere({ app, roomId, root, prefix }) {
-  const link = app.linkFor(roomId);
+  // Outside a room (레퍼런스 from home), the app's own address.
+  const link = roomId ? app.linkFor(roomId) : String(app.shareBase() || location.href).split("#")[0];
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);

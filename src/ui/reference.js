@@ -1,15 +1,47 @@
-// The 레퍼런스 sheet: my private notes, from home or from inside any room.
+// 레퍼런스: this person's own notes and recordings, on this device only.
+// Opened from home and from every room's bar. Notes can be copied or put into
+// a room; recordings (made in the app, in the phone's recorder app, or picked
+// from files) can be heard, and put into a song room as a clip or onto a
+// whiteboard as a song card. Nothing here is sent anywhere until it is put in.
+// Removing a recording from the list keeps its sound on the device: a clip or
+// card made from it may still play it.
 
 import { h, openSheet, toast } from "./dom.js";
-import { refNotes, addRefNote, removeRefNote } from "../reference.js";
+import { timeText } from "./song-view.js";
+import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
+import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
 import { clipboardItem } from "../clipboard.js";
+import { MAX_TAKE_MS } from "../core/song.js";
+import { audioContext } from "../audio/engine.js";
+import { analyzeSamples } from "../audio/analyze.js";
+import { decodeAudioFile } from "../audio/decode.js";
+import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
+import { encodeWav } from "../audio/wav.js";
+import { resample } from "../audio/dsp.js";
+import { toBase64 } from "../audio/peaks.js";
+import { newBlobId } from "../sync/blobs.js";
+import { solfege } from "../audio/notes.js";
 
-/** `insert(text)` puts a note into the room that is open, when that room can take text. */
-export function openReference(app, { insert = null } = {}) {
-  openSheet(app.root, "레퍼런스 (나만 보기)", (panel, close) => {
+/**
+ * insert(text): the room takes a note; insertSound(sound): the room takes a recording
+ * (a song room as a clip, a whiteboard as a card). Either may be missing.
+ */
+export function openReference(app, { insert = null, insertSound = null, roomId = null } = {}) {
+  const mic = micSupport();
+  openSheet(app.root, "레퍼런스 (나만 보기)", (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
+    const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
+    const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
     const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 3, placeholder: "가사, 코드, 아이디어… 이 기기의 나만 봐요" });
-    const draw = () => {
+    let busy = false;
+    let audio = null; // the recording being heard: { id, el, url }
+
+    const say = (text) => {
+      status.textContent = text || "";
+      status.hidden = !text;
+    };
+
+    function drawNotes() {
       const notes = refNotes(app.store);
       const clip = clipboardItem(app.store, "song-clip");
       list.replaceChildren(
@@ -19,16 +51,149 @@ export function openReference(app, { insert = null } = {}) {
           h("div", { class: "ref-actions" },
             h("button", { class: "chip", type: "button", text: "복사", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }),
             insert && h("button", { class: "chip", type: "button", data: { put: n.id }, text: "이 방에 붙이기", onclick: () => { insert(n.text); close(); toast(app.root, "붙였어요"); } }),
-            h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { removeRefNote(app.store, n.id); draw(); } }))))
+            h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }))))
           : [h("p", { class: "help", text: "아직 메모가 없어요. 여기 적은 것은 이 기기의 나만 볼 수 있어요." })]));
-    };
+    }
+
+    /** A recording's notes as small bars by pitch, named when there is room. */
+    function bars(s) {
+      const ps = s.notes.map((n) => n.p);
+      const lo = ps.length ? Math.min(...ps) : 60;
+      const hi = ps.length ? Math.max(...ps) : 60;
+      const span = Math.max(10, hi - lo + 2);
+      return h("div", { class: "pick-notes" }, s.notes.map((n) => h("i", {
+        class: "note",
+        text: n.d / s.dur >= 0.09 ? solfege(Math.round(n.p)) : "",
+        style: { left: (n.t / s.dur) * 100 + "%", width: `max(3px, ${(n.d / s.dur) * 100}%)`, top: `calc(${((hi + (span - (hi - lo)) / 2 - n.p) / span) * 100}% - 0.4rem)`, height: "0.8rem" },
+      })));
+    }
+
+    function drawSounds() {
+      const all = refSounds(app.store);
+      sounds.replaceChildren(...(all.length ? all.map((s) => h("div", { class: "ref-sound", data: { id: s.id } },
+        h("div", { class: "pick-head" }, h("span", { class: "pick-name", text: s.name }), h("span", { class: "pick-len", text: timeText(s.dur * 1000) })),
+        bars(s),
+        h("div", { class: "ref-actions" },
+          h("button", { class: "chip", type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
+          insertSound && h("button", { class: "chip", type: "button", data: { putSound: s.id }, text: "이 방에 붙이기", onclick: () => { stopHearing(); insertSound(s); close(); toast(app.root, "붙였어요"); } }),
+          h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }))))
+        : [h("p", { class: "help", text: "녹음도 남길 수 있어요. 노래 방이나 화이트보드에 바로 붙일 수 있어요." })]));
+    }
+
+    function stopHearing() {
+      if (!audio) return;
+      audio.el.pause();
+      URL.revokeObjectURL(audio.url);
+      audio = null;
+      drawSounds();
+    }
+
+    async function hear(s) {
+      const again = audio?.id === s.id;
+      stopHearing();
+      if (again) return;
+      const kept = await app.blobs.get(s.blob);
+      if (!kept) return void toast(app.root, "이 녹음의 소리를 찾지 못했어요");
+      const url = URL.createObjectURL(new Blob([kept.data], { type: kept.type || "audio/wav" }));
+      const el = new Audio(url);
+      audio = { id: s.id, el, url };
+      el.onended = () => stopHearing();
+      el.play().catch(() => stopHearing());
+      drawSounds();
+    }
+
+    /** Notes found, the sound kept on this device, a line in the list. */
+    async function keep(samples, rate, name) {
+      say("음을 찾는 중…");
+      const result = await analyzeSamples(samples, rate, { onProgress: (p) => say(`음을 찾는 중… ${Math.round(p * 100)}%`) });
+      const kept = rate === KEEP_RATE ? samples : resample(samples, rate, KEEP_RATE);
+      const blob = newBlobId();
+      await app.blobs.put(blob, encodeWav(kept, KEEP_RATE), "audio/wav");
+      addRefSound(app.store, { name, dur: result.duration, notes: result.notes, peaks: toBase64(result.peaks), blob });
+      say(null);
+      drawSounds();
+    }
+
+    async function importFile(file) {
+      if (busy) return;
+      busy = true;
+      say("소리를 읽는 중…");
+      try {
+        const ctx = await audioContext({ wake: false });
+        if (!ctx) throw new Error("no audio");
+        let { samples, rate } = await decodeAudioFile(ctx, file);
+        if (samples.length > (rate * MAX_TAKE_MS) / 1000) samples = samples.subarray(0, Math.round((rate * MAX_TAKE_MS) / 1000));
+        await keep(samples, rate, file.name);
+      } catch (err) {
+        console.warn(err);
+        say(null);
+        toast(app.root, "이 파일은 읽을 수 없어요", 3600);
+      } finally {
+        busy = false;
+      }
+    }
+
+    let recording = null;
+    async function record() {
+      if (busy || !mic.ok) return;
+      const ctx = await audioContext();
+      if (!ctx) return;
+      const recorder = new MicRecorder(ctx);
+      try {
+        await recorder.start();
+      } catch (err) {
+        return void toast(app.root, micProblem(err), 3600);
+      }
+      busy = true;
+      const time = h("span", { class: "ref-rec-time", id: "ref-rec-time", text: "0:00.0" });
+      const stop = h("button", { class: "btn", id: "ref-stop", type: "button", text: "멈추고 남기기", onclick: () => finish() });
+      const row = h("div", { class: "ref-recording" }, h("span", { class: "dot-rec" }), time, stop);
+      ways.before(row);
+      const timer = setInterval(() => {
+        time.textContent = timeText(recorder.seconds * 1000);
+        if (recorder.seconds * 1000 >= MAX_TAKE_MS) finish();
+      }, 200);
+      recording = { recorder, timer, row };
+      async function finish() {
+        if (recording?.recorder !== recorder) return;
+        clearInterval(timer);
+        row.remove();
+        recording = null;
+        const take = await recorder.stop();
+        try {
+          if (take.samples.length < take.rate * 0.25) toast(app.root, "녹음이 너무 짧아요");
+          else await keep(take.samples, take.rate, null);
+        } finally {
+          busy = false;
+        }
+      }
+    }
+
+    const { inputs, stop: stopPickers } = soundPickers("ref", {
+      onFile: (file) => importFile(file),
+      onSilent: () => pickerHelp({ app, roomId, root: app.root, mic }),
+    });
+    const ways = h("div", { class: "form ref-ways", id: "ref-ways" },
+      ...waysIn({ app, roomId, root: app.root, name: "ref", prefix: "ref-", mic, canRecord: true, onRecord: () => record() }));
     panel.append(h("div", { class: "form" }, area,
       h("button", { class: "btn", id: "ref-add", type: "button", text: "메모 남기기", onclick: () => {
         if (!area.value.trim()) return;
         addRefNote(app.store, area.value.trim());
         area.value = "";
-        draw();
-      } }), list));
-    draw();
+        drawNotes();
+      } }), list),
+      h("h3", { class: "ref-heading", text: "녹음" }),
+      ...inputs, ways, status, sounds);
+    drawNotes();
+    drawSounds();
+    onClose(() => {
+      stopPickers();
+      stopHearing();
+      if (recording) {
+        clearInterval(recording.timer);
+        recording.recorder.stop();
+        recording = null;
+      }
+    });
   });
 }

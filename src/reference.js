@@ -19,3 +19,23 @@ export function addRefNote(store, text, now = Date.now()) {
 export function removeRefNote(store, id) {
   store.set(KEY, refNotes(store).filter((n) => n.id !== id));
 }
+
+// Recordings in 레퍼런스: the sound itself stays in this device's file store
+// (sync/blobs.js); here only what describes it: name, length, the notes found
+// (seconds) and the waveform summary, so it can become a clip or a card.
+const SOUNDS = "reference-sounds";
+const MAX_SOUNDS = 50;
+
+export function refSounds(store) {
+  return store.get(SOUNDS, []);
+}
+
+export function addRefSound(store, { name, dur, notes, peaks, blob }, now = Date.now()) {
+  const sound = { id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6), name: name ? String(name).slice(0, 60) : "녹음", dur, notes, peaks: peaks || "", blob, at: now };
+  store.set(SOUNDS, [sound, ...refSounds(store)].slice(0, MAX_SOUNDS));
+  return sound;
+}
+
+export function removeRefSound(store, id) {
+  store.set(SOUNDS, refSounds(store).filter((s) => s.id !== id));
+}

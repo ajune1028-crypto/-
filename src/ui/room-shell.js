@@ -142,7 +142,7 @@ export function showRoom(app, roomId) {
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
-        getSettings(app.store).reference && iconButton("room-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app, { insert: screen.insertText || null })),
+        getSettings(app.store).reference && iconButton("room-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, roomId })),
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
       banner, top, body));

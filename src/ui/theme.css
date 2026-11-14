@@ -1023,6 +1023,14 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .pick-len { color: var(--muted); font-weight: 600; }
 .pick-notes { position: relative; height: 2.4rem; margin-top: 0.3rem; border-radius: 0.5rem; background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .pick-notes .note { position: absolute; border-radius: 0.3rem; background: var(--accent); }
+.ref-heading { margin: 1.2rem 0 0.4rem; font-size: 0.95rem; font-weight: 800; }
+.ref-ways { gap: 0.45rem; }
+.ref-sounds { display: grid; gap: 0.5rem; margin-top: 0.6rem; }
+.ref-sound { padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 1rem; background: var(--gloss), color-mix(in srgb, var(--accent) 6%, var(--paper)); box-shadow: var(--gloss-edge); }
+.ref-sound .pick-notes .note { background: var(--accent); }
+.ref-recording { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; }
+.ref-rec-time { flex: 1; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ref-recording .btn { width: auto; padding: 0 1rem; }
 .rec-time { margin: 0.4rem 0 0.8rem; font-size: 2rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
 .board-hint { position: absolute; left: 1.4rem; right: 1.4rem; bottom: 0.8rem; z-index: 2; padding: 0.4rem 0.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 80%, transparent); color: var(--paper); font-size: 0.74rem; text-align: center; pointer-events: none; word-break: keep-all; }
 .text-btn { width: auto; min-width: 2.6rem; padding: 0 0.5rem; font-size: 0.8rem; font-weight: 800; }
