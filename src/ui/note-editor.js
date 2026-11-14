@@ -8,6 +8,7 @@
 // clip cut from the same recording, and each one can be undone.
 
 import { h, openSheet } from "./dom.js";
+import { watchFingers } from "./fingers.js";
 import { noteLabel, solfege } from "../audio/notes.js";
 import { noteSetOps, noteAddOps } from "../core/song.js";
 import { timeText } from "./song-view.js";
@@ -66,6 +67,13 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
       return { lo: Math.max(21, lo), hi: Math.min(108, hi) };
     }
 
+    // Keys, rows and notes are kept from one draw to the next and only moved.
+    // A touch stays with the element it began on: one replaced under a finger
+    // would stop reaching the roll in the middle of a pinch.
+    const keyEls = new Map();
+    const rowEls = new Map();
+    const noteEls = new Map();
+
     let layout = null;
     function draw() {
       const c = clip();
@@ -80,18 +88,34 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
       grid.style.height = (hi - lo + 1) * rowH + "px";
       keys.style.height = grid.style.height;
       // Rows: one per key, the black keys a shade darker, every 도 named.
-      keys.replaceChildren(...range2(hi, lo).map((p) => h("span", { class: "key" + (BLACK.has(p % 12) ? " black" : "") + (p % 12 === 0 ? " c" : ""), style: { height: rowH + "px" }, text: rowH >= 14 || p % 12 === 0 ? (p % 12 === 0 ? noteLabel(p) : solfege(p)) : "" })));
-      grid.replaceChildren(playline, ...range2(hi, lo).map((p, i) => h("span", { class: "lane-row" + (BLACK.has(p % 12) ? " black" : ""), style: { top: i * rowH + "px", height: rowH + "px" } })),
-        ...notes.map((n) => {
-          const el = h("i", {
-            class: "rnote" + (n.key === chosen ? " chosen" : ""),
-            data: { key: n.key, p: String(n.p) },
-            style: { left: ((n.s - c.offset) / 1000) * pps + "px", width: Math.max(6, ((n.e - n.s) / 1000) * pps) + "px", top: (hi - n.p) * rowH + 1 + "px", height: rowH - 2 + "px", background: color },
-            text: ((n.e - n.s) / 1000) * pps >= 22 ? solfege(n.p) : "",
-          });
-          wireNote(el, n);
-          return el;
-        }));
+      const pitches = range2(hi, lo);
+      pitches.forEach((p, i) => {
+        const black = BLACK.has(p % 12);
+        const key = keep(keyEls, keys, p, () => h("span", { class: "key" + (black ? " black" : "") + (p % 12 === 0 ? " c" : "") }));
+        key.style.top = i * rowH + "px";
+        key.style.height = rowH + "px";
+        key.textContent = rowH >= 14 || p % 12 === 0 ? (p % 12 === 0 ? noteLabel(p) : solfege(p)) : "";
+        const row = keep(rowEls, grid, p, () => h("span", { class: "lane-row" + (black ? " black" : "") }));
+        row.style.top = i * rowH + "px";
+        row.style.height = rowH + "px";
+      });
+      prune(keyEls, pitches);
+      prune(rowEls, pitches);
+      for (const n of notes) {
+        const el = keep(noteEls, grid, n.key, () => wireNote(h("i", { class: "rnote", data: { key: n.key } })));
+        el.classList.toggle("chosen", n.key === chosen);
+        el.dataset.p = String(n.p);
+        Object.assign(el.style, {
+          left: ((n.s - c.offset) / 1000) * pps + "px",
+          width: Math.max(6, ((n.e - n.s) / 1000) * pps) + "px",
+          top: (hi - n.p) * rowH + 1 + "px",
+          height: rowH - 2 + "px",
+          background: color,
+          transform: "",
+        });
+        el.textContent = ((n.e - n.s) / 1000) * pps >= 22 ? solfege(n.p) : "";
+      }
+      prune(noteEls, notes.map((n) => n.key));
       list.replaceChildren(...notes.map((n) => h("li", {},
         h("button", { type: "button", class: "note-row" + (n.key === chosen ? " chosen" : ""), data: { key: n.key }, onclick: () => choose(n) },
           h("span", { class: "note-name", text: noteLabel(n.p) }),
@@ -118,26 +142,39 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
 
     const ctx = () => [clock, song, layout.c.src];
 
-    function wireNote(el, n) {
+    /** A note's own finger: drag to move it, drag its right end to stretch it, tap to hear it. */
+    function wireNote(el) {
       el.addEventListener("pointerdown", (e) => {
-        if (!canEdit()) return void choose(n);
+        // The note as it is now: the element outlives edits to it.
+        const n = layout?.notes.find((x) => x.key === el.dataset.key);
+        if (!n || fingers.pinching) return;
+        const editable = canEdit();
         e.preventDefault();
         el.setPointerCapture?.(e.pointerId);
         const box = el.getBoundingClientRect();
         const resize = box.right - e.clientX <= EDGE_PX;
         const start = { x: e.clientX, y: e.clientY, moved: false };
+        const mine = (ev) => ev.pointerId === e.pointerId;
         const move = (ev) => {
+          if (!mine(ev)) return;
           const dx = ev.clientX - start.x;
           const dy = ev.clientY - start.y;
           if (Math.hypot(dx, dy) > 4) start.moved = true;
+          if (!editable) return;
           if (resize) el.style.width = Math.max(6, box.width + dx) + "px";
           else el.style.transform = `translate(${dx}px, ${Math.round(dy / layout.rowH) * layout.rowH}px)`;
         };
-        const up = (ev) => {
+        const stop = () => {
           el.removeEventListener("pointermove", move);
           el.removeEventListener("pointerup", up);
           el.removeEventListener("pointercancel", cancel);
+          gesture = null;
+        };
+        const up = (ev) => {
+          if (!mine(ev)) return;
+          stop();
           if (!start.moved) return choose(n);
+          if (!editable) return;
           const dx = ev.clientX - start.x;
           const dy = ev.clientY - start.y;
           chosen = n.key;
@@ -152,17 +189,32 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
           }
           draw();
         };
-        const cancel = () => draw();
+        // Cancelled by the browser, or by a second finger: the note goes back, nothing is saved.
+        const cancel = (ev) => {
+          if (ev && !mine(ev)) return;
+          stop();
+          draw();
+        };
+        gesture = cancel;
         el.addEventListener("pointermove", move);
         el.addEventListener("pointerup", up);
         el.addEventListener("pointercancel", cancel);
       });
+      return el;
     }
 
-    // A double tap (or double click) on an empty spot adds a note there.
+    // A second finger means zoom: whatever the first finger began is put back,
+    // and the lifts that end the pinch are no double tap.
+    let gesture = null;
     let lastTap = null;
+    const fingers = watchFingers(roll, () => {
+      gesture?.();
+      lastTap = null;
+    });
+
+    // A double tap (or double click) on an empty spot adds a note there.
     grid.addEventListener("pointerup", (e) => {
-      if (e.target.closest(".rnote") || !canEdit() || !layout) return;
+      if (e.target.closest(".rnote") || !canEdit() || !layout || fingers.pinching) return;
       const now = performance.now();
       const near = lastTap && now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 24;
       lastTap = { t: now, x: e.clientX, y: e.clientY };
@@ -202,9 +254,33 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
     }, { passive: false });
 
     requestAnimationFrame(draw);
-    onClose(() => { refresh = () => {}; });
+    onClose(() => {
+      refresh = () => {};
+      fingers.stop();
+    });
   });
   return { refresh: () => refresh(), close };
+}
+
+/** The element kept under key in map, made (and put into parent) the first time. */
+function keep(map, parent, key, make) {
+  let el = map.get(key);
+  if (!el) {
+    el = make();
+    map.set(key, el);
+    parent.append(el);
+  }
+  return el;
+}
+
+/** Removes the kept elements whose keys are not in wanted. */
+function prune(map, wanted) {
+  const want = new Set(wanted);
+  for (const [key, el] of map) {
+    if (want.has(key)) continue;
+    el.remove();
+    map.delete(key);
+  }
 }
 
 /** hi down to lo. */

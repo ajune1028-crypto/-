@@ -104,25 +104,28 @@ export class InkLayer {
 
   wire() {
     const c = this.canvas;
+    // A line belongs to the finger (or pen) that began it. Another touch while it is
+    // being drawn, such as a resting palm or a second finger, is left out of it.
     c.addEventListener("pointerdown", (e) => {
-      if (!this.tool) return;
+      if (!this.tool || this.live) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
       if (this.tool === "eraser-stroke") {
-        this.live = { erase: new Set() };
+        this.live = { pointer: e.pointerId, erase: new Set() };
         this.eraseAt(e);
       } else {
-        this.live = { pts: this.point(e), brush: this.tool === "eraser" ? "erase" : this.brush };
+        this.live = { pointer: e.pointerId, pts: this.point(e), brush: this.tool === "eraser" ? "erase" : this.brush };
         this.render();
       }
     });
     c.addEventListener("pointermove", (e) => {
-      if (!this.live) return;
+      if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
       for (const ev of e.getCoalescedEvents?.() || [e]) this.live.pts.push(...this.point(ev));
       this.render();
     });
-    const end = () => {
+    const end = (e) => {
+      if (!this.live || e.pointerId !== this.live.pointer) return;
       const live = this.live;
       this.live = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
@@ -131,6 +134,8 @@ export class InkLayer {
     };
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
+    // Losing hold of the pointer without a lift also ends the line, so it never waits forever.
+    c.addEventListener("lostpointercapture", end);
   }
 
   eraseAt(e) {

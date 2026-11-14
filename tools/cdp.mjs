@@ -124,6 +124,7 @@ export async function launch({ port = 9333, args = [] } = {}) {
       }
     };
     const mouse = (type, x, y, clickCount) => s("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mousePressed" ? 1 : 0, clickCount, pointerType: "mouse" });
+    let touchOn = false;
     const api = {
       errors,
       eval: evaluate,
@@ -148,6 +149,35 @@ export async function launch({ port = 9333, args = [] } = {}) {
         await s("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY, modifiers: (alt ? 1 : 0) | (ctrl ? 2 : 0) | (shift ? 8 : 0), pointerType: "mouse" });
       },
       moveTo: (x, y) => s("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1, pointerType: "mouse" }),
+      /**
+       * Fingers on the glass, as a phone sends them: kind is "start", "move" or "end", points
+       * are [x, y] per finger (none for "end"). Chrome turns each changed finger into its own
+       * pointer and touch events, one after another, like a real screen.
+       */
+      touch: async (kind, points = []) => {
+        if (!touchOn) {
+          await s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+          touchOn = true;
+        }
+        await s("Page.bringToFront");
+        const type = "touch" + kind[0].toUpperCase() + kind.slice(1);
+        await s("Input.dispatchTouchEvent", { type, touchPoints: points.map(([x, y], id) => ({ x, y, id, radiusX: 6, radiusY: 6, force: 1 })) });
+      },
+      /** Two fingers set down at from (one after the other), moved in steps to to, then lifted. */
+      pinch: async (from, to, { steps = 8, lift = true } = {}) => {
+        await api.touch("start", [from[0]]);
+        await sleep(30);
+        await api.touch("start", from);
+        for (let i = 1; i <= steps; i++) {
+          const at = from.map(([x, y], k) => [x + ((to[k][0] - x) * i) / steps, y + ((to[k][1] - y) * i) / steps]);
+          await sleep(16);
+          await api.touch("move", at);
+        }
+        if (lift) {
+          await sleep(16);
+          await api.touch("end");
+        }
+      },
       release: (x, y) => mouse("mouseReleased", x, y, 1),
       /** Puts files into a file input, as if picked in the file chooser. */
       setFiles: async (selector, files) => {

@@ -9,6 +9,7 @@
 // (보내기 there, or 복사 there and + 노래 here).
 
 import { h, icon, iconButton, segmented, openSheet, toast } from "./dom.js";
+import { watchFingers } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { memberColor, INK } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
@@ -179,25 +180,42 @@ export function mountBoardRoom(body, app, session, frame) {
     place();
   }
 
+  // A second finger means zoom: a card the first finger was dragging goes back,
+  // nothing is saved, and the lifts that end the pinch are no taps.
+  let gesture = null;
+  const fingers = watchFingers(surface, () => {
+    gesture?.();
+    pan = null;
+  });
+
   function wireCard(el, id) {
     el.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
-      if (mode === "link") return void tapToLink(id);
+      if (fingers.pinching) return;
       const item = board.item(id);
       if (!item) return;
       el.setPointerCapture?.(e.pointerId);
+      const linking = mode === "link";
       const start = { x: e.clientX, y: e.clientY, ix: item.x, iy: item.y, moved: false };
+      const mine = (ev) => ev.pointerId === e.pointerId;
       const move = (ev) => {
-        if (readOnly()) return;
-        const dx = (ev.clientX - start.x) / zoom;
-        const dy = (ev.clientY - start.y) / zoom;
-        if (Math.hypot(dx, dy) > 4) start.moved = true;
-        el.style.left = start.ix + dx + "px";
-        el.style.top = start.iy + dy + "px";
+        if (!mine(ev)) return;
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 4 * zoom) start.moved = true;
+        if (linking || readOnly()) return;
+        el.style.left = start.ix + (ev.clientX - start.x) / zoom + "px";
+        el.style.top = start.iy + (ev.clientY - start.y) / zoom + "px";
       };
-      const up = (ev) => {
+      const stop = () => {
         el.removeEventListener("pointermove", move);
         el.removeEventListener("pointerup", up);
+        el.removeEventListener("pointercancel", cancel);
+        gesture = null;
+      };
+      const up = (ev) => {
+        if (!mine(ev)) return;
+        stop();
+        // 잇기 counts a tap, not a touch, so a pinch that starts on a card joins nothing.
+        if (linking) return void (start.moved || tapToLink(id));
         if (start.moved && !readOnly()) {
           apply(setItemOps(session.clock, board, id, { x: start.ix + (ev.clientX - start.x) / zoom, y: start.iy + (ev.clientY - start.y) / zoom }));
           return;
@@ -206,8 +224,16 @@ export function mountBoardRoom(body, app, session, frame) {
         selected = id;
         draw();
       };
+      const cancel = (ev) => {
+        if (ev && !mine(ev)) return;
+        stop();
+        el.style.left = start.ix + "px";
+        el.style.top = start.iy + "px";
+      };
+      gesture = cancel;
       el.addEventListener("pointermove", move);
       el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", cancel);
     });
   }
 
@@ -226,18 +252,19 @@ export function mountBoardRoom(body, app, session, frame) {
 
   let pan = null;
   surface.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".card") || e.target.closest(".badge")) return;
-    pan = { x: e.clientX, y: e.clientY, px: panX, py: panY, moved: false };
+    if (e.target.closest(".card") || e.target.closest(".badge") || fingers.pinching) return;
+    pan = { id: e.pointerId, x: e.clientX, y: e.clientY, px: panX, py: panY, moved: false };
     surface.setPointerCapture?.(e.pointerId);
   });
   surface.addEventListener("pointermove", (e) => {
-    if (!pan) return;
+    if (!pan || e.pointerId !== pan.id) return;
     if (Math.hypot(e.clientX - pan.x, e.clientY - pan.y) > 4) pan.moved = true;
     panX = pan.px + e.clientX - pan.x;
     panY = pan.py + e.clientY - pan.y;
     place();
   });
-  surface.addEventListener("pointerup", () => {
+  surface.addEventListener("pointerup", (e) => {
+    if (pan && e.pointerId !== pan.id) return;
     if (pan && !pan.moved) {
       selected = null;
       linkFrom = null;

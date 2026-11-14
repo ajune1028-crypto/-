@@ -1252,6 +1252,36 @@ scenario("song: split at the playhead, copy, paste on another row, mute, delete,
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
+scenario("song: with a finger too, a held clip moves and a quick drag scrolls", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const [before] = await songClips(page);
+  const where = () => page.eval(`(() => {
+    const r = document.querySelector(".clip[data-id]").getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, rowH: 5.25 * rem, pps: Number(document.getElementById("timeline").dataset.pps), scroll: document.getElementById("timeline").scrollLeft };
+  })()`);
+  // A quick finger drag: the timeline scrolls, the clip stays.
+  let at = await where();
+  await page.touch("start", [[at.x, at.y]]);
+  for (let i = 1; i <= 5; i++) await page.touch("move", [[at.x - 20 * i, at.y]]);
+  await page.touch("end");
+  assert.ok((await where()).scroll > at.scroll, "the timeline scrolled");
+  assert.deepEqual((await songClips(page))[0], before, "the clip did not move");
+  await page.eval(`document.getElementById("timeline").scrollLeft = 0`);
+  // Held past the browser's own long press, then dragged a second later and a row down.
+  at = await where();
+  await page.touch("start", [[at.x, at.y]]);
+  await pause(900);
+  await page.waitFor(`document.querySelector(".clip.lifted")`);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[at.x + (at.pps * i) / 10, at.y + (at.rowH * i) / 10]]);
+  await page.touch("end");
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].lane === 1`);
+  const [after] = await songClips(page);
+  assert.ok(Math.abs(after.start - before.start - 1000) <= 30, "moved by a second: " + after.start);
+});
+
 scenario("song: a clip held and dragged moves in time and to another row; a quick drag scrolls instead", async ({ open, fixtures }) => {
   const page = await open();
   await createSongRoom(page);
@@ -1410,7 +1440,76 @@ scenario("look: dark is near black; the main button glows, small ones are glass;
   assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--text-scale").trim()`), "1.3");
 });
 
+scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints the room's glass, the same in light and in dark", async ({ open }) => {
+  const page = await open();
+  await createRoom(page, { room: "유리 방" });
+  await click(page, "#room-settings");
+  await settled(page);
+  const presets = await page.eval(`[...document.querySelectorAll(".swatch[data-key]")].map((b) => [b.dataset.key, b.dataset.accent, b.getAttribute("aria-label")])`);
+  assert.deepEqual(presets.map((p) => p[2]), ["빨강", "주황", "노랑", "초록", "파랑", "남색", "보라", "갈색", "핑크", "흑백"]);
+  const hue = ([r, g, b]) => {
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    if (!d) return 0;
+    const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return h * 60;
+  };
+  const gap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+  // The glass's coloured stop: any stop that is not plain white.
+  const tinted = (image) => {
+    const stops = [...image.matchAll(/color\(srgb ([\d.e-]+) ([\d.e-]+) ([\d.e-]+)|rgba?\((\d+), (\d+), (\d+)/g)]
+      .map((m) => (m[1] !== undefined ? m.slice(1, 4).map(Number) : m.slice(4, 7).map((v) => Number(v) / 255)));
+    return stops.find((c) => c.some((v) => v < 0.999));
+  };
+  for (const theme of ["light", "dark"]) {
+    await click(page, `[data-theme-choice="${theme}"]`);
+    for (const [key, hex, name] of presets) {
+      await click(page, `[data-key="${key}"]`);
+      const got = await page.eval(`(() => ({
+        accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
+        bar: getComputedStyle(document.querySelector(".room > .bar")).backgroundImage,
+        pressed: document.querySelector('[data-key="${key}"]').getAttribute("aria-pressed"),
+      }))()`);
+      assert.equal(got.accent, hex, `${theme} ${name}: the colour is used as chosen`);
+      assert.equal(got.pressed, "true", `${theme} ${name}: its swatch shows as chosen`);
+      const stop = tinted(got.bar);
+      assert.ok(stop, `${theme} ${name}: the glass has a coloured stop: ${got.bar}`);
+      const want = hue([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
+      assert.ok(gap(hue(stop), want) < 8, `${theme} ${name}: the glass takes the colour (${hue(stop).toFixed(1)}° vs ${want.toFixed(1)}°): ${got.bar}`);
+    }
+  }
+});
+
 // ---- drawing -----------------------------------------------------------------------------------------
+
+scenario("drawing: a second finger or a resting palm leaves the line being drawn alone", async ({ open }) => {
+  const [a] = await together(open, []);
+  const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await click(a, "#pen");
+  await a.waitFor(`!${q("#ink-tools")}.hidden`);
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const x0 = box.x + box.w * 0.15;
+  const x1 = box.x + box.w * 0.85;
+  const y = box.y + box.h * 0.4;
+  const palm = [box.x + box.w * 0.5, box.y + box.h * 0.8];
+  const at = (i) => [x0 + ((x1 - x0) * i) / 12, y];
+  await a.touch("start", [at(0)]);
+  for (let i = 1; i <= 4; i++) await a.touch("move", [at(i)]);
+  // A palm comes down and shifts a little while the finger keeps drawing.
+  await a.touch("start", [at(4), palm]);
+  for (let i = 5; i <= 12; i++) await a.touch("move", [at(i), [palm[0] + i, palm[1] - i]]);
+  await a.touch("end");
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length >= 1`);
+  const s = await a.eval(`(() => {
+    const list = window.__app.session.doc("k:${day}").strokes();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const xs = [], ys = [];
+    for (let i = 0; i < list[0].pts.length; i += 3) { xs.push((list[0].pts[i] * rem) / 100); ys.push((list[0].pts[i + 1] * rem) / 100); }
+    return { n: list.length, wide: Math.max(...xs) - Math.min(...xs), tall: Math.max(...ys) - Math.min(...ys) };
+  })()`);
+  assert.equal(s.n, 1, "one line, nothing from the palm: " + JSON.stringify(s));
+  assert.ok(s.tall < 3, "every point lies on the finger's line: " + JSON.stringify(s));
+  assert.ok(Math.abs(s.wide - (x1 - x0)) < 6, "the whole line was kept, start to end: " + JSON.stringify(s));
+});
 
 scenario("drawing: pen, brushes and both erasers on today's sheet; the other device sees it; undo works", async ({ open, out }) => {
   const [a, b] = await together(open);
@@ -1573,6 +1672,79 @@ scenario("song: on a computer the wheel zooms time, Alt+wheel makes rows taller,
   assert.ok((await page.eval(`document.getElementById("timeline").scrollLeft`)) > 0, "moved sideways");
 });
 
+/** Two animation frames: what a gesture changed is on screen. */
+const frames = (page) => page.eval(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`);
+
+scenario("song: two fingers on a rectangle zoom it (sideways = time, up and down = rows); nothing scrolls away, moves or opens", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const clips0 = await songClips(page);
+  const view = () => page.eval(`(() => {
+    const tl = document.getElementById("timeline");
+    const box = tl.getBoundingClientRect();
+    const c = document.querySelector(".clip[data-id]").getBoundingClientRect();
+    const r = document.getElementById("ruler").getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const left = Math.max(c.left, box.left), right = Math.min(c.right, box.right);
+    return { pps: Number(tl.dataset.pps), x: (left + right) / 2, seen: right - left, y: c.top + c.height / 2, h: c.height, zero: r.left + 0.9 * rem,
+      lifted: !!document.querySelector(".clip.lifted"), menu: !!document.getElementById("clip-menu"), chosen: !!document.querySelector(".clip.selected") };
+  })()`);
+  const msAt = (v, x) => ((x - v.zero) / v.pps) * 1000;
+  const v0 = await view();
+  assert.ok(v0.seen > 90, "room for two fingers on the clip: " + JSON.stringify(v0));
+  // Sideways, both fingers on the rectangle: 60 px apart spread to 150 px is 2.5 times the time.
+  // (Importing chose the clip and opened its menu; a pinch must leave that as it was.)
+  const t0 = msAt(v0, v0.x);
+  // One finger stays put and the other spreads away, as thumbs often do.
+  await page.pinch([[v0.x - 30, v0.y], [v0.x + 30, v0.y]], [[v0.x - 30, v0.y], [v0.x + 120, v0.y]]);
+  await frames(page);
+  const v1 = await view();
+  assert.ok(Math.abs(v1.pps / v0.pps - 2.5) < 0.2, `time zoomed 2.5 times: ${v0.pps} -> ${v1.pps}`);
+  const drift = (Math.abs(msAt(v1, v0.x) - t0) / 1000) * v1.pps;
+  assert.ok(drift < 12, `the moment under the fingers stays under them (moved ${drift.toFixed(1)} px)`);
+  assert.ok(Math.abs(v1.h - v0.h) < 2, "rows keep their height while time zooms");
+  // Up and down: the rows grow, time stays.
+  await page.pinch([[v1.x, v1.y - 22], [v1.x, v1.y + 22]], [[v1.x, v1.y - 45], [v1.x, v1.y + 45]]);
+  await frames(page);
+  const v2 = await view();
+  assert.ok(v2.h > v1.h * 1.7, `rows taller: ${v1.h} -> ${v2.h}`);
+  assert.ok(Math.abs(v2.pps - v1.pps) < 0.5, "an up-and-down pinch leaves time alone");
+  // Nothing was picked up, chosen, opened, closed or moved.
+  for (const v of [v1, v2]) assert.ok(!v.lifted && v.menu === v0.menu && v.chosen === v0.chosen, JSON.stringify({ v0, v }));
+  assert.deepEqual(await songClips(page), clips0);
+  // Holding anywhere on the timeline selects no text, which would cancel the touch on phones.
+  assert.equal(await page.eval(`getComputedStyle(document.getElementById("timeline")).userSelect`), "none");
+});
+
+scenario("song: two fingers in 음 편집 zoom the roll and never move, stretch or add a note", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-notes");
+  await page.waitFor(`document.querySelectorAll("#roll-grid .rnote").length === 5`);
+  await settled(page);
+  const notes = () => page.eval(`JSON.stringify(window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src).map((n) => [n.t, n.d, n.p]))`);
+  const box = (p) => page.eval(`(() => { const r = document.querySelector('#roll-grid .rnote[data-p="${p}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+  const n0 = await notes();
+  // One finger on 도, one on 미, spreading sideways.
+  const a = await box(60);
+  const b = await box(64);
+  await page.pinch([[a.x, a.y], [b.x, b.y]], [[a.x - 30, a.y], [b.x + 60, b.y]]);
+  await frames(page);
+  assert.equal(await notes(), n0, "no note moved or stretched");
+  assert.ok((await box(64)).w > b.w * 1.4, "time zoomed in");
+  // Pinching in over an empty spot: the two lifts land close together, but that is no double tap.
+  const g = await page.eval(`(() => { const g = document.getElementById("roll-grid").getBoundingClientRect(); const r = document.getElementById("roll").getBoundingClientRect(); return { x: Math.max(g.left, r.left), y: Math.max(g.top, r.top) + 8 }; })()`);
+  await page.pinch([[g.x + 30, g.y], [g.x + 150, g.y]], [[g.x + 85, g.y], [g.x + 95, g.y]]);
+  await frames(page);
+  assert.equal(await notes(), n0, "no note added");
+  assert.equal(await page.eval(`document.querySelectorAll("#roll-grid .rnote").length`), 5);
+  // A long press on a note picks it up; it must not select the note's name instead (that cancels the touch on phones).
+  assert.equal(await page.eval(`getComputedStyle(document.getElementById("roll")).userSelect`), "none");
+});
+
 scenario("song: a locked clip cannot be deleted, cut or moved, and its locker unlocks it", async ({ open, fixtures }) => {
   const page = await open();
   await createSongRoom(page);
@@ -1668,6 +1840,45 @@ scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 set
   await click(page, "#board-undo");
   await page.waitFor(`!document.querySelector(".card.note")`);
   void songId;
+});
+
+scenario("whiteboard: two fingers zoom the board; they never move a card or start an order line", async ({ open }) => {
+  const page = await open({ width: 600, height: 800 });
+  await createBoard(page);
+  for (const memo of ["첫 메모", "둘째 메모"]) {
+    await click(page, "#add-note");
+    await page.waitFor(q("#note-text"));
+    await fill(page, "#note-text", memo);
+    await click(page, "#note-save");
+    await page.waitFor(`[...document.querySelectorAll(".card.note .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
+  }
+  const items = () => page.eval(`JSON.stringify(window.__app.session.doc("board").items().map((i) => [i.id, i.x, i.y]).sort())`);
+  const card = (n) => page.eval(`(() => { const c = [...document.querySelectorAll(".card.note")].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[${n}]; const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+  const links = () => page.eval(`window.__app.session.doc("board").links().length`);
+  const i0 = await items();
+  // 잇기 mode, a finger on each card, spreading: that is a pinch, not two taps.
+  await click(page, "#mode-link");
+  const a = await card(0);
+  const b = await card(1);
+  await page.pinch([[a.x, a.y], [b.x, b.y]], [[a.x - 20, a.y], [b.x + 20, b.y]]);
+  await frames(page);
+  assert.equal(await links(), 0, "no order line from a pinch");
+  assert.equal(await page.eval(`document.querySelectorAll(".card.link-from").length`), 0, "no card left waiting to be joined");
+  // Finger taps still join, first card then second.
+  for (const n of [0, 1]) {
+    const c = await card(n);
+    await page.touch("start", [[c.x, c.y]]);
+    await page.touch("end");
+  }
+  await page.waitFor(`window.__app.session.doc("board").links().length === 1`);
+  // Both fingers on one card in 전체: the board zooms in and the card stays where it is.
+  await click(page, "#mode-all");
+  const c = await card(0);
+  assert.ok(c.w > 60, "room for two fingers on the card: " + JSON.stringify(c));
+  await page.pinch([[c.x - 20, c.y], [c.x + 20, c.y]], [[c.x - 60, c.y], [c.x + 60, c.y]]);
+  await frames(page);
+  assert.equal(await items(), i0, "no card moved");
+  assert.ok((await card(0)).w > c.w * 1.8, "the board zoomed in");
 });
 
 // ---- 레퍼런스 -----------------------------------------------------------------------------------------

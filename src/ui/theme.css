@@ -677,6 +677,10 @@ h1, h2, p { margin: 0; }
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+  /* Holding a clip or the time bar must not select their labels: that cancels the touch on phones. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   --muted: var(--muted-tone);
 }
 .song-content { position: relative; min-height: 100%; }
@@ -872,9 +876,13 @@ label.btn { display: grid; place-items: center; cursor: pointer; text-align: cen
   background: var(--sheet);
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
+  /* A long press picks a note up; selecting its name instead would cancel the touch on phones. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .keys { position: sticky; left: 0; z-index: 3; flex: none; width: 2.6rem; background: var(--paper); box-shadow: 1px 0 0 var(--line); }
-.key { display: flex; align-items: center; justify-content: flex-end; padding-right: 0.3rem; font-size: 0.6rem; color: var(--muted); border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.key { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 0.3rem; font-size: 0.6rem; color: var(--muted); border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
 .key.black { background: color-mix(in srgb, var(--ink) 9%, var(--paper)); }
 .key.c { color: var(--ink); font-weight: 800; }
 .grid { position: relative; flex: none; }

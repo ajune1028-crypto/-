@@ -8,6 +8,7 @@
 // the time bar or an empty spot to move the playhead. Two fingers zoom.
 
 import { h } from "./dom.js";
+import { watchFingers } from "./fingers.js";
 import { solfege } from "../audio/notes.js";
 import { fromBase64, PEAKS_PER_SECOND } from "../audio/peaks.js";
 
@@ -338,26 +339,35 @@ export class Timeline {
   // ---- touch -----------------------------------------------------------------------
 
   wire() {
+    // One-finger gestures follow their own pointer and give way to a second
+    // finger, which always means zoom (see fingers.js).
+    let scrub = null; // the pointer moving the playhead
+    let down = null; // a press on an empty spot that may be a tap
+    this.fingers = watchFingers(this.el, () => {
+      scrub = null;
+      down = null;
+      this.dropDrag();
+    });
+
     // The time bar: press or drag to move the playhead.
-    let scrubbing = false;
     this.ruler.addEventListener("pointerdown", (e) => {
-      scrubbing = true;
+      if (this.fingers.pinching) return;
+      scrub = e.pointerId;
       this.ruler.setPointerCapture?.(e.pointerId);
       this.on.seek(this.msAt(e.clientX));
     });
-    this.ruler.addEventListener("pointermove", (e) => { if (scrubbing) this.on.seek(this.msAt(e.clientX)); });
-    const endScrub = () => { scrubbing = false; };
+    this.ruler.addEventListener("pointermove", (e) => { if (e.pointerId === scrub) this.on.seek(this.msAt(e.clientX)); });
+    const endScrub = () => { scrub = null; };
     this.ruler.addEventListener("pointerup", endScrub);
     this.ruler.addEventListener("pointercancel", endScrub);
 
     // An empty spot: a tap moves the playhead there and picks that row.
-    let down = null;
     this.lanes.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".clip")) return;
-      down = { x: e.clientX, y: e.clientY, at: performance.now() };
+      if (e.target.closest(".clip") || this.fingers.pinching) return;
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() };
     });
     this.lanes.addEventListener("pointerup", (e) => {
-      if (!down || e.target.closest(".clip")) return;
+      if (!down || e.pointerId !== down.id || e.target.closest(".clip")) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
       if (moved > SLOP_PX) return;
@@ -413,18 +423,19 @@ export class Timeline {
   wireClip(el, id) {
     el.addEventListener("pointerdown", (e) => {
       if (e.button !== undefined && e.button > 0) return;
+      if (this.fingers.pinching) return;
       el.setPointerCapture?.(e.pointerId);
       const box = el.getBoundingClientRect();
       const lanes = this.lanes.getBoundingClientRect();
       this.drag = {
-        id, x: e.clientX, y: e.clientY, sl: this.el.scrollLeft, st: this.el.scrollTop, lifted: false, panning: false,
+        id, pointer: e.pointerId, x: e.clientX, y: e.clientY, sl: this.el.scrollLeft, st: this.el.scrollTop, lifted: false, panning: false,
         grabX: e.clientX - box.left, grabY: e.clientY - box.top, lanesTop: lanes.top,
         timer: setTimeout(() => this.lift(el), LONG_PRESS_MS),
       };
     });
     el.addEventListener("pointermove", (e) => {
       const d = this.drag;
-      if (!d || d.id !== id) return;
+      if (!d || d.id !== id || d.pointer !== e.pointerId) return;
       const dx = e.clientX - d.x;
       const dy = e.clientY - d.y;
       if (d.lifted) {
@@ -443,7 +454,7 @@ export class Timeline {
     });
     const end = (e, cancelled) => {
       const d = this.drag;
-      if (!d || d.id !== id) return;
+      if (!d || d.id !== id || d.pointer !== e.pointerId) return;
       clearTimeout(d.timer);
       this.drag = null;
       el.classList.remove("lifted");
@@ -466,6 +477,19 @@ export class Timeline {
         this.on.select(id);
       }
     });
+  }
+
+  /** A second finger landed: the clip under the first one is let go, back where it was. */
+  dropDrag() {
+    const d = this.drag;
+    if (!d) return;
+    clearTimeout(d.timer);
+    this.drag = null;
+    const el = this.clipEls.get(d.id)?.el;
+    if (!el) return;
+    el.classList.remove("lifted");
+    el.style.transform = "";
+    if (this.model) this.render(this.model);
   }
 
   lift(el) {
