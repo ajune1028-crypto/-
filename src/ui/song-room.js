@@ -30,24 +30,14 @@ import { encodeWav, decodeWav } from "../audio/wav.js";
 import { resample, toMono } from "../audio/dsp.js";
 import { toBase64 } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
-import { watchPickers } from "./picker-watch.js";
+import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
 import { addItemOps, cardFromClip } from "../core/board.js";
 
-const KEEP_RATE = 24000; // recordings are kept at this rate: clear voice, a quarter of CD size
 const MIN_TAKE_MS = 250;
 const PRESENCE_EVERY_MS = 120;
 const LIVE_EVERY_MS = 150;
 export const SPEEDS = [1, 1.5, 2, 3, 0.5];
-const AUDIO_TYPES = "audio/*,.m4a,.mp3,.wav,.aac,.ogg,.oga,.opus,.webm,.3gp,.amr,.flac";
-
-/** Why this page cannot record in the app, in words a person can act on. */
-function micReason(reason) {
-  if (reason === "blocked") return "Claude 안에서는 Claude가 이 화면에 마이크를 열어 주지 않아요. 폰 녹음 앱이나 파일로 넣어 주세요. Claude 앱에서 그것도 안 열리면 '크롬에서 열기'로 같은 방을 크롬에서 여세요.";
-  if (reason === "insecure") return "이 주소에서는 브라우저가 마이크를 열어 주지 않아요(https 주소에서만 돼요). 아래 '폰 녹음 앱으로 녹음하기'를 써 주세요.";
-  if (reason === "unsupported") return "이 브라우저는 앱 안 녹음을 지원하지 않아요. 아래 '폰 녹음 앱으로 녹음하기'를 써 주세요.";
-  return reason || "";
-}
 
 export function mountSongRoom(body, app, session, frame) {
   const song = session.doc("song");
@@ -107,23 +97,12 @@ export function mountSongRoom(body, app, session, frame) {
   const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, addButton, undoButton, redoButton, speedButton, toneButton);
   body.after(toolbar);
 
-  // The pickers are opened by <label>s, never by a script: some phones and app
-  // views only open a file chooser straight from a person's tap.
-  const pickers = [
-    h("input", { type: "file", accept: AUDIO_TYPES, id: "song-file", class: "vh", tabindex: "-1" }),
-    h("input", { type: "file", accept: "audio/*", capture: "user", id: "song-capture", class: "vh", tabindex: "-1" }),
-  ];
-  for (const input of pickers) {
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      input.value = "";
-      closeAdd?.();
-      if (file) importFile(file);
-    });
-  }
+  // The pickers (opened by <label>s; a tap that opens nothing gets a way out, see sound-in.js).
+  const { inputs: pickers, stop: stopPickerWatch } = soundPickers("song", {
+    onFile: (file) => { closeAdd?.(); importFile(file); },
+    onSilent: () => { if (alive) { closeAdd?.(); noChooserHelp({ app, roomId: session.roomId, root, mic }); } },
+  });
   body.append(...pickers);
-  // A tap that opens no chooser (the Claude app's view does this) gets a way out instead of silence.
-  const stopPickerWatch = watchPickers(pickers, () => { if (alive) pickerHelp(); });
   const status = h("div", { class: "song-status", id: "song-status", role: "status", hidden: true });
   const start = h("div", { class: "song-start", id: "song-start", hidden: true });
   body.append(status, start);
@@ -133,44 +112,7 @@ export function mountSongRoom(body, app, session, frame) {
 
   /** The three ways in, as buttons. Used by the start card and the 소리 넣기 sheet. */
   function waysIn(prefix, after = () => {}) {
-    return [
-      h("button", { type: "button", class: "btn rec-way", id: prefix + "record", disabled: readOnly() || !mic.ok, onclick: () => { after(); toggleRecord(); } }, h("span", { class: "dot-rec" }), "지금 이 앱에서 녹음"),
-      !mic.ok && h("p", { class: "help warn", id: prefix + "mic-reason", text: micReason(mic.reason) }),
-      mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere(prefix)),
-      h("label", { class: "btn quiet way", id: prefix + "capture", for: "song-capture" }, "폰 녹음 앱으로 녹음하기"),
-      h("p", { class: "help", text: "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
-      h("label", { class: "btn quiet way", id: prefix + "file", for: "song-file" }, "파일에서 가져오기"),
-      h("p", { class: "help", text: "녹음 앱에 저장된 파일(m4a), mp3, wav 모두 돼요." }),
-    ];
-  }
-
-  /** The same room in the phone's browser, where the pickers (and on the public address, the microphone) work. */
-  function elsewhere(prefix) {
-    const link = app.linkFor(session.roomId);
-    const copy = async () => {
-      try {
-        await navigator.clipboard.writeText(link);
-        toast(root, "링크를 복사했어요. 크롬 주소창에 붙여 넣으면 같은 방이 열려요", 3600);
-      } catch {
-        toast(root, link, 8000);
-      }
-    };
-    return [
-      h("a", { class: "btn quiet small", id: prefix + "open-browser", href: link, target: "_blank", rel: "noopener" }, "크롬에서 열기"),
-      h("button", { type: "button", class: "btn quiet small", id: prefix + "copy-link", onclick: copy }, "링크 복사"),
-    ];
-  }
-
-  /** A picker was tapped and no chooser came. */
-  function pickerHelp() {
-    closeAdd?.();
-    openSheet(root, "선택 창이 안 열렸나요?", (panel) => {
-      panel.append(h("div", { class: "form", id: "picker-help" },
-        h("p", { class: "help", text: mic.reason === "blocked"
-          ? "Claude 앱 안에서는 파일 선택 창(폰 녹음 앱 포함)이 열리지 않을 수 있어요. 같은 방을 크롬에서 열면 폰 녹음 앱과 파일로 넣을 수 있어요."
-          : "이 화면에서는 파일 선택 창이 열리지 않았어요. 같은 방을 크롬에서 열어 보세요." }),
-        h("div", { class: "elsewhere" }, ...elsewhere("help-"))));
-    });
+    return soundWays({ app, roomId: session.roomId, root, name: "song", prefix, mic, canRecord: !readOnly(), onRecord: () => { after(); toggleRecord(); } });
   }
 
   function openAddSheet() {

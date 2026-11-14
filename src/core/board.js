@@ -31,7 +31,15 @@ const FIELD_OK = {
   y: (v) => isInt(v, -1000000, 1000000),
   w: (v) => isInt(v, 60, 2000),
   text: (v) => isText(v, 4000),
+  muted: (v) => typeof v === "boolean",
+  // A song card's notes after 음 편집 or the like; checked against the card's kind once it is known.
+  data: (v) => !!v && typeof v === "object" && !Array.isArray(v),
 };
+
+/** A song card is as wide as its song is long: 60 px a second, 120 to 960. */
+export function songWidth(dur) {
+  return Math.min(960, Math.max(120, Math.round((dur / 1000) * 60)));
+}
 
 function validData(kind, d) {
   if (!d || typeof d !== "object" || Array.isArray(d)) return false;
@@ -77,6 +85,7 @@ export class BoardDoc {
     this.version = 0;
     this.byId = new Map();
     this.linksById = new Map();
+    this.slotsByN = new Map(); // order slot number → { id, pairs }: the latest save wins
     this.waiting = new Map();
     this.seen = new Set();
     this.unknown = [];
@@ -102,7 +111,7 @@ export class BoardDoc {
     switch (op.t) {
       case "item": {
         if (!ITEM_KINDS.includes(op.kind) || !FIELD_OK.x(op.x) || !FIELD_OK.y(op.y) || !validData(op.kind, op.data) || !isText(op.by, 40) || !Number.isFinite(op.at)) return this.setAside(op);
-        const fields = new Map([["x", { v: op.x, at: op.id }], ["y", { v: op.y, at: op.id }], ["w", { v: op.kind === "song" ? 240 : 200, at: op.id }]]);
+        const fields = new Map([["x", { v: op.x, at: op.id }], ["y", { v: op.y, at: op.id }], ["w", { v: op.kind === "song" ? songWidth(op.data.dur) : 200, at: op.id }], ["muted", { v: false, at: op.id }]]);
         if (op.kind === "note") fields.set("text", { v: op.data.text, at: op.id });
         this.byId.set(op.id, { id: op.id, kind: op.kind, data: op.data, by: op.by, at: op.at, fields, rm: 0 });
         return this.done(op);
@@ -113,6 +122,7 @@ export class BoardDoc {
         if (!ok) return this.setAside(op);
         const item = this.byId.get(op.i);
         if (!item) return this.wait(op.i, op);
+        if ("data" in f && (item.kind !== "song" || !validData("song", f.data))) return this.setAside(op);
         for (const [k, v] of Object.entries(f)) {
           const cur = item.fields.get(k);
           if (!cur || cmpId(op.id, cur.at) > 0) item.fields.set(k, { v, at: op.id });
@@ -126,6 +136,14 @@ export class BoardDoc {
         const thing = (op.t === "irm" ? this.byId : this.linksById).get(target);
         if (!thing) return this.wait(target, op);
         if (op.n > thing.rm) thing.rm = op.n;
+        return this.done(op);
+      }
+      case "slot": {
+        const ok = isInt(op.n, 1, 9) && Array.isArray(op.pairs) && op.pairs.length <= 300 && isText(op.by, 40) &&
+          op.pairs.every((pair) => Array.isArray(pair) && pair.length === 2 && validId(pair[0]) && validId(pair[1]));
+        if (!ok) return this.setAside(op);
+        const cur = this.slotsByN.get(op.n);
+        if (!cur || cmpId(op.id, cur.id) > 0) this.slotsByN.set(op.n, { id: op.id, pairs: op.pairs.map((pair) => [pair[0], pair[1]]) });
         return this.done(op);
       }
       case "link": {
@@ -176,6 +194,11 @@ export class BoardDoc {
     const out = { id: it.id, kind: it.kind, data: it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
     for (const [k, { v }] of it.fields) out[k] = v;
     return out;
+  }
+
+  /** Saved orders, by slot number: [{ n, pairs: [[from, to], …] }]. */
+  slots() {
+    return [...this.slotsByN.entries()].sort((p, q) => p[0] - q[0]).map(([n, { pairs }]) => ({ n, pairs: pairs.map((pair) => [...pair]) }));
   }
 
   /** Visible cards, oldest first (the order they are drawn in). */
@@ -242,7 +265,9 @@ export function boardSong(board) {
     const src = { t: "src", id: clock.next(), dur: d.dur, notes: d.notes, peaks: d.peaks, by: card.by, at: 0 };
     if (d.blob) src.blob = d.blob;
     song.apply(src);
-    song.apply({ t: "clip", id: clock.next(), src: src.id, row: 0, start: at, offset: 0, length: d.dur, by: card.by, at: 0 });
+    const clip = { t: "clip", id: clock.next(), src: src.id, row: 0, start: at, offset: 0, length: d.dur, by: card.by, at: 0 };
+    song.apply(clip);
+    if (card.muted) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { muted: true } });
     at += d.dur;
   }
   return song;
@@ -264,7 +289,7 @@ export function setItemOps(clock, board, itemId, fields) {
   const prev = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!FIELD_OK[k]) continue;
-    next[k] = k === "text" ? String(v).slice(0, 4000) : Math.round(v);
+    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" ? v : Math.round(v);
     prev[k] = item[k];
   }
   return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
@@ -320,4 +345,83 @@ export function invertBoardOps(board, clock, atoms, dir) {
     else if (atom.k === "set") ops.push({ t: "iset", id: clock.next(), i: atom.item, f: { ...(undo ? atom.prev : atom.next) } });
   }
   return ops;
+}
+
+// ---- 노래 모드: cutting cards, saved orders -------------------------------------------
+
+const MIN_PART_MS = 100;
+
+/** The part of a song card's data between from and to (ms), notes measured from from. */
+function partOf(d, from, to) {
+  const notes = d.notes
+    .map(([t, len, p, v]) => [Math.max(t, from), Math.min(t + len, to), p, v])
+    .filter(([s, e]) => e - s >= 20)
+    .map(([s, e, p, v]) => [s - from, e - s, p, v]);
+  const bytes = fromBase64(d.peaks || "");
+  const out = { dur: to - from, peaks: toBase64(bytes.subarray(Math.floor(from / 40), Math.ceil(to / 40))), notes };
+  if (d.name) out.name = d.name;
+  return out;
+}
+
+/**
+ * Cuts a song card at `at` ms into two cards side by side. Lines into and out of
+ * it move to the halves, and the halves are joined, so the order plays on as
+ * before. The recording stays with neither half (a part plays as piano).
+ */
+export function splitCardOps(clock, board, itemId, at, by) {
+  const item = board.item(itemId);
+  if (!item || item.removed || item.kind !== "song") return { ops: [], atoms: [] };
+  const cut = Math.round(at);
+  if (cut < MIN_PART_MS || cut > item.data.dur - MIN_PART_MS) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  const gone = { t: "irm", id: clock.next(), i: itemId, n: item.rm + 1 };
+  const leftData = partOf(item.data, 0, cut);
+  const left = { t: "item", id: clock.next(), kind: "song", x: item.x, y: item.y, data: leftData, by, at: Date.now() };
+  const right = { t: "item", id: clock.next(), kind: "song", x: item.x + songWidth(leftData.dur) + 24, y: item.y, data: partOf(item.data, cut, item.data.dur), by, at: Date.now() };
+  const ops = [gone, left, right];
+  const atoms = [{ k: "del", item: itemId }, { k: "add", item: left.id }, { k: "add", item: right.id }];
+  const lines = board.links();
+  const into = lines.find((l) => l.b === itemId);
+  const out = lines.find((l) => l.a === itemId);
+  for (const l of [into, out]) {
+    if (!l) continue;
+    ops.push({ t: "lrm", id: clock.next(), l: l.id, n: board.linksById.get(l.id).rm + 1 });
+    atoms.push({ k: "ldel", link: l.id });
+  }
+  const join = (a, b) => {
+    const op = { t: "link", id: clock.next(), a, b, by };
+    ops.push(op);
+    atoms.push({ k: "ladd", link: op.id });
+  };
+  if (into) join(into.a, left.id);
+  if (into || out) join(left.id, right.id);
+  if (out) join(right.id, out.b);
+  return { ops, atoms, ids: [left.id, right.id] };
+}
+
+/** Keeps the lines as they are now in order slot n (1 to 9). */
+export function saveSlotOps(clock, board, n, by) {
+  if (!isInt(n, 1, 9)) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "slot", id: clock.next(), n, pairs: board.links().map((l) => [l.a, l.b]), by }], atoms: [] };
+}
+
+/** Brings slot n back: today's lines go, the saved ones (between cards still here) come. Undoable. */
+export function useSlotOps(clock, board, n, by) {
+  const saved = board.slots().find((s) => s.n === n);
+  if (!saved) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  const ops = [];
+  const atoms = [];
+  for (const l of board.links()) {
+    ops.push({ t: "lrm", id: clock.next(), l: l.id, n: board.linksById.get(l.id).rm + 1 });
+    atoms.push({ k: "ldel", link: l.id });
+  }
+  for (const [a, b] of saved.pairs) {
+    if (!board.item(a) || board.item(a).removed || !board.item(b) || board.item(b).removed) continue;
+    const op = { t: "link", id: clock.next(), a, b, by };
+    ops.push(op);
+    atoms.push({ k: "ladd", link: op.id });
+  }
+  return { ops, atoms };
 }
