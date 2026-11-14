@@ -248,3 +248,24 @@ test("three devices editing at random end with the same song, whatever the deliv
     for (const d of devices) assert.equal(d.song.pendingCount, 0);
   }
 });
+
+test("박자: the song's tempo and meter, set and undone; the latest wins in any order; nonsense is set aside", async () => {
+  const { SongDoc, tempoOps, invertSongOps } = await import("../src/core/song.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const song = new SongDoc();
+  const clock = new Clock("a");
+  const run = (made) => { for (const op of made.ops) song.apply(op); return made; };
+  assert.equal(song.tempo(), null);
+  const set = run(tempoOps(clock, song, { bpm: 96, beats: 3, unit: 4 }, "m1"));
+  assert.deepEqual(song.tempo(), { bpm: 96, beats: 3, unit: 4 });
+  const again = run(tempoOps(clock, song, { bpm: 120, beats: 6, unit: 8 }, "m1"));
+  for (const op of invertSongOps(song, clock, again.atoms, "undo")) song.apply(op);
+  assert.deepEqual(song.tempo(), { bpm: 96, beats: 3, unit: 4 });
+  for (const op of invertSongOps(song, clock, set.atoms, "undo")) song.apply(op);
+  assert.equal(song.tempo(), null, "undo all the way: no tempo");
+  const other = new SongDoc();
+  const ops = [...set.ops, ...again.ops].reverse();
+  for (const op of ops) other.apply(op);
+  assert.deepEqual(other.tempo(), { bpm: 120, beats: 6, unit: 8 }, "arriving out of order, the later still wins");
+  assert.equal(song.apply({ t: "tempo", id: clock.next(), bpm: 999, beats: 4, unit: 4, by: "m1" }), "unknown");
+});

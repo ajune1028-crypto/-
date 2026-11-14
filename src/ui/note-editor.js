@@ -11,6 +11,7 @@ import { h, openSheet } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { noteLabel, solfege } from "../audio/notes.js";
 import { noteSetOps, noteAddOps } from "../core/song.js";
+import { snapMs, quantizeNotes } from "../core/beat.js";
 import { timeText } from "./song-view.js";
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
@@ -22,7 +23,7 @@ const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSi
  * preview(p, seconds) sounds a note; canEdit() false makes it read-only;
  * color paints the notes. Returns { refresh, close }.
  */
-export function openNoteEditor(root, { song, clipId, clock, commit, preview, canEdit, color }) {
+export function openNoteEditor(root, { song, clipId, clock, commit, preview, canEdit, color, beat = () => null }) {
   let pps = 140;
   let rowRem = 1.3;
   let chosen = null;
@@ -46,6 +47,7 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
         h("button", { type: "button", class: "chip", id: "roll-time-in", text: "시간 +", onclick: () => zoom(1.4, 1) }),
         h("button", { type: "button", class: "chip", id: "roll-row-out", text: "높이 −", onclick: () => zoom(1, 1 / 1.25) }),
         h("button", { type: "button", class: "chip", id: "roll-row-in", text: "높이 +", onclick: () => zoom(1, 1.25) }),
+        h("button", { type: "button", class: "chip", id: "quantize", text: "박자 맞추기", onclick: () => quantize() }),
         del),
       roll, info, list);
 
@@ -86,6 +88,17 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
       layout = { c, lo, hi, rowH, keyW, notes };
       grid.style.width = width + "px";
       grid.style.height = (hi - lo + 1) * rowH + "px";
+      // 박자: beat and bar lines, in step with the song's timeline.
+      const b = beat();
+      grid.classList.toggle("beats", !!b);
+      if (b) {
+        const phase = (period) => ((((Math.ceil(c.start / period) * period - c.start) / 1000) * pps) + "px");
+        grid.style.setProperty("--beat-px", (b.beat / 1000) * pps + "px");
+        grid.style.setProperty("--bar-px", (b.bar / 1000) * pps + "px");
+        grid.style.setProperty("--beat-x", phase(b.beat));
+        grid.style.setProperty("--bar-x", phase(b.bar));
+      }
+      panel.querySelector("#quantize").hidden = !b || !canEdit();
       keys.style.height = grid.style.height;
       // Rows: one per key, the black keys a shade darker, every 도 named.
       const pitches = range2(hi, lo);
@@ -130,6 +143,26 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
     function choose(n) {
       chosen = n.key;
       preview(n.p, Math.min(1.2, (n.e - n.s) / 1000));
+      draw();
+    }
+
+    /** 박자 맞추기: every note of this clip onto the grid, as one step to undo. */
+    function quantize() {
+      const g = beat();
+      if (!g || !canEdit() || !layout) return;
+      const c = layout.c;
+      const onTimeline = layout.notes.map((n) => ({ key: n.key, t: c.start + n.t - c.offset, d: n.d }));
+      const made = { ops: [], atoms: [] };
+      for (const q of quantizeNotes(onTimeline, g.step)) {
+        const n = layout.notes.find((x) => x.key === q.key);
+        const t = Math.max(0, q.t - c.start + c.offset);
+        if (n && (t !== n.t || q.d !== n.d)) {
+          const one = noteSetOps(...ctx(), q.key, { t, d: q.d });
+          made.ops.push(...one.ops);
+          made.atoms.push(...one.atoms);
+        }
+      }
+      if (made.ops.length) commit(made);
       draw();
     }
 
@@ -178,11 +211,15 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
           const dx = ev.clientX - start.x;
           const dy = ev.clientY - start.y;
           chosen = n.key;
+          // On the song's grid when 박자 is set and snapping is on (grid times are timeline times).
+          const g = beat();
+          const onGrid = (sourceMs) => (g?.snap ? snapMs(layout.c.start + sourceMs - layout.c.offset, g.step) - layout.c.start + layout.c.offset : sourceMs);
           if (resize) {
-            const d = Math.max(40, Math.round((((n.e - n.s) / 1000) * pps + dx) / pps * 1000 / 10) * 10);
-            commit(noteSetOps(...ctx(), n.key, { d: d + (n.s - n.t) }));
+            let d = Math.max(40, Math.round((((n.e - n.s) / 1000) * pps + dx) / pps * 1000 / 10) * 10);
+            if (g?.snap) d = Math.max(g.step, onGrid(n.s + d) - n.s);
+            commit(noteSetOps(...ctx(), n.key, { d: Math.round(d + (n.s - n.t)) }));
           } else {
-            const t = Math.max(0, Math.round((n.t + (dx / pps) * 1000) / 10) * 10);
+            const t = Math.max(0, Math.round(onGrid(Math.round((n.t + (dx / pps) * 1000) / 10) * 10)));
             const p = Math.min(108, Math.max(21, n.p - Math.round(dy / layout.rowH)));
             commit(noteSetOps(...ctx(), n.key, { t, p }));
             if (p !== n.p) preview(p, 0.5);

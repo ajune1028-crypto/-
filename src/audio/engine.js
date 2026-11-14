@@ -47,6 +47,8 @@ export function useAudioContext(ctx) {
  *   audioFor(id)  the decoded AudioBuffer of a sound, or null when this device
  *                 does not have the recording (its clips then play as piano)
  */
+import { clicksIn } from "../core/beat.js";
+
 export class SongPlayer {
   constructor(ctx, { song, audioFor, onEnd = () => {} }) {
     this.ctx = ctx;
@@ -63,6 +65,8 @@ export class SongPlayer {
     this.timer = null;
     this.keepGoing = false;
     this.fallback = new Set();
+    this.metronome = null; // 박자: { bpm, beats, unit } to click on the beats, or null
+    this.clicked = 0;
     // Piano → bus → (dry, and the room's echo) → out. Recorded sound goes to dry only.
     this.out = ctx.createGain();
     this.out.gain.value = 0.9;
@@ -170,11 +174,37 @@ export class SongPlayer {
     } else {
       for (const ev of song.noteEvents(from, until, opts)) this.playNote(ev);
     }
+    if (this.metronome) for (const c of clicksIn(from, until, this.metronome)) this.click(c);
     this.booked = until;
     if (!this.keepGoing && this.position > song.end() + TAIL_MS) {
       this.stop();
       this.onEnd();
     }
+  }
+
+  /** 박자: click on the beats while playing (null: no clicks). Takes effect from the next beat. */
+  setMetronome(tempo) {
+    this.metronome = tempo || null;
+  }
+
+  /** One metronome click: a short high tick, higher on a bar's first beat. */
+  click({ at, accent }) {
+    const ctx = this.ctx;
+    const t = this.when(at);
+    if (t < ctx.currentTime - 0.005) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = accent ? 1760 : 1320;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(accent ? 0.5 : 0.3, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    osc.connect(gain);
+    gain.connect(this.out);
+    osc.start(t);
+    osc.stop(t + 0.06);
+    osc.onended = () => gain.disconnect();
+    this.track(osc);
+    this.clicked++;
   }
 
   playNote(ev) {

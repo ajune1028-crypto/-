@@ -11,6 +11,7 @@ import { h } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { solfege } from "../audio/notes.js";
 import { fromBase64, PEAKS_PER_SECOND } from "../audio/peaks.js";
+import { beatMs } from "../core/beat.js";
 
 const LONG_PRESS_MS = 380;
 const SLOP_PX = 8;
@@ -113,7 +114,16 @@ export class Timeline {
     this.content.style.width = width + "px";
     this.el.dataset.pps = String(this.pps);
     this.lanes.style.height = rows * this.rowH + "px";
-    this.drawRuler(seconds);
+    const tempo = model.tempo || null;
+    this.drawRuler(seconds, tempo);
+    // 박자: faint beat lines and stronger bar lines under the clips.
+    this.lanes.classList.toggle("beats", !!tempo);
+    if (tempo) {
+      const beatPx = (beatMs(tempo) / 1000) * this.pps;
+      this.lanes.style.setProperty("--beat-px", beatPx + "px");
+      this.lanes.style.setProperty("--bar-px", beatPx * tempo.beats + "px");
+      this.lanes.style.setProperty("--grid-x", this.pad + "px");
+    }
     this.drawRows(rows, model.selectedRow);
     this.drawClips(model);
     this.empty.hidden = !model.empty;
@@ -121,13 +131,29 @@ export class Timeline {
     this.setPlayhead(model.playhead);
   }
 
-  drawRuler(seconds) {
+  drawRuler(seconds, tempo = null) {
     const step = this.pps < 24 ? 10 : this.pps < 40 ? 5 : this.pps < 90 ? 1 : 0.5;
     const label = this.pps < 24 ? 10 : this.pps < 40 ? 5 : this.pps < 60 ? 2 : 1;
-    const key = this.pps + ":" + Math.ceil(seconds);
+    const key = this.pps + ":" + Math.ceil(seconds) + ":" + (tempo ? `${tempo.bpm}/${tempo.beats}/${tempo.unit}` : "");
     if (this.rulerKey === key) return;
     this.rulerKey = key;
     const ticks = [];
+    if (tempo) {
+      // Bars numbered 1, 2, 3… (every 2nd or 4th when they are narrow), beats as small ticks.
+      const beat = beatMs(tempo);
+      const beatPx = (beat / 1000) * this.pps;
+      const barPx = beatPx * tempo.beats;
+      const every = barPx >= 26 ? 1 : barPx >= 13 ? 2 : barPx >= 6.5 ? 4 : 8;
+      for (let k = 0; k * beat <= seconds * 1000 + 1e-6; k++) {
+        const bar = k % tempo.beats === 0;
+        if (!bar && beatPx < 6) continue;
+        const n = Math.floor(k / tempo.beats) + 1;
+        const named = bar && (n - 1) % every === 0;
+        ticks.push(h("span", { class: "tick" + (named ? " named bar" : bar ? " bar" : " half"), style: { left: this.xOf(k * beat) + "px" }, text: named ? String(n) : "" }));
+      }
+      this.ruler.replaceChildren(...ticks, this.head);
+      return;
+    }
     for (let s = 0; s <= seconds + 1e-9; s += step) {
       const whole = Math.abs(s - Math.round(s)) < 1e-9;
       const named = whole && Math.round(s) % label === 0;

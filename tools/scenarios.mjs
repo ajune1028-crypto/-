@@ -1698,6 +1698,71 @@ scenario("song: 음 편집 moves a note up a step, adds one, removes one, and un
   await page.waitFor(`JSON.stringify(window.__app.session.doc("song").notesOf(window.__app.session.doc("song").layout()[0].src).map((n) => n.p)) === "[60,62,64,65,67]"`);
 });
 
+scenario("song 박자: tempo and meter from the clock; bars on the ruler; tap and 노래에서 찾기; the metronome clicks; clips snap; 박자 맞추기; one undo step", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const song = `window.__app.session.doc("song")`;
+  const tempo = () => page.eval(`JSON.stringify(${song}.tempo())`);
+  assert.equal(await text(page, "#beat-label"), "♩ 박자");
+  await click(page, "#beat");
+  await page.waitFor(q("#beat-sheet"));
+  await fill(page, "#bpm-input", "120");
+  await page.key("Enter");
+  await page.waitFor(`${song}.tempo()?.bpm === 120`);
+  await click(page, "#meter-3-4");
+  await page.waitFor(`${song}.tempo()?.beats === 3`);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#ruler .tick.named")].slice(0, 3).map((t) => t.textContent)`), ["1", "2", "3"], "bars on the ruler");
+  // Tap tempo: five taps half a second apart.
+  const tapAt = await page.eval(`(() => { const r = document.getElementById("tap-tempo").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  for (let i = 0; i < 5; i++) { await page.tap(...tapAt); await pause(500); }
+  const tapped = JSON.parse(await tempo()).bpm;
+  assert.ok(tapped >= 105 && tapped <= 125, "tapped about 120: " + tapped);
+  // 노래에서 찾기: 도레미 was sung a note every 0.45 s or so.
+  await click(page, "#guess-tempo");
+  await page.waitFor(`${song}.tempo()?.bpm >= 120 && ${song}.tempo()?.bpm <= 145`);
+  await fill(page, "#bpm-input", "120");
+  await page.key("Enter");
+  await page.waitFor(`${song}.tempo()?.bpm === 120`);
+  await click(page, 'label[for="metronome"]');
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).metronome`), true);
+  await settled(page);
+  await page.shot(out("song-beat-sheet.png"));
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("beat-sheet")`);
+  assert.match(await text(page, "#beat-label"), /^♩120 · 1\.1$/);
+  // All of that is one step to undo.
+  await click(page, "#undo");
+  await page.waitFor(`${song}.tempo() === null`);
+  await click(page, "#redo");
+  await page.waitFor(`${song}.tempo()?.bpm === 120 && ${song}.tempo()?.beats === 3`);
+  // The metronome clicks while playing.
+  await click(page, "#play");
+  await page.waitFor(`(window.__app.player?.clicked || 0) >= 2`, 4000);
+  await click(page, "#play");
+  // A clip moved by hand lands on the grid (an eighth at 120 is 250 ms).
+  await click(page, "#to-start");
+  const at = await page.eval(`(() => { const r = document.querySelector(".clip[data-id]").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, pps: Number(document.getElementById("timeline").dataset.pps) }; })()`);
+  await page.press(at.x, at.y);
+  await pause(550);
+  await page.waitFor(`document.querySelector(".clip.lifted")`);
+  for (let i = 1; i <= 8; i++) await page.moveTo(at.x + (at.pps * 0.37 * i) / 8, at.y);
+  await page.release(at.x + at.pps * 0.37, at.y);
+  await page.waitFor(`${song}.layout()[0].start > 0`);
+  assert.equal((await page.eval(`${song}.layout()[0].start`)) % 250, 0, "on the grid");
+  // 박자 맞추기 in 음 편집: every note starts and ends on the grid; one undo puts them back.
+  const before = await page.eval(`JSON.stringify(${song}.notesOf(${song}.layout()[0].src).map((n) => [n.t, n.d]))`);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-notes");
+  await page.waitFor(`document.querySelectorAll("#roll-grid .rnote").length === 5 && !document.getElementById("quantize").hidden`);
+  assert.ok(await page.eval(`document.getElementById("roll-grid").classList.contains("beats")`), "beat lines in the roll");
+  await click(page, "#quantize");
+  await page.waitFor(`(() => { const c = ${song}.layout()[0]; return ${song}.notesOf(c.src).every((n) => (c.start + n.t - c.offset) % 250 === 0 && n.d % 250 === 0); })()`);
+  await page.key("Escape");
+  await click(page, "#undo");
+  await page.waitFor(`JSON.stringify(${song}.notesOf(${song}.layout()[0].src).map((n) => [n.t, n.d])) === ${JSON.stringify(before)}`);
+});
+
 scenario("song: the speed button plays 1.5x, 2x, 3x and 0.5x, and at 2x the playhead runs twice as fast", async ({ open, fixtures }) => {
   const page = await open();
   await createSongRoom(page);

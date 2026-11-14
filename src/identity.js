@@ -8,6 +8,8 @@ export const DEFAULT_SETTINGS = {
   accent: null, textScale: 1,
   // Song room: what to hear and see, the piano's tone, a faint waveform behind the notes, and the overdub delay fix in ms.
   songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0, songSpeed: 1,
+  // 박자: clicks while playing and recording, snapping to the grid, and the grid's note value (8 = eighths).
+  metronome: false, snap: true, grid: 8,
   // Drawing: the brush, and whether the eraser rubs out an area or whole strokes.
   inkBrush: "pen", inkEraser: "area",
   // 레퍼런스 (private notes) everywhere; off hides every way to it.

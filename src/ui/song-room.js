@@ -17,10 +17,11 @@ import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
 import { memberColor, INK } from "../core/paint.js";
 import {
-  MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps,
+  MAX_ROWS, MAX_TAKE_MS, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps,
   joinClipOps, joinWithSourceOps, combinedSource,
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
+import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { Analyzer, analyzeSamples } from "../audio/analyze.js";
@@ -77,7 +78,10 @@ export function mountSongRoom(body, app, session, frame) {
 
   // ---- controls ------------------------------------------------------------------
 
-  const clock = h("span", { class: "song-clock", id: "song-clock", text: "0:00.0" });
+  // The time, and under it the song's 박자; a tap opens the 박자 sheet.
+  const clockTime = h("span", { class: "clock-time", id: "song-clock", text: "0:00.0" });
+  const beatLabel = h("span", { class: "clock-beat", id: "beat-label", text: "♩ 박자" });
+  const clock = h("button", { class: "song-clock", id: "beat", type: "button", "aria-label": "박자 (빠르기, 박자표, 메트로놈)", onclick: () => openBeatSheet() }, clockTime, beatLabel);
   const zoomOut = iconButton("zoom-out", "zoomOut", "좁게 보기", () => timeline.setZoom(timeline.pps / 1.4, playhead));
   const zoomIn = iconButton("zoom-in", "zoomIn", "넓게 보기", () => timeline.setZoom(timeline.pps * 1.4, playhead));
   const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"]], settings().songMode, (mode) => setMode(mode), "mode");
@@ -165,7 +169,7 @@ export function mountSongRoom(body, app, session, frame) {
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
       others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
-      playhead, empty,
+      playhead, empty, tempo: song.tempo(),
     };
   }
 
@@ -201,7 +205,12 @@ export function mountSongRoom(body, app, session, frame) {
     toneButton.setAttribute("aria-label", "피아노 음색: " + (dark ? "어둡게" : "밝게"));
     toneButton.dataset.tone = dark ? "dark" : "bright";
     for (const b of modeSwitch.children) b.setAttribute("aria-pressed", String(b.dataset.value === settings().songMode));
-    clock.textContent = timeText(playhead);
+    clockTime.textContent = timeText(playhead);
+    const tempo = song.tempo();
+    if (tempo) {
+      const at = barBeat(playhead, tempo);
+      beatLabel.textContent = `♩${tempo.bpm} · ${at.bar}.${at.beat}`;
+    } else beatLabel.textContent = "♩ 박자";
   }
 
   const speedLabel = (s) => (s === 1 ? "1×" : String(s) + "×");
@@ -254,6 +263,7 @@ export function mountSongRoom(body, app, session, frame) {
     player.setMode(settings().songMode);
     player.setTone(settings().pianoTone);
     player.setSpeed(settings().songSpeed || 1);
+    app.player = player; // for the scenarios: is the metronome clicking?
     return player;
   }
 
@@ -281,6 +291,7 @@ export function mountSongRoom(body, app, session, frame) {
     }
     if (!(await ready())) return;
     if (playhead >= song.end() && song.end() > 0) playhead = 0;
+    player.setMetronome(metronome());
     player.play(playhead);
     runFrames();
     draw();
@@ -316,7 +327,7 @@ export function mountSongRoom(body, app, session, frame) {
       else return void draw();
       timeline.setPlayhead(playhead);
       timeline.follow(playhead);
-      clock.textContent = timeText(playhead);
+      clockTime.textContent = timeText(playhead);
       frameReq = requestAnimationFrame(tick);
     };
     frameReq = requestAnimationFrame(tick);
@@ -390,7 +401,8 @@ export function mountSongRoom(body, app, session, frame) {
       app.store.set("hint:earphones", true);
       toast(root, "이어폰을 쓰면 다른 소리가 섞이지 않아요", 3600);
     }
-    // The other clips play along while you sing.
+    // The other clips play along while you sing (and the metronome, when it is on).
+    player.setMetronome(metronome());
     player.play(playhead, { keepGoing: true });
     session.setPresence(presence());
     runFrames();
@@ -507,6 +519,8 @@ export function mountSongRoom(body, app, session, frame) {
     const clip = song.clip(id);
     if (!clip || clip.locked || readOnly()) return;
     const lane = Math.min(row, MAX_ROWS - 1);
+    const step = gridStep();
+    if (step) at = Math.max(0, Math.round(snapMs(at, step)));
     const place = song.freeRow(at, clip.length, lane, id);
     if (place === null) return void toast(root, "그 자리에는 놓을 수 없어요");
     if (place === clip.row && at === clip.start) return;
@@ -712,6 +726,97 @@ export function mountSongRoom(body, app, session, frame) {
       commit: (made) => apply(made),
       preview: async (p, seconds) => { if (await ready()) player.preview(p, seconds); },
       canEdit: () => !readOnly() && !song.clip(id)?.locked,
+      beat: () => beatGrid(),
+    });
+  }
+
+  // ---- 박자: tempo, meter, metronome, the grid --------------------------------------------
+
+  const metronome = () => (settings().metronome ? song.tempo() : null);
+
+  /** The grid step to snap to (ms), or null when there is no tempo or snapping is off. */
+  function gridStep() {
+    const tempo = song.tempo();
+    return tempo && settings().snap !== false ? stepMs(tempo, settings().grid || 8) : null;
+  }
+
+  /** What 음 편집 needs of the grid, or null without a tempo. */
+  function beatGrid() {
+    const tempo = song.tempo();
+    if (!tempo) return null;
+    return { step: stepMs(tempo, settings().grid || 8), beat: beatMs(tempo), bar: barMs(tempo), snap: settings().snap !== false };
+  }
+
+  /** Every note's start on the timeline (ms), for finding the tempo. */
+  function noteStarts() {
+    const out = [];
+    for (const c of song.layout()) {
+      if (c.muted) continue;
+      for (const n of song.notesOf(c.src)) if (n.t >= c.offset && n.t < c.offset + c.length) out.push(c.start + n.t - c.offset);
+    }
+    return out.sort((a, b) => a - b);
+  }
+
+  /** The 박자 sheet. Changes are heard and seen at once; closing it keeps them as one undo step. */
+  function openBeatSheet() {
+    if (rec) return;
+    closeAdd?.();
+    const before = song.tempo();
+    let tempo = before || { bpm: 100, beats: 4, unit: 4 };
+    const live = (next) => {
+      tempo = next;
+      session.commit("song", tempoOps(session.clock, song, tempo, session.memberId).ops);
+      if (player) player.setMetronome(metronome());
+      draw();
+    };
+    openSheet(root, "박자", (panel, close, onClose) => {
+      const s = settings();
+      const input = h("input", { class: "input bpm-input", id: "bpm-input", type: "number", inputMode: "numeric", min: String(MIN_BPM), max: String(MAX_BPM), value: String(tempo.bpm), "aria-label": "빠르기 (BPM)" });
+      const setBpm = (bpm) => {
+        const v = Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(bpm)));
+        input.value = String(v);
+        live({ ...tempo, bpm: v });
+      };
+      input.addEventListener("change", () => setBpm(Number(input.value) || tempo.bpm));
+      const taps = [];
+      const tap = () => {
+        const t = performance.now();
+        if (taps.length && t - taps[taps.length - 1] > 2500) taps.length = 0;
+        taps.push(t);
+        const bpm = tapTempo(taps.slice(-8));
+        if (bpm) setBpm(bpm);
+      };
+      const guess = () => {
+        const bpm = estimateTempo(noteStarts());
+        if (bpm) setBpm(bpm);
+        else toast(root, "음이 네 개는 있어야 빠르기를 찾을 수 있어요");
+      };
+      const meters = segmented(METERS.map(([b, u]) => [`${b}/${u}`, `${b}/${u}`, `meter-${b}-${u}`]), `${tempo.beats}/${tempo.unit}`, (v) => {
+        const [beats, unit] = v.split("/").map(Number);
+        live({ ...tempo, beats, unit });
+      });
+      const grids = segmented(GRIDS.map((g) => [String(g), "1/" + g, "grid-" + g]), String(s.grid || 8), (v) => { setSetting(app.store, "grid", Number(v)); draw(); });
+      panel.append(h("div", { class: "form", id: "beat-sheet" },
+        h("div", { class: "bpm-row" },
+          h("span", { class: "bpm-mark", text: "♩ =" }),
+          h("button", { type: "button", class: "chip", id: "bpm-down", text: "−", "aria-label": "느리게", onclick: () => setBpm(tempo.bpm - 1) }),
+          input,
+          h("button", { type: "button", class: "chip", id: "bpm-up", text: "+", "aria-label": "빠르게", onclick: () => setBpm(tempo.bpm + 1) })),
+        h("div", { class: "elsewhere" },
+          h("button", { type: "button", class: "btn quiet small", id: "tap-tempo", text: "탭으로 맞추기", onclick: tap }),
+          h("button", { type: "button", class: "btn quiet small", id: "guess-tempo", text: "노래에서 찾기", onclick: guess })),
+        h("p", { class: "label", text: "박자표" }), meters,
+        h("p", { class: "label", text: "격자 (옮길 때 붙는 단위, 박자 맞추기)" }), grids,
+        toggle("metronome", "메트로놈: 재생하고 녹음할 때 박마다 소리", !!s.metronome, (on) => { setSetting(app.store, "metronome", on); player?.setMetronome(metronome()); }),
+        toggle("snap", "격자에 붙이기: 클립과 음을 옮길 때", s.snap !== false, (on) => setSetting(app.store, "snap", on)),
+        h("button", { type: "button", class: "btn quiet small", id: "tempo-off", text: "박자 끄기", onclick: () => { live(null); close(); } })));
+      onClose(() => {
+        const after = song.tempo();
+        if (JSON.stringify(after) === JSON.stringify(before)) return;
+        const off = { bpm: 0, beats: 4, unit: 4 };
+        record([{ k: "tempo", prev: before || off, next: after || off, by: session.memberId }]);
+        draw();
+      });
     });
   }
 

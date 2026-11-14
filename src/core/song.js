@@ -83,6 +83,13 @@ export class SongDoc {
     this.added = new Map();
     this.fixes = new Map();
     this.noteCache = null;
+    this.tempoOp = null; // 박자: the latest tempo op wins; bpm 0 turns the grid off
+  }
+
+  /** The song's tempo and meter, { bpm, beats, unit }, or null when none is set. */
+  tempo() {
+    const op = this.tempoOp;
+    return op && op.bpm > 0 ? { bpm: op.bpm, beats: op.beats, unit: op.unit } : null;
   }
 
   apply(op) {
@@ -122,6 +129,13 @@ export class SongDoc {
         fields.set("locked", { v: false, at: op.id });
         fields.set("lockBy", { v: null, at: op.id });
         this.clipsById.set(op.id, { id: op.id, src: op.src, by: op.by, at: op.at, fields, rm: 0 });
+        return this.done(op);
+      }
+      case "tempo": {
+        const ok = Number.isFinite(op.bpm) && (op.bpm === 0 || (op.bpm >= 30 && op.bpm <= 300)) &&
+          Number.isInteger(op.beats) && op.beats >= 1 && op.beats <= 12 && [2, 4, 8, 16].includes(op.unit) && shortText(op.by, 40);
+        if (!ok) return this.setAside(op);
+        if (!this.tempoOp || cmpId(op.id, this.tempoOp.id) > 0) this.tempoOp = op;
         return this.done(op);
       }
       case "cset": {
@@ -448,6 +462,7 @@ export function invertSongOps(song, clock, atoms, dir) {
     else if (atom.k === "set") ops.push({ t: "cset", id: clock.next(), c: atom.clip, f: { ...(undo ? atom.prev : atom.next) } });
     else if (atom.k === "nset") ops.push({ t: "nfix", id: clock.next(), src: atom.src, n: atom.n, f: { ...(undo ? atom.prev : atom.next) } });
     else if (atom.k === "nadd") ops.push({ t: "nfix", id: clock.next(), src: atom.src, n: atom.n, f: { gone: undo } });
+    else if (atom.k === "tempo") ops.push({ t: "tempo", id: clock.next(), ...(undo ? atom.prev : atom.next), by: atom.by });
   }
   return ops;
 }
@@ -529,4 +544,13 @@ export function joinWithSourceOps(clock, song, a, b, srcOp, by, now = Date.now()
   const dropA = { t: "crm", id: clock.next(), c: a.id, n: (song.clip(a.id)?.rm ?? 0) + 1 };
   const dropB = { t: "crm", id: clock.next(), c: b.id, n: (song.clip(b.id)?.rm ?? 0) + 1 };
   return { ops: [srcOp, clip, dropA, dropB], atoms: [{ k: "add", clip: clip.id }, { k: "del", clip: a.id }, { k: "del", clip: b.id }], id: clip.id };
+}
+
+/** Sets the song's tempo and meter ({ bpm, beats, unit }; null turns 박자 off). Undoable. */
+export function tempoOps(clock, song, tempo, by) {
+  clock.atLeast(song.maxN);
+  const before = song.tempo();
+  const next = tempo ? { bpm: Math.round(tempo.bpm * 10) / 10, beats: tempo.beats, unit: tempo.unit } : { bpm: 0, beats: before?.beats || 4, unit: before?.unit || 4 };
+  const prev = before || { bpm: 0, beats: 4, unit: 4 };
+  return { ops: [{ t: "tempo", id: clock.next(), ...next, by }], atoms: [{ k: "tempo", prev, next, by }] };
 }

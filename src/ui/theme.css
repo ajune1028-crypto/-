@@ -663,7 +663,17 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .song-top-left { display: flex; align-items: center; }
 .song-top .icon-btn { width: 2.2rem; height: 2.2rem; color: var(--soft); }
 .song-top .icon-btn svg { width: 1.15rem; height: 1.15rem; }
-.song-clock { min-width: 3.3rem; padding: 0 0.35rem; font-size: 0.86rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.song-clock { display: grid; justify-items: start; min-width: 3.6rem; padding: 0.1rem 0.35rem; text-align: left; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); }
+.clock-time { font-size: 0.86rem; font-weight: 800; line-height: 1.15; }
+.clock-beat { font-size: 0.6rem; font-weight: 700; line-height: 1.1; color: var(--accent-ink); white-space: nowrap; }
+/* 박자: bar and beat lines under the clips and the notes. */
+.lanes.beats { background-image: repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 16%, transparent) 0 1px, transparent 1px var(--bar-px)), repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 7%, transparent) 0 1px, transparent 1px var(--beat-px)); background-position: var(--grid-x) 0; }
+.grid.beats { background-image: repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 20%, transparent) 0 1px, transparent 1px var(--bar-px)), repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 9%, transparent) 0 1px, transparent 1px var(--beat-px)); background-position: var(--bar-x) 0, var(--beat-x) 0; }
+.tick.bar { border-left-color: color-mix(in srgb, var(--ink) 50%, transparent); }
+.bpm-row { display: flex; align-items: center; gap: 0.5rem; }
+.bpm-mark { font-size: 1.1rem; font-weight: 800; }
+.bpm-input { flex: 1; text-align: center; font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bpm-row .chip { width: 2.6rem; height: 2.6rem; font-size: 1.2rem; }
 .mode-switch {
   width: 9.4rem;
   border: 1px solid var(--glass-edge);
