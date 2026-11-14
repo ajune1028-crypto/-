@@ -301,6 +301,23 @@ export class SheetEditor {
     return ch && to ? { ch, to } : null;
   }
 
+  /**
+   * The word at the caret (or just before it) as { ch, to }; `at` past the end gives the
+   * last word. Null on a sheet with no words.
+   */
+  wordAround(at = this.input.selectionStart) {
+    const text = this.snap.text;
+    let end = Math.min(Math.max(0, at), text.length);
+    if (end < text.length && /\S/.test(text[end])) while (end < text.length && /\S/.test(text[end])) end++;
+    else while (end > 0 && /\s/.test(text[end - 1])) end--;
+    let start = end;
+    while (start > 0 && /\S/.test(text[start - 1])) start--;
+    if (start === end) return null;
+    const ch = this.snap.ids[start];
+    const to = this.snap.ids[end - 1];
+    return ch && to ? { ch, to } : null;
+  }
+
   /** The sparkling word under a point, if any. */
   sparkleAt(x, y) {
     return document.elementsFromPoint(x, y).find((el) => el.classList?.contains("sparkle") && this.draw.contains(el)) || null;

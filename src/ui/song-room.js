@@ -89,15 +89,15 @@ export function mountSongRoom(body, app, session, frame) {
   modeSwitch.setAttribute("aria-label", "듣는 방식");
   frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn), modeSwitch));
 
-  const startButton = iconButton("to-start", "start", "처음으로", () => seek(0));
-  const playButton = iconButton("play", "play", "재생", () => togglePlay());
-  const recordButton = iconButton("record", "record", "녹음", () => toggleRecord());
+  const startButton = iconButton("to-start", "start", "처음으로", () => seek(0), "처음");
+  const playButton = iconButton("play", "play", "재생", () => togglePlay(), "재생");
+  const recordButton = iconButton("record", "record", "녹음", () => toggleRecord(), "녹음");
   recordButton.classList.add("rec-btn");
-  const addButton = iconButton("import", "upload", "소리 넣기", () => openAddSheet());
-  const undoButton = iconButton("undo", "undo", "실행취소", () => step("undo"));
-  const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"));
-  const speedButton = h("button", { class: "icon-btn speed-btn", id: "speed", type: "button", "aria-label": "재생 빠르기", onclick: () => nextSpeed() });
-  const toneButton = iconButton("tone", "sun", "피아노 음색", () => setTone(settings().pianoTone === "dark" ? "bright" : "dark"));
+  const addButton = iconButton("import", "upload", "소리 넣기", () => openAddSheet(), "넣기");
+  const undoButton = iconButton("undo", "undo", "실행취소", () => step("undo"), "되돌리기");
+  const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"), "다시하기");
+  const speedButton = h("button", { class: "icon-btn speed-btn", id: "speed", type: "button", "aria-label": "재생 빠르기", data: { cap: "빠르기" }, onclick: () => nextSpeed() });
+  const toneButton = iconButton("tone", "sun", "피아노 음색", () => setTone(settings().pianoTone === "dark" ? "bright" : "dark"), "음색");
   const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, addButton, undoButton, redoButton, speedButton, toneButton);
   body.after(toolbar);
 

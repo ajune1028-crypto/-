@@ -67,8 +67,9 @@ export function icon(name) {
   return span.firstChild;
 }
 
-export function iconButton(id, name, label, onclick) {
-  return h("button", { class: "icon-btn", id, type: "button", "aria-label": label, onclick }, icon(name));
+/** cap: a short word shown under the icon (bottom toolbars say what each button does). */
+export function iconButton(id, name, label, onclick, cap = null) {
+  return h("button", { class: "icon-btn", id, type: "button", "aria-label": label, data: cap ? { cap } : undefined, onclick }, icon(name));
 }
 
 export function mount(root, ...nodes) {

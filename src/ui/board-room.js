@@ -106,12 +106,12 @@ export function mountBoardRoom(body, app, session, frame) {
       iconButton("board-zoom-out", "zoomOut", "작게 보기", () => zoomAt(1 / 1.25)),
       iconButton("board-zoom-in", "zoomIn", "크게 보기", () => zoomAt(1.25)))));
 
-  const playButton = iconButton("board-play", "play", "순서대로 재생", () => togglePlay());
+  const playButton = iconButton("board-play", "play", "전체 재생 (왼쪽부터, 잇기 순서대로)", () => togglePlay(), "전체 재생");
   const toolbar = h("div", { class: "toolbar board-tools", id: "board-tools" },
     playButton,
-    iconButton("board-undo", "undo", "실행취소", () => step("undo")),
-    iconButton("board-redo", "redo", "다시실행", () => step("redo")),
-    iconButton("board-delete", "eraser", "고른 카드 지우기", () => removeSelected()));
+    iconButton("board-undo", "undo", "실행취소", () => step("undo"), "되돌리기"),
+    iconButton("board-redo", "redo", "다시실행", () => step("redo"), "다시하기"),
+    iconButton("board-delete", "eraser", "고른 카드 지우기", () => removeSelected(), "지우기"));
   body.after(toolbar);
 
   const readOnly = () => !!session.transport.readOnly;
@@ -180,7 +180,16 @@ export function mountBoardRoom(body, app, session, frame) {
         el.shownData = item.data;
         el.replaceChildren(...cardInside(item, order.indexOf(item.id)));
       }
-      if (item.kind === "song") nameNotes(el, item);
+      if (item.kind === "song") {
+        nameNotes(el, item);
+        const pb = el.querySelector(".card-play");
+        const want = solo === item.id && player?.playing ? "stop" : "play";
+        if (pb && pb.dataset.icon !== want) {
+          pb.dataset.icon = want;
+          pb.setAttribute("aria-label", want === "stop" ? "멈춤" : "이 카드만 듣기");
+          pb.replaceChildren(icon(want));
+        }
+      }
     }
     for (const el of [...content.querySelectorAll(".card")]) if (!keep.has(el.dataset.id)) el.remove();
     drawLines();
@@ -210,6 +219,8 @@ export function mountBoardRoom(body, app, session, frame) {
     const d = item.data;
     return [
       h("div", { class: "card-head" },
+        // One tap plays just this card (again stops it); the card's menu has the rest.
+        h("button", { type: "button", class: "card-play", "aria-label": "이 카드만 듣기", data: { icon: "play" }, onclick: (e) => { if (e.detail === 0) playCard(item.id); } }, icon("play")),
         place >= 0 && h("span", { class: "card-order", text: String(place + 1) }),
         item.muted && h("span", { class: "card-muted", "aria-label": "음소거" }, icon("muted")),
         h("span", { class: "card-name", text: d.name || "노래" }),
@@ -625,6 +636,8 @@ export function mountBoardRoom(body, app, session, frame) {
       const up = (ev) => {
         if (!mine(ev)) return;
         stop();
+        // The card's ▶: a tap plays just this card, in every mode.
+        if (!start.moved && e.target.closest?.(".card-play")) return void playCard(id);
         // 잇기 counts a tap, not a touch, so a pinch that starts on a card joins nothing.
         if (linking) return void (start.moved || tapToLink(id));
         if (start.moved && !readOnly()) return void apply(setItemOps(session.clock, board, id, at(ev)));

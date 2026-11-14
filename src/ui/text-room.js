@@ -25,26 +25,34 @@ export function mountTextRoom(body, app, session) {
   let settled = false;
 
   const list = h("div", { class: "sheets", id: "sheets" });
-  const undoButton = iconButton("undo", "undo", "실행취소", () => step("undo"));
-  const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"));
+  const undoButton = iconButton("undo", "undo", "실행취소", () => step("undo"), "되돌리기");
+  const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"), "다시하기");
   const colorsButton = iconButton("toggle-colors", "palette", "사람마다 다른 색으로 보기", () => {
     setSetting(app.store, "colors", !getSettings(app.store).colors);
     app.events.emit("settings");
-  });
+  }, "사람 색");
   // Drawing: the pen button turns every sheet into a drawing surface, with its own small tool row.
   // The brush and the kind of eraser are remembered on this device.
   const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
   const eraserKind = () => (getSettings(app.store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
-  const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"));
+  const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"), "그리기");
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   // 사진: choose words, then a photo; it hides in them and they sparkle (2 s hold brings it out).
   const photoInput = h("input", { type: "file", accept: "image/*", id: "photo-file", class: "vh", tabindex: "-1" });
-  const photoButton = h("label", { class: "icon-btn", id: "photo", for: "photo-file", role: "button", "aria-label": "고른 글자에 사진 숨기기" }, icon("photo"));
-  let chosen = null; // { editor, ch, to }: the words last chosen
+  const photoButton = h("label", { class: "icon-btn", id: "photo", for: "photo-file", role: "button", "aria-label": "글자에 사진 숨기기", data: { cap: "사진" } }, icon("photo"));
+  // The words a photo goes into: the ones chosen, else the word at the caret, else today's last word.
+  let chosen = null; // { editor, ch, to }
   photoButton.addEventListener("click", (e) => {
-    if (chosen && !readOnlyNow()) return;
+    if (!readOnlyNow()) {
+      if (!chosen) {
+        const ed = editors.get(today);
+        const word = ed?.wordAround(Infinity);
+        if (word) chosen = { editor: ed, ...word };
+      }
+      if (chosen) return;
+    }
     e.preventDefault();
-    toast(app.root, readOnlyNow() ? "이 방은 읽기만 할 수 있어요" : "사진을 숨길 글자를 먼저 길게 눌러 고르세요", 3200);
+    toast(app.root, readOnlyNow() ? "이 방은 읽기만 할 수 있어요" : "먼저 글을 써 주세요. 사진은 글자 속에 숨어요", 3200);
   });
   photoInput.addEventListener("change", async () => {
     const file = photoInput.files?.[0];
@@ -224,7 +232,7 @@ export function mountTextRoom(body, app, session) {
         app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text),
         onReveal: (att, from) => revealPhoto(day, att, from),
         onSelect: (ed) => {
-          const range = ed.selectionRange();
+          const range = ed.selectionRange() || ed.wordAround();
           if (range) chosen = { editor: ed, ...range };
         },
       });

@@ -647,8 +647,10 @@ scenario("overflow: a very long unbroken string wraps and never widens the page"
     await focusEnd(a);
     await a.type("w".repeat(300) + " 그리고 한글도 조금 섞어서 씁니다");
     await a.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().length > 300`);
-    const m = await a.eval(`({ page: document.documentElement.scrollWidth, inner: innerWidth, paper: ${TODAY}.querySelector(".paper").scrollWidth, paperBox: ${TODAY}.querySelector(".paper").clientWidth })`);
-    assert.ok(m.page <= m.inner && m.paper <= m.paperBox, JSON.stringify(m));
+    // The words stay inside the paper (the drawing layer alone reaches a little past its sides, by design),
+    // and neither the page nor the room scrolls sideways.
+    const m = await a.eval(`(() => { const p = ${TODAY}.querySelector(".paper").getBoundingClientRect(); const words = [...${TODAY}.querySelectorAll(".draw .w")].map((w) => w.getBoundingClientRect()); const body = document.getElementById("room-body"); return { page: document.documentElement.scrollWidth, inner: innerWidth, body: body.scrollWidth - body.clientWidth, right: Math.max(...words.map((r) => r.right)), paperRight: p.right, ta: ${TODAY}.querySelector("textarea").scrollWidth - ${TODAY}.querySelector("textarea").clientWidth }; })()`);
+    assert.ok(m.page <= m.inner && m.body <= 0 && m.right <= m.paperRight && m.ta <= 0, JSON.stringify(m));
     if (dark) await a.shot(out("room-dark.png"));
   }
 });
@@ -1616,6 +1618,25 @@ scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes o
   await b.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`, 8000);
 });
 
+scenario("text room: 사진 with no words chosen hides the photo in the word at the caret; on an empty sheet it says to write first", async ({ open, fixtures }) => {
+  const page = await open();
+  await createRoom(page);
+  await page.interceptChooser(true);
+  // An empty sheet: nothing to hide a photo in.
+  await click(page, "#photo");
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("먼저 글을")`);
+  await focusEnd(page);
+  await page.type("바다에 갔어 노을이 예뻤어");
+  const day = await page.eval(`${TODAY}.dataset.day`);
+  await page.waitFor(`window.__app.session.sheet(${JSON.stringify(day)}).text() === "바다에 갔어 노을이 예뻤어"`);
+  // The caret right after 갔어.
+  await page.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.focus(); ta.setSelectionRange(6, 6); document.dispatchEvent(new Event("selectionchange")); return true; })()`);
+  await click(page, "#photo");
+  await page.setFiles("#photo-file", [fixtures.photo]);
+  await page.waitFor(`window.__app.session.sheet(${JSON.stringify(day)}).attachments().length === 1`, 8000);
+  await page.waitFor(`[...${TODAY}.querySelectorAll(".w.sparkle")].map((w) => w.textContent.trim()).join(" ") === "갔어"`);
+});
+
 scenario("text room: two fingers never zoom smaller than the screen; with the pen there is room to draw, and lines past the paper are kept whole", async ({ open }) => {
   const [a] = await together(open, []);
   await focusEnd(a);
@@ -2361,6 +2382,61 @@ scenario("whiteboard 올가미: a loop drawn round one card with a finger closes
   await frames(page);
   assert.notEqual(await page.eval(`getComputedStyle(document.getElementById("board-content")).transform`), pan0, "the board moved");
   assert.equal(await page.eval(`${board}.lassos().length`), 1, "and no loop was drawn");
+});
+
+scenario("toolbars say what each button does: captions under every icon in the text room, the song room and the whiteboard; the bars fit 360 and 320 wide; the board's ▶ is 전체 재생", async ({ open, fixtures }) => {
+  for (const width of [360, 320]) {
+    const page = await open({ width, height: 760 });
+    const caps = (sel) => page.eval(`[...document.querySelectorAll(${JSON.stringify(sel + " .icon-btn")})].map((b) => getComputedStyle(b, "::after").content.replace(/"/g, ""))`);
+    const fits = (sel) => page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); const buttons = [...document.querySelectorAll(${JSON.stringify(sel + " .icon-btn")})].map((b) => b.getBoundingClientRect()); return r.left >= 0 && r.right <= innerWidth && buttons.every((b, i, all) => i === 0 || b.left >= all[i - 1].right - 0.5); })()`);
+    await createRoom(page, { room: "글 방" });
+    assert.deepEqual(await caps(".toolbar"), ["되돌리기", "다시하기", "사람 색", "그리기", "사진"]);
+    assert.ok(await fits(".toolbar"), "the text room's bar fits " + width);
+    await click(page, "#back");
+    await createSongRoom(page);
+    assert.deepEqual(await caps("#song-tools"), ["처음", "재생", "녹음", "넣기", "되돌리기", "다시하기", "빠르기", "음색"]);
+    assert.ok(await fits("#song-tools"), "the song room's eight buttons fit " + width);
+    await click(page, "#back");
+    await createBoard(page);
+    assert.deepEqual(await caps("#board-tools"), ["전체 재생", "되돌리기", "다시하기", "지우기"]);
+    assert.ok(await fits("#board-tools"));
+    assert.match(await page.eval(`${q("#board-play")}.getAttribute("aria-label")`), /전체 재생/);
+  }
+  void fixtures;
+});
+
+scenario("whiteboard: each song card has its own ▶ - one tap plays just that card (it glows), again stops; the board's 전체 재생 plays all from the left", async ({ open, fixtures }) => {
+  const page = await open();
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 2; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const second = await cardBox(page, 1);
+  await page.eval(`(() => { window.__played = []; new MutationObserver(() => { for (const c of document.querySelectorAll(".card.song.playing")) if (!window.__played.includes(c.dataset.id)) window.__played.push(c.dataset.id); }).observe(document.getElementById("board-content"), { subtree: true, attributes: true, attributeFilter: ["class"] }); return true; })()`);
+  const playOf = `.card[data-id="${second.id}"] .card-play`;
+  // (A card just placed is chosen, with its menu; a tap on the empty board puts that away first.)
+  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = b.getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 20; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
+  await page.tap(empty[0], empty[1]);
+  await page.waitFor(`!${q("#card-menu")}`);
+  await click(page, playOf);
+  await page.waitFor(`document.querySelector('.card[data-id="${second.id}"]').classList.contains("playing") && ${q(playOf)}.dataset.icon === "stop"`, 4000);
+  assert.ok(!(await page.eval(q("#card-menu"))), "no menu needed to hear a card");
+  await click(page, playOf);
+  await page.waitFor(`!document.querySelector(".card.playing") && ${q(playOf)}.dataset.icon === "play"`);
+  assert.deepEqual(await page.eval(`window.__played`), [second.id], "only that card sounded");
+  // 전체 재생: the first card from the left sounds first.
+  await page.eval(`(window.__played = [], true)`);
+  await click(page, "#board-play");
+  await page.waitFor(`window.__played.length >= 1`, 4000);
+  const first = await cardBox(page, 0);
+  const leftmost = await page.eval(`window.__app.session.doc("board").items().filter((i) => i.kind === "song").sort((a, b) => a.x - b.x || a.y - b.y)[0].id`);
+  assert.equal(await page.eval(`window.__played[0]`), leftmost);
+  await click(page, "#board-play");
+  void first;
 });
 
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {
