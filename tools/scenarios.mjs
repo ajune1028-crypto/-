@@ -1398,35 +1398,60 @@ scenario("look: dark is near black; the main button glows, small ones are glass;
 
 // ---- drawing -----------------------------------------------------------------------------------------
 
-scenario("drawing: the pen draws on today's sheet, the other device sees it, the eraser and undo work", async ({ open, out }) => {
+scenario("drawing: pen, brushes and both erasers on today's sheet; the other device sees it; undo works", async ({ open, out }) => {
   const [a, b] = await together(open);
   const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   await click(a, "#pen");
   await a.waitFor(`!${q("#ink-tools")}.hidden`);
   await click(a, '[data-ink="blue"]');
   const y = box.y + box.h * 0.5;
-  await a.press(box.x + box.w * 0.25, y);
-  for (let i = 1; i <= 12; i++) await a.moveTo(box.x + box.w * (0.25 + 0.04 * i), y + Math.sin(i / 2) * 12);
-  await a.release(box.x + box.w * 0.73, y);
+  const stroke = async (page, x0, x1, yy) => {
+    await page.press(x0, yy);
+    for (let i = 1; i <= 10; i++) await page.moveTo(x0 + ((x1 - x0) * i) / 10, yy);
+    await page.release(x1, yy);
+  };
+  await stroke(a, box.x + box.w * 0.2, box.x + box.w * 0.8, y);
   const day = await a.eval(`${TODAY}.dataset.day`);
-  const strokes = (page) => page.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => s.c)`);
+  const kinds = (page) => page.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => s.b + ":" + s.c)`);
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
-  assert.deepEqual(await strokes(a), ["blue"]);
+  assert.deepEqual(await kinds(a), ["pen:blue"]);
   await b.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
   await b.front();
-  const inked = await b.eval(`(() => { const c = ${TODAY}.querySelector("canvas.ink"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`);
-  assert.ok(inked > 200, "the other screen paints the stroke: " + inked + " pixels");
+  const inked = (page) => page.eval(`(() => { const c = ${TODAY}.querySelector("canvas.ink"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`);
+  const full = await inked(b);
+  assert.ok(full > 200, "the other screen paints the stroke: " + full + " pixels");
+  // 부분 지우개 (the default): rubs out only the middle.
+  await a.front();
+  await click(a, "#eraser");
+  assert.equal(await a.eval(`${q('[data-erase="eraser"]')}.getAttribute("aria-pressed")`), "true", "부분 지우개 is the default");
+  await stroke(a, box.x + box.w * 0.45, box.x + box.w * 0.55, y);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 2`);
+  assert.deepEqual(await kinds(a), ["pen:blue", "erase:black"]);
+  await b.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 2`);
+  await b.front();
+  const rubbed = await inked(b);
+  assert.ok(rubbed < full * 0.95 && rubbed > full * 0.4, `part of it is gone: ${full} → ${rubbed}`);
+  // 획 지우개: a touch removes the whole stroke, and it is remembered.
+  await a.front();
+  await click(a, '[data-erase="eraser-stroke"]');
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkEraser`), "stroke");
+  await a.press(box.x + box.w * 0.25, y);
+  await a.release(box.x + box.w * 0.25, y);
+  await a.waitFor(`!window.__app.session.doc("k:${day}").strokes().some((s) => s.b === "pen")`);
+  // A highlighter stroke.
+  await click(a, "#eraser");
+  await click(a, '[data-brush="highlighter"]');
+  await click(a, '[data-ink="yellow"]');
+  await stroke(a, box.x + box.w * 0.2, box.x + box.w * 0.7, box.y + box.h * 0.3);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().some((s) => s.b === "highlighter" && s.c === "yellow")`);
   await a.front();
   await a.shot(out("drawing.png"));
-  // The eraser hides it; undo brings it back.
-  await click(a, "#eraser");
-  await a.press(box.x + box.w * 0.5, y + Math.sin(6.25 / 2) * 12);
-  await a.release(box.x + box.w * 0.5, y + Math.sin(6.25 / 2) * 12);
-  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 0`);
+  // Undo: the highlighter goes, then the whole stroke comes back.
   await click(a, "#pen");
   await a.waitFor(`${q("#ink-tools")}.hidden`);
   await click(a, "#undo");
-  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
+  await click(a, "#undo");
+  await a.waitFor(`JSON.stringify(window.__app.session.doc("k:${day}").strokes().map((s) => s.b)) === '["pen","erase"]'`);
   // With the pen off, the sheet takes typing again.
   await focusEnd(a);
   await a.type("글");

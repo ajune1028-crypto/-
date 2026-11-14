@@ -29,7 +29,9 @@ export function mountTextRoom(body, app, session) {
     app.events.emit("settings");
   });
   // Drawing: the pen button turns every sheet into a drawing surface, with its own small tool row.
-  const pen = { tool: null, color: "black", width: 2 };
+  // The brush and the kind of eraser are remembered on this device.
+  const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
+  const eraserKind = () => (getSettings(app.store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"));
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   const toolbar = h("div", { class: "toolbar" }, undoButton, redoButton, colorsButton, penButton);
@@ -49,14 +51,23 @@ export function mountTextRoom(body, app, session) {
   function drawInkTools() {
     inkTools.hidden = !pen.tool;
     if (!pen.tool) return;
-    const choose = (patch) => { Object.assign(pen, patch); setTool(pen.tool === "eraser" && patch.color ? "pen" : pen.tool); };
+    const erasing = pen.tool !== "pen";
+    const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
+    const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
     inkTools.replaceChildren(
-      ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(pen.tool === "pen" && pen.color === c),
-        style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-        onclick: () => choose({ width: w }) }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
-      iconButton("eraser", "eraser", "지우개", () => setTool(pen.tool === "eraser" ? "pen" : "eraser")));
-    inkTools.querySelector("#eraser").setAttribute("aria-pressed", String(pen.tool === "eraser"));
+      h("div", { class: "ink-row" },
+        ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
+          onclick: () => { setSetting(app.store, "inkBrush", b); choose({ brush: b }); } })),
+        iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
+        erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
+          ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
+            onclick: () => { setSetting(app.store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
+      h("div", { class: "ink-row" },
+        ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
+          style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
+        ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
+          onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
+    inkTools.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
   }
 
   function buttons() {
@@ -118,8 +129,8 @@ export function mountTextRoom(body, app, session) {
       editor.ink = new InkLayer({
         host: editor.paper,
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, by: session.memberId });
+        onStroke: ({ pts, color, width, brush }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
         },
