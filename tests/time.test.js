@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dayKey, dayLabel, hourLabel, lineStamps } from "../src/core/time.js";
+import { dayKey, dayLabel, hourLabel } from "../src/core/time.js";
 
 const at = (iso) => Date.parse(iso);
 
@@ -26,12 +26,3 @@ test("hourLabel uses 오전 and 오후 with a 12-hour number", () => {
   assert.equal(hourLabel(at("2026-11-10T00:59:00Z"), "Asia/Seoul"), "오전 9시");
 });
 
-test("lineStamps labels a line only when its hour differs from the line above", () => {
-  const lines = [{ at: at("2026-11-10T06:05:00Z") }, { at: at("2026-11-10T06:50:00Z") }, { at: null }, { at: at("2026-11-10T07:01:00Z") }, { at: at("2026-11-10T07:30:00Z") }];
-  assert.deepEqual(lineStamps(lines, "Asia/Seoul", "2026-11-10"), ["오후 3시", null, null, "오후 4시", null]);
-});
-
-test("lineStamps adds the date to a line written on another day", () => {
-  const lines = [{ at: at("2026-11-10T06:05:00Z") }, { at: at("2026-11-12T06:05:00Z") }, { at: at("2026-11-12T06:40:00Z") }];
-  assert.deepEqual(lineStamps(lines, "Asia/Seoul", "2026-11-10"), ["오후 3시", "11월 12일 오후 3시", null]);
-});

@@ -638,8 +638,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .caret.moved .caret-name { animation: name-tag 2s ease-out; }
 @keyframes name-tag { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 
-.stamps { position: absolute; left: 0; top: 1rem; width: 3.2rem; }
-.stamp { position: absolute; right: 0.5rem; font-size: 0.6rem; line-height: calc(1.75rem * var(--text-scale)); color: var(--muted); white-space: nowrap; }
+/* (No hour labels in the margin since 14 November: a long press on a word tells who wrote it and when.) */
 
 /* Undo, redo, colours: one small glass capsule. */
 .toolbar {

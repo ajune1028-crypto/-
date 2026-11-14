@@ -551,7 +551,7 @@ scenario("layers: the drawn text and the input box always have the same height",
   }
 });
 
-scenario("stamps: lines an hour apart are stamped, and the day header names the day", async ({ open }) => {
+scenario("time: no hour labels in the margin; a long press on a word says who wrote it, on which day and at what time", async ({ open }) => {
   const [a] = await together(open, []);
   const day = await a.eval(`${TODAY}.dataset.day`);
   const tz = await a.eval(`window.__app.session.room.meta("tz")`);
@@ -561,10 +561,23 @@ scenario("stamps: lines an hour apart are stamped, and the day header names the 
   const local = (h, m) => { for (let t = base - 14 * 3600e3; t < base + 38 * 3600e3; t += 600e3) { const p = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(t).reduce((o, x) => (o[x.type] = x.value, o), {}); if (`${p.year}-${p.month}-${p.day}` === day && +p.hour === h && +p.minute === m) return t; } throw new Error("no such time"); };
   await writeAt(a, "아침에 쓴 글\n같은 시간에 한 줄 더", local(9, 10));
   await writeAt(a, "\n점심에 쓴 글", local(12, 20));
-  await a.waitFor(`document.querySelectorAll(".sheet.today .stamp").length === 2`);
-  assert.deepEqual(await a.eval(`[...document.querySelectorAll(".sheet.today .stamp")].map((s) => s.textContent)`), ["오전 9시", "오후 12시"]);
-  const tops = await a.eval(`(() => { const s = ${TODAY}; const st = [...s.querySelectorAll(".stamp")].map((x) => x.getBoundingClientRect().top); const ln = [...s.querySelectorAll(".draw .ln")].map((x) => x.getBoundingClientRect().top); return { st, ln }; })()`);
-  assert.ok(Math.abs(tops.st[0] - tops.ln[0]) <= 6 && Math.abs(tops.st[1] - tops.ln[2]) <= 6, JSON.stringify(tops));
+  await a.waitFor(`${TODAY}.querySelectorAll(".draw .ln").length === 3`);
+  assert.equal(await a.eval(`document.querySelectorAll(".stamp").length`), 0, "the margin stays clean");
+  // Press and hold on 점심에: who, which day, what time.
+  const date = dayLabel(day).split(" ").slice(0, 2).join(" ");
+  const at = await a.eval(`(() => { const w = [...${TODAY}.querySelectorAll(".draw .w")].find((x) => x.textContent === "점심에"); const r = w.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.touch("start", [at]);
+  await pause(700);
+  await a.touch("end");
+  await a.waitFor(q(".toast"));
+  assert.equal(await text(a, ".toast"), `가람 님이 ${date} 오후 12:20에 썼어요`);
+  // A quick tap says nothing.
+  await a.waitFor(`!${q(".toast")}`, 6000);
+  const morning = await a.eval(`(() => { const w = [...${TODAY}.querySelectorAll(".draw .w")].find((x) => x.textContent === "아침에"); const r = w.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.touch("start", [morning]);
+  await a.touch("end");
+  await pause(900);
+  assert.ok(!(await a.eval(q(".toast"))), "a tap only puts the caret there");
 });
 
 scenario("days: older sheets come first, only seven load until asked for more", async ({ open }) => {
@@ -626,12 +639,12 @@ scenario("contrast: ink, muted text and all eight colours read on the paper, lig
     await a.waitFor(`${TODAY}.querySelector(".draw .w")`);
     const css = await a.eval(`(() => { const cs = getComputedStyle(document.documentElement); const probe = (v) => { const e = document.createElement("i"); e.style.color = v; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; };
       return { paper: probe(cs.getPropertyValue("--paper")), ink: probe(cs.getPropertyValue("--ink")), muted: probe(cs.getPropertyValue("--muted")),
-        word: getComputedStyle(${TODAY}.querySelector(".draw .w")).color, stamp: getComputedStyle(${TODAY}.querySelector(".stamp")).color, drawInk: getComputedStyle(${TODAY}.querySelector(".draw")).color }; })()`);
+        word: getComputedStyle(${TODAY}.querySelector(".draw .w")).color, drawInk: getComputedStyle(${TODAY}.querySelector(".draw")).color }; })()`);
     assert.equal(hex(css.paper), PAPER[theme], "the stylesheet and the colour rules agree on the paper");
     assert.equal(hex(css.ink), INK[theme], "and on the ink");
     assert.equal(hex(css.word), memberColor(0, theme));
     assert.equal(hex(css.drawInk), INK[theme]);
-    for (const [name, value] of Object.entries({ ink: css.ink, muted: css.muted, word: css.word, stamp: css.stamp })) {
+    for (const [name, value] of Object.entries({ ink: css.ink, muted: css.muted, word: css.word })) {
       assert.ok(contrast(hex(value), hex(css.paper)) >= 4.5, `${theme} ${name} ${contrast(hex(value), hex(css.paper)).toFixed(2)}`);
     }
     await click(a, "#room-settings");
@@ -770,16 +783,6 @@ scenario("full store: the page says the storage is full and keeps what was typed
   await a.waitFor(`document.querySelector("#banner").textContent === "저장 공간이 가득 찼어요"`);
   assert.equal(await drawn(a), "가득 찼을 때 쓴 글");
   assert.equal(await a.eval(`${TODAY}.querySelector("textarea").readOnly`), false);
-});
-
-scenario("stamp: tapping a time stamp tells who wrote the line and when", async ({ open }) => {
-  const [a] = await together(open, []);
-  await focusEnd(a);
-  await a.type("누가 언제 썼는지");
-  await a.waitFor(q(".sheet.today .stamp"));
-  await click(a, ".sheet.today .stamp");
-  await a.waitFor(q(".toast"));
-  assert.match(await text(a, ".toast"), /^가람 님이 (오전|오후) \d{1,2}:\d{2}에 썼어요$/);
 });
 
 scenario("speed: typing stays quick on a sheet that already holds 10,000 characters", async ({ open }) => {
@@ -1089,7 +1092,7 @@ scenario("glass: the chrome is frosted and blue, and text stays readable on the 
       const look = (sel) => { const e = document.querySelector(sel); if (!e) return null; const s = getComputedStyle(e); return { filter: s.backdropFilter || s.webkitBackdropFilter || "", bg: s.backgroundColor, image: s.backgroundImage, color: s.color }; };
       const tokens = {};
       for (const name of ["--paper", "--ink", "--muted", "--soft", "--sheet", "--accent", "--base", "--daily-b", "--creative-b", "--sky"]) tokens[name] = probe(name);
-      return { tokens, strength: parseFloat(cs.getPropertyValue("--field-strength")), bar: look(".room > .bar"), toolbar: look(".toolbar"), paper: look(".paper"), day: look(".day"), stamp: look(".stamp") };
+      return { tokens, strength: parseFloat(cs.getPropertyValue("--field-strength")), bar: look(".room > .bar"), toolbar: look(".toolbar"), paper: look(".paper"), day: look(".day") };
     })()`);
     const t = Object.fromEntries(Object.entries(css.tokens).map(([k, v]) => [k, rgba(v)]));
     const paper = t["--paper"];
@@ -1110,7 +1113,6 @@ scenario("glass: the chrome is frosted and blue, and text stays readable on the 
         assert.ok(c >= 4.5, `${theme}: ${name} on the sheet over ${fieldName} is ${c.toFixed(2)}`);
       }
     }
-    assert.equal(hex(css.stamp.color), hex(css.tokens["--muted"]), "time stamps sit on the sheet");
 
     // 2. Text straight on a colour field uses ink or the soft tone, and both read at the field's strongest.
     for (const [fieldName, field] of fields) {

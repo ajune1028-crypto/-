@@ -10,11 +10,15 @@ import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
 import { diffText, spliceOps, mixOps } from "../core/edit.js";
 import { memberColor, INK, splitWords, paintFor, paintCss } from "../core/paint.js";
-import { dayKey, dayLabel, hourLabel, lineStamps } from "../core/time.js";
+import { dayKey, dayLabel } from "../core/time.js";
 import { getSettings } from "../identity.js";
 
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 24;
+// A press held this long, without moving, asks who wrote the words under it (before the
+// phone's own long press at about 500 ms, which goes on to select the word as usual).
+const HOLD_MS = 450;
+const HOLD_SLOP_PX = 10;
 
 export class SheetEditor {
   constructor({ app, session, day, isToday, zone, record, onCaret, tell }) {
@@ -39,14 +43,13 @@ export class SheetEditor {
 
     this.draw = h("div", { class: "draw", "aria-hidden": "true" });
     this.carets = h("div", { class: "carets", "aria-hidden": "true" });
-    this.stamps = h("div", { class: "stamps" });
     this.input = h("textarea", {
       class: "typing", id: "sheet-" + day, spellcheck: false, autocomplete: "off", autocapitalize: "off",
       "aria-label": dayLabel(day) + "에 쓴 글", placeholder: isToday ? "오늘의 첫 글을 써 보세요" : "",
     });
     this.input.setAttribute("autocorrect", "off");
     this.layers = h("div", { class: "layers" }, this.draw, this.carets, this.input);
-    this.paper = h("div", { class: "paper" }, this.stamps, this.layers);
+    this.paper = h("div", { class: "paper" }, this.layers);
     this.el = h("section", { class: "sheet" + (isToday ? " today" : ""), data: { day } },
       h("h2", { class: "day", text: dayLabel(day) }),
       this.paper);
@@ -60,6 +63,19 @@ export class SheetEditor {
     ta.addEventListener("input", (event) => this.onInput(event.isComposing || this.composing));
     for (const type of ["keyup", "focus", "blur", "select"]) ta.addEventListener(type, () => this.caretMoved());
     ta.addEventListener("pointerup", (event) => { this.onTap(event); this.caretMoved(); });
+    // Written words carry no time labels; a press held on them tells who wrote them and when.
+    let hold = null;
+    const letGo = () => { clearTimeout(hold?.timer); hold = null; };
+    ta.addEventListener("pointerdown", (event) => {
+      letGo();
+      const { clientX: x, clientY: y } = event;
+      hold = { id: event.pointerId, x, y, timer: setTimeout(() => { hold = null; this.whoWrote(x, y); }, HOLD_MS) };
+    });
+    ta.addEventListener("pointermove", (event) => {
+      if (hold && event.pointerId === hold.id && Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP_PX) letGo();
+    });
+    ta.addEventListener("pointerup", letGo);
+    ta.addEventListener("pointercancel", letGo);
     ta.addEventListener("mousedown", (event) => { if (event.detail >= 2 && this.canMix()) event.preventDefault(); });
     this.onSelection = () => { if (document.activeElement === ta) this.caretMoved(); };
     document.addEventListener("selectionchange", this.onSelection);
@@ -176,9 +192,6 @@ export class SheetEditor {
     while (kids.length > lines.length) kids[kids.length - 1].remove();
     this.shapeWheels();
 
-    const zone = this.zone();
-    const labels = lineStamps(lines, zone, this.day);
-    this.stamps.replaceChildren(...labels.flatMap((label, i) => (label ? [this.stamp(label, lines[i], zone)] : [])));
     this.drawCarets();
   }
 
@@ -232,18 +245,21 @@ export class SheetEditor {
     return el;
   }
 
-  stamp(label, line, zone) {
-    return h("button", {
-      class: "stamp", type: "button", text: label, style: { top: line.el.offsetTop + "px" },
-      onclick: () => {
-        const first = this.sheet.chars().slice(line.start, line.start + line.len).reduce((a, c) => (!a || c.at < a.at ? c : a), null);
-        if (!first) return;
-        const who = this.session.room.member(first.by)?.name || "누군가";
-        const minutes = new Intl.DateTimeFormat("ko-KR", { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(first.at);
-        const day = dayKey(first.at, zone);
-        this.tell(`${who} 님이 ${day === this.day ? "" : dayLabel(day).split(" ").slice(0, 2).join(" ") + " "}${minutes}에 썼어요`);
-      },
-    });
+  /** Who wrote the word at (x, y), and on which day and at what time (its first letter). */
+  whoWrote(x, y) {
+    const span = document.elementsFromPoint(x, y).find((el) => el.classList?.contains("w") && this.draw.contains(el));
+    if (!span) return;
+    const chars = this.sheet.chars();
+    const word = splitWords(chars).find((w) => w.anchor === span.dataset.anchor);
+    if (!word) return;
+    const letters = chars.slice(word.start, word.end);
+    const first = letters.reduce((a, c) => (!a || c.at < a.at ? c : a), null);
+    if (!first) return;
+    const names = [...new Set(letters.map((c) => this.session.room.member(c.by)?.name || "누군가"))];
+    const zone = this.zone();
+    const date = dayLabel(dayKey(first.at, zone)).split(" ").slice(0, 2).join(" ");
+    const time = new Intl.DateTimeFormat("ko-KR", { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(first.at);
+    this.tell(`${names.join("·")} 님이 ${date} ${time}에 썼어요`);
   }
 
   // ---- carets -----------------------------------------------------------------

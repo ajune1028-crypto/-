@@ -45,20 +45,3 @@ export function hourLabel(ms, tz) {
   const { hour } = parts(ms, tz);
   return `${hour < 12 ? "오전" : "오후"} ${hour % 12 === 0 ? 12 : hour % 12}시`;
 }
-
-/**
- * One label per line, or null. A line gets a label when its hour differs from
- * the labelled line above it; empty lines (`at: null`) never do. A line written
- * on a day other than the sheet's own carries the date too.
- */
-export function lineStamps(lines, tz, sheetDay) {
-  let last = null;
-  return lines.map(({ at }) => {
-    if (at === null || at === undefined) return null;
-    const day = dayKey(at, tz);
-    const bucket = day + " " + parts(at, tz).hour;
-    if (bucket === last) return null;
-    last = bucket;
-    return (day === sheetDay ? "" : monthDay(day) + " ") + hourLabel(at, tz);
-  });
-}
