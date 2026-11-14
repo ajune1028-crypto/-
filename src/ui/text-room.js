@@ -4,7 +4,7 @@ import { h, iconButton, mount, toast } from "./dom.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
-import { invertOps } from "../core/edit.js";
+import { invertOps, spliceOps } from "../core/edit.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { InkLayer, inkColor } from "./ink.js";
@@ -215,7 +215,18 @@ export function mountTextRoom(body, app, session) {
   drawList();
   buttons();
 
-  return () => {
+  /** Puts text at the end of today's sheet, as its own line (레퍼런스 → 이 방에 붙이기). */
+  function insertText(text) {
+    const sheet = session.sheet(today);
+    const ids = sheet.ids().slice();
+    const before = sheet.text();
+    const add = (before && !before.endsWith("\n") ? "\n" : "") + text;
+    const made = spliceOps(sheet, session.clock, { by: session.memberId, now: Date.now() }, ids, ids.length, 0, add, false);
+    session.commit("s:" + today, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: "s:" + today })), false);
+  }
+
+  const close = () => {
     for (const off of offs) off();
     clearInterval(midnight);
     clearTimeout(presenceTimer);
@@ -228,4 +239,5 @@ export function mountTextRoom(body, app, session) {
     inkTools.remove();
     list.remove();
   };
+  return { close, insertText };
 }

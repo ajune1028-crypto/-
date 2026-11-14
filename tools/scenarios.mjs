@@ -1669,3 +1669,28 @@ scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 set
   await page.waitFor(`!document.querySelector(".card.note")`);
   void songId;
 });
+
+// ---- 레퍼런스 -----------------------------------------------------------------------------------------
+
+scenario("레퍼런스: private notes from home and from a room; put into the room only when asked; the switch hides it", async ({ open }) => {
+  const [a, b] = await together(open);
+  await click(a, "#room-reference");
+  await a.waitFor(q("#ref-text"));
+  await fill(a, "#ref-text", "후렴: 같이 걷던 길");
+  await click(a, "#ref-add");
+  await a.waitFor(`document.querySelector("#ref-list .ref-body")?.textContent === "후렴: 같이 걷던 길"`);
+  // Private: nothing reached the room yet, so the other device has nothing.
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  assert.equal(await b.eval(`window.__app.session.sheet("${day}").text()`), "");
+  await click(a, "#ref-list [data-put]");
+  await b.waitFor(`window.__app.session.sheet("${day}").text().includes("후렴: 같이 걷던 길")`);
+  // Turned off in settings: gone from the room bar.
+  await click(a, "#room-settings");
+  await a.waitFor(q("#set-reference"));
+  await a.eval(`(() => { const t = document.getElementById("set-reference"); t.click(); return true; })()`);
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).reference`), false);
+  await a.key("Escape");
+  await click(a, "#back");
+  await a.waitFor(q("#home"));
+  assert.equal(await a.eval(`!!document.getElementById("home-reference")`), false);
+});

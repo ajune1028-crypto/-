@@ -384,6 +384,11 @@ export function mountBoardRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 레퍼런스 → 이 방에 붙이기: a memo card. */
+    insertText(text) {
+      const at = freeSpot();
+      apply(addItemOps(session.clock, board, { kind: "note", x: at.x, y: at.y, data: { text }, by: session.memberId }));
+    },
     close() {
       alive = false;
       cancelAnimationFrame(frameReq);

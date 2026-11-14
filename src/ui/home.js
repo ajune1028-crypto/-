@@ -7,6 +7,8 @@ import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
 import { SIDES, kindsOf, sideOf } from "./kinds.js";
+import { openReference } from "./reference.js";
+import { getSettings } from "../identity.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -59,7 +61,9 @@ export function showHome(app) {
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 노래 방을 만들어 보세요.")),
-        h("div", { class: "home-top" }, iconButton("home-settings", "more", "설정", openSettings)),
+        h("div", { class: "home-top" },
+          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
+          iconButton("home-settings", "more", "설정", openSettings)),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));

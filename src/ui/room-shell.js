@@ -4,6 +4,7 @@ import { h, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } f
 import { applyTheme, applyAccent, applyTextScale, currentTheme, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
+import { openReference } from "./reference.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { memberColor, PALETTE } from "../core/paint.js";
@@ -37,6 +38,7 @@ export function displaySettings(app, { withColors }) {
     h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
+    toggle("set-reference", "레퍼런스 기능 (나만 보는 메모)", settings.reference, (on) => change("reference", on)),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }
@@ -140,6 +142,7 @@ export function showRoom(app, roomId) {
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
+        getSettings(app.store).reference && iconButton("room-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app, { insert: screen.insertText || null })),
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
       banner, top, body));

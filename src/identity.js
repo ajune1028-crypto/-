@@ -10,6 +10,8 @@ export const DEFAULT_SETTINGS = {
   songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0, songSpeed: 1,
   // Drawing: the brush, and whether the eraser rubs out an area or whole strokes.
   inkBrush: "pen", inkEraser: "area",
+  // 레퍼런스 (private notes) everywhere; off hides every way to it.
+  reference: true,
 };
 
 export function openStore(storage, prefix = "") {
