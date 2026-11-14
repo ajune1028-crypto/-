@@ -1309,3 +1309,37 @@ scenario("song: a friend's device shows the same clips and plays them as piano",
   await click(a, "#clip-mute");
   await b.waitFor(`document.querySelector(".clip[data-id]").classList.contains("muted")`);
 });
+
+// ---- look: black, glass, your own colour, text size ------------------------------------------------
+
+scenario("look: dark is near black; the main button glows, small ones are glass; your colour and text size stay across themes", async ({ open, out }) => {
+  const page = await open({ dark: true });
+  await createRoom(page, { room: "검은 방" });
+  const tokens = await page.eval(`(() => { const s = getComputedStyle(document.documentElement); return { paper: s.getPropertyValue("--paper").trim(), base: s.getPropertyValue("--base").trim() }; })()`);
+  assert.equal(tokens.paper, PAPER.dark);
+  assert.ok(contrast(tokens.paper, "#000000") < 1.1 && contrast(tokens.base, "#000000") < 1.05, "near black: " + JSON.stringify(tokens));
+  await click(page, "#room-settings");
+  await settled(page);
+  const save = await page.eval(`(() => { const s = getComputedStyle(document.getElementById("save-pin")); return { bg: s.backgroundImage, filter: s.backdropFilter || s.webkitBackdropFilter || "" }; })()`);
+  assert.match(save.bg, /gradient/, "the 저장 button is a gradient");
+  assert.match(save.filter, /blur/, "and glass");
+  await page.shot(out("look-dark-settings.png"));
+  // Pick pink: the same colour in dark and in light.
+  await click(page, '[data-key="pink"]');
+  const darkAccent = await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`);
+  assert.equal(darkAccent, "#d03d78");
+  await click(page, '[data-theme-choice="light"]');
+  const lightAccent = await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`);
+  assert.equal(lightAccent, darkAccent, "the chosen colour does not change with the theme");
+  // Text size: the writing gets bigger.
+  const before = await page.eval(`parseFloat(getComputedStyle(document.querySelector(".layers")).fontSize)`);
+  await click(page, '[data-text-size="1.3"]');
+  const after = await page.eval(`parseFloat(getComputedStyle(document.querySelector(".layers")).fontSize)`);
+  assert.ok(Math.abs(after / before - 1.3) < 0.02, `text ${before} → ${after}`);
+  await page.shot(out("look-light-pink.png"));
+  // Remembered after a reload.
+  await page.reload();
+  await page.waitFor("window.__app && window.__app.booted");
+  assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`), "#d03d78");
+  assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--text-scale").trim()`), "1.3");
+});

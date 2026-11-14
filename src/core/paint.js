@@ -21,7 +21,7 @@ export const PALETTE = [
 
 // Must equal --ink and --paper in the stylesheet; a browser scenario checks that they agree.
 export const INK = { light: "#1b2030", dark: "#f2f5fb" };
-export const PAPER = { light: "#f8fafd", dark: "#111624" };
+export const PAPER = { light: "#f8fafd", dark: "#0b0b0e" };
 
 // Text lightness per theme, and the range a mixed colour may land in.
 const TONE = { light: { l: 0.5, min: 0.4, max: 0.52 }, dark: { l: 0.8, min: 0.76, max: 0.88 } };
@@ -250,4 +250,25 @@ export function paintCss(paint, aspect = 1) {
   if (paint.r) layers.push(`linear-gradient(to left, ${paint.r} 0%, ${paint.r}00 ${SEEP_REACH}%)`);
   layers.push(background(paint.base, aspect));
   return { background: layers.join(", ") };
+}
+
+/**
+ * The colours one chosen accent brings: lighter and darker ends for gradients,
+ * a second hue to blend into, a version for icons and small text that shows
+ * on both papers (nudged only when it would not), and the text colour that
+ * reads on the accent itself. The same in light and dark.
+ */
+export function accentColors(hex) {
+  const { l, c, h } = hexToOklch(hex);
+  const top = oklchToHex(Math.min(0.92, l + 0.05), c, h);
+  const bottom = oklchToHex(Math.max(0.2, l - 0.04), c, h);
+  const second = oklchToHex(l, c, (h + 38) % 360);
+  let ink = hex;
+  for (let i = 0, L = l; i < 40 && (contrast(ink, PAPER.light) < 3 || contrast(ink, PAPER.dark) < 3); i++) {
+    L += L > 0.6 ? -0.015 : 0.015;
+    ink = oklchToHex(L, c, h);
+  }
+  const white = contrast("#ffffff", hex);
+  const onAccent = white >= 4.5 || white >= contrast("#111216", hex) ? "#ffffff" : "#111216";
+  return { "--accent": hex, "--accent-top": top, "--accent-bottom": bottom, "--accent-2": second, "--accent-ink": ink, "--ring": ink, "--on-accent": onAccent };
 }

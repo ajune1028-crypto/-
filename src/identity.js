@@ -4,6 +4,8 @@
 
 export const DEFAULT_SETTINGS = {
   theme: "system", colors: true, mixing: true,
+  // Your own accent colour (null: the app's blue) and the size of written text.
+  accent: null, textScale: 1,
   // Song room: what to hear and see, the piano's tone, a faint waveform behind the notes, and the overdub delay fix in ms.
   songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0,
 };

@@ -4,7 +4,7 @@ import { openStore, getSettings, roomEntry } from "./identity.js";
 import { Emitter } from "./sync/transport.js";
 import { LocalTransport } from "./sync/local.js";
 import { ClaudeTransport } from "./sync/claude.js";
-import { applyTheme, fitScale } from "./ui/theme.js";
+import { applyTheme, applyAccent, applyTextScale, fitScale } from "./ui/theme.js";
 import { showHome } from "./ui/home.js";
 import { showRoom } from "./ui/room-shell.js";
 import { roomLink } from "./core/room.js";
@@ -84,6 +84,8 @@ export function boot(root) {
   window.__app = app;
   fitScale();
   applyTheme(getSettings(store).theme);
+  applyAccent(getSettings(store).accent);
+  applyTextScale(getSettings(store).textScale);
   app.ready = chooseTransport(app, patience).then(({ transport, limited }) => {
     app.transport = transport;
     app.limited = limited;

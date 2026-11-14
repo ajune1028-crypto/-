@@ -1,7 +1,7 @@
 // The frame every room shares: top bar, who is here, settings, and the way in.
 
 import { h, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
-import { applyTheme, currentTheme } from "./theme.js";
+import { applyTheme, applyAccent, applyTextScale, currentTheme, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
@@ -15,11 +15,28 @@ export function displaySettings(app, { withColors }) {
   const change = (key, value) => {
     setSetting(app.store, key, value);
     if (key === "theme") applyTheme(value);
+    if (key === "accent") applyAccent(value);
+    if (key === "textScale") applyTextScale(value);
     app.events.emit("settings");
   };
+  // Your own colour: the presets, and a colour well for any colour at all.
+  const current = settings.accent || ACCENTS[0][2];
+  const accents = h("div", { class: "swatches", id: "accents", role: "group", "aria-label": "포인트 색" });
+  const paintAccents = (hex) => { for (const b of accents.querySelectorAll("[data-accent]")) b.setAttribute("aria-pressed", String(b.dataset.accent === hex)); };
+  for (const [key, name, hex] of ACCENTS) {
+    accents.append(h("button", { class: "swatch", type: "button", data: { accent: hex, key }, "aria-label": name, title: name, style: { background: hex },
+      onclick: () => { change("accent", key === "blue" ? null : hex); paintAccents(hex); } }));
+  }
+  const well = h("input", { type: "color", id: "accent-own", value: current, "aria-label": "직접 고르기",
+    oninput: () => { change("accent", well.value); paintAccents(well.value); } });
+  accents.append(h("span", { class: "swatch own", data: { accent: ACCENTS.some(([, , hex]) => hex === current) ? "" : current }, title: "직접 고르기" }, well));
+  paintAccents(current);
   return h("div", { class: "form" },
     h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
+    h("div", { class: "row" }, h("span", { class: "label", text: "포인트 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
+      segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }

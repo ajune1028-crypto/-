@@ -159,3 +159,19 @@ test("a seeping wheel keeps its fair shares too", () => {
   assert.match(css, /^linear-gradient\(to right, #aaaa00 0%, #aaaa0000 \d+%\), conic-gradient\(/);
   assert.notEqual(css, paintCss({ k: "seep", base: { k: "wheel", cs: ["#aa0000", "#0000aa", "#00aa00"] }, l: "#aaaa00", r: null }, 1).background);
 });
+
+test("an accent of your own: text on it reads, and its icons show on both papers", async () => {
+  const { accentColors, contrast, PAPER } = await import("../src/core/paint.js");
+  for (const hex of ["#2466dc", "#6d4ae0", "#d03d78", "#16865a", "#c8550f", "#0d7d8f", "#3a3d46", "#ffe14d", "#a0f0ff", "#000000", "#ffffff"]) {
+    const c = accentColors(hex);
+    assert.equal(c["--accent"], hex, "the colour itself is kept as chosen");
+    // White or near-black, whichever reads better; a mid-grey can reach no more than about 4.4.
+    assert.ok(contrast(c["--on-accent"], hex) >= 4.4, `${hex}: text on it ${contrast(c["--on-accent"], hex).toFixed(2)}`);
+    for (const paper of [PAPER.light, PAPER.dark]) {
+      if (hex === "#000000" || hex === "#ffffff") continue;
+      assert.ok(contrast(c["--accent-ink"], paper) >= 3, `${hex}: icon colour ${c["--accent-ink"]} on ${paper} is ${contrast(c["--accent-ink"], paper).toFixed(2)}`);
+    }
+  }
+  assert.equal(accentColors("#2466dc")["--on-accent"], "#ffffff");
+  assert.equal(accentColors("#ffe14d")["--on-accent"], "#111216", "dark text on a light yellow");
+});
