@@ -329,6 +329,40 @@ scenario("typing: what one screen types shows on the other within a second", asy
   await a.shot(out("room-light.png"));
 });
 
+scenario("public address with a server: a room made on one phone opens by its link on another, typing shows on both, nobody else's home lists it, and a cut line mends", async ({ open, out, fixtures }) => {
+  const view = { query: "server=" + encodeURIComponent(fixtures.server) };
+  const [a, b, id] = await together(open, ["나래"], view);
+  for (const p of [a, b]) assert.equal(await p.eval(`window.__app.transport.info().kind`), "firebase");
+  assert.ok(!(await a.eval(`window.__app.store.get("rooms", []).find((r) => r.id === ${JSON.stringify(id)}).local`)), "the room is not kept on one phone only");
+  assert.equal(await a.eval(`window.__app.linkFor(${JSON.stringify(id)}).split("#")[1]`), "r-" + id);
+  await focusEnd(a);
+  await a.type("서버로 같이 써요");
+  await sameOnAll([a, b], "서버로 같이 써요");
+  await b.waitFor(`window.__app.session.peers.some((p) => !p.isMe && p.state?.m)`);
+  const stored = fixtures.firebase.data().rooms[id];
+  assert.equal(stored.meta.name, "우리 방");
+  assert.ok(Object.keys(stored.docs).some((d) => d.startsWith("s:")), "the writing is on the server: " + Object.keys(stored.docs));
+  // A phone that was never given the link sees no rooms: a room is as private as its link.
+  const c = await open({ dev: "c", ...view });
+  await c.waitFor(`window.__app.transport?.info().kind === "firebase" && !window.__app.connecting`);
+  await c.waitFor(`!${q("#connecting")}`);
+  assert.equal(await c.eval(`document.querySelectorAll(".room-row").length`), 0);
+  assert.ok(!(await c.eval(q("#notice"))), "no 'only on this device' notice where a server answers");
+  // The line is cut: the room says so, keeps what is typed, and sends it when the line is back.
+  fixtures.firebase.setDown(true);
+  await a.waitFor(`window.__app.session.status === "offline"`, 8000);
+  await focusEnd(a);
+  await a.type(" 끊겨도");
+  fixtures.firebase.setDown(false);
+  for (const p of [a, b]) await p.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "서버로 같이 써요 끊겨도"`, 25000);
+  await b.waitFor(`window.__app.session.status === "online"`, 25000);
+  // Opened again later (a reload), the room comes back from the server.
+  await b.eval(`location.reload(), true`);
+  await b.waitFor(`window.__app && window.__app.booted && window.__app.session && ${TODAY}`, 10000);
+  await sameOnAll([b], "서버로 같이 써요 끊겨도");
+  await b.shot(out("server-room.png"));
+});
+
 scenario("concurrent: two screens typing at once lose nothing and end equal", async ({ open }) => {
   const [a, b] = await together(open);
   await focusEnd(a);

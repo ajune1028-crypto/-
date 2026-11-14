@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import { serve } from "./serve.mjs";
 import { launch } from "./cdp.mjs";
 import { scenarios } from "./scenarios.mjs";
+import { startFakeFirebase } from "../tests/mocks/fake-firebase.mjs";
 import { sing } from "../tests/fixtures/voice.js";
 import { encodeWav } from "../src/audio/wav.js";
 
@@ -66,6 +67,11 @@ const server = await serve(dist ? join(root, "dist") : root, PORT);
   writeFileSync(fixtures.photo, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
 }
 
+// A stand-in room server (the Firebase REST API) for the scenarios of the public address.
+const firebase = await startFakeFirebase();
+fixtures.server = firebase.url;
+fixtures.firebase = firebase;
+
 const browser = await launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + fixtures.mic, "--autoplay-policy=no-user-gesture-required"] });
 let seq = 0;
 let failed = 0;
@@ -96,5 +102,6 @@ for (const { name, run } of scenarios) {
 
 await browser.close();
 server.close();
+await firebase.close();
 console.log(`${failed ? "FAILED" : "PASSED"}: ${failed} failed (${Math.round((Date.now() - started) / 100) / 10} s)`);
 process.exit(failed ? 1 : 0);

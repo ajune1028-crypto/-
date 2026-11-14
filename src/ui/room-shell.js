@@ -48,7 +48,7 @@ export function diagnostics(app, session) {
   const transport = session?.transport || app.transport;
   const info = transport ? transport.info() : null;
   const facts = [
-    ["전송 방식", info ? info.kind : "연결 중"],
+    ["전송 방식", info ? ({ firebase: "서버 (Firebase)", claude: "Claude 시험판 저장소", local: "이 기기만" }[info.kind] || info.kind) : "연결 중"],
     ["저장소", info ? info.db : "-"],
     ["실시간 채널", info ? info.live : "-"],
     session && ["접속 중인 화면", String(session.peers.length)],

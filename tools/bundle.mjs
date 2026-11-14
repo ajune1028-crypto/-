@@ -1,5 +1,6 @@
 // Writes dist/index.html: one self-contained file for the trial page.
 // Modules are wrapped in dependency order inside one script; the stylesheet is inlined.
+import { serverFrom } from "../src/sync/firebase.js";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, posix } from "node:path";
@@ -53,7 +54,13 @@ if (shareBase) {
   if (!/^https:\/\/[\w.-]+\/[\w./-]*$/.test(shareBase)) throw new Error("--share-base must be a plain https address");
   swap("<title>", `<meta name="share-base" content="${shareBase}">\n<title>`);
 }
+// --server=URL (or HAMKKE_SERVER): the room server, a Firebase Realtime Database. With it the
+// public page shares rooms between any browsers by link; without it rooms stay on each device.
+const serverArg = process.argv.slice(2).find((a) => a.startsWith("--server="))?.slice(9) ?? process.env.HAMKKE_SERVER ?? "";
+const server = serverArg.trim() ? serverFrom(serverArg) : null;
+if (serverArg.trim() && (!server || !server.startsWith("https://"))) throw new Error("--server must be the https address of a Firebase Realtime Database, got: " + serverArg);
+if (server) swap("<title>", `<meta name="hamkke-server" content="${server}">\n<title>`);
 swap('<script type="module" src="./src/main.js"></script>', `<script>\n${script}\n</script>`);
 mkdirSync(join(root, "dist"), { recursive: true });
 writeFileSync(join(root, "dist/index.html"), html);
-console.log(`dist/index.html: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}`);
+console.log(`dist/index.html: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}${server ? ", rooms on " + server : ""}`);

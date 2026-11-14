@@ -54,3 +54,25 @@ test("the dev server serves index.html on the port it prints", async () => {
     child.kill();
   }
 });
+
+test("the build names its room server when told (--server= or HAMKKE_SERVER), and refuses an address that is not a database", async () => {
+  const run = (args, env = {}) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [join(root, "tools/bundle.mjs"), ...args], { env: { ...process.env, HAMKKE_SERVER: "", ...env } });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    child.on("close", (code) => resolve({ code, out }));
+  });
+  const { readFileSync } = await import("node:fs");
+  const built = () => readFileSync(join(root, "dist/index.html"), "utf8");
+  const url = "https://hamkke-test-default-rtdb.asia-southeast1.firebasedatabase.app";
+  assert.equal((await run(["--server=" + url])).code, 0);
+  assert.ok(built().includes(`<meta name="hamkke-server" content="${url}">`));
+  assert.equal((await run([], { HAMKKE_SERVER: url + "/" })).code, 0);
+  assert.ok(built().includes(`<meta name="hamkke-server" content="${url}">`), "the address from the environment, without the trailing slash");
+  const bad = await run(["--server=https://evil.example"]);
+  assert.notEqual(bad.code, 0);
+  assert.match(bad.out, /server/);
+  assert.equal((await run([])).code, 0);
+  assert.ok(!built().includes(`<meta name="hamkke-server"`), "no server named, none written");
+});

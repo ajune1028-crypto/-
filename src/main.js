@@ -4,6 +4,7 @@ import { openStore, getSettings, roomEntry } from "./identity.js";
 import { Emitter } from "./sync/transport.js";
 import { LocalTransport } from "./sync/local.js";
 import { ClaudeTransport } from "./sync/claude.js";
+import { FirebaseTransport, serverFrom } from "./sync/firebase.js";
 import { applyTheme, applyAccent, applyTextScale, fitScale } from "./ui/theme.js";
 import { showHome } from "./ui/home.js";
 import { showRoom } from "./ui/room-shell.js";
@@ -30,12 +31,31 @@ async function findRuntime() {
   return null;
 }
 
-async function chooseTransport(app, patience, testing) {
+/**
+ * The room server this build names (a meta tag that tools/bundle.mjs --server= writes).
+ * Tests name a server on this machine with ?server=; no link can name any other.
+ */
+function roomServer(params, testing) {
+  const asked = params.get("server");
+  if (asked) return /^http:\/\/(127\.0\.0\.1|localhost):/.test(asked) ? serverFrom(asked) : null;
+  if (testing) return null;
+  return serverFrom(document.querySelector('meta[name="hamkke-server"]')?.content || "");
+}
+
+async function chooseTransport(app, patience, testing, params) {
   const runtime = await findRuntime();
   app.trace(`page ${window.parent !== window ? "framed" : "top"}, runtime ${runtime ? "found" : "absent"}`);
-  // On a public address with no server yet (GitHub Pages), rooms live on this device only, and the
-  // screens say so. Test devices (?dev=…) share one browser, so for them the local rooms are shared.
-  if (!runtime) return { transport: app.local(), limited: !testing };
+  if (!runtime) {
+    // The public address: rooms on the server, joined by link from any browser.
+    const server = roomServer(params, testing);
+    if (server) {
+      app.trace("server " + server.replace(/^https?:\/\//, ""));
+      return { transport: new FirebaseTransport(server, { callTimeoutMs: patience, log: app.trace }), limited: false };
+    }
+    // With no server named, rooms live on this device only, and the screens say so.
+    // Test devices (?dev=…) share one browser, so for them the local rooms are shared.
+    return { transport: app.local(), limited: !testing };
+  }
   const transport = await ClaudeTransport.connect(runtime, { callTimeoutMs: patience, log: app.trace });
   return transport ? { transport, limited: false } : { transport: app.local(), limited: true };
 }
@@ -88,7 +108,7 @@ export function boot(root) {
   applyTheme(getSettings(store).theme);
   applyAccent(getSettings(store).accent);
   applyTextScale(getSettings(store).textScale);
-  app.ready = chooseTransport(app, patience, !!dev).then(({ transport, limited }) => {
+  app.ready = chooseTransport(app, patience, !!dev, params).then(({ transport, limited }) => {
     app.transport = transport;
     app.limited = limited;
     app.connecting = false;

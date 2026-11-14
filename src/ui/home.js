@@ -55,8 +55,11 @@ export function showHome(app) {
 
   function draw() {
     if (!alive) return;
+    const serverKind = app.transport?.info().kind;
     const notice = app.limited
-      ? (app.store.available ? "아직 서버가 없어서 방은 이 기기에만 있어요" : "다른 기기와 연결되지 않아요. 이 화면을 닫으면 여기서 만든 방은 사라져요")
+      ? (!app.store.available ? "다른 기기와 연결되지 않아요. 이 화면을 닫으면 여기서 만든 방은 사라져요"
+        : serverKind === "firebase" ? "서버에 연결하지 못해서 방을 이 기기에만 만들었어요. 인터넷을 확인해 주세요"
+        : "아직 서버가 없어서 방은 이 기기에만 있어요")
       : app.store.available ? null : "이 기기에는 방 목록이 저장되지 않아요";
     // The notice takes its own row above the halves, so it never lies over a button.
     mount(root,

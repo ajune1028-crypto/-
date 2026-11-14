@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "$room.matches(/^[a-z2-7]{12}$/)",
+        "meta": {
+          ".write": "!data.exists() && $room.matches(/^[a-z2-7]{12}$/)",
+          ".validate": "newData.hasChildren(['id', 'kind', 'name', 'at']) && newData.child('id').val() === $room && newData.child('kind').isString() && newData.child('kind').val().length <= 40 && newData.child('name').isString() && newData.child('name').val().length <= 60 && newData.child('at').isNumber()",
+          "id": {}, "kind": {}, "name": {}, "at": {},
+          "$other": { ".validate": false }
+        },
+        "docs": {
+          "$doc": {
+            "$batch": {
+              ".write": "!data.exists() && $room.matches(/^[a-z2-7]{12}$/) && $doc.length <= 40",
+              ".validate": "newData.hasChildren(['o', 'w']) && newData.child('o').isString() && newData.child('o').val().length <= 2000000 && newData.child('w').isString() && newData.child('w').val().length <= 16",
+              "o": {}, "w": {}, "t": { ".validate": "newData.isNumber()" },
+              "$other": { ".validate": false }
+            }
+          }
+        },
+        "peers": {
+          "$peer": {
+            ".write": "$room.matches(/^[a-z2-7]{12}$/) && $peer.length <= 16",
+            ".validate": "newData.hasChildren(['s', 't']) && newData.child('s').isString() && newData.child('s').val().length <= 4000 && newData.child('t').isNumber()",
+            "s": {}, "t": {},
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}

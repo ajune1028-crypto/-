@@ -1,10 +1,12 @@
 # Publishes the app at a public address (GitHub Pages), so anyone can open it
 # without Claude. On that address the browser allows the microphone, so the
-# song room can record. Rooms stay on each device until a server is added
-# (see docs/superpowers/specs/2026-11-14-roadmap.md, "실제 서버").
+# song room can record. With a room server named (docs/public-address.md) any
+# browser joins a room by its link; without one, rooms stay on each device.
 #
 # One-time setup by the repository owner: Settings → Pages → Build and
-# deployment → Source: "GitHub Actions". Then every push to main publishes.
+# deployment → Source: "GitHub Actions"; Settings → Secrets and variables →
+# Actions → Variables: HAMKKE_SERVER = the database address. Then every push
+# to main publishes.
 
 name: pages
 
@@ -33,6 +35,10 @@ jobs:
       - name: Unit tests
         run: npm test
       - name: One-file build
+        # The room server (a Firebase Realtime Database address) comes from the repository
+        # variable HAMKKE_SERVER; without it rooms stay on each device.
+        env:
+          HAMKKE_SERVER: ${{ vars.HAMKKE_SERVER }}
         run: node tools/bundle.mjs
       - name: Browser scenarios on the build
         run: node tools/e2e.mjs --dist
