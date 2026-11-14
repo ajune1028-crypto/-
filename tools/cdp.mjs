@@ -1,8 +1,8 @@
 // Drives headless Chrome over the DevTools protocol. No dependencies.
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const KEYS = {
@@ -15,9 +15,47 @@ const KEYS = {
   Home: { key: "Home", code: "Home", windowsVirtualKeyCode: 36 },
 };
 
+/** Where a Chromium-based browser may live. CHROME_BIN comes first, so anyone can point at their own. */
+export function chromeCandidates({ platform = process.platform, env = process.env } = {}) {
+  const list = [];
+  if (env.CHROME_BIN) list.push(env.CHROME_BIN);
+  const under = (base, rest) => (base ? [`${base}\\${rest}`] : []);
+  if (platform === "win32") {
+    list.push(
+      ...under(env.ProgramFiles, "Google\\Chrome\\Application\\chrome.exe"),
+      ...under(env["ProgramFiles(x86)"], "Google\\Chrome\\Application\\chrome.exe"),
+      ...under(env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe"),
+      ...under(env["ProgramFiles(x86)"], "Microsoft\\Edge\\Application\\msedge.exe"),
+      ...under(env.ProgramFiles, "Microsoft\\Edge\\Application\\msedge.exe"),
+    );
+  } else if (platform === "darwin") {
+    list.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    );
+  }
+  list.push("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge");
+  return list;
+}
+
+/** A full path must exist as a file; a bare name is looked up on PATH. */
+function isInstalled(candidate, { platform, env }) {
+  if (/[\\/]/.test(candidate)) return existsSync(candidate);
+  const suffixes = platform === "win32" ? ["", ".exe", ".cmd"] : [""];
+  return (env.PATH || env.Path || "").split(delimiter).filter(Boolean).some((dir) => suffixes.some((s) => existsSync(join(dir, candidate + s))));
+}
+
+/** The first browser that is really there; says how to point at one when none is. */
+export function findChrome({ platform = process.platform, env = process.env, exists = (c) => isInstalled(c, { platform, env }) } = {}) {
+  const found = chromeCandidates({ platform, env }).find((c) => exists(c));
+  if (!found) throw new Error("Chrome (or Edge) was not found. Install it, or set CHROME_BIN to the program's full path.");
+  return found;
+}
+
 export async function launch({ port = 9333 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "hamkke-chrome-"));
-  const proc = spawn("google-chrome", [
+  const proc = spawn(findChrome(), [
     "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--disable-extensions",
     "--disable-background-networking", "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=127.0.0.1", `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank",
