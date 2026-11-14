@@ -578,7 +578,12 @@ scenario("overflow: a very long unbroken string wraps and never widens the page"
 
 import { contrast, memberColor, INK, PAPER } from "../src/core/paint.js";
 
-const hex = (rgb) => "#" + rgb.match(/\d+/g).slice(0, 3).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
+/** "rgb(…)", "rgba(…)" or "color(srgb r g b / a)" (what color-mix() computes to) → "#rrggbb". */
+const hex = (css) => {
+  const m = /color\(srgb ([-\d.e]+) ([-\d.e]+) ([-\d.e]+)/.exec(css);
+  const parts = m ? m.slice(1, 4).map((v) => Math.round(Math.min(1, Math.max(0, Number(v))) * 255)) : css.match(/\d+/g).slice(0, 3).map(Number);
+  return "#" + parts.map((n) => n.toString(16).padStart(2, "0")).join("");
+};
 
 scenario("contrast: ink, muted text and all eight colours read on the paper, light and dark", async ({ open }) => {
   for (const dark of [false, true]) {
@@ -1029,7 +1034,12 @@ scenario("forms: every field is a visible box that a tap reaches, on every scree
 // ---- glass ---------------------------------------------------------------------------------------
 
 /** "rgb(1, 2, 3)" or "rgba(1, 2, 3, 0.5)" → [r, g, b, a]. */
-const rgba = (css) => { const p = /rgba?\(([^)]+)\)/.exec(css)[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+const rgba = (css) => {
+  const m = /color\(srgb ([-\d.e]+) ([-\d.e]+) ([-\d.e]+)(?: \/ ([\d.e]+))?\)/.exec(css);
+  if (m) return [Number(m[1]) * 255, Number(m[2]) * 255, Number(m[3]) * 255, m[4] === undefined ? 1 : Number(m[4])];
+  const p = /rgba?\(([^)]+)\)/.exec(css)[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+  return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+};
 /** One colour laid over another, as a hex. */
 const over = (top, bottom) => { const [r, g, b, a] = top; const hx = (v) => Math.round(v).toString(16).padStart(2, "0"); return "#" + hx(r * a + bottom[0] * (1 - a)) + hx(g * a + bottom[1] * (1 - a)) + hx(b * a + bottom[2] * (1 - a)); };
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16), 1];
@@ -1379,7 +1389,7 @@ scenario("look: dark is near black; the main button glows, small ones are glass;
   // Pick pink: the same colour in dark and in light.
   await click(page, '[data-key="pink"]');
   const darkAccent = await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`);
-  assert.equal(darkAccent, "#d03d78");
+  assert.equal(darkAccent, "#e05298");
   await click(page, '[data-theme-choice="light"]');
   const lightAccent = await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`);
   assert.equal(lightAccent, darkAccent, "the chosen colour does not change with the theme");
@@ -1388,11 +1398,15 @@ scenario("look: dark is near black; the main button glows, small ones are glass;
   await click(page, '[data-text-size="1.3"]');
   const after = await page.eval(`parseFloat(getComputedStyle(document.querySelector(".layers")).fontSize)`);
   assert.ok(Math.abs(after / before - 1.3) < 0.02, `text ${before} → ${after}`);
+  // The glass takes the colour too.
+  const sky = await page.eval(`(() => { const e = document.createElement("i"); e.style.color = "var(--sky)"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
+  const [r, g, b] = rgba(sky);
+  assert.ok(r > b && r > g, "the sky under the halves turns pink: " + sky);
   await page.shot(out("look-light-pink.png"));
   // Remembered after a reload.
   await page.reload();
   await page.waitFor("window.__app && window.__app.booted");
-  assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`), "#d03d78");
+  assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`), "#e05298");
   assert.equal(await page.eval(`getComputedStyle(document.documentElement).getPropertyValue("--text-scale").trim()`), "1.3");
 });
 

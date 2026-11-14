@@ -20,7 +20,7 @@ export function displaySettings(app, { withColors }) {
     app.events.emit("settings");
   };
   // Your own colour: the presets, and a colour well for any colour at all.
-  const current = settings.accent || ACCENTS[0][2];
+  const current = settings.accent || ACCENTS.find(([key]) => key === "blue")[2];
   const accents = h("div", { class: "swatches", id: "accents", role: "group", "aria-label": "포인트 색" });
   const paintAccents = (hex) => { for (const b of accents.querySelectorAll("[data-accent]")) b.setAttribute("aria-pressed", String(b.dataset.accent === hex)); };
   for (const [key, name, hex] of ACCENTS) {
@@ -34,7 +34,7 @@ export function displaySettings(app, { withColors }) {
   return h("div", { class: "form" },
     h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
-    h("div", { class: "row" }, h("span", { class: "label", text: "포인트 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),

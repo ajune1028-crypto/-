@@ -57,14 +57,20 @@ export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)"
 // it is written on the page itself, over both themes' defaults.
 
 
-/** [key, Korean name, colour]. The first one is the app's own blue. */
+/**
+ * [key, Korean name, colour]: 빨주노초파남보, 갈색, 핑크, 흑백. 파랑 is the app's own.
+ * The chosen one tints the glass, the buttons and the sky under both halves.
+ */
 export const ACCENTS = [
+  ["red", "빨강", "#d93a3a"],
+  ["orange", "주황", "#e0701f"],
+  ["yellow", "노랑", "#d4a514"],
+  ["green", "초록", "#2e9a4f"],
   ["blue", "파랑", "#2466dc"],
-  ["violet", "보라", "#6d4ae0"],
-  ["pink", "분홍", "#d03d78"],
-  ["green", "초록", "#16865a"],
-  ["orange", "주황", "#c8550f"],
-  ["teal", "청록", "#0d7d8f"],
+  ["indigo", "남색", "#3346b8"],
+  ["violet", "보라", "#7a4ad8"],
+  ["brown", "갈색", "#8a5a36"],
+  ["pink", "핑크", "#e05298"],
   ["graphite", "흑백", "#3a3d46"],
 ];
 

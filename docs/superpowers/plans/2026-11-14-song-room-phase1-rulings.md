@@ -58,3 +58,17 @@ Every decision taken on the owner's behalf in this session, in the order made. E
 - Ruling: the browser test driver brings a page to the front before a drag: Chrome hands mouse moves to a background page only on its frames (a drawing scenario took 85 s before, 1.9 s after) — cost if wrong: none.
 - Ruling: on a page with no Claude runtime and no ?dev, rooms are device-only and home says "아직 서버가 없어서 방은 이 기기에만 있어요"; before, such rooms offered an invitation that could not open elsewhere — cost if wrong: none.
 - Ruling: GitHub Pages deploys from main only (the github-pages environment's default); the owner turns Pages on and merges — cost if wrong: none.
+
+## Second round (owner's message of 14 November, evening)
+
+- Ruling: "녹음 기능을 안 만들어" came from the Claude trial page, which may not use the microphone; the record button is now always shown and, where the page cannot record, explains why and offers the phone's own recorder app through `<input type=file accept="audio/*" capture>` (Android opens Samsung 녹음 or the default recorder) — cost if wrong: none; in-app recording still works on https pages.
+- Ruling: file pickers are opened by `<label for>` only, never by a script after an await (some phones and app views refuse a chooser that is not straight from a tap), and importing no longer waits for the audio to wake (some views never answer resume()) — cost if wrong: none.
+- Ruling: phone formats are tested with real files: m4a (AAC, what Samsung 녹음 saves), mp3 and webm made by ffmpeg in the scenario runner; skipped where ffmpeg is missing — cost if wrong: none.
+- Ruling: "직사각형을 잇고" is read as joining a clip with the next one on its row (GarageBand's Join): pieces of one recording merge back; other pairs become one clip of a new combined sound, the gap kept as silence — cost if wrong: the owner meant playback-order lines (that is the whiteboard's 잇기, roadmap 9).
+- Ruling: "음편집" is a piano-roll editor; edits are ops over a sound's notes (nfix/nadd), so they reach every clip cut from that recording — cost if wrong: per-clip note edits would need a copy of the sound first.
+- Ruling: two fingers zoom time sideways and row height up and down; on a computer the plain wheel zooms (as asked: "PC는 스크롤 하면 되게"), Shift+wheel moves sideways, Alt+wheel heightens rows, a mouse drag on empty space pans — cost if wrong: people expecting the wheel to scroll use Shift.
+- Ruling: landscape is "width more than 1.05 × height"; then the scale follows the height (0.85–1.25) and the app takes the width up to 75 rem; writing sheets stay a 22.5 rem column so drawings do not move — cost if wrong: none.
+- Ruling: speeds are 1, 1.5, 2, 3, 0.5 (one button cycles); recordings are time-stretched with WSOLA so the pitch stays; stretching is done once per sound and speed when first played — cost if wrong: a one-off pause of up to a second for a long take at a new speed.
+- Ruling: the area eraser (부분) is the default and is a stroke drawn with destination-out; the stroke eraser (획) hides whole strokes; brushes are pen, pencil (grain), marker, highlighter; both choices are remembered per device — cost if wrong: none.
+- Ruling: "파란 글라스를 빨주노초파남보갈핑으로" makes the glass itself follow the chosen colour: one --tint (the accent) drives the glass gradient, shadows, the sheet rim, the sky under both halves and the ground; presets are 빨강 주황 노랑 초록 파랑 남색 보라 갈색 핑크 흑백 plus any colour — cost if wrong: none.
+- Ruling: a locked clip records who locked it (lockBy); they and the room's owner may unlock — cost if wrong: none.
