@@ -461,6 +461,11 @@ h1, h2, p { margin: 0; }
 }
 .kind:first-child { border-top: 0; }
 .kind-name { flex: 1; min-width: 0; font-weight: 700; }
+/* Another way in: the same room in the phone's browser. */
+.elsewhere { display: flex; gap: 0.5rem; }
+.elsewhere > * { flex: 1; }
+/* A link that looks like a button: centred like a <button>, no underline. */
+a.btn { display: grid; place-items: center; text-decoration: none; }
 .kind-icon { display: grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border-radius: 0.8rem; color: var(--accent-ink); background: color-mix(in srgb, var(--tint) 14%, transparent); }
 .kind-icon svg { width: 1.25rem; height: 1.25rem; }
 .kind-note { display: block; margin-top: 0.1rem; font-size: 0.78rem; font-weight: 400; color: var(--muted); }

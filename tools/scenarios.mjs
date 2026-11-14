@@ -1408,6 +1408,35 @@ scenario("song: the phone's recorder app is asked for with an audio capture pick
   assert.match(file, /\.m4a/);
 });
 
+scenario("song: in an app view that opens no file chooser (the Claude app), a tap on 폰 녹음 앱 offers the same room in Chrome; a file that arrives needs no help", async ({ open, out, fixtures }) => {
+  // Like the Claude app: the frame keeps the microphone, and a tap on a picker opens nothing.
+  const page = await open({ init: `Object.defineProperty(Document.prototype, "permissionsPolicy", { configurable: true, get() { return { allowsFeature: (f) => f !== "microphone" }; } });` });
+  const id = await createSongRoom(page);
+  await page.waitFor(q("#start-open-browser"));
+  const link = await page.eval(`document.getElementById("start-open-browser").href`);
+  assert.ok(link.endsWith("#r-" + id), "Chrome gets the same room: " + link);
+  assert.equal(await page.eval(`document.getElementById("start-open-browser").target`), "_blank");
+  assert.ok(await page.eval(q("#start-copy-link")), "and the link can be copied");
+  await page.shot(out("song-start-in-claude.png"));
+  // A real tap on 폰 녹음 앱: no chooser comes, so after a moment the page says so and offers the way out.
+  const centre = (sel) => page.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  // (Headless Chrome answers a chooser it cannot show with an instant cancel, as an app view that ignores pickers does.)
+  await page.tap(...(await centre("#start-capture")));
+  await page.waitFor(q("#picker-help"), 6000);
+  assert.ok(await page.eval(`!!document.querySelector("#picker-help #help-open-browser") && !!document.querySelector("#picker-help #help-copy-link")`));
+  await settled(page);
+  await page.shot(out("song-picker-help.png"));
+  await page.key("Escape");
+  await page.waitFor(`!${q("#picker-help")}`);
+  // Where a chooser does open (Chrome holds it open for the test) and a file comes back, nothing more is said.
+  await page.interceptChooser(true);
+  await page.tap(...(await centre("#start-file")));
+  await page.setFiles("#song-file", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 20000);
+  await pause(3000);
+  assert.ok(!(await page.eval(q("#picker-help"))), "no help when the file came");
+});
+
 for (const ext of ["m4a", "mp3", "webm"]) {
   scenario(`song: a ${ext} recording (as phones save them) is read and its notes found`, async ({ open, fixtures }) => {
     if (!fixtures[ext]) return console.log(`     (skipped: ffmpeg could not make a ${ext} file here)`);

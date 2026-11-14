@@ -179,6 +179,8 @@ export async function launch({ port = 9333, args = [] } = {}) {
         }
       },
       release: (x, y) => mouse("mouseReleased", x, y, 1),
+      /** On: a tapped file input opens a chooser that Chrome holds open (no dialog) until setFiles answers it. */
+      interceptChooser: (on) => s("Page.setInterceptFileChooserDialog", { enabled: on }),
       /** Puts files into a file input, as if picked in the file chooser. */
       setFiles: async (selector, files) => {
         const { result } = await s("Runtime.evaluate", { expression: `document.querySelector(${JSON.stringify(selector)})` });
