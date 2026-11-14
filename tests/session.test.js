@@ -176,7 +176,9 @@ test("a store over storage that throws is unavailable but still works from memor
   const broken = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); }, removeItem() {} };
   const store = openStore(broken);
   assert.equal(store.available, false);
-  assert.deepEqual(store.get("settings", DEFAULT_SETTINGS), { theme: "system", colors: true, mixing: true });
+  assert.deepEqual(store.get("settings", DEFAULT_SETTINGS), DEFAULT_SETTINGS);
+  assert.equal(DEFAULT_SETTINGS.theme, "system");
+  assert.equal(DEFAULT_SETTINGS.songMode, "piano", "the song room starts on piano");
   store.set("last", { name: "가", pin: "12345" });
   assert.deepEqual(store.get("last", null), { name: "가", pin: "12345" });
 });

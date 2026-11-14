@@ -53,12 +53,12 @@ export function findChrome({ platform = process.platform, env = process.env, exi
   return found;
 }
 
-export async function launch({ port = 9333 } = {}) {
+export async function launch({ port = 9333, args = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "hamkke-chrome-"));
   const proc = spawn(findChrome(), [
     "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--disable-extensions",
     "--disable-background-networking", "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
-    "--disable-backgrounding-occluded-windows", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=127.0.0.1", `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank",
+    "--disable-backgrounding-occluded-windows", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=127.0.0.1", ...args, `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank",
   ], { stdio: "ignore" });
   let url;
   for (let i = 0; i < 150 && !url; i++) {
@@ -138,6 +138,16 @@ export async function launch({ port = 9333 } = {}) {
         await s("Input.dispatchKeyEvent", { type: "keyUp", ...k });
       },
       tap: async (x, y) => { await mouse("mousePressed", x, y, 1); await mouse("mouseReleased", x, y, 1); },
+      // A press that is held and moved: the pieces of a drag.
+      press: (x, y) => mouse("mousePressed", x, y, 1),
+      moveTo: (x, y) => s("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1, pointerType: "mouse" }),
+      release: (x, y) => mouse("mouseReleased", x, y, 1),
+      /** Puts files into a file input, as if picked in the file chooser. */
+      setFiles: async (selector, files) => {
+        const { result } = await s("Runtime.evaluate", { expression: `document.querySelector(${JSON.stringify(selector)})` });
+        if (!result.objectId) throw new Error("no element " + selector);
+        await s("DOM.setFileInputFiles", { files, objectId: result.objectId });
+      },
       dblTap: async (x, y) => {
         await mouse("mousePressed", x, y, 1); await mouse("mouseReleased", x, y, 1);
         await sleep(60);

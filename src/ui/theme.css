@@ -597,3 +597,146 @@ h1, h2, p { margin: 0; }
   flex: none;
 }
 .toolbar .icon-btn[aria-pressed="false"] { color: var(--muted); }
+
+/* ---- song room -------------------------------------------------------------- */
+/* The timeline is a bright, nearly solid sheet like the writing paper, so the
+   clips' colours read; the controls above and below it float as glass. */
+
+.room-top:empty { display: none; }
+.room-top { flex: none; padding: 0 0.7rem 0.4rem; }
+.song-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.song-top-left { display: flex; align-items: center; }
+.song-top .icon-btn { width: 2.2rem; height: 2.2rem; color: var(--soft); }
+.song-top .icon-btn svg { width: 1.15rem; height: 1.15rem; }
+.song-clock { min-width: 3.3rem; padding: 0 0.35rem; font-size: 0.86rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.mode-switch {
+  width: 9.4rem;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shine), 0 4px 14px rgb(38 72 140 / 0.12);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.mode-switch button { height: 2rem; color: var(--soft); }
+.mode-switch button[aria-pressed="true"] { color: #fff; background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 2px 8px rgb(29 91 208 / 0.3); }
+
+.room-body.song-body { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.timeline {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 0.6rem 0.25rem;
+  overflow: auto;
+  border-radius: 1.3rem;
+  background: var(--sheet);
+  box-shadow: var(--glass-shine), 0 10px 26px rgb(38 72 140 / 0.12), 0 1px 2px rgb(38 72 140 / 0.08);
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+  --muted: var(--muted-tone);
+}
+.song-content { position: relative; min-height: 100%; }
+.ruler {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 1.9rem;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  touch-action: none;
+  cursor: pointer;
+}
+.tick { position: absolute; bottom: 0; height: 0.4rem; border-left: 1px solid color-mix(in srgb, var(--ink) 28%, transparent); }
+.tick.half { height: 0.25rem; }
+.tick.named { height: 100%; padding: 0.3rem 0 0 0.25rem; border-left-color: color-mix(in srgb, var(--ink) 40%, transparent); color: var(--muted); font-size: 0.62rem; font-weight: 700; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.head { position: absolute; bottom: 0; z-index: 1; width: 0.8rem; height: 0.6rem; margin-left: -0.4rem; background: var(--accent); clip-path: polygon(0 0, 100% 0, 50% 100%); pointer-events: none; }
+.lanes { position: relative; touch-action: pan-x pan-y; }
+.row-bg { position: absolute; left: 0; right: 0; border-bottom: 1px dashed var(--line); }
+.row-bg:nth-child(even) { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+.row-bg.chosen { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.help, .toast, .center p, .song-status { word-break: keep-all; overflow-wrap: anywhere; }
+.playline { position: absolute; top: 1.9rem; bottom: 0; z-index: 4; width: 2px; margin-left: -1px; background: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--paper) 55%, transparent); pointer-events: none; }
+.song-empty { position: absolute; left: 1.4rem; right: 1.4rem; top: 42%; z-index: 1; color: var(--muted); font-size: 0.86rem; line-height: 1.6; text-align: center; white-space: pre-line; word-break: keep-all; pointer-events: none; }
+
+/* A clip: same height for all, as long as its time. Colour: whoever made it. */
+.clip {
+  position: absolute;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--c) 16%, var(--paper));
+  box-shadow: 0 2px 6px rgb(30 50 100 / 0.08);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: box-shadow 0.15s, opacity 0.15s;
+}
+.clip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.clip.selected { border-color: var(--c); box-shadow: 0 0 0 2px var(--ink), 0 6px 16px rgb(30 50 100 / 0.18); }
+.clip.peer { box-shadow: 0 0 0 2px var(--peer); }
+.clip.selected.peer { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--peer); }
+.clip.muted { opacity: 0.45; filter: saturate(0.35); }
+.clip.no-notes { border-style: dashed; background: color-mix(in srgb, var(--c) 6%, var(--paper)); }
+.clip.lifted { z-index: 6; cursor: grabbing; box-shadow: 0 14px 30px rgb(20 40 90 / 0.3); transition: none; }
+.clip.rec { --c: #e5484d; z-index: 2; border-color: #e5484d; background: color-mix(in srgb, #e5484d 14%, var(--paper)); animation: rec-glow 1.4s ease-in-out infinite; }
+.wave { position: absolute; inset: 0.2rem 0; pointer-events: none; }
+.wave svg { display: block; width: 100%; height: 100%; }
+.wave path { fill: color-mix(in srgb, var(--c) 72%, transparent); }
+.wave.faint path { fill: color-mix(in srgb, var(--c) 20%, transparent); }
+.notes { position: absolute; inset: 0.25rem 0.1rem; pointer-events: none; }
+/* A note: higher is higher; its name sits inside when it fits. */
+.note {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--c);
+  color: var(--paper);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.clip-note { position: absolute; top: 50%; left: 0.55rem; right: 0.4rem; overflow: hidden; color: var(--muted); font-size: 0.68rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; transform: translateY(-50%); }
+.flags { position: absolute; top: 0.2rem; left: 0.3rem; display: flex; gap: 0.15rem; color: var(--ink); }
+.flags svg { width: 0.85rem; height: 0.85rem; }
+.rec-time { position: absolute; top: 0.2rem; right: 0.4rem; color: #b3262b; font-size: 0.62rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+@keyframes rec-glow { 50% { box-shadow: 0 0 0 3px rgb(229 72 77 / 0.25); } }
+
+.clip-menu {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  gap: 0.05rem;
+  padding: 0.2rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shine), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.clip-menu button { padding: 0.4rem 0.5rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+.clip-menu button:disabled { opacity: 0.35; cursor: default; }
+.clip-menu #clip-delete { color: var(--danger); }
+.song-status { position: absolute; top: 2.6rem; left: 50%; z-index: 9; padding: 0.45rem 0.95rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 86%, transparent); color: var(--paper); font-size: 0.78rem; white-space: nowrap; transform: translateX(-50%); }
+
+.song-tools .rec-btn { color: #e5484d; }
+.song-tools .rec-btn.on { background: #e5484d; color: #fff; animation: rec-glow 1.4s ease-in-out infinite; }
+.song-tools #play[aria-pressed="true"] { color: var(--accent-ink); }
+.song-tools #tone[data-tone="dark"] { color: var(--soft); }
+
+.note-list { display: flex; flex-direction: column; margin: 0.8rem 0 0; padding: 0; list-style: none; }
+.note-row { display: grid; grid-template-columns: 3.4rem 1fr auto; align-items: center; width: 100%; padding: 0.6rem 0.1rem; border-top: 1px solid var(--line); text-align: left; }
+.note-list li:first-child .note-row { border-top: 0; }
+.note-name { font-weight: 800; }
+.note-at { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.note-len { font-size: 0.88rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.range { width: 100%; accent-color: var(--accent); }

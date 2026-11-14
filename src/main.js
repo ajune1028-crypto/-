@@ -8,6 +8,7 @@ import { applyTheme, fitScale } from "./ui/theme.js";
 import { showHome } from "./ui/home.js";
 import { showRoom } from "./ui/room-shell.js";
 import { roomLink } from "./core/room.js";
+import { BlobStore } from "./sync/blobs.js";
 
 export const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -51,6 +52,8 @@ export function boot(root) {
   const store = openStore(dev === "broken" ? refusingStorage() : undefined, dev && dev !== "broken" ? `dev-${dev}:${ns}:` : "hamkke:");
   const app = {
     version: APP_VERSION, root, store, events: new Emitter(),
+    // Recordings kept on this device. Test devices get their own.
+    blobs: new BlobStore(dev ? `hamkke-files-${dev}-${ns}` : "hamkke-files"),
     transport: null, limited: false, connecting: true, session: null, handoff: null, fresh: null, booted: false,
     /** The published page's own address, when the build names one (the trial page). */
     shareBase: () => document.querySelector('meta[name="share-base"]')?.content || null,

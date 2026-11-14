@@ -10,6 +10,7 @@
 // gives extra sections for the room's settings sheet.
 
 import { mountTextRoom } from "./text-room.js";
+import { mountSongRoom } from "./song-room.js";
 
 /** The halves of home. A third place (레퍼런스) is planned; see docs/superpowers/specs. */
 export const SIDES = {
@@ -21,7 +22,7 @@ export const ROOM_KINDS = [
   { kind: "daily-text", side: "daily", name: "텍스트", note: "같은 종이에 같이 써요", mount: mountTextRoom },
   { kind: "daily-photo", side: "daily", name: "사진", note: "시간대별 사진과 3초 영상" },
   { kind: "daily-both", side: "daily", name: "통합", note: "텍스트와 사진을 한 방에" },
-  { kind: "creative-song", side: "creative", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요" },
+  { kind: "creative-song", side: "creative", name: "노래 만들기", note: "흥얼거리면 피아노 음이 돼요", mount: mountSongRoom },
   { kind: "creative-writing", side: "creative", name: "글쓰기", note: "같이 쓰는 문서" },
   { kind: "creative-board", side: "creative", name: "화이트보드", note: "큰 종이에 전부 올려요" },
 ];

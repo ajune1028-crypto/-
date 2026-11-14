@@ -122,11 +122,11 @@ scenario("create: an empty room name or a bad code is refused with a reason", as
   assert.equal(await page.eval("location.hash"), "");
 });
 
-scenario("create: the creative side and unfinished kinds say 준비 중", async ({ open }) => {
+scenario("create: on the creative side 노래 만들기 is open and the unfinished kinds say 준비 중", async ({ open }) => {
   const page = await open();
   await click(page, "#add-creative");
   const kinds = await page.eval(`[...document.querySelectorAll(".kind")].map((b) => [b.dataset.kind, b.disabled, b.querySelector(".soon")?.textContent ?? ""])`);
-  assert.deepEqual(kinds, [["creative-song", true, "준비 중"], ["creative-writing", true, "준비 중"], ["creative-board", true, "준비 중"]]);
+  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", true, "준비 중"]]);
 });
 
 scenario("second device: finds the room, joins as a new person with another colour", async ({ open }) => {
@@ -1082,4 +1082,230 @@ scenario("glass: the chrome is frosted and blue, and text stays readable on the 
     assert.equal(hex(home.note.color), hex(css.tokens["--soft"]), "notes on the home fields use the soft tone");
     await a.shot(out(`glass-home-${theme}.png`));
   }
+});
+
+// ---- song room ------------------------------------------------------------------------------------
+
+/** Makes a song room on the creative side and waits for its timeline. */
+async function createSongRoom(page, { room = "우리 노래", name = "가람" } = {}) {
+  await click(page, "#add-creative");
+  await click(page, '[data-kind="creative-song"]');
+  await fill(page, "#room-name", room);
+  await fill(page, "#my-name", name);
+  await click(page, "#create-room");
+  await page.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(page, "#invite-done");
+  await page.waitFor(q("#timeline"));
+  return page.eval("location.hash.slice(3)");
+}
+
+/** Puts a sound file into the song room as if picked from the phone, and waits for its clip. */
+async function importSound(page, file, clips = 1) {
+  await page.setFiles("#song-file", [file]);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === ${clips} && ${q("#song-status")}.hidden`, 20000);
+}
+
+/** Makes sure a clip is the chosen one (a tap on a chosen clip would put its menu away). */
+async function choose(page, sel) {
+  if (!(await page.eval(`${q(sel)}.classList.contains("selected")`))) await click(page, sel);
+  await page.waitFor(`${q(sel)}.classList.contains("selected") && ${q("#clip-menu")}`);
+}
+
+const noteNames = (page, sel = ".clip[data-id]") => page.eval(`[...document.querySelectorAll(${JSON.stringify(sel + " .note")})].map((n) => n.textContent)`);
+const songClips = (page) => page.eval(`window.__app.session.doc("song").layout().map((c) => ({ id: c.id, start: c.start, length: c.length, lane: c.lane, muted: c.muted, offset: c.offset }))`);
+
+/** Taps the time bar at a time (ms). */
+async function tapTime(page, ms) {
+  const at = await page.eval(`(() => {
+    const tl = document.getElementById("timeline");
+    const r = document.getElementById("ruler").getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return { x: r.left + 0.9 * rem + ${ms} / 1000 * Number(tl.dataset.pps), y: r.top + r.height / 2 };
+  })()`);
+  await page.tap(at.x, at.y);
+}
+
+scenario("song: a hummed recording becomes a clip whose bars are the notes sung, named 도레미", async ({ open, out, fixtures }) => {
+  for (const dark of [false, true]) {
+    const page = await open({ dark, dev: dark ? "d" : "a" });
+    await createSongRoom(page);
+    assert.match(await text(page, "#song-empty"), /흥얼거려/);
+    await importSound(page, fixtures.doremi);
+    assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
+    const notes = await page.eval(`[...window.__app.session.doc("song").sources.values()][0].notes.map((n) => [n.p, n.d])`);
+    assert.deepEqual(notes.map(([p]) => p), [60, 62, 64, 65, 67]);
+    for (const [, d] of notes) assert.ok(Math.abs(d - 450) <= 40, "each note sung 0.45 s lasts " + d + " ms");
+    // Higher notes sit higher in the clip.
+    const tops = await page.eval(`[...document.querySelectorAll(".clip[data-id] .note")].map((n) => n.getBoundingClientRect().top)`);
+    for (let i = 1; i < tops.length; i++) assert.ok(tops[i] < tops[i - 1], "each note above the one before: " + tops.join(", "));
+    const fits = await page.eval(`document.documentElement.scrollWidth <= innerWidth && document.getElementById("song-tools").getBoundingClientRect().bottom <= innerHeight`);
+    assert.ok(fits, "nothing sticks out of the 360-wide screen");
+    await page.shot(out(`song-${dark ? "dark" : "light"}.png`));
+  }
+});
+
+scenario("song: 원본 | 피아노 at the top right switches between waveform and notes, per device", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const right = await page.eval(`(() => { const r = document.querySelector(".mode-switch").getBoundingClientRect(); return r.right > innerWidth * 0.7 && r.top < 140; })()`);
+  assert.ok(right, "the switch sits at the top right");
+  assert.equal(await page.eval(`${q("#mode-piano")}.getAttribute("aria-pressed")`), "true", "piano is the default");
+  assert.ok(await page.eval(`!!document.querySelector(".clip[data-id] .wave.faint")`), "the original shows faintly behind the notes");
+  await click(page, "#mode-original");
+  await page.waitFor(`!document.querySelector(".clip[data-id] .note") && document.querySelector(".clip[data-id] .wave:not(.faint)")`);
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).songMode`), "original");
+  await page.shot(out("song-original.png"));
+  await click(page, "#mode-piano");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note").length === 5`);
+});
+
+scenario("song: the microphone records a take, notes appear while singing, and the take keeps them", async ({ open, out }) => {
+  const page = await open();
+  await createSongRoom(page);
+  assert.equal(await page.eval(`${q("#record")}.hidden`), false, "the record button is there where a microphone is");
+  await click(page, "#record");
+  await page.waitFor(q("#rec-clip"), 8000);
+  await page.waitFor(`document.querySelectorAll("#rec-clip .note").length >= 2`, 8000);
+  await page.shot(out("song-recording.png"));
+  await page.waitFor(`document.getElementById("song-clock").textContent >= "0:03.0"`, 8000);
+  await click(page, "#record");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+  const notes = await page.eval(`[...window.__app.session.doc("song").sources.values()][0].notes.map((n) => n.p)`);
+  assert.deepEqual(notes, [67, 64, 64, 65, 62, 62], "the notes sung into the microphone");
+  const blob = await page.eval(`(async () => { const src = [...window.__app.session.doc("song").sources.values()][0]; const kept = await window.__app.blobs.get(src.blob); return kept ? new Uint8Array(kept.data).length : 0; })()`);
+  assert.ok(blob > 100000, "the recording itself is kept on this device: " + blob + " bytes");
+});
+
+scenario("song: split at the playhead, copy, paste on another row, mute, delete, then undo it all", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const [first] = await songClips(page);
+  await tapTime(page, first.start + 1000);
+  await choose(page, ".clip[data-id]");
+  await page.waitFor(`${q("#clip-split")} && !${q("#clip-split")}.disabled`);
+  await click(page, "#clip-split");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+  let clips = await songClips(page);
+  assert.ok(Math.abs(clips[0].length - 1000) < 40 && Math.abs(clips[1].offset - clips[0].length) < 1, JSON.stringify(clips));
+  assert.deepEqual(await noteNames(page, `.clip[data-id="${clips[1].id}"]`), ["미", "파", "솔"]);
+
+  await choose(page, `.clip[data-id="${clips[1].id}"]`);
+  await click(page, "#clip-copy");
+  await tapTime(page, 0);
+  await choose(page, `.clip[data-id="${clips[0].id}"]`);
+  await click(page, "#clip-paste");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 3`);
+  clips = await songClips(page);
+  assert.deepEqual(clips.map((c) => c.lane).sort(), [0, 0, 1], "the paste went to the row below, where there was room");
+
+  const pasted = clips.find((c) => c.lane === 1);
+  await choose(page, `.clip[data-id="${pasted.id}"]`);
+  await click(page, "#clip-mute");
+  await page.waitFor(`document.querySelector('.clip[data-id="${pasted.id}"]').classList.contains("muted")`);
+  await click(page, "#clip-delete");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+
+  for (let i = 0; i < 4; i++) await click(page, "#undo");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
+  clips = await songClips(page);
+  assert.equal(clips[0].length, first.length, "back to the one clip it was");
+  await click(page, "#redo");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+});
+
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+scenario("song: a clip held and dragged moves in time and to another row; a quick drag scrolls instead", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const [before] = await songClips(page);
+  const where = () => page.eval(`(() => {
+    const r = document.querySelector(".clip[data-id]").getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, rowH: 5.25 * rem, pps: Number(document.getElementById("timeline").dataset.pps), scroll: document.getElementById("timeline").scrollLeft };
+  })()`);
+  // A quick drag: the timeline scrolls, the clip stays.
+  let at = await where();
+  await page.press(at.x, at.y);
+  for (let i = 1; i <= 5; i++) await page.moveTo(at.x - 20 * i, at.y);
+  await page.release(at.x - 100, at.y);
+  assert.ok((await where()).scroll > at.scroll, "the timeline scrolled");
+  assert.deepEqual((await songClips(page))[0], before, "the clip did not move");
+  await page.eval(`document.getElementById("timeline").scrollLeft = 0`);
+  // Held, then dragged: one second later, one row down.
+  at = await where();
+  await page.press(at.x, at.y);
+  await pause(550);
+  await page.waitFor(`document.querySelector(".clip.lifted")`);
+  for (let i = 1; i <= 10; i++) await page.moveTo(at.x + (at.pps * i) / 10, at.y + (at.rowH * i) / 10);
+  await page.release(at.x + at.pps, at.y + at.rowH);
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].lane === 1`);
+  const [after] = await songClips(page);
+  assert.ok(Math.abs(after.start - before.start - 1000) <= 30, "moved by a second: " + after.start);
+  await click(page, "#undo");
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].lane === 0`);
+  assert.equal((await songClips(page))[0].start, before.start);
+});
+
+scenario("song: playing moves the playhead and the play button turns into pause", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await tapTime(page, 0);
+  await click(page, "#play");
+  await page.waitFor(`${q("#play")}.getAttribute("aria-pressed") === "true"`);
+  await page.waitFor(`document.getElementById("song-clock").textContent >= "0:00.8"`, 4000);
+  await click(page, "#play");
+  await page.waitFor(`${q("#play")}.getAttribute("aria-pressed") === "false"`);
+  const stopped = await text(page, "#song-clock");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(await text(page, "#song-clock"), stopped, "the playhead stays where it was stopped");
+  await click(page, "#to-start");
+  assert.equal(await text(page, "#song-clock"), "0:00.0");
+});
+
+scenario("song: the tone button switches the piano between 밝게 and 어둡게 and remembers it", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page);
+  assert.equal(await page.eval(`${q("#tone")}.dataset.tone`), "bright");
+  await click(page, "#tone");
+  await page.waitFor(`${q("#tone")}.dataset.tone === "dark"`);
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).pianoTone`), "dark");
+  await click(page, "#room-settings");
+  await page.waitFor(q("#tone-dark"));
+  assert.equal(await page.eval(`${q("#tone-dark")}.getAttribute("aria-pressed")`), "true");
+  await click(page, "#tone-bright");
+  await page.key("Escape");
+  assert.equal(await page.eval(`${q("#tone")}.dataset.tone`), "bright");
+});
+
+scenario("song: where there is no microphone, the record button gives way to importing", async ({ open, fixtures }) => {
+  const page = await open({ init: "Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });" });
+  await createSongRoom(page);
+  assert.equal(await page.eval(`${q("#record")}.hidden`), true);
+  assert.equal(await page.eval(`${q("#import")}.hidden`), false);
+  assert.match(await text(page, "#song-empty"), /가져와/);
+  await importSound(page, fixtures.doremi);
+  assert.equal((await noteNames(page)).length, 5);
+});
+
+scenario("song: a friend's device shows the same clips and plays them as piano", async ({ open, fixtures }) => {
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a, { room: "같이 부르는 방" });
+  await importSound(a, fixtures.doremi);
+  const b = await open({ dev: "b" });
+  await b.goto(await localLink(a, "b", id));
+  await b.waitFor("window.__app && window.__app.booted");
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`document.querySelectorAll(".clip[data-id] .note").length === 5`);
+  assert.deepEqual(await noteNames(b), ["도", "레", "미", "파", "솔"]);
+  await click(b, "#mode-original");
+  await b.waitFor(`${q(".clip[data-id] .clip-note")}?.textContent === "원본은 이 기기에 없어요"`);
+  // A change on one side shows on the other.
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-mute");
+  await b.waitFor(`document.querySelector(".clip[data-id]").classList.contains("muted")`);
 });

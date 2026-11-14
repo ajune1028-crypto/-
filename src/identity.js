@@ -2,7 +2,11 @@
 // name and personal code typed, and display settings. Works from memory when
 // the browser refuses storage.
 
-export const DEFAULT_SETTINGS = { theme: "system", colors: true, mixing: true };
+export const DEFAULT_SETTINGS = {
+  theme: "system", colors: true, mixing: true,
+  // Song room: what to hear and see, the piano's tone, a faint waveform behind the notes, and the overdub delay fix in ms.
+  songMode: "piano", pianoTone: "bright", showWave: true, syncMs: 0,
+};
 
 export function openStore(storage, prefix = "") {
   const memory = new Map();
