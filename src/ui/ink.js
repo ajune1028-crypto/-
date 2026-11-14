@@ -66,9 +66,15 @@ export class InkLayer {
    * onErase  (strokeId) when the stroke eraser touches a stroke
    */
   /** blocked(): true while two fingers zoom, so no new line starts then. */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false }) {
+  /**
+   * room(): px of extra drawing room wanted below the paper's content (while the pen is on).
+   * Drawings may go past the paper's sides (to the screen's edges) and below it: the paper
+   * grows to hold them.
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0 }) {
     this.host = host;
     this.blocked = blocked;
+    this.room = room;
     this.ink = ink;
     this.onStroke = onStroke;
     this.onErase = onErase;
@@ -163,7 +169,9 @@ export class InkLayer {
 
   render() {
     const c = this.canvas;
-    const rect = this.host.getBoundingClientRect();
+    this.grow();
+    const rect = c.getBoundingClientRect();
+    const host = this.host.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
     const w = Math.max(1, Math.round(rect.width * ratio));
     const hgt = Math.max(1, Math.round(rect.height * ratio));
@@ -175,12 +183,24 @@ export class InkLayer {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, hgt);
-    // Drawn at the zoomed size (sharp), in the page's own units.
-    const zoom = this.host.offsetWidth ? rect.width / this.host.offsetWidth : 1;
+    // Drawn at the zoomed size (sharp), in the page's own units, from the paper's corner
+    // (the canvas reaches past the paper's sides).
+    const zoom = this.host.offsetWidth ? host.width / this.host.offsetWidth : 1;
     const scale = (remPx() / 100) * ratio * zoom;
-    g.setTransform(scale, 0, 0, scale, 0, 0);
+    g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
     for (const s of this.ink().strokes()) this.paint(g, s.pts, s.c, s.w, s.b || "pen");
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
+  }
+
+  /** The paper is at least as tall as its lowest drawing, and, while drawing, has room below. */
+  grow() {
+    let lowest = 0;
+    for (const s of this.ink().strokes()) for (let i = 1; i < s.pts.length; i += 3) if (s.pts[i] > lowest) lowest = s.pts[i];
+    if (this.live?.pts) for (let i = 1; i < this.live.pts.length; i += 3) if (this.live.pts[i] > lowest) lowest = this.live.pts[i];
+    const rem = remPx();
+    const want = Math.max(lowest > 0 ? (lowest / 100 + 1.5) * rem : 0, this.tool ? this.room() : 0);
+    const next = want > 0 ? Math.ceil(want) + "px" : "";
+    if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
   paint(g, pts, color, width, brush) {

@@ -1546,6 +1546,76 @@ scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints th
 
 // ---- drawing -----------------------------------------------------------------------------------------
 
+scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes out, for the friend too; it can be taken out", async ({ open, out, fixtures }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("우리 바다 갔던 날");
+  await a.waitFor(`${TODAY}.querySelectorAll(".draw .w").length >= 4`);
+  // Choose 바다 in the box, as a long press would.
+  await a.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); const i = ta.value.indexOf("바다"); ta.focus(); ta.setSelectionRange(i, i + 2); return true; })()`);
+  await a.waitFor(`document.activeElement === ${TODAY}.querySelector("textarea")`);
+  await a.interceptChooser(true);
+  await click(a, "#photo");
+  await a.setFiles("#photo-file", [fixtures.photo]);
+  await a.waitFor(`${TODAY}.querySelector(".draw .w.sparkle")?.textContent === "바다"`, 8000);
+  await b.waitFor(`${TODAY}.querySelector(".draw .w.sparkle")?.textContent === "바다"`, 8000);
+  const hold = async (page, ms) => {
+    const at = await page.eval(`(() => { const r = ${TODAY}.querySelector(".draw .w.sparkle").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.touch("start", [at]);
+    await pause(ms);
+    await page.touch("end");
+  };
+  await hold(b, 900);
+  assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 2 seconds");
+  await hold(b, 2300);
+  await b.waitFor(`document.querySelector("#photo-reveal img")?.naturalWidth > 0`);
+  assert.match(await text(b, ".reveal-who"), /가람 님이 숨겨 둔 사진/);
+  await pause(800);
+  await b.shot(out("text-photo-reveal.png"));
+  await click(b, "#photo-close");
+  await b.waitFor(`!${q("#photo-reveal")}`);
+  // The one who hid it takes it out: no sparkle on either screen.
+  await hold(a, 2300);
+  await a.waitFor(q("#photo-remove"));
+  await click(a, "#photo-remove");
+  await a.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`);
+  await b.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`, 8000);
+});
+
+scenario("text room: two fingers never zoom smaller than the screen; with the pen there is room to draw, and lines past the paper are kept whole", async ({ open }) => {
+  const [a] = await together(open, []);
+  await focusEnd(a);
+  await a.type("한 줄");
+  const box = () => a.eval(`(() => { const p = ${TODAY}.querySelector(".paper").getBoundingClientRect(); const l = document.getElementById("sheets").getBoundingClientRect(); return { left: p.left, top: p.top, w: p.width, h: p.height, bottom: p.bottom, lw: l.width }; })()`);
+  const b0 = await box();
+  // Pinching in leaves the page as wide as the screen: no blank space beside it.
+  const mid = [b0.left + b0.w / 2, b0.top + 30];
+  await a.pinch([[mid[0] - 90, mid[1]], [mid[0] + 90, mid[1]]], [[mid[0] - 30, mid[1]], [mid[0] + 30, mid[1]]]);
+  await frames(a);
+  assert.ok(Math.abs((await box()).lw - b0.lw) < 1, "no blank space beside the page");
+  // Pen on: today's paper opens room below the words to draw in.
+  await click(a, "#pen");
+  await a.waitFor(`!${q("#ink-tools")}.hidden`);
+  const b2 = await box();
+  assert.ok(b2.h > b0.h + 150, `room to draw below: ${b0.h} → ${b2.h}`);
+  // A line from just left of the paper down into the new room.
+  const x0 = b2.left - 8;
+  const y0 = b2.top + 30;
+  const y1 = b2.bottom - 30;
+  await a.press(x0, y0);
+  for (let i = 1; i <= 10; i++) await a.moveTo(x0 + (120 * i) / 10, y0 + ((y1 - y0) * i) / 10);
+  await a.release(x0 + 120, y1);
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
+  const s = await a.eval(`(() => { const st = window.__app.session.doc("k:${day}").strokes()[0]; const rem = parseFloat(getComputedStyle(document.documentElement).fontSize); let lowest = 0; for (let i = 1; i < st.pts.length; i += 3) lowest = Math.max(lowest, st.pts[i]); return { firstX: st.pts[0], lowest: (lowest / 100) * rem }; })()`);
+  assert.ok(s.firstX < 0, "the line began left of the paper and was kept: " + s.firstX);
+  // Pen off: the extra room goes, but the paper still holds the whole drawing.
+  await click(a, "#pen");
+  await frames(a);
+  const b3 = await box();
+  assert.ok(b3.h >= s.lowest && b3.h < b2.h, `the paper holds the drawing: ${b3.h} (lowest point ${s.lowest.toFixed(0)}, with the pen ${b2.h})`);
+});
+
 scenario("text room: two fingers zoom the page, words and drawings together; nothing reflows; the spot between the fingers stays; a line drawn zoomed lands under the finger", async ({ open }) => {
   const [a] = await together(open, []);
   await focusEnd(a);

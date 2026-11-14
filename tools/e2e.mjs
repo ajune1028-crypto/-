@@ -36,6 +36,36 @@ mkdirSync(dirname(fixtures.doremi), { recursive: true });
 }
 
 const server = await serve(dist ? join(root, "dist") : root, PORT);
+// A photo to hide in words: a small gradient PNG, written here without any tools.
+{
+  const { deflateSync } = await import("node:zlib");
+  const crc32 = (buf) => {
+    let crc = 0xffffffff;
+    for (const byte of buf) {
+      crc ^= byte;
+      for (let k = 0; k < 8; k++) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const w = 800, h = 600;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set([Math.round((255 * x) / w), Math.round((180 * y) / h), 200], y * (w * 3 + 1) + 1 + x * 3);
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(w, 0);
+  head.writeUInt32BE(h, 4);
+  head.set([8, 2, 0, 0, 0], 8);
+  fixtures.photo = join(root, "out", "fixtures", "photo.png");
+  writeFileSync(fixtures.photo, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+}
+
 const browser = await launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + fixtures.mic, "--autoplay-policy=no-user-gesture-required"] });
 let seq = 0;
 let failed = 0;

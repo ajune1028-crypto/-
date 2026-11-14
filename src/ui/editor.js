@@ -18,10 +18,14 @@ const DOUBLE_TAP_PX = 24;
 // A press held this long, without moving, asks who wrote the words under it (before the
 // phone's own long press at about 500 ms, which goes on to select the word as usual).
 const HOLD_MS = 450;
+// Holding a sparkling word this long brings out the photo hidden in it.
+const REVEAL_MS = 2000;
 const HOLD_SLOP_PX = 10;
 
 export class SheetEditor {
-  constructor({ app, session, day, isToday, zone, record, onCaret, tell }) {
+  constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {} }) {
+    this.onReveal = onReveal;
+    this.onSelect = onSelect;
     this.app = app;
     this.session = session;
     this.day = day;
@@ -64,12 +68,25 @@ export class SheetEditor {
     for (const type of ["keyup", "focus", "blur", "select"]) ta.addEventListener(type, () => this.caretMoved());
     ta.addEventListener("pointerup", (event) => { this.onTap(event); this.caretMoved(); });
     // Written words carry no time labels; a press held on them tells who wrote them and when.
+    // On a sparkling word, a 2-second hold glows brighter and brings out its photo.
     let hold = null;
-    const letGo = () => { clearTimeout(hold?.timer); hold = null; };
+    const letGo = () => {
+      clearTimeout(hold?.timer);
+      hold?.glow?.classList.remove("charging");
+      hold = null;
+    };
     ta.addEventListener("pointerdown", (event) => {
       letGo();
       const { clientX: x, clientY: y } = event;
-      hold = { id: event.pointerId, x, y, timer: setTimeout(() => { hold = null; this.whoWrote(x, y); }, HOLD_MS) };
+      const glow = this.sparkleAt(x, y);
+      if (glow) {
+        glow.classList.add("charging");
+        hold = { id: event.pointerId, x, y, glow, timer: setTimeout(() => {
+          letGo();
+          const att = this.sheet.attachments().find((a) => a.id === glow.dataset.att);
+          if (att) this.onReveal(att, glow.getBoundingClientRect());
+        }, REVEAL_MS) };
+      } else hold = { id: event.pointerId, x, y, timer: setTimeout(() => { hold = null; this.whoWrote(x, y); }, HOLD_MS) };
     });
     ta.addEventListener("pointermove", (event) => {
       if (hold && event.pointerId === hold.id && Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP_PX) letGo();
@@ -192,6 +209,7 @@ export class SheetEditor {
     while (kids.length > lines.length) kids[kids.length - 1].remove();
     this.shapeWheels();
 
+    this.markSparkles();
     this.drawCarets();
   }
 
@@ -269,6 +287,50 @@ export class SheetEditor {
     const focused = document.activeElement === ta;
     this.onCaret(this, focused ? (ta.selectionStart > 0 ? this.snap.ids[ta.selectionStart - 1] ?? ROOT : ROOT) : null);
     this.drawCarets();
+    if (focused) this.onSelect(this);
+  }
+
+  /** The chosen words as { ch, to } (first and last letter ids), or null when nothing is chosen. */
+  selectionRange() {
+    const ta = this.input;
+    const a = Math.min(ta.selectionStart, ta.selectionEnd);
+    const b = Math.max(ta.selectionStart, ta.selectionEnd);
+    if (a === b) return null;
+    const ch = this.snap.ids[a];
+    const to = this.snap.ids[b - 1];
+    return ch && to ? { ch, to } : null;
+  }
+
+  /** The sparkling word under a point, if any. */
+  sparkleAt(x, y) {
+    return document.elementsFromPoint(x, y).find((el) => el.classList?.contains("sparkle") && this.draw.contains(el)) || null;
+  }
+
+  /** Words holding a hidden photo sparkle (all words the photo's letters touch). */
+  markSparkles() {
+    for (const el of this.draw.querySelectorAll(".w.sparkle")) {
+      el.classList.remove("sparkle");
+      delete el.dataset.att;
+    }
+    const atts = this.sheet.attachments();
+    if (!atts.length) return;
+    const chars = this.sheet.chars();
+    const at = new Map(chars.map((c, i) => [c.id, i]));
+    const words = splitWords(chars);
+    for (const a of atts) {
+      const i0 = at.get(a.ch);
+      const i1 = at.get(a.to);
+      if (i0 === undefined || i1 === undefined) continue;
+      const lo = Math.min(i0, i1);
+      const hi = Math.max(i0, i1);
+      for (const w of words) {
+        if (w.end <= lo || w.start > hi) continue;
+        const span = this.draw.querySelector(`.w[data-anchor="${w.anchor}"]`);
+        if (!span) continue;
+        span.classList.add("sparkle");
+        span.dataset.att = a.id;
+      }
+    }
   }
 
   /** Pixel position of the caret at `index`, relative to the layers box. */

@@ -56,6 +56,9 @@ function greater(node, n, r) {
   return node.n > n || (node.n === n && node.r > r);
 }
 
+/** A hidden photo's data URL stays small enough for the trial store's records. */
+export const MAX_ATT_CHARS = 45000;
+
 export class Sheet {
   constructor() {
     this.version = 0;
@@ -67,6 +70,7 @@ export class Sheet {
     this.pendingCount = 0;
     this.maxN = 0;
     this.mix = new Map();
+    this.atts = new Map(); // photos hidden in words: id → { ch, to, kind, data, w, h, by, at, rm }
     this.unknown = [];
     this.cache = null;
   }
@@ -113,6 +117,27 @@ export class Sheet {
         return this.onChar(op, (node) => {
           if (op.n > node.rm) node.rm = op.n;
         });
+      case "att": {
+        // A photo hidden in the words from ch to to; it waits for both letters.
+        const ok = validId(op.ch) && validId(op.to) && op.kind === "photo" && typeof op.data === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(op.data) &&
+          op.data.length <= MAX_ATT_CHARS && [op.w, op.h].every((v) => Number.isInteger(v) && v > 0 && v <= 4096) && typeof op.by === "string" && op.by.length <= 40;
+        if (!ok) return this.setAside(op);
+        if (!this.nodes.has(op.ch)) return this.wait(op.ch, op);
+        if (!this.nodes.has(op.to)) return this.wait(op.to, op);
+        const before = this.atts.get(op.id);
+        this.atts.set(op.id, { id: op.id, ch: op.ch, to: op.to, kind: op.kind, data: op.data, w: op.w, h: op.h, by: op.by, at: op.at, rm: before ? before.rm : 0 });
+        this.done(op);
+        this.ready.push(op.id);
+        return "applied";
+      }
+      case "arm": {
+        if (!validId(op.a) || !Number.isSafeInteger(op.n) || op.n < 1 || op.n > 1e9) return this.setAside(op);
+        const att = this.atts.get(op.a);
+        if (!att) return this.wait(op.a, op);
+        if (op.n > att.rm) att.rm = op.n;
+        this.done(op);
+        return "applied";
+      }
       case "mix":
         if (!validId(op.ch) || ![0, 1, 2].includes(op.lv)) return this.setAside(op);
         return this.onChar(op, () => {
@@ -221,6 +246,11 @@ export class Sheet {
     const before = this.view().before.get(id);
     if (before === undefined) return 0;
     return before + (this.isVisible(id) ? 1 : 0);
+  }
+
+  /** Photos hidden in words, oldest first: [{ id, ch, to, kind, data, w, h, by, at }]. */
+  attachments() {
+    return [...this.atts.values()].filter((a) => a.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
   }
 
   mixLevel(id) {

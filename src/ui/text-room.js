@@ -1,11 +1,13 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-import { h, iconButton, mount, toast } from "./dom.js";
+import { h, icon, iconButton, mount, toast } from "./dom.js";
+import { watchPickers } from "./picker-watch.js";
 import { watchFingers } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
-import { invertOps, spliceOps } from "../core/edit.js";
+import { invertOps, spliceOps, attachOps, detachOps } from "../core/edit.js";
+import { MAX_ATT_CHARS } from "../core/crdt.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { InkLayer, inkColor } from "./ink.js";
@@ -35,14 +37,37 @@ export function mountTextRoom(body, app, session) {
   const eraserKind = () => (getSettings(app.store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"));
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
-  const toolbar = h("div", { class: "toolbar" }, undoButton, redoButton, colorsButton, penButton);
+  // 사진: choose words, then a photo; it hides in them and they sparkle (2 s hold brings it out).
+  const photoInput = h("input", { type: "file", accept: "image/*", id: "photo-file", class: "vh", tabindex: "-1" });
+  const photoButton = h("label", { class: "icon-btn", id: "photo", for: "photo-file", role: "button", "aria-label": "고른 글자에 사진 숨기기" }, icon("photo"));
+  let chosen = null; // { editor, ch, to }: the words last chosen
+  photoButton.addEventListener("click", (e) => {
+    if (chosen && !readOnlyNow()) return;
+    e.preventDefault();
+    toast(app.root, readOnlyNow() ? "이 방은 읽기만 할 수 있어요" : "사진을 숨길 글자를 먼저 길게 눌러 고르세요", 3200);
+  });
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files?.[0];
+    photoInput.value = "";
+    if (!file || !chosen) return;
+    const target = chosen;
+    const photo = await shrinkPhoto(file).catch(() => null);
+    if (!photo) return void toast(app.root, "이 사진은 읽을 수 없어요", 3200);
+    const made = attachOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, data: photo.data, w: photo.w, h: photo.h, by: session.memberId });
+    session.commit(target.editor.doc, made.ops);
+    toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 2초 꾹 누르면 나와요", 3600);
+  });
+  const stopPhotoWatch = watchPickers([photoInput], () => toast(app.root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200));
+  const readOnlyNow = () => !!session.transport.readOnly;
+  const toolbar = h("div", { class: "toolbar" }, undoButton, redoButton, colorsButton, penButton, photoButton);
+  body.append(photoInput);
   body.append(list);
   body.after(inkTools, toolbar);
 
   // Two fingers zoom the page, words and drawings together; Ctrl+wheel or a trackpad
   // pinch on a computer. The page keeps its width while zoomed, so nothing reflows and
   // drawings stay with their words; the spot between the fingers stays under them.
-  const MIN_PAGE = 0.75;
+  const MIN_PAGE = 1; // never smaller than the screen: no blank space beside the page
   const MAX_PAGE = 3;
   let pageZoom = 1;
   body.classList.add("text-body");
@@ -118,6 +143,7 @@ export function mountTextRoom(body, app, session) {
     }
     drawInkTools();
     buttons();
+    for (const editor of editors.values()) editor.ink?.render();
   }
 
   function drawInkTools() {
@@ -194,13 +220,22 @@ export function mountTextRoom(body, app, session) {
   function editorFor(day) {
     let editor = editors.get(day);
     if (!editor) {
-      editor = new SheetEditor({ app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text) });
+      editor = new SheetEditor({
+        app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text),
+        onReveal: (att, from) => revealPhoto(day, att, from),
+        onSelect: (ed) => {
+          const range = ed.selectionRange();
+          if (range) chosen = { editor: ed, ...range };
+        },
+      });
       editor.setReadOnly(!!app.transport.readOnly);
       editors.set(day, editor);
       const inkDoc = "k:" + day;
       editor.ink = new InkLayer({
         host: editor.paper,
         blocked: () => fingers.pinching,
+        // While the pen is on, today's paper leaves room to draw below the words.
+        room: () => (day === today ? body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
         onStroke: ({ pts, color, width, brush }) => {
           const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
@@ -299,7 +334,43 @@ export function mountTextRoom(body, app, session) {
     record(made.atoms.map((atom) => ({ ...atom, doc: "s:" + today })), false);
   }
 
+  /** The photo hidden in sparkling words comes out of them. */
+  function revealPhoto(day, att, from) {
+    document.getElementById("photo-reveal")?.remove();
+    const who = session.room.member(att.by)?.name || "누군가";
+    const editor = editors.get(day);
+    const shut = () => {
+      box.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (e) => { if (e.key === "Escape") shut(); };
+    // A tap on the dark around the photo closes it; the lift of the finger that held the word does not
+    // (its press began before the photo was there).
+    let pressedHere = false;
+    const box = h("div", { class: "reveal", id: "photo-reveal", role: "dialog", "aria-label": "숨겨 둔 사진",
+      onpointerdown: (e) => { pressedHere = e.target === box; },
+      onclick: (e) => { if (e.target === box && pressedHere) shut(); } },
+      h("span", { class: "reveal-burst", "aria-hidden": "true" }),
+      h("img", { class: "reveal-img", src: att.data, alt: "숨겨 둔 사진", width: att.w, height: att.h }),
+      h("p", { class: "reveal-who", text: `${who} 님이 숨겨 둔 사진` }),
+      h("div", { class: "reveal-actions" },
+        !readOnlyNow() && editor && h("button", { class: "btn quiet small", id: "photo-remove", type: "button", text: "사진 빼기", onclick: () => {
+          session.commit(editor.doc, detachOps(editor.sheet, session.clock, att.id).ops);
+          shut();
+          toast(app.root, "사진을 뺐어요");
+        } }),
+        h("button", { class: "btn small", id: "photo-close", type: "button", text: "닫기", onclick: () => shut() })));
+    // The photo flies out of the word towards the middle of the screen.
+    box.style.setProperty("--dx", Math.round(from.left + from.width / 2 - innerWidth / 2) + "px");
+    box.style.setProperty("--dy", Math.round(from.top + from.height / 2 - innerHeight / 2) + "px");
+    app.root.append(box);
+    document.addEventListener("keydown", onKey);
+  }
+
   const close = () => {
+    document.getElementById("photo-reveal")?.remove();
+    stopPhotoWatch();
+    photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);
     body.removeEventListener("touchmove", onTouchMove);
     body.removeEventListener("touchend", onTouchEnd);
@@ -319,4 +390,33 @@ export function mountTextRoom(body, app, session) {
     list.remove();
   };
   return { close, insertText };
+}
+
+/** A photo made small enough to travel with the words (a JPEG data URL), or null. */
+async function shrinkPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    for (const side of [720, 560, 440, 340, 260]) {
+      const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * k));
+      const h = Math.max(1, Math.round(img.naturalHeight * k));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      for (const q of [0.72, 0.6, 0.48]) {
+        const data = canvas.toDataURL("image/jpeg", q);
+        if (data.length <= MAX_ATT_CHARS) return { data, w, h };
+      }
+    }
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

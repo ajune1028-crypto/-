@@ -106,3 +106,17 @@ export function invertOps(sheet, clock, atoms, dir) {
   }
   return ops;
 }
+
+/** Hides a photo in the words from ch to to (char ids); it sparkles there. */
+export function attachOps(sheet, clock, { ch, to, data, w, h, by, at = Date.now() }) {
+  clock.atLeast(sheet.maxN);
+  return { ops: [{ t: "att", id: clock.next(), ch, to, kind: "photo", data, w, h, by, at }] };
+}
+
+/** Takes a hidden photo out of its words. */
+export function detachOps(sheet, clock, attId) {
+  const att = sheet.atts.get(attId);
+  if (!att || att.rm % 2 === 1) return { ops: [] };
+  clock.atLeast(sheet.maxN);
+  return { ops: [{ t: "arm", id: clock.next(), a: attId, n: att.rm + 1 }] };
+}
