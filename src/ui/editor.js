@@ -46,9 +46,10 @@ export class SheetEditor {
     });
     this.input.setAttribute("autocorrect", "off");
     this.layers = h("div", { class: "layers" }, this.draw, this.carets, this.input);
+    this.paper = h("div", { class: "paper" }, this.stamps, this.layers);
     this.el = h("section", { class: "sheet" + (isToday ? " today" : ""), data: { day } },
       h("h2", { class: "day", text: dayLabel(day) }),
-      h("div", { class: "paper" }, this.stamps, this.layers));
+      this.paper);
 
     const ta = this.input;
     ta.addEventListener("compositionstart", () => { this.composing = true; });

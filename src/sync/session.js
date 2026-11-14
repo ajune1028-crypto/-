@@ -13,6 +13,7 @@ import { Emitter } from "./transport.js";
 import { Clock, Sheet } from "../core/crdt.js";
 import { RoomState, newReplicaId } from "../core/room.js";
 import { SongDoc } from "../core/song.js";
+import { InkDoc } from "../core/ink.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -25,6 +26,8 @@ export const DOC_TYPES = [
   { test: (doc) => doc === ROOM, make: () => new RoomState() },
   { test: (doc) => doc.startsWith(SHEET) && doc.length > SHEET.length, make: () => new Sheet() },
   { test: (doc) => doc === "song", make: () => new SongDoc() },
+  // Drawings on a day's sheet.
+  { test: (doc) => doc.startsWith("k:") && doc.length > 2, make: () => new InkDoc() },
 ];
 
 export class RoomSession extends Emitter {

@@ -138,8 +138,10 @@ export async function launch({ port = 9333, args = [] } = {}) {
         await s("Input.dispatchKeyEvent", { type: "keyUp", ...k });
       },
       tap: async (x, y) => { await mouse("mousePressed", x, y, 1); await mouse("mouseReleased", x, y, 1); },
-      // A press that is held and moved: the pieces of a drag.
-      press: (x, y) => mouse("mousePressed", x, y, 1),
+      // A press that is held and moved: the pieces of a drag. Chrome hands moves to a page only
+      // on its animation frames, which a page in the background hardly gets: come to the front first.
+      press: async (x, y) => { await s("Page.bringToFront"); await mouse("mousePressed", x, y, 1); },
+      front: () => s("Page.bringToFront"),
       moveTo: (x, y) => s("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1, pointerType: "mouse" }),
       release: (x, y) => mouse("mouseReleased", x, y, 1),
       /** Puts files into a file input, as if picked in the file chooser. */
