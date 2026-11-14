@@ -16,7 +16,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 
 - 한국어로 답한다. 사용자는 구어체·음성 받아쓰기로 말하고(오타와 반복이 많다) 보통 폰으로 읽는다. 결론부터, 짧게.
 - 사용자의 말: "나한테 맞냐고 묻지 말고, 이 방향이 본질에 맞는지, 내가 한 모든 말과 들어맞는지 스스로 계속 확인해라. 알아서 다 해라." 세부는 묻지 말고 정한다. 정한 것은 `docs/superpowers/plans/2026-11-12-text-room-phase1-rulings.md`처럼 한 줄씩 남긴다. 되돌릴 수 없는 일(삭제, 푸시, 배포, 계정 만들기)만 먼저 묻는다.
-- 기준은 사용자의 원문이다: `docs/superpowers/source/2026-11-10-original-idea.txt`와 같은 폴더의 참고 이미지 3장. 한 조각이 끝날 때마다 원문과 개요 설계 8절의 체크리스트에 대조한다.
+- 기준은 사용자의 원문이다: `docs/superpowers/source/2026-11-10-original-idea.txt`, 같은 폴더의 참고 이미지 3장, 그리고 그 뒤 대화에서 한 말을 옮겨 둔 `user-messages.md`(최근 것은 원문, 앞선 것은 발췌). 한 조각이 끝날 때마다 원문과 개요 설계 8절의 체크리스트에 대조한다.
 - 사용자가 폰에서 직접 눌러 본다. "된다"고 말하기 전에 실제로 돌려 본다. 11월 13일에 "방이 안 만들어진다"는 사고가 있었다. 테스트가 `el.click()`으로 눌러서 가려진 입력칸을 못 잡았고, 원인은 CSS 클래스 이름 충돌이었다(rulings의 "The 13 November outage").
 
 ## 명령
@@ -67,7 +67,7 @@ node tools/bundle.mjs [--share-base=https://…]   # dist/index.html 한 파일�
 
 ## 문서 (이 순서로 읽는다)
 
-1. `docs/superpowers/source/2026-11-10-original-idea.txt`: 사용자 원문과 참고 이미지
+1. `docs/superpowers/source/`: `2026-11-10-original-idea.txt`(사용자 원문), 참고 이미지 3장, `user-messages.md`(그 뒤 대화에서 한 말). 저장소를 공개로 올리기 전에는 이 폴더를 공개해도 되는지 사용자에게 먼저 묻는다.
 2. `docs/superpowers/specs/2026-11-10-app-overview-design.md`: 전체 결정, 공통 규칙, 8절 기능 체크리스트, 9절 가정
 3. `docs/superpowers/specs/2026-11-10-foundation-text-room-design.md`: 바탕과 텍스트 방(전송 약속은 6.4절)
 4. `docs/superpowers/specs/2026-11-10-song-room-design.md`: 다음에 만들 노래 방
