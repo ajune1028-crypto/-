@@ -1779,6 +1779,10 @@ scenario("drawing: pen, brushes and both erasers on today's sheet; the other dev
   await stroke(a, box.x + box.w * 0.2, box.x + box.w * 0.7, box.y + box.h * 0.3);
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().some((s) => s.b === "highlighter" && s.c === "yellow")`);
   await a.front();
+  // The drawing layer covers the paper (and a little past its sides), never more: a canvas that
+  // takes its own pixel size as its size would double on every redraw until the phone gives up.
+  const layer = await a.eval(`(() => { const c = ${TODAY}.querySelector("canvas.ink").getBoundingClientRect(); const p = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { cw: c.width, ch: c.height, pw: p.width, ph: p.height }; })()`);
+  assert.ok(layer.cw > layer.pw && layer.cw < layer.pw + 40 && Math.abs(layer.ch - layer.ph) < 2, "the layer is the paper's size: " + JSON.stringify(layer));
   await a.shot(out("drawing.png"));
   // Undo: the highlighter goes, then the whole stroke comes back.
   await click(a, "#pen");
