@@ -248,3 +248,23 @@ test("올가미 closes the shortest way: a crossing keeps the loop, a near end t
   // A "6": the end comes back near the middle of the stroke, not the start.
   assert.deepEqual(loopOf([-200, 100, 0, 100, 0, 0, 200, 0, 200, 200, 10, 110]), [0, 100, 0, 0, 200, 0, 200, 200, 10, 110]);
 });
+
+test("photo cards: a small picture stands on the board, moves and goes like any card, and never plays; a bad picture is set aside", async () => {
+  const { orderColor, PASTEL_COLORS } = await import("../src/core/board.js");
+  const { board, clock, commit, song } = setup();
+  const src = "data:image/jpeg;base64," + "A".repeat(400);
+  const pic = commit(addItemOps(clock, board, { kind: "photo", x: 10, y: 20, data: { src, w: 640, h: 480 }, by: "m1" }));
+  assert.deepEqual(board.items().map((i) => [i.kind, i.x, i.w, i.data.w]), [["photo", 10, 200, 640]]);
+  const s = song(300);
+  assert.deepEqual(playOrder(board).map((i) => i.id), [s.id], "photos do not play");
+  commit(setItemOps(clock, board, pic.id, { x: 50 }));
+  assert.equal(board.item(pic.id).x, 50);
+  for (const data of [{ src: "javascript:alert(1)", w: 1, h: 1 }, { src: "data:image/svg+xml;base64,AAAA", w: 1, h: 1 }, { src, w: 0, h: 10 }, { src: "data:image/png;base64," + "A".repeat(70000), w: 10, h: 10 }]) {
+    assert.equal(board.apply({ t: "item", id: clock.next(), kind: "photo", x: 0, y: 0, data, by: "m1", at: 1 }), "unknown", JSON.stringify(data).slice(0, 60));
+  }
+  // Order lines: 무지개 by default, 파스텔, or one colour of the person's own; then around again.
+  assert.equal(orderColor(1, "rainbow"), ORDER_COLORS[0]);
+  assert.equal(orderColor(9, "rainbow"), ORDER_COLORS[0]);
+  assert.equal(orderColor(2, "pastel"), PASTEL_COLORS[1]);
+  assert.equal(orderColor(5, "mine", "#123456"), "#123456");
+});

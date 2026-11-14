@@ -8,7 +8,7 @@
 // its first card stands. Lines are numbered in playing order and coloured
 // 빨주노초파남보검 in turn.
 //
-//   item  { id, kind, x, y, data, by, at }      kept forever, hidden by irm
+//   item  { id, kind, x, y, data, by, at }      note, song or photo; kept forever, hidden by irm
 //   iset  { id, i, f: { x, y, w, text } }       per field, larger id wins
 //   irm   { id, i, n }                          removes counter, odd = hidden
 //   link  { id, a, b, by }                      a then b
@@ -24,7 +24,18 @@ import { fromBase64, toBase64 } from "./b64.js";
 
 /** 빨 주 노 초 파 남 보 검. */
 export const ORDER_COLORS = ["#e5484d", "#f2802a", "#e8b422", "#2f9e5b", "#2f7bf0", "#3b45c4", "#9a4fd8", "#2b2b30"];
-export const ITEM_KINDS = ["note", "song"];
+/** The same order in soft pastel. */
+export const PASTEL_COLORS = ["#f4a3a6", "#f8c29a", "#f2d98a", "#9fd8b2", "#9cc4f7", "#a9b0ea", "#cfaaf0", "#9a9aa3"];
+export const ITEM_KINDS = ["note", "song", "photo"];
+/** A picture on the board is a small JPEG/PNG/WebP kept in the card (as a text room's hidden photo). */
+export const MAX_PHOTO_CHARS = 60000;
+
+/** The colour of order line n (1, 2, 3…): 무지개 (default), 파스텔, or one colour of the person's own. */
+export function orderColor(n, style = "rainbow", mine = ORDER_COLORS[4]) {
+  if (style === "mine") return mine;
+  const list = style === "pastel" ? PASTEL_COLORS : ORDER_COLORS;
+  return list[(n - 1) % list.length];
+}
 const MAX_UNKNOWN = 300;
 const MAX_LOOP_POINTS = 300;
 const MAX_MS = 600000;
@@ -49,6 +60,10 @@ export function songWidth(dur) {
 function validData(kind, d) {
   if (!d || typeof d !== "object" || Array.isArray(d)) return false;
   if (kind === "note") return isText(d.text, 4000);
+  if (kind === "photo") {
+    return typeof d.src === "string" && d.src.length <= MAX_PHOTO_CHARS && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(d.src) &&
+      isInt(d.w, 1, 4096) && isInt(d.h, 1, 4096);
+  }
   return isInt(d.dur, 1, MAX_MS) && typeof d.peaks === "string" && d.peaks.length <= 40000 &&
     Array.isArray(d.notes) && d.notes.length <= 3000 &&
     d.notes.every((n) => Array.isArray(n) && n.length === 4 && isInt(n[0], 0, MAX_MS) && isInt(n[1], 1, MAX_MS) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100)) &&

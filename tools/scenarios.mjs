@@ -2145,11 +2145,11 @@ scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 set
   await page.waitFor(q("#note-text"));
   await fill(page, "#note-text", "후렴은 여기서부터");
   await click(page, "#note-save");
-  await page.waitFor(`document.querySelector(".card.note .card-text")?.textContent === "후렴은 여기서부터"`);
+  await page.waitFor(`document.querySelector(".card.memo .card-text")?.textContent === "후렴은 여기서부터"`);
   // Undo takes the memo away again, step by step.
   await click(page, "#board-undo");
   await click(page, "#board-undo");
-  await page.waitFor(`!document.querySelector(".card.note")`);
+  await page.waitFor(`!document.querySelector(".card.memo")`);
   void songId;
 });
 
@@ -2447,7 +2447,7 @@ scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, an
     await page.waitFor(q("#note-text"));
     await fill(page, "#note-text", memo);
     await click(page, "#note-save");
-    await page.waitFor(`[...document.querySelectorAll(".card.note .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
+    await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const board = `window.__app.session.doc("board")`;
   const ids = await page.eval(`${board}.items().sort((a, b) => a.x - b.x).map((i) => i.id)`);
@@ -2469,6 +2469,78 @@ scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, an
   await page.waitFor(`${board}.links().length === 0`);
 });
 
+scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains them in that order (one undo step); lines are 무지개, 파스텔 or 내 색; a photo card goes on, moves and comes off", async ({ open, out, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await createBoard(page);
+  for (const memo of ["하나", "둘", "셋"]) {
+    await click(page, "#add-note");
+    await page.waitFor(q("#note-text"));
+    await fill(page, "#note-text", memo);
+    await click(page, "#note-save");
+    await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  // A memo's words read on its yellow (the small note bars inside clips are another thing).
+  const memoInk = await page.eval(`(() => { const t = document.querySelector(".card.memo .card-text"); return t && [getComputedStyle(t).color, getComputedStyle(t.closest(".card")).backgroundColor, getComputedStyle(t).fontWeight]; })()`);
+  assert.ok(memoInk, "memo cards are .card.memo");
+  assert.ok(contrast(hex(memoInk[0]), hex(memoInk[1])) >= 4.5, "memo text contrast: " + JSON.stringify(memoInk));
+  const centre = (id) => page.eval(`(() => { const r = document.querySelector('.card[data-id="${id}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const ids = await page.eval(`${board}.items().sort((a, b) => a.x - b.x || a.y - b.y).map((i) => i.id)`);
+  // Drawn third → first → second: the order is the order the line passes them.
+  const order = [ids[2], ids[0], ids[1]];
+  await click(page, "#mode-link");
+  const pts = [];
+  for (const id of order) pts.push(await centre(id));
+  const path = [pts[0]];
+  for (let k = 1; k < pts.length; k++) for (let i = 1; i <= 8; i++) path.push([pts[k - 1][0] + ((pts[k][0] - pts[k - 1][0]) * i) / 8, pts[k - 1][1] + ((pts[k][1] - pts[k - 1][1]) * i) / 8]);
+  // The cards the line passes, in the order it first reaches them (it may cross one on the way).
+  const passed = await page.eval(`(() => { const seen = []; for (const [x, y] of ${JSON.stringify(path)}) { const id = document.elementFromPoint(x, y)?.closest(".card")?.dataset.id; if (id && !seen.includes(id)) seen.push(id); } return seen; })()`);
+  assert.equal(passed.length, 3);
+  assert.equal(passed[0], order[0]);
+  await page.touch("start", [path[0]]);
+  for (const pt of path.slice(1)) await page.touch("move", [pt]);
+  await page.touch("end");
+  await page.waitFor(`${board}.links().length === 2`);
+  assert.deepEqual(await page.eval(`${board}.links().map((l) => [l.a, l.b])`), [[passed[0], passed[1]], [passed[1], passed[2]]]);
+  assert.ok(!(await page.eval(`document.querySelector(".card[data-chain]") || document.querySelector(".chain-line")`)), "the drawing marks are gone");
+  assert.equal(await page.eval(`${board}.items().filter((i) => i.x !== undefined).length`), 3);
+  // Line colours: 무지개, then 파스텔, then the person's own colour; the numbers stay readable.
+  const firstStroke = () => page.eval(`document.querySelector(".board-lines path").getAttribute("stroke")`);
+  assert.equal(await firstStroke(), "#e5484d");
+  await click(page, "#line-colors");
+  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") === "#f4a3a6"`);
+  assert.equal(await page.eval(`document.querySelector(".board-lines .badge text").style.fill`), "rgb(29, 36, 51)", "dark numbers on pastel");
+  await click(page, "#line-colors");
+  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") !== "#f4a3a6"`);
+  const strokes = await page.eval(`[...document.querySelectorAll(".board-lines path")].map((p) => p.getAttribute("stroke"))`);
+  assert.equal(new Set(strokes).size, 1, "one colour of my own");
+  assert.equal(await text(page, "#line-colors .rail-cap"), "내 색");
+  await page.shot(out("board-line-colors.png"));
+  // One undo takes the whole line away.
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.links().length === 0`);
+  // A photo card.
+  await click(page, "#mode-all");
+  await page.interceptChooser(true);
+  await click(page, "#add-photo");
+  await page.setFiles("#board-photo-file", [fixtures.photo]);
+  await page.waitFor(`document.querySelector(".card.photo img")?.complete && document.querySelector(".card.photo img").naturalWidth > 0`, 8000);
+  const photo = await page.eval(`${board}.items().find((i) => i.kind === "photo")`);
+  assert.ok(photo.data.src.startsWith("data:image/jpeg;base64,") && photo.data.src.length <= 60000, "a small JPEG: " + photo.data.src.length);
+  assert.equal(photo.data.w / photo.data.h, 800 / 600);
+  await frames(page); // (the menu moves the frame after the picture is in)
+  const [px, py] = await centre(photo.id);
+  assert.ok(await page.eval(`!!document.elementFromPoint(${px}, ${py})?.closest(".card.photo")`), "the menu stands clear of the picture");
+  await page.press(px, py);
+  for (let i = 1; i <= 6; i++) await page.moveTo(px + i * 10, py + i * 6);
+  await page.release(px + 60, py + 36);
+  await page.waitFor(`${board}.item(${JSON.stringify(photo.id)}).x !== ${photo.x}`);
+  await click(page, `.card[data-id="${photo.id}"]`);
+  await page.waitFor(`${q("#card-menu #card-delete")} && !${q("#card-menu #card-edit")}`);
+  await click(page, "#card-menu #card-delete");
+  await page.waitFor(`!document.querySelector(".card.photo")`);
+});
+
 scenario("whiteboard: two fingers zoom the board; they never move a card or start an order line", async ({ open }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);
@@ -2477,10 +2549,10 @@ scenario("whiteboard: two fingers zoom the board; they never move a card or star
     await page.waitFor(q("#note-text"));
     await fill(page, "#note-text", memo);
     await click(page, "#note-save");
-    await page.waitFor(`[...document.querySelectorAll(".card.note .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
+    await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const items = () => page.eval(`JSON.stringify(window.__app.session.doc("board").items().map((i) => [i.id, i.x, i.y]).sort())`);
-  const card = (n) => page.eval(`(() => { const c = [...document.querySelectorAll(".card.note")].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[${n}]; const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+  const card = (n) => page.eval(`(() => { const c = [...document.querySelectorAll(".card.memo")].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[${n}]; const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
   const links = () => page.eval(`window.__app.session.doc("board").links().length`);
   const i0 = await items();
   // 잇기 mode, a finger on each card, spreading: that is a pinch, not two taps.

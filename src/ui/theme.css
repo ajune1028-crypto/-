@@ -980,13 +980,20 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .board-loops path { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .board-loops path.drawing { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke-dasharray: none; }
 .board.lassoing, .board.lassoing .card { cursor: crosshair; }
+/* 잇기 by a line: the line as it is drawn, and the cards it has passed, numbered. */
+.board-loops path.chain-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+.card[data-chain]::after { content: attr(data-chain); position: absolute; top: -0.6rem; right: -0.6rem; display: grid; place-items: center; min-width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 0.75rem; font-weight: 800; box-shadow: 0 2px 8px rgb(30 50 100 / 0.25); }
+.card[data-chain] { box-shadow: 0 0 0 3px var(--accent), 0 6px 18px rgb(30 50 100 / 0.2); }
+/* A picture card. */
+.card.photo { padding: 0.3rem; background: var(--gloss), var(--paper); }
+.card-photo { display: block; width: 100%; height: auto; border-radius: 0.75rem; pointer-events: none; -webkit-user-drag: none; }
 .lasso-chip { position: absolute; z-index: 3; display: flex; gap: 0.2rem; padding: 0.2rem; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; background: var(--gloss), var(--card-bg), var(--paper); box-shadow: var(--gloss-edge), 0 6px 16px rgb(30 50 100 / 0.18); transform-origin: 0 0; transform: scale(var(--unzoom, 1)); touch-action: none; cursor: grab; white-space: nowrap; }
 .lasso-chip button { min-width: 2.75rem; min-height: 2.5rem; padding: 0 0.7rem; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: 800 0.85rem var(--font); cursor: pointer; }
 .lasso-chip .lasso-play { background: var(--accent); color: var(--on-accent, #fff); }
 .lasso-chip.side { flex-direction: column; }
 .lasso-chip.side button { padding: 0 0.45rem; }
 .card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
-.card.note { background: var(--gloss), color-mix(in srgb, #ffd84d 26%, var(--paper)); border-color: color-mix(in srgb, #e0b000 50%, transparent); }
+.card.memo { background: var(--gloss), color-mix(in srgb, #ffd84d 26%, var(--paper)); border-color: color-mix(in srgb, #e0b000 50%, transparent); }
 .card.chosen { box-shadow: var(--gloss-edge), 0 0 0 2px var(--ink), 0 6px 18px rgb(30 50 100 / 0.2); }
 .card.link-from { box-shadow: 0 0 0 3px var(--accent), 0 6px 18px rgb(30 50 100 / 0.2); }
 .card.playing { box-shadow: var(--gloss-edge), 0 0 0 3px #e5484d, 0 0 22px rgb(229 72 77 / 0.35); }

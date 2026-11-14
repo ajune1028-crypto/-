@@ -21,14 +21,16 @@ import { openNoteEditor } from "./note-editor.js";
 import { timeText } from "./song-view.js";
 import { SPEEDS } from "./song-room.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
-import { memberColor, INK } from "../core/paint.js";
+import { shrinkPhoto } from "./photo.js";
+import { watchPickers } from "./picker-watch.js";
+import { memberColor, INK, contrast } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
 import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
-  lassoOps, moveLassoOps, removeLassoOps, lassoOrder,
+  lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS,
 } from "../core/board.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
@@ -49,6 +51,7 @@ const MAX_SX = 8;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.5;
 const SLOTS_SHOWN = 5;
+const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export function mountBoardRoom(body, app, session, frame) {
@@ -98,6 +101,18 @@ export function mountBoardRoom(body, app, session, frame) {
     onSilent: () => { if (alive) { closeExtra?.(); pickerHelp({ app, roomId: session.roomId, root, mic }); } },
   });
   body.append(...pickers);
+  // 사진: a picture card, picked by a label as every picker is.
+  const photoInput = h("input", { type: "file", accept: "image/*", id: "board-photo-file", class: "vh", tabindex: "-1" });
+  body.append(photoInput);
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files?.[0];
+    photoInput.value = "";
+    if (!file || readOnly()) return;
+    const photo = await shrinkPhoto(file, MAX_PHOTO_CHARS).catch(() => null);
+    if (!photo) return void toast(root, "이 사진은 읽을 수 없어요", 3200);
+    placePhoto(photo);
+  });
+  const stopPhotoWatch = watchPickers([photoInput], () => { if (alive) toast(root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200); });
 
   const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"]], mode, (m) => setMode(m), "boardMode");
   modes.classList.add("board-modes");
@@ -159,7 +174,8 @@ export function mountBoardRoom(body, app, session, frame) {
       keep.add(item.id);
       let el = content.querySelector(`.card[data-id="${item.id}"]`);
       if (!el) {
-        el = h("div", { class: "card " + item.kind, data: { id: item.id } });
+        // A memo is "memo" here: "note" is the small note bars' class, whose white words would ride along.
+        el = h("div", { class: "card " + (item.kind === "note" ? "memo" : item.kind), data: { id: item.id } });
         wireCard(el, item.id);
         content.append(el);
       }
@@ -210,12 +226,14 @@ export function mountBoardRoom(body, app, session, frame) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
     if (lassoTool) return "재생할 카드들을 한 번에 둘러 그리세요. 끝이 시작에 안 닿아도 알아서 닫혀요.";
     if (!items.length) return mode === "song" ? "오른쪽 '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요." : "오른쪽 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.";
-    if (mode === "link") return linkFrom ? "다음에 올 카드를 누르세요. 번호를 누르면 그 줄이 지워져요." : "먼저 재생할 카드부터 차례로 누르세요.";
+    if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나, 카드에서 카드로 줄을 그으세요. 번호를 누르면 그 줄이 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
   }
 
   function cardInside(item, place) {
     if (item.kind === "note") return [h("p", { class: "card-text", text: item.text || "빈 메모" })];
+    // Once the picture is in, the card is taller: its menu and lines are placed again.
+    if (item.kind === "photo") return [h("img", { class: "card-photo", src: item.data.src, alt: "사진", draggable: "false", onload: () => drawSoon() })];
     const d = item.data;
     return [
       h("div", { class: "card-head" },
@@ -254,6 +272,8 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function drawLines() {
     const items = new Map(board.items().map((i) => [i.id, i]));
+    const style = settings().lineColors || "rainbow";
+    const mine = colorOf(session.memberId);
     const parts = [];
     for (const l of board.links()) {
       const a = items.get(l.a);
@@ -261,15 +281,30 @@ export function mountBoardRoom(body, app, session, frame) {
       const ea = content.querySelector(`.card[data-id="${l.a}"]`);
       const eb = content.querySelector(`.card[data-id="${l.b}"]`);
       if (!a || !b || !ea || !eb) continue;
-      const x1 = a.x * sx + widthOf(a);
-      const y1 = a.y + ea.offsetHeight / 2;
-      const x2 = b.x * sx;
-      const y2 = b.y + eb.offsetHeight / 2;
-      const bend = Math.max(60, Math.abs(x2 - x1) / 2);
-      parts.push(`<path d="M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}" stroke="${l.color}" />`);
+      // From the side of one card that faces the other: right to left when they stand side by side,
+      // bottom to top when one stands under the other.
+      const [aw, ah, bw, bh] = [widthOf(a), ea.offsetHeight, widthOf(b), eb.offsetHeight];
+      const [acx, acy, bcx, bcy] = [a.x * sx + aw / 2, a.y + ah / 2, b.x * sx + bw / 2, b.y + bh / 2];
+      const across = Math.max(0, Math.abs(bcx - acx) - (aw + bw) / 2);
+      const down = Math.max(0, Math.abs(bcy - acy) - (ah + bh) / 2);
+      let x1, y1, x2, y2, d;
+      if (down > across) {
+        const s1 = Math.sign(bcy - acy) || 1;
+        [x1, y1, x2, y2] = [acx, acy + (s1 * ah) / 2, bcx, bcy - (s1 * bh) / 2];
+        const bend = Math.max(30, Math.abs(y2 - y1) / 2) * s1;
+        d = `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`;
+      } else {
+        const s1 = Math.sign(bcx - acx) || 1;
+        [x1, y1, x2, y2] = [acx + (s1 * aw) / 2, acy, bcx - (s1 * bw) / 2, bcy];
+        const bend = Math.max(40, Math.abs(x2 - x1) / 2) * s1;
+        d = `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
+      }
+      const color = orderColor(l.n, style, mine);
+      const ink = contrast(color, "#ffffff") >= contrast(color, "#1d2433") ? "#ffffff" : "#1d2433";
+      parts.push(`<path d="${d}" stroke="${color}" />`);
       const mx = (x1 + x2) / 2;
       const my = (y1 + y2) / 2;
-      parts.push(`<g class="badge" data-link="${l.id}" transform="translate(${mx} ${my})"><circle r="13" fill="${l.color}" /><text text-anchor="middle" dy="4.5">${l.n}</text></g>`);
+      parts.push(`<g class="badge" data-link="${l.id}" transform="translate(${mx} ${my})"><circle r="13" fill="${color}" /><text text-anchor="middle" dy="4.5" style="fill:${ink}">${l.n}</text></g>`);
     }
     const html = parts.join("");
     if (lines.dataset.html === html) return;
@@ -444,6 +479,11 @@ export function mountBoardRoom(body, app, session, frame) {
 
   // ---- the tools on the right ------------------------------------------------------
 
+  /** A rail tool that opens a picker: a label, so the chooser opens straight from the tap. */
+  function railLabel(id, iconName, label, forId) {
+    return h("label", { class: "rail-btn", id, for: forId, role: "button", "aria-label": label, title: label }, icon(iconName), h("span", { class: "rail-cap", text: label }));
+  }
+
   function railButton(id, iconName, label, onclick, { text, pressed } = {}) {
     const b = h("button", { class: "rail-btn", id, type: "button", "aria-label": label, title: label, onclick },
       text ? h("span", { class: "rail-text", text }) : icon(iconName),
@@ -456,7 +496,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, lassoTool].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, lassoTool, s.lineColors || "rainbow"].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -465,11 +505,13 @@ export function mountBoardRoom(body, app, session, frame) {
       all: [
         can && railButton("add-note", null, "글", () => addNote(), { text: "+글" }),
         can && railButton("add-song", null, "붙이기", () => addSong(), { text: "+♪" }),
+        can && railLabel("add-photo", "photo", "사진", "board-photo-file"),
         can && railButton("my-songs", "library", "내 노래", () => openSongDrawer()),
       ],
       move: [railButton("board-fit", "fit", "모두 보기", () => fitAll())],
       link: [
         railButton("order-slots", "slots", "순서 칸", () => openSlots()),
+        railButton("line-colors", "palette", LINE_STYLES[s.lineColors || "rainbow"], () => nextLineColors()),
         can && railButton("unlink-all", "eraser", "줄 지우기", () => unlinkAll()),
       ],
       song: [
@@ -513,8 +555,10 @@ export function mountBoardRoom(body, app, session, frame) {
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
-      ] : [
+      ] : item.kind === "note" ? [
         can && one("card-edit", "고치기", () => editNote(item.id)),
+        can && one("card-delete", "지우기", () => removeSelected()),
+      ] : [
         can && one("card-delete", "지우기", () => removeSelected()),
       ]).filter(Boolean));
     }
@@ -619,9 +663,30 @@ export function mountBoardRoom(body, app, session, frame) {
       const start = { x: e.clientX, y: e.clientY, ix: item.x, iy: item.y, moved: false };
       const mine = (ev) => ev.pointerId === e.pointerId;
       const at = (ev) => ({ x: start.ix + (ev.clientX - start.x) / (zoom * sx), y: start.iy + (ev.clientY - start.y) / zoom });
+      // 잇기: a line drawn from this card over others chains them in the order it passes them.
+      const chain = [id];
+      let line = null;
       const move = (ev) => {
         if (!mine(ev)) return;
         if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 4 * zoom) start.moved = true;
+        if (linking && start.moved && !readOnly()) {
+          if (!line) {
+            line = document.createElementNS(SVG, "path");
+            line.setAttribute("class", "drawing chain-line");
+            loops.append(line);
+            const p0 = toBoard(start.x, start.y);
+            line.pts = [p0.x, p0.y];
+          }
+          const p = toBoard(ev.clientX, ev.clientY);
+          line.pts.push(p.x, p.y);
+          line.setAttribute("d", loopPath(line.pts));
+          const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.(".card")?.dataset.id;
+          if (over && !chain.includes(over)) {
+            chain.push(over);
+            markChain(chain);
+          }
+          return;
+        }
         if (linking || readOnly() || !start.moved) return;
         const p = at(ev);
         el.style.left = p.x * sx + "px";
@@ -632,6 +697,8 @@ export function mountBoardRoom(body, app, session, frame) {
         el.removeEventListener("pointerup", up);
         el.removeEventListener("pointercancel", cancel);
         gesture = null;
+        line?.remove();
+        markChain([]);
       };
       const up = (ev) => {
         if (!mine(ev)) return;
@@ -639,7 +706,11 @@ export function mountBoardRoom(body, app, session, frame) {
         // The card's ▶: a tap plays just this card, in every mode.
         if (!start.moved && e.target.closest?.(".card-play")) return void playCard(id);
         // 잇기 counts a tap, not a touch, so a pinch that starts on a card joins nothing.
-        if (linking) return void (start.moved || tapToLink(id));
+        if (linking) {
+          if (!start.moved) return void tapToLink(id);
+          if (chain.length >= 2 && !readOnly()) linkChain(chain);
+          return;
+        }
         if (start.moved && !readOnly()) return void apply(setItemOps(session.clock, board, id, at(ev)));
         if (cutting && item.kind === "song" && !readOnly()) return void cutAt(id, el, ev.clientX);
         if (selected === id && mode === "all" && item.kind === "note") return void editNote(id);
@@ -657,6 +728,41 @@ export function mountBoardRoom(body, app, session, frame) {
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", cancel);
     });
+  }
+
+  /** Numbers the cards a 잇기 line has passed so far (an empty list clears them). */
+  function markChain(ids) {
+    for (const el of content.querySelectorAll(".card[data-chain]")) if (!ids.includes(el.dataset.id)) delete el.dataset.chain;
+    ids.forEach((cid, i) => {
+      const el = content.querySelector(`.card[data-id="${cid}"]`);
+      if (el && ids.length > 1) el.dataset.chain = String(i + 1);
+    });
+  }
+
+  /** Lines between the cards in turn, one undo step; a card already led to or from is passed over. */
+  function linkChain(ids) {
+    const atoms = [];
+    let skipped = 0;
+    for (let i = 1; i < ids.length; i++) {
+      const made = linkOps(session.clock, board, ids[i - 1], ids[i], session.memberId);
+      if (!made.ops.length) {
+        skipped++;
+        continue;
+      }
+      session.commit("board", made.ops);
+      atoms.push(...made.atoms);
+    }
+    record(atoms);
+    linkFrom = ids[ids.length - 1];
+    if (skipped) toast(root, "이미 다른 줄에 이어진 카드는 건너뛰었어요");
+    draw();
+  }
+
+  function nextLineColors() {
+    const order = ["rainbow", "pastel", "mine"];
+    const now = settings().lineColors || "rainbow";
+    setSetting(app.store, "lineColors", order[(order.indexOf(now) + 1) % order.length]);
+    draw();
   }
 
   function tapToLink(id) {
@@ -818,7 +924,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const from = toBoard(r.left + 16, r.top + 16);
     const to = toBoard(r.right - rail.offsetWidth - 28, r.bottom - 56);
     const w = kind === "song" ? songWidth(data.dur) : 200 / sx;
-    const tall = kind === "song" ? 100 : 84;
+    const tall = kind === "song" ? 100 : kind === "photo" ? Math.round((200 * data.h) / data.w) + 16 : 84;
     const boxes = [...content.querySelectorAll(".card")].map((el) => {
       const it = board.item(el.dataset.id);
       return it && { x: it.x, y: it.y, w: el.offsetWidth / sx, h: el.offsetHeight };
@@ -851,6 +957,17 @@ export function mountBoardRoom(body, app, session, frame) {
     draw();
     if (!at.seen) reveal(made.id);
     return made.id;
+  }
+
+  /** A picture card in view, chosen, so its menu is at hand. */
+  function placePhoto({ data, w, h: tall }) {
+    if (readOnly()) return;
+    const at = spotFor("photo", { w, h: tall });
+    const made = addItemOps(session.clock, board, { kind: "photo", x: at.x, y: at.y, data: { src: data, w, h: tall }, by: session.memberId });
+    apply(made);
+    selected = made.id;
+    draw();
+    if (!at.seen) reveal(made.id);
   }
 
   function addNote() {
@@ -1306,6 +1423,7 @@ export function mountBoardRoom(body, app, session, frame) {
       menu?.remove();
       editor?.close();
       stopPickers();
+      stopPhotoWatch();
       fingers.stop();
       player?.close();
       for (const off of offs) off();

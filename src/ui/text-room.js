@@ -1,13 +1,13 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
 import { h, icon, iconButton, mount, toast } from "./dom.js";
+import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { watchFingers } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
 import { invertOps, spliceOps, attachOps, detachOps } from "../core/edit.js";
-import { MAX_ATT_CHARS } from "../core/crdt.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { InkLayer, inkColor } from "./ink.js";
@@ -400,31 +400,3 @@ export function mountTextRoom(body, app, session) {
   return { close, insertText };
 }
 
-/** A photo made small enough to travel with the words (a JPEG data URL), or null. */
-async function shrinkPhoto(file) {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = url;
-    });
-    for (const side of [720, 560, 440, 340, 260]) {
-      const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
-      const w = Math.max(1, Math.round(img.naturalWidth * k));
-      const h = Math.max(1, Math.round(img.naturalHeight * k));
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      for (const q of [0.72, 0.6, 0.48]) {
-        const data = canvas.toDataURL("image/jpeg", q);
-        if (data.length <= MAX_ATT_CHARS) return { data, w, h };
-      }
-    }
-    return null;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
