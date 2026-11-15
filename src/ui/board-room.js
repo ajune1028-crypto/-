@@ -352,7 +352,7 @@ export function mountBoardRoom(body, app, session, frame) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
     if (lassoing()) return "카드들을 둘러 그리세요(끝이 안 닿아도 닫혀요). 테두리 안을 끌면 안의 카드와 함께 옮겨져요.";
     if (!items.length) return mode === "song" ? "오른쪽 '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요." : "오른쪽 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.";
-    if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나, 카드에서 카드로 줄을 그으세요. 번호를 누르면 그 줄이 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
+    if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나 줄을 그으세요. 한 카드에서 여러 줄도 돼요(나중 줄이 다음). 번호를 누르면 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
   }
 
@@ -1149,8 +1149,10 @@ export function mountBoardRoom(body, app, session, frame) {
       return void draw();
     }
     const made = linkOps(session.clock, board, linkFrom, id, session.memberId);
-    if (!made.ops.length) toast(root, "그 카드는 이미 다른 줄에 이어져 있어요");
-    else apply(made);
+    if (made.ops.length) apply(made);
+    // A card that cannot come next (it already follows a card, or it is further back on this
+    // line) is where the next line starts from: tap a card, then another, to branch from it.
+    else if (board.links().some((l) => l.b === id)) toast(root, "그 카드는 이미 앞에 오는 카드가 있어요. 여기서부터 이어요", 2600);
     linkFrom = id;
     draw();
   }

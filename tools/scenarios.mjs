@@ -3128,6 +3128,36 @@ scenario("whiteboard: text is plain text with a colour and a size; the 올가미
   assert.deepEqual([pasted.text, pasted.color, pasted.size], ["가사 첫 줄", "blue", 3]);
 });
 
+// The owner: "한 개에 여러 개를 잇는 거는… 뒤늦게 한 거가 2번으로" and "겹치는 게 있을 때 녹음이 뭐가 먼저 되고".
+scenario("whiteboard 잇기 branches: tap A then B, tap A again and C: two lines out of A, the later one numbered 2; it plays A, B, C; a card already following another is not taken twice", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 3; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#mode-link");
+  const ids = await page.eval(`${board}.items().map((i) => i.id)`);
+  const tapCard = async (id) => { const r = await page.eval(`(() => { const c = document.querySelector('.card[data-id="${id}"] .card-notes').getBoundingClientRect(); return [c.left + c.width / 2, c.top + c.height / 2]; })()`); await page.tap(r[0], r[1]); await frames(page); };
+  await tapCard(ids[0]);
+  await tapCard(ids[1]);
+  await page.waitFor(`${board}.links().length === 1`);
+  await tapCard(ids[0]); // a step back: A becomes where the next line starts
+  await tapCard(ids[2]);
+  await page.waitFor(`${board}.links().length === 2`);
+  assert.deepEqual(await page.eval(`${board}.links().map((l) => [l.a, l.b, l.n])`), [[ids[0], ids[1], 1], [ids[0], ids[2], 2]], "two lines out of A; the later one is 2");
+  assert.deepEqual(await page.eval(`window.__app.session.doc("board").view().order.map((i) => i.id)`), [ids[0], ids[1], ids[2]]);
+  // C already follows A: a line from B into C is not made.
+  await tapCard(ids[1]);
+  await tapCard(ids[2]);
+  await frames(page);
+  assert.equal(await page.eval(`${board}.links().length`), 2);
+});
+
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);

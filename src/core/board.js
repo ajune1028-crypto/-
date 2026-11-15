@@ -270,36 +270,38 @@ export class BoardDoc {
     if (this.cache && this.cache.version === this.version) return this.cache;
     const items = [...this.byId.keys()].map((id) => this.item(id)).filter((i) => !i.removed).sort((p, q) => cmpId(p.id, q.id));
     const shown = new Set(items.map((i) => i.id));
-    // Lines in id order; one that would give a card a second line out or in, or close a loop, is left out.
-    const next = new Map();
-    const prev = new Map();
+    // Lines in id order. A card may lead to several (branches) but follows one card only; a line
+    // that would give a card a second card before it, or close a circle, is left out. So every
+    // card has one place in the order and plays once there.
+    const next = new Map(); // card → its lines out, in the order they were drawn
+    const prev = new Map(); // card → the line into it
     for (const l of [...this.linksById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id))) {
-      if (!shown.has(l.a) || !shown.has(l.b) || next.has(l.a) || prev.has(l.b)) continue;
-      let walk = l.b;
-      let loop = false;
-      while (next.has(walk)) {
-        walk = next.get(walk).b;
-        if (walk === l.a) { loop = true; break; }
+      if (!shown.has(l.a) || !shown.has(l.b) || l.a === l.b || prev.has(l.b)) continue;
+      let walk = l.a;
+      let circle = false;
+      while (prev.has(walk)) {
+        walk = prev.get(walk).a;
+        if (walk === l.b) { circle = true; break; }
       }
-      if (loop) continue;
-      next.set(l.a, l);
+      if (circle) continue;
+      if (!next.has(l.a)) next.set(l.a, []);
+      next.get(l.a).push(l);
       prev.set(l.b, l);
     }
-    // Chains, each placed where its first card stands; then numbered as they will play.
+    // From each first card (left to right), each line followed to its end before the next line
+    // out of the same card; lines numbered as they will play.
     const byId = new Map(items.map((i) => [i.id, i]));
     const heads = items.filter((i) => !prev.has(i.id)).sort((p, q) => p.x - q.x || cmpId(p.id, q.id));
     const order = [];
     const links = [];
-    for (const head of heads) {
-      let at = head;
-      order.push(at);
-      while (next.has(at.id)) {
-        const l = next.get(at.id);
+    const visit = (card) => {
+      order.push(card);
+      for (const l of next.get(card.id) || []) {
         links.push({ id: l.id, a: l.a, b: l.b, n: links.length + 1, color: ORDER_COLORS[links.length % ORDER_COLORS.length] });
-        at = byId.get(l.b);
-        order.push(at);
+        visit(byId.get(l.b));
       }
-    }
+    };
+    for (const head of heads) visit(head);
     this.cache = { version: this.version, items, links, order };
     return this.cache;
   }
@@ -363,14 +365,18 @@ export function removeItemOps(clock, board, itemId) {
 }
 
 /** A line from card a to card b; nothing when a already leads somewhere, b is already led to, or it would loop. */
+/**
+ * A line from card a to card b: b plays after a. A card may lead to several (the later line plays
+ * after the earlier one's whole line); nothing when b already follows a card, or it would close a circle.
+ */
 export function linkOps(clock, board, a, b, by) {
   const { links } = board.view();
-  if (a === b || !board.item(a) || !board.item(b) || links.some((l) => l.a === a || l.b === b)) return { ops: [], atoms: [] };
-  let walk = b;
-  const next = new Map(links.map((l) => [l.a, l.b]));
-  while (next.has(walk)) {
-    walk = next.get(walk);
-    if (walk === a) return { ops: [], atoms: [] };
+  if (a === b || !board.item(a) || !board.item(b) || links.some((l) => l.b === b)) return { ops: [], atoms: [] };
+  const before = new Map(links.map((l) => [l.b, l.a]));
+  let walk = a;
+  while (before.has(walk)) {
+    walk = before.get(walk);
+    if (walk === b) return { ops: [], atoms: [] };
   }
   clock.atLeast(board.maxN);
   const op = { t: "link", id: clock.next(), a, b, by };

@@ -315,3 +315,25 @@ test("정리: cards laid in one row from the left, tops at the highest, an even 
   assert.ok(pts.length >= 16 && pts.length % 2 === 0 && pts.every(Number.isInteger));
   assert.ok(insideLoop(pts, 200, 50) && insideLoop(pts, 5, 50) && !insideLoop(pts, 200, 140), "the box's inside is inside");
 });
+
+test("잇기 branches: one card may lead to several (the later line comes after, its number next); a card follows one card only; the order follows each line to its end before the next", () => {
+  const { board, clock, commit, song } = setup();
+  const a = song(0);
+  const b = song(300);
+  const c = song(600);
+  const d = song(900);
+  const e = song(1200);
+  commit(linkOps(clock, board, a.id, b.id, "m1"));
+  commit(linkOps(clock, board, b.id, d.id, "m1"));
+  const branch = commit(linkOps(clock, board, a.id, c.id, "m1"));
+  assert.equal(branch.ops.length, 1, "a second line out of a card is a branch");
+  assert.deepEqual(playOrder(board).map((i) => i.id), [a.id, b.id, d.id, c.id, e.id], "a, then b's line to its end (d), then a's later line (c); the rest from the left");
+  assert.deepEqual(board.links().map((l) => [l.a, l.b, l.n]), [[a.id, b.id, 1], [b.id, d.id, 2], [a.id, c.id, 3]], "numbers as they play");
+  assert.equal(linkOps(clock, board, e.id, c.id, "m1").ops.length, 0, "c already follows a: one card before each");
+  assert.equal(linkOps(clock, board, d.id, a.id, "m1").ops.length, 0, "no circles");
+  // Two devices drawing lines into the same card at once: both keep the earlier line, the same order.
+  const x = linkOps(clock, board, e.id, d.id, "m1").ops; // refused here (d follows b) ...
+  assert.equal(x.length, 0);
+  board.apply({ t: "link", id: clock.next(), a: e.id, b: d.id, by: "m2" }); // ... but if it comes from elsewhere it is left out
+  assert.deepEqual(playOrder(board).map((i) => i.id), [a.id, b.id, d.id, c.id, e.id]);
+});
