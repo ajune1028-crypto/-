@@ -1033,7 +1033,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 올가미: a dashed loop under the cards; its chip stays the same size at any zoom. */
 .board-loops { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .board-loops path { fill: color-mix(in srgb, var(--lc, var(--accent)) 10%, transparent); stroke: var(--lc, var(--accent)); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.board-loops path.drawing { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke-dasharray: none; }
+/* While it is drawn, the loop is a neon line only (nothing filled); closed, it is the plain loop again. */
+.board-loops path.drawing { fill: none; stroke-dasharray: none; stroke-width: 3; filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 6px var(--accent)); }
 .board.lassoing, .board.lassoing .card { cursor: crosshair; }
 /* 잇기 by a line: the line as it is drawn, and the cards it has passed, numbered. */
 .board-loops path.chain-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
@@ -1232,7 +1233,6 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 올가미: what it takes (곡·글·그림·전체), its neon when it closes, and 노래 working on its part only. */
 .lasso-chip .lasso-kind { background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: 0.78rem; }
 #lasso-kinds button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.board-loops path.neon { stroke-dasharray: none; stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--lc, var(--accent))) drop-shadow(0 0 9px var(--lc, var(--accent))); }
-.board-loops path.drawing.near { filter: drop-shadow(0 0 5px var(--lc, var(--accent))); stroke-width: 3; }
+.board-loops path.drawing.near { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 11px var(--accent)); }
 .card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s; }
 .board-content.focus .card:not(.in-focus) { opacity: 0.3; }

@@ -2482,7 +2482,7 @@ scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노�
 
 // The owner: "곡, 텍스트, 그림, 전체… 순서 정리… 붙여넣기… 처음 부분과 끝부분이 엄청 미세하게 가깝다거나… 다른 손가락으로
 // 한 번 터치… 왼쪽 딸깍을 누르고 있다가 오른쪽 딸깍… 빛나면서 네온 같이… 노래 모드에서 그 올가미 선택한 부분만".
-scenario("whiteboard 올가미 closing and kinds: brought back to its start it closes before the lift and shines; a second finger's tap and a right click close it too; 곡·글·그림·전체 decide what 지우기 and a drag take (drawings move with it); 붙여넣기 puts what was copied inside; in 노래 only its part plays", async ({ open, out, fixtures }) => {
+scenario("whiteboard 올가미 closing and kinds: drawn, its line is neon and what it goes round lights up; brought back to its start it closes before the lift as the plain loop; a second finger's tap and a right click close it too; 곡·글·그림·전체 decide what 지우기 and a drag take (drawings move with it); 붙여넣기 puts what was copied inside; in 노래 only its part plays", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2503,14 +2503,22 @@ scenario("whiteboard 올가미 closing and kinds: brought back to its start it c
   await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
   await click(page, "#board-pen");
   await click(page, "#mode-lasso");
-  // Round everything, coming right back to the start: it closes (and shines) before the finger lifts.
+  // Round everything. While it is drawn the line is neon (the line only); nearly closed, what it goes
+  // round lights up with it; brought right back to the start it closes before the finger lifts, and is
+  // the plain loop again ("원래 하던 대로").
   const box = { l: v.l - 16, t: v.t - 16, r: Math.min(v.r + 16, 520), b: v.b + 60 };
-  const ring = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 4]];
+  const ring = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b]];
   await page.touch("start", [ring[0]]);
   for (let k = 1; k < ring.length; k++) for (let i = 1; i <= 8; i++) await page.touch("move", [[ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * i) / 8, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * i) / 8]]);
-  await page.waitFor(`${board}.lassos().length === 1`);
-  assert.ok(await page.eval(`!!document.querySelector(".board-loops path.neon")`), "it shines when it closes");
+  const line = await page.eval(`(() => { const p = document.querySelector(".board-loops path.drawing"); const cs = getComputedStyle(p); return { fill: cs.fill, glow: cs.filter }; })()`);
+  assert.ok(line.fill === "none" && line.glow.includes("drop-shadow"), "a neon line, nothing filled: " + JSON.stringify(line));
+  for (const y of [box.t + 90, box.t + 60, box.t + 30]) await page.touch("move", [[box.l, y]]);
+  await page.waitFor(`document.querySelector(".board-loops path.drawing.near") && document.querySelectorAll(".card.lasso-glow").length === 2`);
   await page.shot(out("board-lasso-neon.png"));
+  await page.touch("move", [[box.l, box.t + 6]]);
+  await page.waitFor(`${board}.lassos().length === 1`);
+  const closed = await page.eval(`(() => { const p = document.querySelector(".board-loops path[data-lasso]"); return { drawing: !!document.querySelector(".board-loops path.drawing"), dash: getComputedStyle(p).strokeDasharray, glowing: document.querySelectorAll(".card.lasso-glow").length }; })()`);
+  assert.ok(!closed.drawing && closed.dash !== "none" && closed.glowing === 0, "closed: the plain dashed loop, nothing glowing: " + JSON.stringify(closed));
   await page.touch("end");
   const loop = await page.eval(`${board}.lassos()[0].id`);
   assert.equal(await text(page, `[id="lasso-kind-${loop}"]`), "전체 3", "전체: the song, the text and the drawing");

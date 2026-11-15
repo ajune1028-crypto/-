@@ -84,7 +84,6 @@ export function mountBoardRoom(body, app, session, frame) {
   const loopKinds = new Map();
   let focusLoop = null; // the loop last used: in 노래 only its part is played and worked on
   let focusOff = false; // 노래's 올가미 부분만 turned off
-  let glowLoop = null; // a loop just closed: it shines like neon a moment, and what it holds with it
   let loopDrag = null; // a loop being dragged by its chip: { id, dx, dy } on the board
   let chipDragged = false;
   let player = null;
@@ -466,7 +465,7 @@ export function mountBoardRoom(body, app, session, frame) {
   function drawLassos() {
     const all = board.lassos();
     const shift = (l) => (loopDrag?.id === l.id ? [loopDrag.dx, loopDrag.dy] : [0, 0]);
-    const html = all.map((l) => `<path data-lasso="${l.id}"${l.id === glowLoop ? ` class="neon"` : ""}${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
+    const html = all.map((l) => `<path data-lasso="${l.id}"${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
     if (loopGroup.dataset.html !== html) {
       loopGroup.dataset.html = html;
       loopGroup.innerHTML = html;
@@ -1331,7 +1330,10 @@ export function mountBoardRoom(body, app, session, frame) {
       loop.pts.push(q.x, q.y);
       live.setAttribute("d", loopPath(loop.pts));
       const back = Math.hypot(ev.clientX - loop.start[0], ev.clientY - loop.start[1]);
-      live.classList.toggle("near", loop.length > LONG && back < NEAR);
+      const near = loop.length > LONG && back < NEAR;
+      live.classList.toggle("near", near);
+      // Nearly closed: what it is about to hold lights up with the line ("그 애들을 포함하는 느낌").
+      previewHold(near ? loop.pts : null);
       if (loop.length > LONG && back < SNAP) close();
     };
     // A second finger: lifted quickly where it came down, it closes the loop; moved, it is a pinch.
@@ -1363,6 +1365,7 @@ export function mountBoardRoom(body, app, session, frame) {
       window.removeEventListener("pointerup", secondUp, true);
       surface.removeEventListener("contextmenu", rightClick);
       live.remove();
+      previewHold(null);
       gesture = null;
     };
     const up = (ev) => {
@@ -1391,17 +1394,19 @@ export function mountBoardRoom(body, app, session, frame) {
     surface.addEventListener("contextmenu", rightClick);
   }, true);
 
-  /** A loop just closed shines like neon for a moment, and what it holds glows with it. */
+  /** A loop just closed is the plain loop again ("원래 하던 대로"); it is the one 노래 works on now. */
   function shine(id) {
     if (!id) return;
-    glowLoop = id;
     focusLoop = id;
     draw();
-    setTimeout(() => {
-      if (glowLoop !== id) return;
-      glowLoop = null;
-      if (alive) draw();
-    }, 1400);
+  }
+
+  /** While a loop is nearly closed, the cards its line goes round light up with it (null: none). */
+  function previewHold(pts) {
+    for (const el of content.querySelectorAll(".card")) {
+      const inside = !!pts && insideLoop(pts, (el.offsetLeft + el.offsetWidth / 2) / sx, el.offsetTop + el.offsetHeight / 2);
+      el.classList.toggle("lasso-glow", inside);
+    }
   }
 
   /** A loop dragged from inside: it and the cards in it move together, as one undo step. */
@@ -2245,12 +2250,8 @@ export function mountBoardRoom(body, app, session, frame) {
     if (focusLoop && !all.some((l) => l.id === focusLoop)) focusLoop = null;
     const focusing = mode === "song" && !!focusLoop && !focusOff;
     const inFocus = focusing ? new Set(itemsInLoop(board, focusLoop).map((c) => c.id)) : null;
-    const glowing = glowLoop && all.some((l) => l.id === glowLoop) ? new Set(loopHolds(glowLoop).cards.map((c) => c.id)) : null;
     content.classList.toggle("focus", focusing);
-    for (const el of content.querySelectorAll(".card")) {
-      el.classList.toggle("in-focus", !!inFocus?.has(el.dataset.id));
-      el.classList.toggle("lasso-glow", !!glowing?.has(el.dataset.id));
-    }
+    for (const el of content.querySelectorAll(".card")) el.classList.toggle("in-focus", !!inFocus?.has(el.dataset.id));
   }
 
   /** Shows the position line (and its time) on the chosen song card, and a light tick each second while chosen. */
