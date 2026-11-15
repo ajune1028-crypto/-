@@ -2313,6 +2313,75 @@ async function createBoard(page, { room = "우리 보드", name = "가람" } = {
   return page.eval("location.hash.slice(3)");
 }
 
+/** Writes on the board where the writing opened (in place, since 15 November), then ends it. */
+async function writeMemo(page, text) {
+  await page.waitFor(`document.activeElement?.id === "board-typing"`);
+  await page.type(text);
+  await page.key("Escape");
+  await page.waitFor(`!${q("#board-typing")}`);
+}
+
+// 본질 5.5: "엄청 크게… 무한적으로" - the board is the whole screen and the bars float over it.
+scenario("whiteboard: the board runs to every edge of the screen under the floating bars; new cards and 모두 보기 keep to the part in view", async ({ open }) => {
+  const page = await open();
+  await createBoard(page);
+  const edges = await page.eval(`(() => { const b = document.getElementById("board").getBoundingClientRect(); return [b.left, innerWidth - b.right, b.top, innerHeight - b.bottom].map((v) => Math.round(v)); })()`);
+  assert.ok(edges.every((v) => v <= 1), "edge to edge: " + edges);
+  const inView = () => page.eval(`(() => { const v = document.getElementById("room-body").getBoundingClientRect(); return [...document.querySelectorAll(".card")].map((c) => { const r = c.getBoundingClientRect(); return r.top >= v.top - 1 && r.bottom <= v.bottom + 1; }); })()`);
+  for (const memo of ["하나", "둘"]) {
+    await click(page, "#add-note");
+    await writeMemo(page, memo);
+  }
+  assert.deepEqual(await inView(), [true, true], "new cards land in the part in view, below the bars");
+  await click(page, "#mode-move");
+  await click(page, "#board-fit");
+  await frames(page);
+  assert.deepEqual(await inView(), [true, true], "모두 보기 shows them in the part in view");
+  await click(page, "#mode-all");
+});
+
+// 본질 5.5: "노트처럼 글 쓰는 것도 진짜 잘 되고" - 글쓰기 writes where the finger is, in place.
+scenario("whiteboard 글쓰기: a tap writes right there and a friend sees the words come; a tap on words writes on in them; a tap outside only ends it; empty writing leaves nothing; undo takes it back step by step", async ({ open }) => {
+  const a = await open({ dev: "a" });
+  const id = await createBoard(a);
+  const b = await open({ dev: "b", hash: "r-" + id });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(q("#board"));
+  assert.deepEqual(await a.eval(`[...document.querySelectorAll(".board-modes button")].map((x) => x.textContent)`), ["전체", "이동", "글쓰기", "잇기", "노래", "올가미"]);
+  await click(a, "#mode-write");
+  const spot = await a.eval(`(() => { const v = document.getElementById("room-body").getBoundingClientRect(); return [v.left + 70, v.top + 140]; })()`);
+  const notes = (p) => p.eval(`window.__app.session.doc("board").items().filter((i) => i.kind === "note").map((i) => i.text)`);
+  await a.tap(spot[0], spot[1]);
+  await a.waitFor(`document.activeElement?.id === "board-typing"`);
+  await a.type("여기에 바로");
+  await b.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "note" && i.text === "여기에 바로")`);
+  const at = await a.eval(`(() => { const r = document.getElementById("board-typing").getBoundingClientRect(); return [r.left, r.top]; })()`);
+  assert.ok(Math.abs(at[0] - spot[0]) < 30 && Math.abs(at[1] - spot[1]) < 30, "the words are where the finger was: " + at + " / " + spot);
+  // A tap outside ends the writing and does nothing else.
+  await a.tap(spot[0], spot[1] + 220);
+  await a.waitFor(`!${q("#board-typing")}`);
+  assert.deepEqual(await notes(a), ["여기에 바로"]);
+  // Writing begun and left empty leaves nothing behind.
+  await a.tap(spot[0], spot[1] + 220);
+  await a.waitFor(`document.activeElement?.id === "board-typing"`);
+  await a.tap(spot[0], spot[1] + 320);
+  await a.waitFor(`!${q("#board-typing")}`);
+  assert.deepEqual(await notes(a), ["여기에 바로"], "no empty text left behind");
+  // A tap on the words writes on in them.
+  await click(a, ".card.memo");
+  await a.waitFor(`document.activeElement?.id === "board-typing" && document.activeElement.value === "여기에 바로"`);
+  await a.type(" 더");
+  await a.key("Escape");
+  await a.waitFor(`!${q("#board-typing")}`);
+  assert.deepEqual(await notes(a), ["여기에 바로 더"]);
+  await b.waitFor(`window.__app.session.doc("board").items().some((i) => i.text === "여기에 바로 더")`);
+  // Undo: the added words go, then the new text, one step each.
+  await click(a, "#board-undo");
+  await a.waitFor(`window.__app.session.doc("board").items().some((i) => i.text === "여기에 바로")`);
+  await click(a, "#board-undo");
+  await a.waitFor(`window.__app.session.doc("board").items().filter((i) => i.kind === "note").length === 0`);
+});
+
 scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 sets the playing order with numbered rainbow lines", async ({ open, out, fixtures }) => {
   const page = await open();
   const boardId = await createBoard(page, { room: "순서 보드" });
@@ -2352,9 +2421,7 @@ scenario("whiteboard: song clips arrive by 보내기 and by + 노래; 잇기 set
   // A memo card.
   await click(page, "#mode-all");
   await click(page, "#add-note");
-  await page.waitFor(q("#note-text"));
-  await fill(page, "#note-text", "후렴은 여기서부터");
-  await click(page, "#note-save");
+  await writeMemo(page, "후렴은 여기서부터");
   await page.waitFor(`document.querySelector(".card.memo .card-text")?.textContent === "후렴은 여기서부터"`);
   // Undo takes the memo away again, step by step.
   await click(page, "#board-undo");
@@ -2375,7 +2442,7 @@ const cardBox = (page, n = 0) => page.eval(`(() => { const c = [...document.quer
 scenario("whiteboard 노래 모드: modes on top, each mode's tools on the right; 내 노래 slides in from the right; song cards are as long as their songs and stretch sideways", async ({ open, out, fixtures }) => {
   const page = await open();
   await songThenBoard(page, fixtures);
-  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".board-modes button")].map((b) => b.textContent)`), ["전체", "이동", "잇기", "노래", "올가미"]);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".board-modes button")].map((b) => b.textContent)`), ["전체", "이동", "글쓰기", "잇기", "노래", "올가미"]);
   const rail = () => page.eval(`[...document.querySelectorAll("#board-rail button, #board-rail label")].map((b) => b.id)`);
   assert.ok((await rail()).includes("add-note"), "전체 has its own tools on the right");
   await click(page, "#mode-song");
@@ -2598,7 +2665,7 @@ scenario("whiteboard 올가미: a loop drawn round one card with a finger closes
   await click(page, "#mode-song");
   await page.waitFor(`${q("#mode-lasso")}.getAttribute("aria-pressed") === "false"`);
   const pan0 = await page.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
-  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = b.getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 150; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
+  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = document.getElementById("room-body").getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 150; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
   assert.ok(empty, "an empty spot on the board");
   await page.touch("start", [empty]);
   for (let i = 1; i <= 6; i++) await page.touch("move", [[empty[0] - i * 20, empty[1]]]);
@@ -2643,7 +2710,7 @@ scenario("whiteboard: each song card has its own ▶ - one tap plays just that c
   await page.eval(`(() => { window.__played = []; new MutationObserver(() => { for (const c of document.querySelectorAll(".card.song.playing")) if (!window.__played.includes(c.dataset.id)) window.__played.push(c.dataset.id); }).observe(document.getElementById("board-content"), { subtree: true, attributes: true, attributeFilter: ["class"] }); return true; })()`);
   const playOf = `.card[data-id="${second.id}"] .card-play`;
   // (A card just placed is chosen, with its menu; a tap on the empty board puts that away first.)
-  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = b.getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 20; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
+  const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = document.getElementById("room-body").getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 20; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
   await page.tap(empty[0], empty[1]);
   await page.waitFor(`!${q("#card-menu")}`);
   await click(page, playOf);
@@ -2668,9 +2735,7 @@ scenario("menus: with a card's menu open, a tap on another card only puts the me
   await createBoard(page);
   for (const memo of ["하나", "둘"]) {
     await click(page, "#add-note");
-    await page.waitFor(q("#note-text"));
-    await fill(page, "#note-text", memo);
-    await click(page, "#note-save");
+    await writeMemo(page, memo);
     await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const ids = await page.eval(`window.__app.session.doc("board").items().map((i) => i.id)`);
@@ -2693,9 +2758,9 @@ scenario("whiteboard: text is plain text with a colour and a size; the 올가미
   await songThenBoard(page, fixtures);
   const board = `window.__app.session.doc("board")`;
   await click(page, "#add-note");
-  await page.waitFor(q("#note-text"));
-  await fill(page, "#note-text", "가사 첫 줄");
-  await click(page, "#note-save");
+  await writeMemo(page, "가사 첫 줄");
+  // Written in place, then chosen with a tap: its menu has the colours and sizes.
+  await click(page, ".card.memo");
   await page.waitFor(`${q("#card-menu")} && ${q("#card-menu #card-color")}`);
   await click(page, "#card-color");
   await page.waitFor(q('#card-menu [data-text-color="blue"]'));
@@ -2748,9 +2813,7 @@ scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, an
   await createBoard(page);
   for (const memo of ["하나", "둘", "셋"]) {
     await click(page, "#add-note");
-    await page.waitFor(q("#note-text"));
-    await fill(page, "#note-text", memo);
-    await click(page, "#note-save");
+    await writeMemo(page, memo);
     await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const board = `window.__app.session.doc("board")`;
@@ -2778,9 +2841,7 @@ scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains t
   await createBoard(page);
   for (const memo of ["하나", "둘", "셋"]) {
     await click(page, "#add-note");
-    await page.waitFor(q("#note-text"));
-    await fill(page, "#note-text", memo);
-    await click(page, "#note-save");
+    await writeMemo(page, memo);
     await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const board = `window.__app.session.doc("board")`;
@@ -2851,9 +2912,7 @@ scenario("whiteboard: two fingers zoom the board; they never move a card or star
   await createBoard(page);
   for (const memo of ["첫 메모", "둘째 메모"]) {
     await click(page, "#add-note");
-    await page.waitFor(q("#note-text"));
-    await fill(page, "#note-text", memo);
-    await click(page, "#note-save");
+    await writeMemo(page, memo);
     await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const items = () => page.eval(`JSON.stringify(window.__app.session.doc("board").items().map((i) => [i.id, i.x, i.y]).sort())`);
