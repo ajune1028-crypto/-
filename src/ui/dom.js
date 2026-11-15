@@ -20,6 +20,7 @@ const ICONS = {
   zoomOut: '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M19.6 19.6l-4.3-4.3M8.3 10.8h5"/>',
   muted: '<path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5"/>',
   solo: '<path d="M4.5 15.5v-3a7.5 7.5 0 0115 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.6"/><rect x="16.5" y="14" width="4" height="6" rx="1.6"/>',
+  side: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M14.5 4.5v15"/>',
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
   pen: '<path d="M4.5 19.5l1.2-4.4L15.6 5.2a2.1 2.1 0 013 3l-9.9 9.9z"/><path d="M13.8 7l3 3"/>',
   eraser: '<path d="M8.6 19.5h10.9"/><path d="M4.9 15.3l8.4-8.4a2 2 0 012.8 0l2.9 2.9a2 2 0 010 2.8l-6.6 6.6H8.5z"/>',
@@ -263,12 +264,17 @@ export function openSheet(root, title, build) {
  * one and work in the other). It opens where it was last left (top left at first) and moves by
  * its head. pos: { get(), set({ x, y }) } keeps where it stands. Returns close().
  */
-export function openFloat(root, { id, title, pos }, build) {
+export function openFloat(root, { id, title, pos, dock = null }, build) {
   document.getElementById(id)?.close?.();
   const closers = [];
+  // dock: { get, set } - on a wide screen lying down it can stand at the right edge instead
+  // (the owner chose 옆 패널): the app narrows beside it, so it covers nothing.
+  const wide = matchMedia("(min-width: 1000px) and (min-height: 600px) and (orientation: landscape)");
+  const pin = dock && h("button", { class: "icon-btn float-pin", type: "button", id: id + "-pin", "aria-label": "옆에 고정", title: "옆에 고정", onclick: () => { dock.set(!dock.get()); fit(); } }, icon("side"));
   const head = h("div", { class: "float-head" },
     h("span", { class: "float-grip", "aria-hidden": "true" }),
     h("h2", { class: "float-title", text: title }),
+    pin,
     h("button", { class: "icon-btn float-close", type: "button", id: id + "-close", "aria-label": "닫기", onclick: () => close() }, icon("back")));
   const body = h("div", { class: "float-body" });
   const panel = h("section", { class: "float", id, role: "dialog", "aria-label": title }, head, body);
@@ -281,9 +287,28 @@ export function openFloat(root, { id, title, pos }, build) {
     panel.style.top = ny + "px";
     return { x: nx, y: ny };
   };
-  // Moved by its head, with any one finger or the mouse.
+  const docked = () => !!dock && !!dock.get() && wide.matches;
+  /** Docked or floating, as the setting and the screen say. */
+  function fit() {
+    const on = docked();
+    panel.classList.toggle("docked", on);
+    document.documentElement.toggleAttribute("data-side-dock", on);
+    if (pin) {
+      pin.hidden = !wide.matches;
+      pin.setAttribute("aria-pressed", String(on));
+      pin.setAttribute("aria-label", on ? "떼어서 띄우기" : "옆에 고정");
+    }
+    if (!on) {
+      panel.style.right = "";
+      const at = pos?.get();
+      place(at?.x ?? 10, at?.y ?? 64);
+    }
+  }
+  wide.addEventListener?.("change", fit);
+  closers.push(() => wide.removeEventListener?.("change", fit));
+  // Moved by its head, with any one finger or the mouse (docked, it stays where it stands).
   head.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("button")) return;
+    if (e.target.closest("button") || docked()) return;
     const r = panel.getBoundingClientRect();
     const grab = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
     head.setPointerCapture?.(e.pointerId);
@@ -306,13 +331,13 @@ export function openFloat(root, { id, title, pos }, build) {
     for (const fn of closers) fn();
     panel.remove();
     document.removeEventListener("keydown", onKey);
+    if (panel.classList.contains("docked")) document.documentElement.removeAttribute("data-side-dock");
   }
   panel.close = close;
   document.addEventListener("keydown", onKey);
   build(body, close, (fn) => closers.push(fn));
   root.append(panel);
-  const at = pos?.get();
-  place(at?.x ?? 10, at?.y ?? 64);
+  fit();
   return close;
 }
 

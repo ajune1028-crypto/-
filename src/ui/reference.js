@@ -39,7 +39,9 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
   // It floats over the room (top left at first, wherever it was moved since), so the room
   // stays in reach: look at one, work in the other.
   const pos = { get: () => getSettings(app.store).refPos || null, set: (p) => setSetting(app.store, "refPos", p) };
-  openFloat(app.root, { id: "reference", title: "레퍼런스 (나만 보기)", pos }, (panel, close, onClose) => {
+  // On a wide screen lying down it can be pinned at the side (옆 패널), remembered on this device.
+  const dock = { get: () => !!getSettings(app.store).refDock, set: (on) => setSetting(app.store, "refDock", !!on) };
+  openFloat(app.root, { id: "reference", title: "레퍼런스 (나만 보기)", pos, dock }, (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });

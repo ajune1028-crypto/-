@@ -1462,3 +1462,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
   .side-title { font-size: 0.95rem; font-weight: 800; }
   .side-facts { font-size: 0.82rem; color: var(--muted); }
 }
+
+/* 레퍼런스 pinned at the side (옆 패널): the app narrows beside it, nothing is covered. */
+.float.docked { top: 0 !important; right: 0; bottom: 0; left: auto !important; width: 22rem; max-height: none; border-width: 0 0 0 1px; border-radius: 0; padding-top: env(safe-area-inset-top); box-shadow: var(--glass-shine), -10px 0 30px color-mix(in srgb, var(--tint) 12%, transparent); }
+.float.docked .float-head { cursor: default; }
+.float.docked .float-grip { visibility: hidden; }
+.float-pin[aria-pressed="true"] { color: var(--accent); }
+:root[data-side-dock] #app { width: calc(100% - 22rem); margin: 0; }
