@@ -39,6 +39,10 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - 텍스트 방: 오늘 장이 화면 아래 끝까지 이어지는 한 장, 아래 빈 곳을 누르면 끝에 이어 쓴다. 색 테두리 대신 가는 유리 윤곽.
   - 화이트보드: 판이 화면 끝까지(위 막대·모드·도구줄은 그 위에 뜬 유리, 방 몸통이 '보이는 부분'). 모드 여섯: 전체·이동·**글쓰기**·잇기·노래·올가미. 글쓰기는 누른 곳에 바로 쓰고(시트 없음) 친구에게 바로 보인다. 전체 모드의 **그리기**: 텍스트 방과 같은 붓(`drawInkTools` 하나로 같이 씀), `k:board` 문서, 카드 아래에 그려짐. 확대 버튼은 이동 모드의 오른쪽 도구로.
   - 가장 큰 막힘은 기능이 아니라 서버다: '같이'가 공개 주소에서 아직 안 된다(아래 '공개 주소와 서버').
+- **11월 15일 밤, 이어서 (사용자: "직사각형이 빨간색… 내 색깔로", "녹음 누르면 색깔 바꾸기", "올가미는 많은 걸 할 수 있게")**:
+  - **내 색** = 글라스 색: 방을 만들거나 들어올 때 사람 색은 내 글라스 색과 색상이 가장 가까운 빈 색(`nearestPeopleColor`, `myPeopleColor`). 그래서 녹음 직사각형이 처음부터 내 색이다(전에는 만든 사람이 늘 첫 색 산호=빨강). 혼자 있는 옛 방은 이 기기에서 처음 열 때 한 번만 내 색으로 바뀐다(`colourFixed`), 친구가 있는 방은 그대로.
+  - **색**: 녹음(노래 방 클립, 화이트보드 노래·사진 카드)을 누르면 '색' → 사람 색 8개와 '기본'. 클립·카드의 `tint`(0~7, null=녹음한 사람 색), 모두에게, 되돌리기 한 번.
+  - **올가미 ⋯**: 색(올가미 선과 안의 카드 전부, `lacl` op), 정리(안의 카드를 왼쪽부터 한 줄로, 위를 맞추고 24px 간격, 올가미를 그 둘레로 다시 그림: `rowLayout`, `boxLoop`), 잇기(안의 노래를 왼쪽부터 순서 줄로), 음소거/소리 켜기, 반복(▶가 멈출 때까지 다시, ↻ 표시, 이 기기만), 복사, 레퍼런스에 넣기, 지우기. 할 수 없는 것은 안 보인다.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 밤 판, 7번째: 본질 문서대로 고친 판). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -59,9 +63,9 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 245개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 250개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 116개. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 119개. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
 ```
 
