@@ -1390,7 +1390,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .timeline.lassoing, .timeline.lassoing .lanes, .timeline.lassoing .ruler { touch-action: none; cursor: crosshair; }
 .timeline.lassoing .clip { pointer-events: none; }
 .clip.grouped { outline: 2.5px solid var(--accent); outline-offset: 1px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); }
-.group-menu { position: absolute; left: 50%; top: 0.4rem; z-index: 9; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.1rem; max-width: calc(100% - 1rem); padding: 0.2rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transform: translateX(-50%); animation: pop-in 0.22s var(--ease); }
+.group-menu { position: absolute; left: 0.5rem; top: 0.4rem; width: max-content; z-index: 9; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.1rem; max-width: calc(100% - 1rem); padding: 0.2rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);  animation: pop-in 0.22s var(--ease); }
 .group-menu button { min-height: 2.2rem; padding: 0 0.7rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
 .group-menu .group-count { align-self: center; padding: 0 0.5rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; }
 .icon-btn[aria-pressed="true"]#song-lasso { background: color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -1430,3 +1430,19 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .bar-order-name { font-weight: 700; }
 /* The bar is held and dragged by a finger: the browser must not take that as a scroll. */
 .board-modes, .board-rail > * { touch-action: none; }
+
+/* 줄 머리 (the owner chose it, "개러지밴드처럼"): who is on each row, 음소거 and 혼자 듣기, at the left
+   edge while the time scrolls under it; time starts right of it, so nothing is covered at the start. */
+.row-heads { position: sticky; left: 0; z-index: 5; width: 2.6rem; height: 0; }
+.row-head { position: absolute; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem; width: 2.6rem; overflow: hidden; border-right: 1px solid var(--glass-edge); background: color-mix(in srgb, var(--paper) 74%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.row-head.empty { border-right-color: transparent; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.row-who { display: inline-flex; align-items: center; min-height: 0.6rem; }
+.row-who .dot { width: 0.6rem; height: 0.6rem; margin-left: -0.16rem; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--paper); }
+.row-who .dot:first-child { margin-left: 0; }
+.row-btn { display: grid; place-items: center; width: 1.95rem; height: min(1.6rem, calc(var(--row-h, 5.25rem) * 0.3)); border-radius: 0.6rem; color: var(--muted); }
+.row-btn svg { width: 1rem; height: 1rem; }
+.row-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--tint) 24%, transparent); color: var(--ink); }
+.row-mute[aria-pressed="true"] { background: color-mix(in srgb, #e5484d 18%, transparent); color: #c8303a; }
+:root[data-theme="dark"] .row-mute[aria-pressed="true"] { color: #ff8a8f; }
+.row-head.quiet .row-who, .row-head.quiet .row-mute { opacity: 0.45; }
+.row-bg.quiet, .clip.quiet { opacity: 0.4; }

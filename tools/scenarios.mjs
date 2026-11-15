@@ -1388,7 +1388,7 @@ async function tapTime(page, ms) {
     const tl = document.getElementById("timeline");
     const r = document.getElementById("ruler").getBoundingClientRect();
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    return { x: r.left + 0.9 * rem + ${ms} / 1000 * Number(tl.dataset.pps), y: r.top + r.height / 2 };
+    return { x: r.left + Number(tl.dataset.pad) + ${ms} / 1000 * Number(tl.dataset.pps), y: r.top + r.height / 2 };
   })()`);
   await page.tap(at.x, at.y);
 }
@@ -1537,7 +1537,7 @@ scenario("song: a tap on a clip puts the playhead where it was tapped, so 분할
     const r = document.getElementById("ruler").getBoundingClientRect();
     const c = document.querySelector(".clip[data-id]").getBoundingClientRect();
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    return { x: r.left + 0.9 * rem + ${first.start + 800} / 1000 * Number(tl.dataset.pps), y: c.top + c.height / 2 };
+    return { x: r.left + Number(tl.dataset.pad) + ${first.start + 800} / 1000 * Number(tl.dataset.pps), y: c.top + c.height / 2 };
   })()`);
   await page.tap(at.x, at.y);
   await page.waitFor(`${q(".clip[data-id]")}.classList.contains("selected") && ${q("#clip-menu")}`);
@@ -2502,7 +2502,7 @@ scenario("song: two fingers on a rectangle zoom it (sideways = time, up and down
     const r = document.getElementById("ruler").getBoundingClientRect();
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const left = Math.max(c.left, box.left), right = Math.min(c.right, box.right);
-    return { pps: Number(tl.dataset.pps), x: (left + right) / 2, seen: right - left, y: c.top + c.height / 2, h: c.height, zero: r.left + 0.9 * rem,
+    return { pps: Number(tl.dataset.pps), x: (left + right) / 2, seen: right - left, y: c.top + c.height / 2, h: c.height, zero: r.left + Number(tl.dataset.pad),
       lifted: !!document.querySelector(".clip.lifted"), menu: !!document.getElementById("clip-menu"), chosen: !!document.querySelector(".clip.selected") };
   })()`);
   const msAt = (v, x) => ((x - v.zero) / v.pps) * 1000;
@@ -4118,6 +4118,47 @@ scenario("settings: 효과음 and 진동 can be turned off (and the chime then s
 });
 
 // Accepted from the UI review: "모드 막대 옮기기", "막대 꾸미기", "오른쪽 도구도 직접 옮기기", "그릴 때 막대 옅어지기".
+scenario("song 줄 머리: each row has a head at the left edge - who sang on it (their colour), 음소거 for the whole row (one undo step) and 혼자 듣기 (only that row plays; the others step back); time starts right of the heads, so they cover nothing at the start", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await tapEmptyRow(page);
+  await tapTime(page, 0);
+  await importSound(page, fixtures.doremi, 2);
+  const song = `window.__app.session.doc("song")`;
+  const lanes = await page.eval(`${song}.layout().map((c) => c.lane).sort()`);
+  assert.deepEqual(lanes, [0, 1], "two rows");
+  await tapEmptyRow(page);
+  // The heads: my colour on both rows, buttons on the rows with clips only.
+  await page.waitFor(q('.row-head[data-row="1"] .row-who .dot'));
+  const look = await page.eval(`(() => {
+    const head = document.querySelector('.row-head[data-row="0"]').getBoundingClientRect();
+    const clip = document.querySelector(".clip[data-id]").getBoundingClientRect();
+    const empty = document.querySelector('.row-head[data-row="2"]');
+    return { headRight: head.right, clipLeft: clip.left, emptyButtons: empty ? [...empty.querySelectorAll(".row-btn")].filter((b) => !b.hidden).length : -1,
+      dot: getComputedStyle(document.querySelector('.row-head[data-row="0"] .row-who .dot')).backgroundColor };
+  })()`);
+  assert.ok(look.clipLeft >= look.headRight - 1, "the clip at 0 starts right of the head: " + JSON.stringify(look));
+  assert.equal(look.emptyButtons, 0, "the empty row has no buttons");
+  // 음소거: the whole first row, for everyone; undo brings it back in one step.
+  await click(page, "#row-mute-0");
+  await page.waitFor(`${song}.layout().filter((c) => c.lane === 0).every((c) => c.muted) && ${q("#row-mute-0")}.getAttribute("aria-pressed") === "true"`);
+  assert.ok(await page.eval(`${song}.layout().filter((c) => c.lane === 1).every((c) => !c.muted)`), "the other row still sounds");
+  await click(page, "#undo");
+  await page.waitFor(`${song}.layout().every((c) => !c.muted)`);
+  // 혼자 듣기: only the second row plays; the first steps back; again, all rows.
+  await click(page, "#row-solo-1");
+  await page.waitFor(`${q("#row-solo-1")}.getAttribute("aria-pressed") === "true" && document.querySelectorAll(".clip.quiet").length === 1`);
+  await click(page, "#play");
+  await page.waitFor(`window.__app.player?.playing`);
+  assert.deepEqual(await page.eval(`window.__app.player.song().layout().map((c) => c.lane)`), [1], "only the second row is heard");
+  await click(page, "#play");
+  await page.shot(out("song-row-heads.png"));
+  await click(page, "#row-solo-1");
+  await page.waitFor(`${q("#row-solo-1")}.getAttribute("aria-pressed") === "false" && !document.querySelector(".clip.quiet")`);
+  assert.equal(await page.eval(`window.__app.player.song().layout().length`), 2, "all rows again");
+});
+
 scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
   const page = await open({ width: 700, height: 900 });
   await createBoard(page);

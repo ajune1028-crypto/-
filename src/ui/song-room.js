@@ -95,11 +95,13 @@ export function mountSongRoom(body, app, session, frame) {
       draw();
     },
     canMove: (id) => !readOnly() && !song.clip(id)?.locked,
-    zoomed: () => placeMenu(),
+    zoomed: () => { placeMenu(); positionGroupMenu(); },
+    rowMute: (row) => muteRow(row),
+    rowSolo: (row) => soloRowToggle(row),
     buzz: (ms) => buzz(app, ms),
   });
   body.append(timeline.el);
-  timeline.el.addEventListener("scroll", () => placeMenu());
+  timeline.el.addEventListener("scroll", () => { placeMenu(); positionGroupMenu(); });
 
   // ---- controls ------------------------------------------------------------------
 
@@ -229,9 +231,65 @@ export function mountSongRoom(body, app, session, frame) {
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
       others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
-      playhead, empty, tempo: song.tempo(),
+      playhead, empty, tempo: song.tempo(), heads: rowHeads(),
     };
   }
+
+  // ---- 줄 머리: who is on each row, 음소거 for the row, 혼자 듣기 --------------------------
+  let soloRow = null; // the row heard alone on this device (null: all of them)
+  let soloView = null;
+
+  function rowHeads() {
+    const rows = new Map();
+    for (const c of song.layout()) {
+      let r = rows.get(c.lane);
+      if (!r) rows.set(c.lane, (r = { row: c.lane, by: [], muted: true }));
+      if (!c.muted) r.muted = false;
+      if (!r.by.includes(c.by)) r.by.push(c.by);
+    }
+    return [...rows.values()].map((r) => ({
+      row: r.row, muted: r.muted, solo: soloRow === r.row, readOnly: readOnly(),
+      colors: r.by.slice(0, 3).map(colorOf),
+      names: r.by.map((by) => session.room.member(by)?.name || "누군가").join(", "),
+    }));
+  }
+
+  /** 음소거 for the whole row, for everyone (as a clip's 음소거 is); one undo step. */
+  function muteRow(row) {
+    if (readOnly()) return;
+    const clips = song.layout().filter((c) => c.lane === row);
+    if (!clips.length) return;
+    const mute = clips.some((c) => !c.muted);
+    const atoms = [];
+    for (const c of clips) {
+      if (!!c.muted === mute) continue;
+      const made = setClipOps(session.clock, song, c.id, { muted: mute });
+      if (!made?.ops?.length) continue;
+      session.commit("song", made.ops);
+      atoms.push(...made.atoms);
+    }
+    record(atoms);
+    toast(root, mute ? `${row + 1}번 줄을 음소거했어요` : `${row + 1}번 줄 소리를 켰어요`, 1600);
+    draw();
+  }
+
+  /** 혼자 듣기: only this row plays (on this device); again, all of them. */
+  function soloRowToggle(row) {
+    soloRow = soloRow === row ? null : row;
+    soloView = null;
+    if (soloRow !== null) {
+      const only = soloRow;
+      // The song as it is, with only this row's clips: the player reads it as it reads the song.
+      soloView = Object.create(song);
+      soloView.layout = () => song.layout().filter((c) => c.lane === only);
+      soloView.clips = () => soloView.layout();
+    }
+    toast(root, soloRow === null ? "모든 줄을 들어요" : `${soloRow + 1}번 줄만 들어요`, 1600);
+    draw();
+  }
+
+  /** What ▶ plays: the song, or one row of it while that row is heard alone. */
+  const heard = () => soloView || song;
 
   function draw() {
     if (!alive) return;
@@ -320,7 +378,7 @@ export function mountSongRoom(body, app, session, frame) {
 
   function makePlayer(ctx) {
     if (player) return player;
-    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playhead = player.position; stopFrames(); draw(); } });
+    player = new SongPlayer(ctx, { song: () => heard(), audioFor: (id) => audio.get(id) || null, onEnd: () => { playhead = player.position; stopFrames(); draw(); } });
     player.setMode(settings().songMode);
     player.setTone(settings().pianoTone);
     player.setSpeed(settings().songSpeed || 1);
@@ -351,7 +409,7 @@ export function mountSongRoom(body, app, session, frame) {
       return void draw();
     }
     if (!(await ready())) return;
-    if (playhead >= song.end() && song.end() > 0) playhead = 0;
+    if (playhead >= heard().end() && heard().end() > 0) playhead = 0;
     player.setMetronome(metronome());
     player.play(playhead);
     runFrames();
@@ -387,7 +445,7 @@ export function mountSongRoom(body, app, session, frame) {
       } else if (player?.playing) {
         playhead = player.position;
         // What sounds now glows.
-        const now = song.layout().filter((c) => !c.muted && c.start <= playhead && playhead < c.start + c.length).map((c) => c.id);
+        const now = heard().layout().filter((c) => !c.muted && c.start <= playhead && playhead < c.start + c.length).map((c) => c.id);
         if (now.join() !== sounding.join()) timeline.markPlaying(sounding = now);
       } else {
         if (sounding.length) timeline.markPlaying(sounding = []);
@@ -669,6 +727,25 @@ export function mountSongRoom(body, app, session, frame) {
       one("group-delete", "지우기", () => { const atoms = []; for (const c of clips) { const made = removeClipOps(session.clock, song, c.id); if (made?.ops?.length) { session.commit("song", made.ops); atoms.push(...made.atoms); } } record(atoms); group = new Set(); draw(); }, can),
       one("group-close", "✕", () => { group = new Set(); stopGroup(); draw(); }),
     ].filter(Boolean));
+    positionGroupMenu();
+  }
+
+  /** The group's menu goes just below the gathered clips (above them when there is no room), never over them. */
+  function positionGroupMenu() {
+    if (!groupMenu) return;
+    const area = body.getBoundingClientRect();
+    const rects = [...group].map((id) => timeline.el.querySelector(`.clip[data-id="${id}"]`)?.getBoundingClientRect()).filter(Boolean);
+    if (!rects.length) return;
+    const w = groupMenu.offsetWidth;
+    const hgt = groupMenu.offsetHeight;
+    const top = Math.min(...rects.map((r) => r.top));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+    let y = bottom - area.top + 6;
+    if (y + hgt > area.height - 4) y = top - area.top - hgt - 6;
+    if (y < 4) y = Math.max(4, area.height - hgt - 4);
+    const mid = (Math.max(area.left, Math.min(...rects.map((r) => r.left))) + Math.min(area.right, Math.max(...rects.map((r) => r.right)))) / 2;
+    groupMenu.style.left = Math.max(4, Math.min(area.width - w - 4, mid - area.left - w / 2)) + "px";
+    groupMenu.style.top = y + "px";
   }
 
   /** The same change to every gathered clip, as one undo step. */

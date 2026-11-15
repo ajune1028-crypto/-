@@ -7,7 +7,7 @@
 // (sideways = time, up and down = row); drag without holding to scroll. Tap
 // the time bar or an empty spot to move the playhead. Two fingers zoom.
 
-import { h } from "./dom.js";
+import { h, icon } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { solfege } from "../audio/notes.js";
 import { fromBase64, PEAKS_PER_SECOND } from "../audio/peaks.js";
@@ -66,6 +66,9 @@ export class Timeline {
     this.ruler = h("div", { class: "ruler", id: "ruler" });
     this.head = h("div", { class: "head", "aria-hidden": "true" });
     this.lanes = h("div", { class: "lanes", id: "lanes" });
+    // Row heads stay at the left edge while the time scrolls sideways (sticky), above the rows.
+    this.heads = h("div", { class: "row-heads", id: "row-heads" });
+    this.lanes.append(this.heads);
     this.line = h("div", { class: "playline", "aria-hidden": "true" });
     this.empty = h("p", { class: "song-empty", id: "song-empty", hidden: true });
     this.content = h("div", { class: "song-content" }, this.ruler, this.lanes, this.line);
@@ -91,8 +94,13 @@ export class Timeline {
     return 1.9 * remPx();
   }
 
+  /** The row heads' column on the left (who, 음소거, 혼자 듣기); time starts right of it. */
+  get headW() {
+    return 2.6 * remPx();
+  }
+
   get pad() {
-    return 0.9 * remPx();
+    return 0.9 * remPx() + this.headW;
   }
 
   /** Space above and below a clip inside its row. */
@@ -123,6 +131,7 @@ export class Timeline {
     const width = this.xOf(seconds * 1000);
     this.content.style.width = width + "px";
     this.el.dataset.pps = String(this.pps);
+    this.el.dataset.pad = String(this.pad);
     this.lanes.style.height = rows * this.rowH + "px";
     const tempo = model.tempo || null;
     this.drawRuler(seconds, tempo);
@@ -135,7 +144,11 @@ export class Timeline {
       this.lanes.style.setProperty("--grid-x", this.pad + "px");
     }
     this.drawRows(rows, model.selectedRow);
+    this.drawHeads(rows, model.heads || []);
     this.drawClips(model);
+    // While one row is heard alone, the clips of the others step back too.
+    const solo = (model.heads || []).find((x) => x.solo);
+    for (const clip of model.clips) this.clipEls.get(clip.id)?.el.classList.toggle("quiet", !!solo && clip.lane !== solo.row);
     this.empty.hidden = !model.empty;
     this.empty.textContent = model.empty || "";
     this.setPlayhead(model.playhead);
@@ -184,6 +197,54 @@ export class Timeline {
     }
     for (const el of [...this.lanes.querySelectorAll(".row-bg")]) if (!want.includes(el)) el.remove();
     for (const el of want) if (!el.isConnected) this.lanes.prepend(el);
+  }
+
+  /**
+   * Each row's head (the owner chose 줄 머리, "개러지밴드처럼"): whose recordings are on it (their
+   * colours), 음소거 for the whole row (for everyone), 혼자 듣기 (only this row plays, on this device).
+   * Heads are moved and updated, never made again while a finger may be on one.
+   */
+  drawHeads(rows, heads) {
+    const byRow = new Map(heads.map((x) => [x.row, x]));
+    const anySolo = heads.some((x) => x.solo);
+    const want = [];
+    for (let r = 0; r < rows; r++) {
+      let el = this.heads.querySelector(`.row-head[data-row="${r}"]`);
+      if (!el) {
+        const row = r;
+        const press = (e) => e.stopPropagation();
+        const mute = h("button", { type: "button", class: "row-btn row-mute", id: "row-mute-" + r, onpointerdown: press, onclick: (e) => { e.stopPropagation(); this.on.rowMute?.(row); } }, icon("muted"));
+        const solo = h("button", { type: "button", class: "row-btn row-solo", id: "row-solo-" + r, onpointerdown: press, onclick: (e) => { e.stopPropagation(); this.on.rowSolo?.(row); } }, icon("solo"));
+        el = h("div", { class: "row-head", data: { row: String(r) } }, h("span", { class: "row-who" }), mute, solo);
+      }
+      const info = byRow.get(r);
+      el.style.top = r * this.rowH + "px";
+      el.style.height = this.rowH + "px";
+      el.style.setProperty("--row-h", this.rowH + "px");
+      el.classList.toggle("empty", !info);
+      el.classList.toggle("quiet", anySolo && !info?.solo);
+      const who = el.querySelector(".row-who");
+      const key = info ? info.colors.join("|") + "#" + info.names : "";
+      if (who.dataset.key !== key) {
+        who.dataset.key = key;
+        who.replaceChildren(...(info ? info.colors.map((c) => h("span", { class: "dot", style: { background: c } })) : []));
+        who.setAttribute("aria-label", info ? info.names + "의 줄" : "");
+        who.title = info ? info.names : "";
+      }
+      const [mute, solo] = el.querySelectorAll(".row-btn");
+      mute.hidden = solo.hidden = !info;
+      mute.setAttribute("aria-pressed", String(!!info?.muted));
+      mute.setAttribute("aria-label", info?.muted ? `${r + 1}번 줄 소리 켜기` : `${r + 1}번 줄 음소거`);
+      mute.disabled = !!info?.readOnly;
+      solo.setAttribute("aria-pressed", String(!!info?.solo));
+      solo.setAttribute("aria-label", info?.solo ? "모든 줄 듣기" : `${r + 1}번 줄만 듣기`);
+      want.push(el);
+    }
+    for (const el of [...this.heads.children]) if (!want.includes(el)) el.remove();
+    for (const el of want) if (!el.isConnected) this.heads.append(el);
+    // The rows of the other rows step back while one is heard alone.
+    this.lanes.classList.toggle("soloing", anySolo);
+    for (const bg of this.lanes.querySelectorAll(".row-bg")) bg.classList.toggle("quiet", anySolo && !byRow.get(Number(bg.dataset.row))?.solo);
   }
 
   drawClips(model) {
@@ -412,11 +473,11 @@ export class Timeline {
 
     // An empty spot: a tap moves the playhead there and picks that row.
     this.lanes.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".clip") || this.fingers.pinching) return;
+      if (e.target.closest(".clip, .row-head") || this.fingers.pinching) return;
       down = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() };
     });
     this.lanes.addEventListener("pointerup", (e) => {
-      if (!down || e.pointerId !== down.id || e.target.closest(".clip")) return;
+      if (!down || e.pointerId !== down.id || e.target.closest(".clip, .row-head")) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
       if (moved > SLOP_PX) return;
