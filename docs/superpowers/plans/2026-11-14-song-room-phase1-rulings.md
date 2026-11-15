@@ -123,3 +123,12 @@ Every decision taken on the owner's behalf in this session, in the order made. E
 - Ruling: line colours are a per-device choice in the 잇기 tools: 무지개 (default), 파스텔, or 내 색 (one colour, the person's own); the numbers on them stay readable (dark on pastel). Lines leave from the sides of the cards that face each other — cost if wrong: none.
 - Ruling: photo cards on the whiteboard ("사진도 넣었다 뺄다"): a picture shrunk to a small JPEG (at most 60,000 characters) inside the card's op, so it travels with the board like everything else; it moves and comes off like any card and never plays — cost if wrong: pictures are about 720 px until the server keeps files.
 - Fix: the whiteboard's memo cards carried the class "note", which is also the small note bars' class, so their words came out white on yellow (barely readable, bold, centred). Memo cards are "memo" now and a scenario checks their contrast — cost if wrong: none.
+
+## 15 November, the owner's second message (recording in words, backgrounds, cover less, menus, 레퍼런스)
+
+- Ruling: chosen words get the first description's 선택 도구 as a row above the toolbar: 표시 in 빨주노초파남보 (and 지우기), 사진, 녹음, 잠금 / 잠금 풀기. The words stay chosen while the row is pressed — cost if wrong: none.
+- Ruling: 표시 is a thick underline drawn beneath the letters and 잠금 a soft grey drawn behind them (with a small lock after the last word): neither moves a letter, so the drawn words keep the input box's exact layout — cost if wrong: none.
+- Ruling: 잠금 is kept by the screen, as the text room design says: a change that would remove a locked letter or type between two locked letters is turned back with "잠긴 글이라 고칠 수 없어요"; typing at a lock's edges is fine. The locker and the room's owner may unlock — cost if wrong: two people acting at the same instant may slip one change through.
+- Ruling: a recording hidden in words is a file of the room ("files" doc: base64 in parts of 40,000 characters, so any store takes it), IMA ADPCM at 12 kHz (about 6 kB a second, a minute at most). Its words sparkle blue; a 2-second hold opens a round player that plays at once; a tap pauses — cost if wrong: phone-call quality; a better codec later keeps the same file doc.
+- Ruling: hiding a photo, a recording, a 표시 and a 잠금 are all undoable (their own removes counters) — cost if wrong: none.
+- Ruling: notices (toasts) never take a tap (pointer-events: none) and rise above the tool rows while those are out — one covered 잠금 풀기 in a test — cost if wrong: none.

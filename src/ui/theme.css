@@ -552,7 +552,11 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   font-size: 0.8rem;
   transform: translateX(-50%);
   animation: rise 0.2s ease-out;
+  /* A notice never stands in the way of a tap. */
+  pointer-events: none;
 }
+/* Above the drawing tools or the chosen words' row while they are out. */
+#app:has(.sel-tools:not([hidden])) .toast, #app:has(.ink-tools:not([hidden])) .toast { bottom: 11.4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -588,7 +592,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 /* The typing layer has its own name: form fields are .input, and the two must never share rules. */
 .layers { position: relative; font-size: calc(1rem * var(--text-scale)); font-weight: 600; line-height: 1.75; letter-spacing: 0; }
 .draw, .typing { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; }
-.draw { min-height: 1.75rem; color: var(--ink); }
+.draw { min-height: 1.75rem; color: var(--ink); isolation: isolate; }
 .sheet.today .draw { min-height: 8.75rem; }
 .typing {
   position: absolute;
@@ -836,7 +840,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .paper canvas.ink { position: absolute; top: 0; left: -0.9rem; width: calc(100% + 1.8rem); height: 100%; z-index: 2; pointer-events: none; }
 .paper canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .paper canvas.ink[data-tool="eraser"] { cursor: cell; }
-.ink-tools {
+.ink-tools, .sel-tools {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1075,7 +1079,42 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @keyframes reveal-fade { from { background: rgb(8 8 14 / 0); } }
 @keyframes reveal-pop { from { transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.04); opacity: 0; filter: brightness(2.6); } 55% { opacity: 1; } to { transform: none; filter: none; } }
 @keyframes reveal-burst { from { transform: scale(0.1); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .w.sparkle::after, .w.sparkle.charging::after, .reveal, .reveal-img, .reveal-burst::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .w.sparkle::after, .w.sparkle.charging::after, .reveal, .reveal-img, .reveal-burst::before, .sound-orb { animation: none; } }
+/* A photo comes out over a soft, wide glow of itself, so any photo sits well. */
+.reveal-glow { position: fixed; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(38px) saturate(1.3) brightness(0.8); opacity: 0.75; pointer-events: none; animation: reveal-fade-in 0.6s ease-out both; }
+@keyframes reveal-fade-in { from { opacity: 0; } }
+/* A recording hidden in words sparkles blue; it comes out as a round player. */
+.w.sparkle.sound { text-shadow: 0 0 6px rgb(90 170 255 / 0.95); }
+.w.sparkle.sound::after { background-image: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.85) 47%, rgb(140 200 255 / 0.9) 53%, transparent 70%); }
+.sound-orb { position: relative; display: grid; place-items: center; width: min(46vmin, 13rem); height: min(46vmin, 13rem); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.95), rgb(190 220 255 / 0.85) 45%, rgb(110 160 255 / 0.75)); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 60px rgb(120 180 255 / 0.8); color: #13213f; animation: reveal-pop 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+/* While it plays the orb breathes (on its own layer, so the fly-in is never started again). */
+.sound-orb::after { content: ""; position: absolute; inset: -6%; border-radius: 50%; box-shadow: 0 0 70px rgb(120 180 255 / 0.9); opacity: 0; pointer-events: none; }
+.sound-orb.on::after { animation: orb-breathe 1.6s ease-in-out infinite; }
+@keyframes orb-breathe { 50% { opacity: 1; } }
+.orb-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.orb-track { fill: none; stroke: rgb(255 255 255 / 0.45); stroke-width: 3; }
+.orb-done { fill: none; stroke: #2f6fe0; stroke-width: 4; stroke-linecap: round; }
+.orb-face svg { width: 2.6rem; height: 2.6rem; }
+/* 선택 도구: the row for chosen words. */
+.sel-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.3rem; }
+.sel-label { font-size: 0.72rem; font-weight: 800; color: var(--soft); }
+.sel-color { width: 1.45rem; height: 1.45rem; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
+.sel-tools .chip { display: inline-flex; align-items: center; gap: 0.25rem; }
+.sel-tools .chip svg { width: 0.95rem; height: 0.95rem; }
+.sel-color[data-hl="red"], .w.hl[data-hl="red"] { --hl: rgb(255 99 99 / 0.55); }
+.sel-color[data-hl="orange"], .w.hl[data-hl="orange"] { --hl: rgb(255 160 60 / 0.55); }
+.sel-color[data-hl="yellow"], .w.hl[data-hl="yellow"] { --hl: rgb(255 214 40 / 0.6); }
+.sel-color[data-hl="green"], .w.hl[data-hl="green"] { --hl: rgb(90 210 120 / 0.5); }
+.sel-color[data-hl="blue"], .w.hl[data-hl="blue"] { --hl: rgb(90 180 255 / 0.5); }
+.sel-color[data-hl="navy"], .w.hl[data-hl="navy"] { --hl: rgb(110 130 250 / 0.5); }
+.sel-color[data-hl="purple"], .w.hl[data-hl="purple"] { --hl: rgb(210 110 245 / 0.5); }
+.sel-color { background: var(--hl); }
+/* 표시: a highlighter under the words, drawn as a thick underline so the letters never move. */
+.w.hl { text-decoration-line: underline; text-decoration-color: var(--hl); text-decoration-thickness: 0.52em; text-underline-offset: -0.34em; text-decoration-skip-ink: none; }
+/* 잠금: locked words sit on a soft grey, with a small lock after the last one. */
+.w.locked { position: relative; }
+.w.locked::before { content: ""; position: absolute; inset: -0.05em -0.12em; z-index: -1; border-radius: 0.3em; background: color-mix(in srgb, var(--muted) 20%, transparent); pointer-events: none; }
+.w.lock-end::before { right: -0.78em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f9c' stroke-width='2.4' stroke-linecap='round'%3E%3Crect x='5.5' y='10.5' width='13' height='9' rx='2'/%3E%3Cpath d='M8.5 10.5V8a3.5 3.5 0 017 0v2.5'/%3E%3C/svg%3E") right 0.08em center / 0.58em 0.58em no-repeat, color-mix(in srgb, var(--muted) 20%, transparent); }
 .rec-time { margin: 0.4rem 0 0.8rem; font-size: 2rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
 .board-hint { position: absolute; left: 1.4rem; right: 1.4rem; bottom: 0.8rem; z-index: 2; padding: 0.4rem 0.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 80%, transparent); color: var(--paper); font-size: 0.74rem; text-align: center; pointer-events: none; word-break: keep-all; }
 .text-btn { width: auto; min-width: 2.6rem; padding: 0 0.5rem; font-size: 0.8rem; font-weight: 800; }

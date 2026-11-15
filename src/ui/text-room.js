@@ -1,13 +1,22 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-import { h, icon, iconButton, mount, toast } from "./dom.js";
+import { h, icon, iconButton, mount, toast, openSheet } from "./dom.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { watchFingers } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
-import { invertOps, spliceOps, attachOps, detachOps } from "../core/edit.js";
+import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps } from "../core/edit.js";
+import { MARK_COLORS, MAX_SOUND_MS } from "../core/crdt.js";
+import { fileOps } from "../core/files.js";
+import { toBase64, fromBase64 } from "../core/b64.js";
+import { encodeAdpcm, decodeAdpcm } from "../audio/adpcm.js";
+import { audioContext } from "../audio/engine.js";
+import { decodeAudioFile } from "../audio/decode.js";
+import { resample } from "../audio/dsp.js";
+import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
+import { soundPickers, waysIn, pickerHelp } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { InkLayer, inkColor } from "./ink.js";
@@ -15,6 +24,10 @@ import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
 
 const FIRST_SHEETS = 7;
 const PRESENCE_EVERY_MS = 80;
+// A recording hidden in words is kept as ADPCM at this rate: a clear voice at 6 kB a second.
+const SOUND_RATE = 12000;
+const MARK_NAMES = { red: "빨강", orange: "주황", yellow: "노랑", green: "초록", blue: "파랑", navy: "남색", purple: "보라" };
+const timeOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
 
 export function mountTextRoom(body, app, session) {
   const zone = () => session.room.meta("tz") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -63,14 +76,26 @@ export function mountTextRoom(body, app, session) {
     if (!photo) return void toast(app.root, "이 사진은 읽을 수 없어요", 3200);
     const made = attachOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, data: photo.data, w: photo.w, h: photo.h, by: session.memberId });
     session.commit(target.editor.doc, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
     toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 2초 꾹 누르면 나와요", 3600);
   });
   const stopPhotoWatch = watchPickers([photoInput], () => toast(app.root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200));
   const readOnlyNow = () => !!session.transport.readOnly;
   const toolbar = h("div", { class: "toolbar" }, undoButton, redoButton, colorsButton, penButton, photoButton);
-  body.append(photoInput);
+  // Chosen words get their own row (the first description's 선택 도구): 표시 in 빨주노초파남보,
+  // a photo or a recording hidden in them, 잠금.
+  const selTools = h("div", { class: "sel-tools", id: "sel-tools", hidden: true, role: "toolbar", "aria-label": "고른 글자" });
+  let sel = null; // { editor, ch, to } while words are chosen
+  const mic = micSupport();
+  let closeSound = null;
+  let soundTarget = null;
+  const { inputs: soundInputs, stop: stopSoundPickers } = soundPickers("text", {
+    onFile: (file) => { closeSound?.(); importSound(soundTarget, file); },
+    onSilent: () => { closeSound?.(); pickerHelp({ app, roomId: session.roomId, root: app.root, mic }); },
+  });
+  body.append(photoInput, ...soundInputs);
   body.append(list);
-  body.after(inkTools, toolbar);
+  body.after(selTools, inkTools, toolbar);
 
   // Two fingers zoom the page, words and drawings together; Ctrl+wheel or a trackpad
   // pinch on a computer. The page keeps its width while zoomed, so nothing reflows and
@@ -150,6 +175,7 @@ export function mountTextRoom(body, app, session) {
       editor.ink?.setStyle(pen);
     }
     drawInkTools();
+    drawSel();
     buttons();
     for (const editor of editors.values()) editor.ink?.render();
   }
@@ -230,10 +256,14 @@ export function mountTextRoom(body, app, session) {
     if (!editor) {
       editor = new SheetEditor({
         app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text),
-        onReveal: (att, from) => revealPhoto(day, att, from),
+        onReveal: (att, from) => (att.kind === "sound" ? revealSound(day, att, from) : revealPhoto(day, att, from)),
         onSelect: (ed) => {
-          const range = ed.selectionRange() || ed.wordAround();
-          if (range) chosen = { editor: ed, ...range };
+          const range = ed.selectionRange();
+          const word = range || ed.wordAround();
+          if (word) chosen = { editor: ed, ...word };
+          const before = sel;
+          sel = range ? { editor: ed, ...range } : null;
+          if (before?.ch !== sel?.ch || before?.to !== sel?.to || before?.editor !== sel?.editor) drawSel();
         },
       });
       editor.setReadOnly(!!app.transport.readOnly);
@@ -313,10 +343,12 @@ export function mountTextRoom(body, app, session) {
     session.on("change", ({ doc }) => {
       if (doc === "room") return void renderAll();
       if (doc.startsWith("k:")) return void editors.get(doc.slice(2))?.ink?.render();
+      if (doc === "files") return;
       const editor = editors.get(doc.slice(2));
       if (!editor) return void drawList();
       editor.render();
       editor.syncInput();
+      if (sel?.editor === editor) drawSel();
     }),
     session.on("peers", () => { for (const editor of editors.values()) editor.drawCarets(); }),
     session.on("status", applyAccess),
@@ -328,8 +360,169 @@ export function mountTextRoom(body, app, session) {
   const onResize = () => renderAll();
   window.addEventListener("resize", onResize);
 
+  // Words stay chosen while the row is used; leaving the sheets for anything else puts it away.
+  const onFocusOut = () => setTimeout(() => {
+    const active = document.activeElement;
+    if (sel && !list.contains(active) && !selTools.contains(active) && !document.querySelector(".scrim")) {
+      sel = null;
+      drawSel();
+    }
+  }, 250);
+  list.addEventListener("focusout", onFocusOut);
+
   drawList();
   buttons();
+
+  // ---- chosen words: 표시, 사진, 녹음, 잠금 ------------------------------------------------
+
+  const isOwner = () => session.room.meta("createdBy") === session.memberId;
+  /** The ranges (marks, locks) that share letters with the chosen words. */
+  function touching(list, target) {
+    const pos = new Map(target.editor.sheet.ids().map((id, i) => [id, i]));
+    const span = (r) => {
+      const a = pos.get(r.ch);
+      const b = pos.get(r.to);
+      return a === undefined || b === undefined ? null : [Math.min(a, b), Math.max(a, b)];
+    };
+    const mine = span(target);
+    if (!mine) return [];
+    return list.filter((r) => {
+      const s = span(r);
+      return s && s[0] <= mine[1] && s[1] >= mine[0];
+    });
+  }
+
+  function drawSel() {
+    selTools.hidden = !sel || readOnlyNow() || !!pen.tool;
+    if (selTools.hidden) return void selTools.replaceChildren();
+    const sheet = sel.editor.sheet;
+    const marks = touching(sheet.marks(), sel);
+    const locks = touching(sheet.locks(), sel);
+    const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
+    selTools.replaceChildren(
+      h("div", { class: "sel-row" },
+        h("span", { class: "sel-label", text: "표시" }),
+        ...MARK_COLORS.map((c) => h("button", { class: "sel-color", type: "button", data: { hl: c }, "aria-label": "표시 " + MARK_NAMES[c], onclick: () => markSel(c) })),
+        marks.length > 0 && h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marks) })),
+      h("div", { class: "sel-row" },
+        h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
+        h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
+        locks.length
+          ? freeable.length > 0 && h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeable) }, icon("lock"), "잠금 풀기")
+          : h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금")));
+    // The words stay chosen while a button here is pressed.
+    for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
+  }
+
+  function commitRange(target, made, done) {
+    if (!made.ops.length) return;
+    session.commit(target.editor.doc, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
+    if (done) toast(app.root, done, 2600);
+    drawSel();
+  }
+
+  function markSel(c) {
+    if (!sel || readOnlyNow()) return;
+    commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "mark", { ch: sel.ch, to: sel.to, c, by: session.memberId }));
+  }
+
+  function lockSel() {
+    if (!sel || readOnlyNow()) return;
+    commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "lock", { ch: sel.ch, to: sel.to, by: session.memberId }), "잠갔어요. 잠근 사람과 방장만 풀 수 있어요");
+  }
+
+  function undoRanges(t, list) {
+    if (!sel || readOnlyNow()) return;
+    const target = sel;
+    const ops = [];
+    const atoms = [];
+    for (const r of list) {
+      const made = unrangeOps(target.editor.sheet, session.clock, t, r.id);
+      ops.push(...made.ops);
+      atoms.push(...made.atoms);
+    }
+    commitRange(target, { ops, atoms }, t === "lock" ? "잠금을 풀었어요" : null);
+  }
+
+  // A recording hidden in words: in the app, from the phone's recorder app, or from a file.
+  function openSoundSheet(target) {
+    target = target || chosen;
+    if (!target || readOnlyNow()) return void toast(app.root, "먼저 녹음을 숨길 글자를 고르세요", 2600);
+    soundTarget = target;
+    closeSound?.();
+    closeSound = openSheet(app.root, "글자에 녹음 숨기기", (panel, close, onClose) => {
+      const ways = h("div", { class: "form", id: "text-sound" },
+        h("p", { class: "help", text: "녹음이 고른 글자 속에 숨어요. 반짝이는 글자를 2초 꾹 누르면 들려요. 1분까지 돼요." }),
+        ...waysIn({ app, roomId: session.roomId, root: app.root, name: "text", prefix: "text-", mic, canRecord: !readOnlyNow(), onRecord: () => recordInto(target, ways, close) }));
+      panel.append(ways);
+      onClose(() => {
+        closeSound = null;
+        stopRecording?.();
+      });
+    });
+  }
+
+  let stopRecording = null;
+  async function recordInto(target, ways, close) {
+    if (stopRecording) return;
+    const ctx = await audioContext();
+    if (!ctx) return;
+    const recorder = new MicRecorder(ctx);
+    try {
+      await recorder.start();
+    } catch (err) {
+      return void toast(app.root, micProblem(err), 3600);
+    }
+    const time = h("span", { class: "ref-rec-time", id: "text-rec-time", text: "0:00" });
+    const row = h("div", { class: "ref-recording" }, h("span", { class: "dot-rec" }), time,
+      h("button", { class: "btn", id: "text-rec-stop", type: "button", text: "멈추고 숨기기", onclick: () => finish(true) }));
+    ways.prepend(row);
+    const timer = setInterval(() => {
+      time.textContent = timeOf(recorder.seconds * 1000);
+      if (recorder.seconds * 1000 >= MAX_SOUND_MS) finish(true);
+    }, 200);
+    let over = false;
+    async function finish(keep) {
+      if (over) return;
+      over = true;
+      stopRecording = null;
+      clearInterval(timer);
+      row.remove();
+      const take = await recorder.stop();
+      if (!keep) return;
+      close();
+      hideSound(target, take.samples, take.rate);
+    }
+    stopRecording = () => finish(false);
+  }
+
+  async function importSound(target, file) {
+    if (!target || readOnlyNow()) return;
+    try {
+      const ctx = await audioContext({ wake: false });
+      if (!ctx) throw new Error("no audio");
+      const { samples, rate } = await decodeAudioFile(ctx, file);
+      hideSound(target, samples, rate);
+    } catch (err) {
+      console.warn(err);
+      toast(app.root, "이 파일은 읽을 수 없어요", 3600);
+    }
+  }
+
+  /** The sound goes into the room as a file in parts; the words point at it and sparkle. */
+  function hideSound(target, samples, rate) {
+    const max = Math.round((rate * MAX_SOUND_MS) / 1000);
+    if (samples.length > max) samples = samples.subarray(0, max);
+    if (samples.length < rate * 0.3) return void toast(app.root, "녹음이 너무 짧아요");
+    const kept = rate === SOUND_RATE ? samples : resample(samples, rate, SOUND_RATE);
+    const file = fileOps(session.clock, { type: "audio/adpcm", data: toBase64(encodeAdpcm(kept, SOUND_RATE)), by: session.memberId });
+    session.commit("files", file.ops);
+    const made = attachSoundOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, file: file.id, dur: (kept.length / SOUND_RATE) * 1000, by: session.memberId });
+    session.commit(target.editor.doc, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
+    toast(app.root, "녹음을 숨겼어요. 반짝이는 글자를 2초 꾹 누르면 들려요", 3600);
+  }
 
   /** Puts text at the end of today's sheet, as its own line (레퍼런스 → 이 방에 붙이기). */
   function insertText(text) {
@@ -342,41 +535,161 @@ export function mountTextRoom(body, app, session) {
     record(made.atoms.map((atom) => ({ ...atom, doc: "s:" + today })), false);
   }
 
-  /** The photo hidden in sparkling words comes out of them. */
-  function revealPhoto(day, att, from) {
-    document.getElementById("photo-reveal")?.remove();
-    const who = session.room.member(att.by)?.name || "누군가";
-    const editor = editors.get(day);
+  /**
+   * A reveal closes on a tap around it (not the lift of the finger that held the word,
+   * whose press began before it was there), on a swipe down, and on Escape.
+   */
+  function revealBox(id, label, from, children, onShut = () => {}) {
+    for (const old of document.querySelectorAll(".reveal")) old.remove();
+    let pressedHere = null;
     const shut = () => {
       box.remove();
       document.removeEventListener("keydown", onKey);
+      onShut();
     };
     const onKey = (e) => { if (e.key === "Escape") shut(); };
-    // A tap on the dark around the photo closes it; the lift of the finger that held the word does not
-    // (its press began before the photo was there).
-    let pressedHere = false;
-    const box = h("div", { class: "reveal", id: "photo-reveal", role: "dialog", "aria-label": "숨겨 둔 사진",
-      onpointerdown: (e) => { pressedHere = e.target === box; },
-      onclick: (e) => { if (e.target === box && pressedHere) shut(); } },
+    const box = h("div", { class: "reveal", id, role: "dialog", "aria-label": label,
+      onpointerdown: (e) => { pressedHere = { around: e.target === box, y: e.clientY }; },
+      onpointerup: (e) => { if (pressedHere && e.clientY - pressedHere.y > 80) shut(); },
+      onclick: (e) => { if (e.target === box && pressedHere?.around) shut(); } }, ...children);
+    box.style.setProperty("--dx", Math.round(from.left + from.width / 2 - innerWidth / 2) + "px");
+    box.style.setProperty("--dy", Math.round(from.top + from.height / 2 - innerHeight / 2) + "px");
+    app.root.append(box);
+    document.addEventListener("keydown", onKey);
+    return shut;
+  }
+
+  /** The recording hidden in sparkling words: a round player that plays at once; a tap pauses. */
+  function revealSound(day, att, from) {
+    const who = session.room.member(att.by)?.name || "누군가";
+    const editor = editors.get(day);
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    ring.setAttribute("viewBox", "0 0 100 100");
+    ring.setAttribute("class", "orb-ring");
+    ring.innerHTML = '<circle class="orb-track" cx="50" cy="50" r="46" /><circle class="orb-done" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="0 100" />';
+    const face = h("span", { class: "orb-face" }, icon("pause"));
+    const orb = h("button", { class: "sound-orb", id: "sound-orb", type: "button", "aria-label": "멈춤", onclick: () => toggle() }, ring, face);
+    const line = h("p", { class: "reveal-who", id: "sound-who", text: `${who} 님이 숨겨 둔 녹음 · ${timeOf(att.dur)}` });
+    let play = null; // { ctx, src, startedAt, offset }
+    let buffer = null;
+    let paused = false;
+    let frame = 0;
+    const shut = revealBox("sound-reveal", "숨겨 둔 녹음", from, [
+      h("span", { class: "reveal-burst", "aria-hidden": "true" }), orb, line,
+      h("div", { class: "reveal-actions" },
+        !readOnlyNow() && editor && h("button", { class: "btn quiet small", id: "sound-remove", type: "button", text: "녹음 빼기", onclick: () => {
+          const made = unrangeOps(editor.sheet, session.clock, "att", att.id);
+          session.commit(editor.doc, made.ops);
+          record(made.atoms.map((atom) => ({ ...atom, doc: editor.doc })), false);
+          shut();
+          toast(app.root, "녹음을 뺐어요");
+        } }),
+        h("button", { class: "btn small", id: "sound-close", type: "button", text: "닫기", onclick: () => shut() })),
+    ], () => stop());
+    const done = ring.querySelector(".orb-done");
+    const show = (f) => done.setAttribute("stroke-dasharray", `${Math.round(Math.min(1, f) * 1000) / 10} 100`);
+    function stop() {
+      cancelAnimationFrame(frame);
+      try { play?.src.stop(); } catch { /* already over */ }
+      play = null;
+    }
+    async function start(offset = 0) {
+      const ctx = await audioContext();
+      if (!ctx || !buffer) return;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0, offset);
+      play = { ctx, src, startedAt: ctx.currentTime - offset, offset };
+      src.onended = () => {
+        if (play?.src !== src) return;
+        play = null;
+        paused = false;
+        orb.classList.remove("on");
+        face.replaceChildren(icon("play"));
+        orb.setAttribute("aria-label", "다시 듣기");
+        show(1);
+      };
+      orb.classList.add("on");
+      face.replaceChildren(icon("pause"));
+      orb.setAttribute("aria-label", "멈춤");
+      const tick = () => {
+        if (!play) return;
+        show((play.ctx.currentTime - play.startedAt) / buffer.duration);
+        frame = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+    function toggle() {
+      if (!buffer) return;
+      if (play) {
+        const at = play.ctx.currentTime - play.startedAt;
+        stop();
+        paused = at;
+        orb.classList.remove("on");
+        face.replaceChildren(icon("play"));
+        orb.setAttribute("aria-label", "이어 듣기");
+        return;
+      }
+      start(typeof paused === "number" && paused < buffer.duration ? paused : 0);
+      paused = false;
+    }
+    // The sound may still be arriving in parts; it plays as soon as it is whole.
+    const tryLoad = async () => {
+      const files = await session.load("files");
+      const file = files.file(att.file);
+      if (!file) {
+        line.textContent = `녹음을 받는 중이에요 ${Math.round(files.progress(att.file) * 100)}%`;
+        return false;
+      }
+      const pcm = decodeAdpcm(fromBase64(file.data));
+      const ctx = await audioContext();
+      if (!pcm || !ctx) {
+        line.textContent = "이 녹음은 열 수 없어요";
+        return true;
+      }
+      buffer = ctx.createBuffer(1, pcm.samples.length, pcm.rate);
+      buffer.copyToChannel(pcm.samples, 0);
+      line.textContent = `${who} 님이 숨겨 둔 녹음 · ${timeOf(att.dur)}`;
+      start(0);
+      return true;
+    };
+    tryLoad().then((ok) => {
+      if (ok) return;
+      const off = session.on("change", ({ doc }) => {
+        if (doc !== "files" || !document.getElementById("sound-reveal")) return void (document.getElementById("sound-reveal") || off());
+        tryLoad().then((now) => { if (now) off(); });
+      });
+    });
+  }
+
+  /** The photo hidden in sparkling words comes out of them, over a soft glow of itself. */
+  function revealPhoto(day, att, from) {
+    const who = session.room.member(att.by)?.name || "누군가";
+    const editor = editors.get(day);
+    const shut = revealBox("photo-reveal", "숨겨 둔 사진", from, [
+      h("img", { class: "reveal-glow", src: att.data, alt: "", "aria-hidden": "true" }),
       h("span", { class: "reveal-burst", "aria-hidden": "true" }),
       h("img", { class: "reveal-img", src: att.data, alt: "숨겨 둔 사진", width: att.w, height: att.h }),
       h("p", { class: "reveal-who", text: `${who} 님이 숨겨 둔 사진` }),
       h("div", { class: "reveal-actions" },
         !readOnlyNow() && editor && h("button", { class: "btn quiet small", id: "photo-remove", type: "button", text: "사진 빼기", onclick: () => {
-          session.commit(editor.doc, detachOps(editor.sheet, session.clock, att.id).ops);
+          const made = unrangeOps(editor.sheet, session.clock, "att", att.id);
+          session.commit(editor.doc, made.ops);
+          record(made.atoms.map((atom) => ({ ...atom, doc: editor.doc })), false);
           shut();
           toast(app.root, "사진을 뺐어요");
         } }),
-        h("button", { class: "btn small", id: "photo-close", type: "button", text: "닫기", onclick: () => shut() })));
-    // The photo flies out of the word towards the middle of the screen.
-    box.style.setProperty("--dx", Math.round(from.left + from.width / 2 - innerWidth / 2) + "px");
-    box.style.setProperty("--dy", Math.round(from.top + from.height / 2 - innerHeight / 2) + "px");
-    app.root.append(box);
-    document.addEventListener("keydown", onKey);
+        h("button", { class: "btn small", id: "photo-close", type: "button", text: "닫기", onclick: () => shut() })),
+    ]);
   }
 
   const close = () => {
-    document.getElementById("photo-reveal")?.remove();
+    for (const el of document.querySelectorAll(".reveal")) el.remove();
+    closeSound?.();
+    stopSoundPickers();
+    for (const input of soundInputs) input.remove();
+    selTools.remove();
     stopPhotoWatch();
     photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);

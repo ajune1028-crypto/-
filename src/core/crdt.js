@@ -58,6 +58,10 @@ function greater(node, n, r) {
 
 /** A hidden photo's data URL stays small enough for the trial store's records. */
 export const MAX_ATT_CHARS = 45000;
+/** 표시: highlight colours for chosen words, 빨주노초파남보. */
+export const MARK_COLORS = ["red", "orange", "yellow", "green", "blue", "navy", "purple"];
+/** A recording hidden in words is at most a minute (its sound is a file in the room's "files" doc). */
+export const MAX_SOUND_MS = 60000;
 
 export class Sheet {
   constructor() {
@@ -70,7 +74,9 @@ export class Sheet {
     this.pendingCount = 0;
     this.maxN = 0;
     this.mix = new Map();
-    this.atts = new Map(); // photos hidden in words: id → { ch, to, kind, data, w, h, by, at, rm }
+    this.atts = new Map(); // photos and recordings hidden in words: id → { ch, to, kind, …, by, at, rm }
+    this.markMap = new Map(); // 표시: id → { ch, to, c, by, at, rm }
+    this.lockMap = new Map(); // 잠금: id → { ch, to, by, at, rm }
     this.unknown = [];
     this.cache = null;
   }
@@ -118,26 +124,29 @@ export class Sheet {
           if (op.n > node.rm) node.rm = op.n;
         });
       case "att": {
-        // A photo hidden in the words from ch to to; it waits for both letters.
-        const ok = validId(op.ch) && validId(op.to) && op.kind === "photo" && typeof op.data === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(op.data) &&
-          op.data.length <= MAX_ATT_CHARS && [op.w, op.h].every((v) => Number.isInteger(v) && v > 0 && v <= 4096) && typeof op.by === "string" && op.by.length <= 40;
-        if (!ok) return this.setAside(op);
-        if (!this.nodes.has(op.ch)) return this.wait(op.ch, op);
-        if (!this.nodes.has(op.to)) return this.wait(op.to, op);
-        const before = this.atts.get(op.id);
-        this.atts.set(op.id, { id: op.id, ch: op.ch, to: op.to, kind: op.kind, data: op.data, w: op.w, h: op.h, by: op.by, at: op.at, rm: before ? before.rm : 0 });
-        this.done(op);
-        this.ready.push(op.id);
-        return "applied";
+        // A photo (its small picture in the op) or a recording (a file of the room) hidden in the
+        // words from ch to to; it waits for both letters.
+        const by = typeof op.by === "string" && op.by.length <= 40;
+        const photo = op.kind === "photo" && typeof op.data === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(op.data) &&
+          op.data.length <= MAX_ATT_CHARS && [op.w, op.h].every((v) => Number.isInteger(v) && v > 0 && v <= 4096);
+        const sound = op.kind === "sound" && validId(op.file) && Number.isInteger(op.dur) && op.dur > 0 && op.dur <= MAX_SOUND_MS;
+        if (!validId(op.ch) || !validId(op.to) || !by || !(photo || sound)) return this.setAside(op);
+        return this.range(op, this.atts, photo ? { kind: "photo", data: op.data, w: op.w, h: op.h } : { kind: "sound", file: op.file, dur: op.dur });
       }
-      case "arm": {
-        if (!validId(op.a) || !Number.isSafeInteger(op.n) || op.n < 1 || op.n > 1e9) return this.setAside(op);
-        const att = this.atts.get(op.a);
-        if (!att) return this.wait(op.a, op);
-        if (op.n > att.rm) att.rm = op.n;
-        this.done(op);
-        return "applied";
+      case "mark": {
+        if (!validId(op.ch) || !validId(op.to) || !MARK_COLORS.includes(op.c) || typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        return this.range(op, this.markMap, { c: op.c });
       }
+      case "lock": {
+        if (!validId(op.ch) || !validId(op.to) || typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        return this.range(op, this.lockMap, {});
+      }
+      case "arm":
+        return this.unrange(op, this.atts, op.a);
+      case "mrm":
+        return this.unrange(op, this.markMap, op.m);
+      case "krm":
+        return this.unrange(op, this.lockMap, op.k);
       case "mix":
         if (!validId(op.ch) || ![0, 1, 2].includes(op.lv)) return this.setAside(op);
         return this.onChar(op, () => {
@@ -179,6 +188,27 @@ export class Sheet {
     const node = this.nodes.get(op.ch);
     if (!node) return this.wait(op.ch, op);
     change(node);
+    this.done(op);
+    return "applied";
+  }
+
+  /** Something kept on the words from ch to to (a photo, a recording, a 표시, a 잠금); it waits for both letters. */
+  range(op, map, fields) {
+    if (!this.nodes.has(op.ch)) return this.wait(op.ch, op);
+    if (!this.nodes.has(op.to)) return this.wait(op.to, op);
+    const before = map.get(op.id);
+    map.set(op.id, { id: op.id, ch: op.ch, to: op.to, ...fields, by: op.by, at: op.at, rm: before ? before.rm : 0 });
+    this.done(op);
+    this.ready.push(op.id);
+    return "applied";
+  }
+
+  /** Its removes counter: odd is taken off, even is back. */
+  unrange(op, map, target) {
+    if (!validId(target) || !Number.isSafeInteger(op.n) || op.n < 1 || op.n > 1e9) return this.setAside(op);
+    const r = map.get(target);
+    if (!r) return this.wait(target, op);
+    if (op.n > r.rm) r.rm = op.n;
     this.done(op);
     return "applied";
   }
@@ -251,6 +281,16 @@ export class Sheet {
   /** Photos hidden in words, oldest first: [{ id, ch, to, kind, data, w, h, by, at }]. */
   attachments() {
     return [...this.atts.values()].filter((a) => a.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
+  }
+
+  /** 표시 on the words, oldest first. */
+  marks() {
+    return [...this.markMap.values()].filter((m) => m.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
+  }
+
+  /** 잠금 on the words, oldest first. */
+  locks() {
+    return [...this.lockMap.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
   }
 
   mixLevel(id) {

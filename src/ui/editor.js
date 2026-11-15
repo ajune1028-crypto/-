@@ -8,7 +8,7 @@
 import { h } from "./dom.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
-import { diffText, spliceOps, mixOps } from "../core/edit.js";
+import { diffText, spliceOps, mixOps, lockedEdit } from "../core/edit.js";
 import { memberColor, INK, splitWords, paintFor, paintCss } from "../core/paint.js";
 import { dayKey, dayLabel } from "../core/time.js";
 import { getSettings } from "../identity.js";
@@ -67,8 +67,9 @@ export class SheetEditor {
     ta.addEventListener("input", (event) => this.onInput(event.isComposing || this.composing));
     for (const type of ["keyup", "focus", "blur", "select"]) ta.addEventListener(type, () => this.caretMoved());
     ta.addEventListener("pointerup", (event) => { this.onTap(event); this.caretMoved(); });
-    // Written words carry no time labels; a press held on them tells who wrote them and when.
-    // On a sparkling word, a 2-second hold glows brighter and brings out its photo.
+    // Written words carry no time labels; a press held on them tells who wrote them and when
+    // (and, on locked words, who locked them). On a sparkling word, a 2-second hold glows
+    // brighter and brings out its photo or its recording.
     let hold = null;
     const letGo = () => {
       clearTimeout(hold?.timer);
@@ -87,6 +88,7 @@ export class SheetEditor {
           if (att) this.onReveal(att, glow.getBoundingClientRect());
         }, REVEAL_MS) };
       } else hold = { id: event.pointerId, x, y, timer: setTimeout(() => { hold = null; this.whoWrote(x, y); }, HOLD_MS) };
+      this.tellLock(x, y);
     });
     ta.addEventListener("pointermove", (event) => {
       if (hold && event.pointerId === hold.id && Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP_PX) letGo();
@@ -113,6 +115,14 @@ export class SheetEditor {
     const next = this.input.value;
     if (next === this.snap.text) return;
     const { index, del, ins } = diffText(this.snap.text, next, this.input.selectionEnd);
+    // 잠금: locked words stay as they are; the box goes back to the sheet.
+    if (lockedEdit(this.sheet, this.snap.ids, index, del)) {
+      const caret = Math.min(index, this.snap.text.length);
+      this.input.value = this.snap.text;
+      this.input.setSelectionRange(caret, caret);
+      this.tell("잠긴 글이라 고칠 수 없어요");
+      return;
+    }
     const now = Date.now();
     const { ops, atoms, ids } = spliceOps(this.sheet, this.session.clock, { by: this.session.memberId, now }, this.snap.ids, index, del, ins, composing);
     this.snap = { text: next, ids };
@@ -209,7 +219,7 @@ export class SheetEditor {
     while (kids.length > lines.length) kids[kids.length - 1].remove();
     this.shapeWheels();
 
-    this.markSparkles();
+    this.markRanges();
     this.drawCarets();
   }
 
@@ -261,6 +271,15 @@ export class SheetEditor {
     if (!text.length) el.append(h("span", { class: "z", text: "​" }));
     el.segs = segs;
     return el;
+  }
+
+  /** A touch on locked words says who locked them (once per lock until another is touched). */
+  tellLock(x, y) {
+    const span = document.elementsFromPoint(x, y).find((el) => el.classList?.contains("locked") && this.draw.contains(el));
+    if (!span || this.toldLock === span.dataset.lock) return;
+    this.toldLock = span.dataset.lock;
+    const lock = this.sheet.locks().find((l) => l.id === span.dataset.lock);
+    if (lock) this.tell(`${this.session.room.member(lock.by)?.name || "누군가"} 님이 잠근 글이에요`);
   }
 
   /** Who wrote the word at (x, y), and on which day and at what time (its first letter). */
@@ -323,29 +342,44 @@ export class SheetEditor {
     return document.elementsFromPoint(x, y).find((el) => el.classList?.contains("sparkle") && this.draw.contains(el)) || null;
   }
 
-  /** Words holding a hidden photo sparkle (all words the photo's letters touch). */
-  markSparkles() {
-    for (const el of this.draw.querySelectorAll(".w.sparkle")) {
-      el.classList.remove("sparkle");
-      delete el.dataset.att;
+  /**
+   * What lies on the words: a hidden photo or recording makes them sparkle, a 표시 colours
+   * them like a highlighter, a 잠금 greys them and puts a small lock after the last one.
+   * Only classes and data change (and absolutely placed marks), so the drawn words keep
+   * exactly the input box's layout.
+   */
+  markRanges() {
+    for (const el of this.draw.querySelectorAll(".w.sparkle, .w.hl, .w.locked")) {
+      el.classList.remove("sparkle", "sound", "hl", "locked", "lock-end");
+      for (const k of ["att", "hl", "lock"]) delete el.dataset[k];
     }
     const atts = this.sheet.attachments();
-    if (!atts.length) return;
+    const marks = this.sheet.marks();
+    const locks = this.sheet.locks();
+    if (!atts.length && !marks.length && !locks.length) return;
     const chars = this.sheet.chars();
     const at = new Map(chars.map((c, i) => [c.id, i]));
     const words = splitWords(chars);
-    for (const a of atts) {
-      const i0 = at.get(a.ch);
-      const i1 = at.get(a.to);
-      if (i0 === undefined || i1 === undefined) continue;
+    const span = (w) => this.draw.querySelector(`.w[data-anchor="${w.anchor}"]`);
+    const covered = (r) => {
+      const i0 = at.get(r.ch);
+      const i1 = at.get(r.to);
+      if (i0 === undefined || i1 === undefined) return [];
       const lo = Math.min(i0, i1);
       const hi = Math.max(i0, i1);
-      for (const w of words) {
-        if (w.end <= lo || w.start > hi) continue;
-        const span = this.draw.querySelector(`.w[data-anchor="${w.anchor}"]`);
-        if (!span) continue;
-        span.classList.add("sparkle");
-        span.dataset.att = a.id;
+      return words.filter((w) => w.end > lo && w.start <= hi).map(span).filter(Boolean);
+    };
+    for (const m of marks) for (const el of covered(m)) { el.classList.add("hl"); el.dataset.hl = m.c; }
+    for (const l of locks) {
+      const els = covered(l);
+      for (const el of els) { el.classList.add("locked"); el.dataset.lock = l.id; }
+      els[els.length - 1]?.classList.add("lock-end");
+    }
+    for (const a of atts) {
+      for (const el of covered(a)) {
+        el.classList.add("sparkle");
+        el.classList.toggle("sound", a.kind === "sound");
+        el.dataset.att = a.id;
       }
     }
   }

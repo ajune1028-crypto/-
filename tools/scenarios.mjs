@@ -1618,6 +1618,59 @@ scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes o
   await b.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`, 8000);
 });
 
+scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠금; a highlight and a lock reach the friend, who cannot change locked words; a recording hidden in words sparkles and a 2-second hold plays it in a round player", async ({ open, out, fixtures }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("바다에 갔어 노을이 예뻤어");
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const sheet = (page) => `window.__app.session.sheet(${JSON.stringify(day)})`;
+  await sameOnAll([a, b], "바다에 갔어 노을이 예뻤어");
+  const choose = (page, from, to) => page.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.focus(); ta.setSelectionRange(${from}, ${to}); document.dispatchEvent(new Event("selectionchange")); return true; })()`);
+  // 노을이: 표시 in yellow, then 잠금.
+  await choose(a, 7, 10);
+  await a.waitFor(`!${q("#sel-tools")}.hidden && ${q("#sel-lock")} && ${q('#sel-tools [data-hl="yellow"]')}`);
+  await click(a, '#sel-tools [data-hl="yellow"]');
+  await a.waitFor(`${sheet(a)}.marks().length === 1`);
+  await b.waitFor(`[...${TODAY}.querySelectorAll('.w.hl[data-hl="yellow"]')].map((w) => w.textContent).join("") === "노을이"`);
+  await click(a, "#sel-lock");
+  await a.waitFor(`${sheet(a)}.locks().length === 1 && ${q("#sel-unlock")}`);
+  await b.waitFor(`${TODAY}.querySelector(".w.locked.lock-end")?.textContent === "노을이"`);
+  await a.shot(out("text-marks-locks.png"));
+  // The friend cannot remove a locked letter.
+  await b.front();
+  await b.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.focus(); ta.setSelectionRange(9, 9); return true; })()`);
+  await b.key("Backspace");
+  await b.waitFor(`document.querySelector(".toast")?.textContent.includes("잠긴 글")`);
+  assert.equal(await b.eval(`${sheet(b)}.text()`), "바다에 갔어 노을이 예뻤어");
+  assert.equal(await b.eval(`${TODAY}.querySelector("textarea").value`), "바다에 갔어 노을이 예뻤어");
+  // Its locker frees it.
+  await a.front();
+  await choose(a, 7, 10);
+  await a.waitFor(q("#sel-unlock"));
+  await click(a, "#sel-unlock");
+  await a.waitFor(`${sheet(a)}.locks().length === 0`);
+  // A recording from a file into 바다에.
+  await choose(a, 0, 3);
+  await a.waitFor(q("#sel-sound"));
+  await click(a, "#sel-sound");
+  await a.waitFor(q("#text-file"));
+  await a.setFiles("#text-file", [fixtures.doremi]);
+  await a.waitFor(`${sheet(a)}.attachments().some((x) => x.kind === "sound")`, 15000);
+  const att = await a.eval(`${sheet(a)}.attachments().find((x) => x.kind === "sound")`);
+  assert.ok(att.dur > 1500 && att.dur < 4000, "about as long as the file: " + att.dur);
+  await b.waitFor(`window.__app.session.doc("files").file(${JSON.stringify(att.file)}) && ${TODAY}.querySelector(".w.sparkle.sound")?.textContent === "바다에"`, 10000);
+  // On the friend's screen: held 2 seconds, the round player comes and plays.
+  await b.front();
+  const at = await b.eval(`(() => { const r = ${TODAY}.querySelector(".w.sparkle.sound").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await b.press(at[0], at[1]);
+  await b.waitFor(q("#sound-reveal .sound-orb.on"), 4000);
+  await b.release(at[0], at[1]);
+  assert.match(await text(b, "#sound-who"), /가람 님이 숨겨 둔 녹음/);
+  await b.shot(out("text-sound-reveal.png"));
+  await click(b, "#sound-remove");
+  await a.waitFor(`!${sheet(a)}.attachments().some((x) => x.kind === "sound")`);
+});
+
 scenario("text room: 사진 with no words chosen hides the photo in the word at the caret; on an empty sheet it says to write first", async ({ open, fixtures }) => {
   const page = await open();
   await createRoom(page);

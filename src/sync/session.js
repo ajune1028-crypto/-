@@ -15,6 +15,7 @@ import { RoomState, newReplicaId } from "../core/room.js";
 import { SongDoc } from "../core/song.js";
 import { InkDoc } from "../core/ink.js";
 import { BoardDoc } from "../core/board.js";
+import { FileDoc } from "../core/files.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -31,6 +32,8 @@ export const DOC_TYPES = [
   { test: (doc) => doc.startsWith("k:") && doc.length > 2, make: () => new InkDoc() },
   // The whiteboard's cards and lines.
   { test: (doc) => doc === "board", make: () => new BoardDoc() },
+  // Files of the room in parts: a background photo, recordings hidden in words.
+  { test: (doc) => doc === "files", make: () => new FileDoc() },
 ];
 
 export class RoomSession extends Emitter {
