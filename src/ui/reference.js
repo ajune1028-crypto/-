@@ -6,7 +6,10 @@
 // Removing a recording from the list keeps its sound on the device: a clip or
 // card made from it may still play it.
 
-import { h, openSheet, toast } from "./dom.js";
+import { h, openFloat, segmented, toast } from "./dom.js";
+import { getSettings, setSetting } from "../identity.js";
+import { kindInfo } from "./kinds.js";
+import { RoomSession } from "../sync/session.js";
 import { timeText } from "./song-view.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
 import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
@@ -28,7 +31,10 @@ import { solfege } from "../audio/notes.js";
  */
 export function openReference(app, { insert = null, insertSound = null, roomId = null } = {}) {
   const mic = micSupport();
-  openSheet(app.root, "레퍼런스 (나만 보기)", (panel, close, onClose) => {
+  // It floats over the room (top left at first, wherever it was moved since), so the room
+  // stays in reach: look at one, work in the other.
+  const pos = { get: () => getSettings(app.store).refPos || null, set: (p) => setSetting(app.store, "refPos", p) };
+  openFloat(app.root, { id: "reference", title: "레퍼런스 (나만 보기)", pos }, (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
@@ -50,7 +56,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
           h("p", { class: "ref-body", text: n.text }),
           h("div", { class: "ref-actions" },
             h("button", { class: "chip", type: "button", text: "복사", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }),
-            insert && h("button", { class: "chip", type: "button", data: { put: n.id }, text: "이 방에 붙이기", onclick: () => { insert(n.text); close(); toast(app.root, "붙였어요"); } }),
+            insert && h("button", { class: "chip", type: "button", data: { put: n.id }, text: "이 방에 붙이기", onclick: () => { insert(n.text); toast(app.root, "붙였어요"); } }),
             h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }))))
           : [h("p", { class: "help", text: "아직 메모가 없어요. 여기 적은 것은 이 기기의 나만 볼 수 있어요." })]));
     }
@@ -75,7 +81,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
         bars(s),
         h("div", { class: "ref-actions" },
           h("button", { class: "chip", type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
-          insertSound && h("button", { class: "chip", type: "button", data: { putSound: s.id }, text: "이 방에 붙이기", onclick: () => { stopHearing(); insertSound(s); close(); toast(app.root, "붙였어요"); } }),
+          insertSound && h("button", { class: "chip", type: "button", data: { putSound: s.id }, text: "이 방에 붙이기", onclick: () => { stopHearing(); insertSound(s); toast(app.root, "붙였어요"); } }),
           h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }))))
         : [h("p", { class: "help", text: "녹음도 남길 수 있어요. 노래 방이나 화이트보드에 바로 붙일 수 있어요." })]));
     }
@@ -175,17 +181,90 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     });
     const ways = h("div", { class: "form ref-ways", id: "ref-ways" },
       ...waysIn({ app, roomId, root: app.root, name: "ref", prefix: "ref-", mic, canRecord: true, onRecord: () => record() }));
-    panel.append(h("div", { class: "form" }, area,
+    const notesPart = h("div", { class: "form ref-part", id: "ref-notes" }, area,
       h("button", { class: "btn", id: "ref-add", type: "button", text: "메모 남기기", onclick: () => {
         if (!area.value.trim()) return;
         addRefNote(app.store, area.value.trim());
         area.value = "";
         drawNotes();
-      } }), list),
-      h("h3", { class: "ref-heading", text: "녹음" }),
-      ...inputs, ways, status, sounds);
+      } }), list);
+    const soundsPart = h("div", { class: "ref-part", id: "ref-sounds-part" }, ...inputs, ways, status, sounds);
+    const roomsPart = h("div", { class: "ref-part", id: "ref-rooms" });
+    const parts = { notes: notesPart, sounds: soundsPart, rooms: roomsPart };
+    const show = (which) => {
+      for (const [k, el] of Object.entries(parts)) el.hidden = k !== which;
+      if (which === "rooms" && !roomsPart.childElementCount) drawRooms();
+    };
+    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], "notes", (v) => show(v), "refTab");
+    tabs.classList.add("ref-tabs");
+    panel.append(tabs, notesPart, soundsPart, roomsPart);
+    show("notes");
     drawNotes();
     drawSounds();
+
+    // 내 방: my other rooms, to look into and bring things from into this room.
+    function drawRooms() {
+      const rooms = app.store.get("rooms", []).filter((r) => r.id !== roomId).sort((a, b) => b.at - a.at);
+      roomsPart.replaceChildren(...(rooms.length ? rooms.map((r) => {
+        const items = h("div", { class: "ref-room-items" });
+        const row = h("div", { class: "ref-room", data: { room: r.id } },
+          h("div", { class: "pick-head" }, h("span", { class: "pick-name", text: r.name }), h("span", { class: "pick-len", text: kindInfo(r.kind)?.name || "" })),
+          h("button", { class: "chip", type: "button", id: "ref-open-" + r.id, text: "보기", onclick: (e) => { e.currentTarget.remove(); lookInto(r, items); } }),
+          items);
+        return row;
+      }) : [h("p", { class: "help", text: "다른 방이 아직 없어요." })]));
+    }
+
+    /** A room's words, clips and cards, each with 가져오기 where this room can take it. */
+    async function lookInto(room, box) {
+      box.replaceChildren(h("p", { class: "help", text: "불러오는 중…" }));
+      let other = null;
+      const found = [];
+      try {
+        other = new RoomSession({ transport: await app.transportFor(room.id), roomId: room.id, store: app.store });
+        if ((await other.open()) !== "ok") throw new Error("not opened");
+        if (room.kind === "creative-song") {
+          const song = await other.load("song");
+          song.layout().forEach((clip, i) => {
+            const src = song.source(clip.src);
+            if (!src) return;
+            const notes = song.notesOf(src.id).filter((n) => n.t + n.d > clip.offset && n.t < clip.offset + clip.length)
+              .map((n) => ({ t: Math.max(0, n.t - clip.offset) / 1000, d: n.d / 1000, p: n.p, v: n.v }));
+            found.push({ sound: { name: src.name || "녹음 " + (i + 1), dur: clip.length / 1000, notes, peaks: src.peaks, blob: clip.offset === 0 && clip.length >= src.dur - 5 ? src.blob : undefined } });
+          });
+        } else if (room.kind === "creative-board") {
+          const board = await other.load("board");
+          for (const item of board.items()) {
+            if (item.kind === "note" && (item.text || "").trim()) found.push({ text: item.text });
+            else if (item.kind === "song") {
+              const d = item.data;
+              found.push({ sound: { name: d.name || "노래", dur: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob } });
+            }
+          }
+        } else {
+          // A text room: the lines of its last days, newest first.
+          const days = other.days().slice(-3).reverse();
+          for (const day of days) {
+            const sheet = await other.loadSheet(day);
+            for (const line of sheet.text().split("\n").reverse()) if (line.trim()) found.push({ text: line.trim() });
+          }
+        }
+      } catch (err) {
+        console.warn(err);
+        box.replaceChildren(h("p", { class: "help", text: "이 방을 열지 못했어요" }));
+        return;
+      } finally {
+        other?.close();
+      }
+      const take = (f) => (f.text ? insert && (() => { insert(f.text); toast(app.root, "가져왔어요"); }) : insertSound && (() => { insertSound(f.sound); toast(app.root, "가져왔어요"); }));
+      box.replaceChildren(...(found.length ? found.slice(0, 40).map((f, i) => {
+        const act = take(f);
+        return h("div", { class: "ref-item" },
+          h("p", { text: f.text || `♪ ${f.sound.name} · ${timeText(f.sound.dur * 1000)}` }),
+          act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "가져오기", onclick: act }),
+          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "레퍼런스 메모에 넣었어요"); } }));
+      }) : [h("p", { class: "help", text: "가져올 것이 아직 없어요" })]));
+    }
     onClose(() => {
       stopPickers();
       stopHearing();

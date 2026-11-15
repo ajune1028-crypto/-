@@ -72,6 +72,46 @@ export function iconButton(id, name, label, onclick, cap = null) {
   return h("button", { class: "icon-btn", id, type: "button", "aria-label": label, data: cap ? { cap } : undefined, onclick }, icon(name));
 }
 
+/**
+ * The rest of a press goes nowhere: its lift, the mouse events copied from it and the click
+ * it makes (and, for a touch, fingers that join it). For a press that closed something.
+ */
+export function swallowPress(e) {
+  const swallow = (ev) => {
+    ev.stopImmediatePropagation();
+    if (ev.cancelable) ev.preventDefault();
+  };
+  swallow(e);
+  const held = new Set([e.pointerId]);
+  const touch = e.pointerType === "touch";
+  let lifted = 0;
+  const lift = (ev) => {
+    if (!held.has(ev.pointerId)) return;
+    swallow(ev);
+    held.delete(ev.pointerId);
+    if (!held.size) lifted = Date.now();
+  };
+  const copy = (ev) => { if (!lifted || Date.now() - lifted < 60) swallow(ev); };
+  const click = (ev) => {
+    if (lifted && Date.now() - lifted < 400) swallow(ev);
+    if (lifted) end();
+  };
+  const next = (ev) => {
+    if (touch && held.size && ev.pointerType === "touch") {
+      swallow(ev);
+      held.add(ev.pointerId);
+    } else end();
+  };
+  const types = [["pointerup", lift], ["pointercancel", lift], ["mousedown", copy], ["mouseup", copy], ["click", click], ["pointerdown", next]];
+  const end = () => {
+    for (const [t, fn] of types) window.removeEventListener(t, fn, true);
+    clearTimeout(timer);
+  };
+  // (Listeners added while this press is being dispatched never hear the press itself.)
+  for (const [t, fn] of types) window.addEventListener(t, fn, true);
+  const timer = setTimeout(end, 4000);
+}
+
 /** The screen's frame: bars, tool rows and sheets work as usual while a menu is open. */
 const FRAME = ".room > .bar, .room-top, .toolbar, .board-rail, .ink-tools, .sel-tools, .scrim, .panel, .drawer, .home-top, .home-foot";
 
@@ -83,46 +123,13 @@ const FRAME = ".room > .bar, .room-top, .toolbar, .board-rail, .ink-tools, .sel-
  * (a pinch) passes. Returns stop().
  */
 export function closeOnOutside(inside, close, menu = null) {
-  const swallow = (e) => {
-    e.stopImmediatePropagation();
-    if (e.cancelable) e.preventDefault();
-  };
   const down = (e) => {
     // A menu whose screen has gone (another room, home) keeps no hold on the page.
     if (menu && !menu.isConnected) return void stop();
     if (e.pointerType === "touch" && !e.isPrimary) return;
     if (inside(e.target) || e.target.closest?.(FRAME)) return;
-    swallow(e);
     stop();
-    // Only this press (with any finger that joins it, as in a pinch): their lifts, the mouse
-    // events copied from them, and the click they make.
-    const held = new Set([e.pointerId]);
-    const touch = e.pointerType === "touch";
-    let lifted = 0;
-    const lift = (ev) => {
-      if (!held.has(ev.pointerId)) return;
-      swallow(ev);
-      held.delete(ev.pointerId);
-      if (!held.size) lifted = Date.now();
-    };
-    const copy = (ev) => { if (!lifted || Date.now() - lifted < 60) swallow(ev); };
-    const click = (ev) => {
-      if (lifted && Date.now() - lifted < 400) swallow(ev);
-      if (lifted) end();
-    };
-    const next = (ev) => {
-      if (touch && held.size && ev.pointerType === "touch") {
-        swallow(ev);
-        held.add(ev.pointerId);
-      } else end();
-    };
-    const types = [["pointerup", lift], ["pointercancel", lift], ["mousedown", copy], ["mouseup", copy], ["click", click], ["pointerdown", next]];
-    const end = () => {
-      for (const [t, fn] of types) window.removeEventListener(t, fn, true);
-      clearTimeout(timer);
-    };
-    for (const [t, fn] of types) window.addEventListener(t, fn, true);
-    const timer = setTimeout(end, 4000);
+    swallowPress(e);
     close();
   };
   window.addEventListener("pointerdown", down, true);
@@ -187,10 +194,73 @@ export function openSheet(root, title, build) {
     scrim.remove();
     document.removeEventListener("keydown", onKey);
   }
-  scrim.addEventListener("pointerdown", (event) => { if (event.target === scrim) close(); });
+  // A press on the dark around the sheet only closes it: nothing underneath is pressed.
+  scrim.addEventListener("pointerdown", (event) => {
+    if (event.target !== scrim) return;
+    swallowPress(event);
+    close();
+  });
   document.addEventListener("keydown", onKey);
   build(panel, close, (fn) => closers.push(fn));
   root.append(scrim);
+  return close;
+}
+
+/**
+ * A floating panel: no dark around it, so the room stays in reach while it is open (to look at
+ * one and work in the other). It opens where it was last left (top left at first) and moves by
+ * its head. pos: { get(), set({ x, y }) } keeps where it stands. Returns close().
+ */
+export function openFloat(root, { id, title, pos }, build) {
+  document.getElementById(id)?.close?.();
+  const closers = [];
+  const head = h("div", { class: "float-head" },
+    h("span", { class: "float-grip", "aria-hidden": "true" }),
+    h("h2", { class: "float-title", text: title }),
+    h("button", { class: "icon-btn float-close", type: "button", id: id + "-close", "aria-label": "닫기", onclick: () => close() }, icon("back")));
+  const body = h("div", { class: "float-body" });
+  const panel = h("section", { class: "float", id, role: "dialog", "aria-label": title }, head, body);
+  const place = (x, y) => {
+    const w = panel.offsetWidth || 320;
+    const hgt = panel.offsetHeight || 200;
+    const nx = Math.max(4, Math.min(innerWidth - w - 4, x));
+    const ny = Math.max(4, Math.min(innerHeight - Math.min(hgt, 120), y));
+    panel.style.left = nx + "px";
+    panel.style.top = ny + "px";
+    return { x: nx, y: ny };
+  };
+  // Moved by its head, with any one finger or the mouse.
+  head.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button")) return;
+    const r = panel.getBoundingClientRect();
+    const grab = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    head.setPointerCapture?.(e.pointerId);
+    const move = (ev) => { if (ev.pointerId === grab.id) place(ev.clientX - grab.dx, ev.clientY - grab.dy); };
+    const up = (ev) => {
+      if (ev.pointerId !== grab.id) return;
+      head.removeEventListener("pointermove", move);
+      head.removeEventListener("pointerup", up);
+      head.removeEventListener("pointercancel", up);
+      const r2 = panel.getBoundingClientRect();
+      pos?.set({ x: Math.round(r2.left), y: Math.round(r2.top) });
+    };
+    head.addEventListener("pointermove", move);
+    head.addEventListener("pointerup", up);
+    head.addEventListener("pointercancel", up);
+  });
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  function close() {
+    if (!panel.isConnected) return;
+    for (const fn of closers) fn();
+    panel.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  panel.close = close;
+  document.addEventListener("keydown", onKey);
+  build(body, close, (fn) => closers.push(fn));
+  root.append(panel);
+  const at = pos?.get();
+  place(at?.x ?? 10, at?.y ?? 64);
   return close;
 }
 

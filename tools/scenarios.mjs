@@ -1048,7 +1048,7 @@ const fieldFaults = (page) => page.eval(`(() => {
   return faults;
 })()`);
 /** Waits for a sheet to finish sliding in (never long: a screen that is not in front may not animate). */
-const settled = (page) => page.eval(`(() => { const moving = document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.matches(".panel, .toast, .drawer")); return Promise.race([Promise.all(moving.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 500))]).then(() => true); })()`);
+const settled = (page) => page.eval(`(() => { const moving = document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.matches(".panel, .toast, .drawer, .float")); return Promise.race([Promise.all(moving.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 500))]).then(() => true); })()`);
 
 scenario("forms: every field is a visible box that a tap reaches, on every screen that has one", async ({ open, out }) => {
   for (const dark of [false, true]) {
@@ -2753,6 +2753,8 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
   const page = await open();
   await page.waitFor(q("#home"));
   await click(page, "#home-reference");
+  await page.waitFor(q("#ref-tab-sounds"));
+  await click(page, "#ref-tab-sounds");
   await page.waitFor(q("#ref-ways"));
   await page.setFiles("#ref-file", [fixtures.doremi]);
   await page.waitFor(`document.querySelectorAll(".ref-sound").length === 1`, 20000);
@@ -2773,6 +2775,8 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
   // Into a song room: a clip with its notes.
   await createSongRoom(page);
   await click(page, "#room-reference");
+  await page.waitFor(q("#ref-tab-sounds"));
+  await click(page, "#ref-tab-sounds");
   await page.waitFor(q(`[data-put-sound="${id}"]`));
   await click(page, `[data-put-sound="${id}"]`);
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
@@ -2781,9 +2785,55 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
   await click(page, "#back");
   await createBoard(page);
   await click(page, "#room-reference");
+  await page.waitFor(q("#ref-tab-sounds"));
+  await click(page, "#ref-tab-sounds");
   await page.waitFor(q(`[data-put-sound="${id}"]`));
   await click(page, `[data-put-sound="${id}"]`);
   await page.waitFor(`document.querySelectorAll(".card.song").length === 1`);
+});
+
+scenario("레퍼런스 floats over the room (no dark around it), moves by its head and opens there again; 내 방 shows my other rooms, and 가져오기 brings their words and clips into this room", async ({ open, fixtures }) => {
+  const page = await open();
+  await createRoom(page, { room: "글 방" });
+  await focusEnd(page);
+  await page.type("오늘의 가사 한 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "오늘의 가사 한 줄"`);
+  await click(page, "#back");
+  await createSongRoom(page, { room: "흥얼 방" });
+  await importSound(page, fixtures.doremi);
+  await click(page, "#back");
+  await createBoard(page, { room: "모으는 보드" });
+  await click(page, "#room-reference");
+  await page.waitFor(q("#reference"));
+  await settled(page);
+  assert.ok(!(await page.eval(q(".scrim"))), "no dark around it");
+  const at = await page.eval(`(() => { const r = document.getElementById("reference").getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+  assert.ok(at.x < 40 && at.y < 120, "top left at first: " + JSON.stringify(at));
+  // Moved by its head; it opens there next time.
+  const head = await page.eval(`(() => { const r = document.querySelector("#reference .float-head").getBoundingClientRect(); return [r.left + 30, r.top + r.height / 2]; })()`);
+  await page.press(head[0], head[1]);
+  for (let i = 1; i <= 6; i++) await page.moveTo(head[0] + i * 4, head[1] + i * 25);
+  await page.release(head[0] + 24, head[1] + 150);
+  const moved = await page.eval(`(() => { const r = document.getElementById("reference").getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+  assert.ok(moved.y > at.y + 100, "it moved: " + JSON.stringify(moved));
+  await click(page, "#reference-close");
+  await page.waitFor(`!${q("#reference")}`);
+  await click(page, "#room-reference");
+  await page.waitFor(q("#reference"));
+  await settled(page);
+  assert.equal(Math.round(await page.eval(`document.getElementById("reference").getBoundingClientRect().top`)), Math.round(moved.y), "it opens where it was left");
+  // 내 방: the text room's words and the song room's clip come into the board.
+  await click(page, "#ref-tab-rooms");
+  const textRoom = await page.eval(`window.__app.store.get("rooms", []).find((r) => r.name === "글 방").id`);
+  const songRoom = await page.eval(`window.__app.store.get("rooms", []).find((r) => r.name === "흥얼 방").id`);
+  await click(page, `[id="ref-open-${textRoom}"]`);
+  await page.waitFor(`[...document.querySelectorAll('[data-room="${textRoom}"] .ref-item p')].some((p) => p.textContent === "오늘의 가사 한 줄")`, 8000);
+  await click(page, `[data-room="${textRoom}"] [data-take="0"]`);
+  await page.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "note" && i.text === "오늘의 가사 한 줄")`);
+  await click(page, `[id="ref-open-${songRoom}"]`);
+  await page.waitFor(q(`[data-room="${songRoom}"] [data-take="0"]`), 8000);
+  await click(page, `[data-room="${songRoom}"] [data-take="0"]`);
+  await page.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "song" && i.data.notes.length === 5)`);
 });
 
 scenario("레퍼런스: private notes from home and from a room; put into the room only when asked; the switch hides it", async ({ open }) => {
