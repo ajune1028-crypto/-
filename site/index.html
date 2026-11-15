@@ -11094,11 +11094,12 @@ function mountSongRoom(body, app, session, frame) {
     // 색: the people colours in place of the menu (small, so it covers little), and 기본 (the recorder's).
     if (menuView === "tints" && !locked) {
       const now = clip.tint ?? null;
-      menu.replaceChildren(
+      menu.replaceChildren(...[
         ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(now === i),
           style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
         item("clip-tint-none", "기본", () => { menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: null })); draw(); }, now !== null),
-        item("clip-tint-back", "←", () => { menuView = "main"; placeMenu(); }));
+        item("clip-tint-back", "←", () => { menuView = "main"; placeMenu(); }),
+      ].filter(Boolean));
     } else menu.replaceChildren(...[
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),

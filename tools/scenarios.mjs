@@ -1428,7 +1428,7 @@ scenario("song: split at the playhead, copy, paste on another row, mute, delete,
 });
 
 // The owner: "녹음 저거 직사각형이 지금 빨간색이잖아 저거를 내색깔로" and "녹음 누르면 색깔 바꾸기도".
-scenario("song: a recording comes in my colour (the people colour nearest my glass colour, not the first one); 색 gives it another that a friend sees too; 기본 brings mine back; undo", async ({ open, fixtures }) => {
+scenario("song: a recording comes in my colour (the people colour nearest my glass colour, not the first one); 색 gives it another that a friend sees too; 기본 brings mine back; undo", async ({ open, out, fixtures }) => {
   const a = await open({ dev: "a" });
   const id = await createSongRoom(a);
   const blue = PALETTE.findIndex((p) => p.key === "blue");
@@ -1443,6 +1443,9 @@ scenario("song: a recording comes in my colour (the people colour nearest my gla
   await choose(a, ".clip[data-id]");
   await click(a, "#clip-tint");
   await a.waitFor(q('#clip-menu [data-tint="6"]'));
+  assert.equal(await a.eval(`document.getElementById("clip-menu").textContent.trim()`), "←", "only the dots and ← (no 기본 while it is the recorder's colour, no stray words)");
+  await a.front();
+  await a.shot(out("song-clip-colours.png"));
   const want = await a.eval(`getComputedStyle(document.querySelector('#clip-menu [data-tint="6"]')).backgroundColor`);
   await click(a, '#clip-menu [data-tint="6"]');
   await a.waitFor(`window.__app.session.doc("song").layout()[0].tint === 6`);
@@ -2408,7 +2411,7 @@ scenario("whiteboard: the board runs to every edge of the screen under the float
 });
 
 // The owner: "올가미 기능에서 색깔 바꾸기… 막 여러가지… 올가미기능은 많은걸 할 수 있게".
-scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop and every card in it; 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, fixtures }) => {
+scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop and every card in it; 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2459,6 +2462,11 @@ scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop 
   await click(page, more);
   await click(page, "#lasso-chain");
   await page.waitFor(`${board}.links().length === 1`);
+  await click(page, more);
+  await page.waitFor(q("#lasso-tidy"));
+  await page.front();
+  await page.shot(out("board-lasso-more.png"));
+  await click(page, "#mode-lasso"); // the bars still work while the menu is open; this one closes it
   // 음소거, then 소리 켜기.
   await click(page, more);
   await click(page, "#lasso-mute");
