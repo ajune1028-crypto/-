@@ -175,3 +175,16 @@ test("an accent of your own: text on it reads, and its icons show on both papers
   assert.equal(accentColors("#2466dc")["--on-accent"], "#ffffff");
   assert.equal(accentColors("#ffe14d")["--on-accent"], "#111216", "dark text on a light yellow");
 });
+
+test("my people colour is the one nearest my glass colour, among those nobody has; grey has no preference", async () => {
+  const { nearestPeopleColor } = await import("../src/core/paint.js");
+  const index = (key) => PALETTE.findIndex((p) => p.key === key);
+  assert.equal(nearestPeopleColor("#2466dc"), index("blue"), "파랑 glass: blue");
+  assert.equal(nearestPeopleColor("#e05298"), index("pink"), "핑크 glass: pink");
+  assert.equal(nearestPeopleColor("#d93a3a"), index("coral"), "빨강 glass: coral");
+  assert.equal(nearestPeopleColor("#2e9a4f"), index("green"), "초록 glass: green");
+  const next = nearestPeopleColor("#2466dc", new Set([index("blue")]));
+  assert.ok(next !== index("blue") && next >= 0, "blue taken: the next nearest");
+  assert.equal(nearestPeopleColor("#3a3d46"), null, "흑백: no preference");
+  assert.equal(nearestPeopleColor(null), null);
+});

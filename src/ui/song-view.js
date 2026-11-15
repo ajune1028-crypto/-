@@ -226,7 +226,7 @@ export class Timeline {
     el.style.top = clip.lane * this.rowH + this.inset + "px";
     el.style.width = Math.max(4, (clip.length / 1000) * this.pps) + "px";
     el.style.height = this.rowH - 2 * this.inset + "px";
-    el.style.setProperty("--c", model.color(clip.by));
+    el.style.setProperty("--c", model.color(clip));
     const peer = model.peers.get(clip.id);
     el.style.setProperty("--peer", peer || "transparent");
     el.classList.toggle("selected", clip.id === model.selected);
@@ -235,7 +235,7 @@ export class Timeline {
     const notes = source ? model.notesOf(clip.src) : [];
     el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip.by), notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip), notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));

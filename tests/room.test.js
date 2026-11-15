@@ -132,3 +132,14 @@ test("roomLink appends the room to the page address and drops any old hash", asy
   assert.equal(roomLink("https://claude.ai/artifact/AbC123", "abcdefgh2345"), "https://claude.ai/artifact/AbC123#r-abcdefgh2345");
   assert.equal(roomLink("https://example.com/app/?x=1#r-oldoldoldold", "abcdefgh2345"), "https://example.com/app/?x=1#r-abcdefgh2345");
 });
+
+test("the maker and a newcomer may bring the colour they prefer; without one the first free colour is theirs", () => {
+  const clock = new Clock("a");
+  const room = new RoomState();
+  for (const op of createRoomOps(clock, { kind: "daily-text", name: "방", tz: "Asia/Seoul", now: 1, memberId: "m1", memberName: "가", color: 1 })) room.apply(op);
+  assert.equal(room.member("m1").color, 1, "the maker's colour");
+  for (const op of joinOps(clock, room, { memberId: "m2", name: "나", now: 2, color: 6 })) room.apply(op);
+  assert.equal(room.member("m2").color, 6, "the newcomer's colour");
+  for (const op of joinOps(clock, room, { memberId: "m3", name: "다", now: 3 })) room.apply(op);
+  assert.equal(room.member("m3").color, 0, "no preference: the first free");
+});

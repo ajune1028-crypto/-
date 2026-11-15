@@ -1,6 +1,6 @@
 // Light and dark, and the scale that keeps the layout at a 360-wide column.
 
-import { accentColors } from "../core/paint.js";
+import { accentColors, nearestPeopleColor } from "../core/paint.js";
 
 const root = document.documentElement;
 const hostTheme = root.dataset.theme || null;
@@ -88,4 +88,19 @@ export function applyAccent(hex) {
 export function applyTextScale(scale) {
   const ok = TEXT_SIZES.some(([v]) => v === scale);
   root.style.setProperty("--text-scale", String(ok ? scale : 1));
+}
+
+/** My glass colour as a hex: the one I chose, else the blue one. */
+export function glassHex(settings) {
+  return settings?.accent || ACCENTS.find(([key]) => key === "blue")[2];
+}
+
+/**
+ * The people colour I would like in a room (an index into PALETTE): the one nearest my glass
+ * colour that nobody there has yet, so my words and recordings come in "my colour". Null for a
+ * grey glass (no preference).
+ */
+export function myPeopleColor(settings, room = null) {
+  const taken = new Set(room ? room.members().map((m) => m.color) : []);
+  return nearestPeopleColor(glassHex(settings), taken);
 }

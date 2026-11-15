@@ -283,3 +283,35 @@ test("plain text on the board takes a colour and a size; a loop finds every card
   assert.deepEqual(itemsInLoop(board, loop.id).map((i) => i.id).sort(), [t.id, s1.id].sort());
   void far;
 });
+
+test("a card may take a people colour (tint 0-7, null = whoever placed it); a loop has a colour too; undo puts each back", async () => {
+  const { board, clock, commit, song, note } = setup();
+  const { tintLassoOps, lassoOps } = await import("../src/core/board.js");
+  const a = song(0, 0);
+  const t = commit(setItemOps(clock, board, a.id, { tint: 5 }));
+  assert.equal(board.item(a.id).tint, 5);
+  commit({ ops: invertBoardOps(board, clock, t.atoms, "undo") });
+  assert.equal(board.item(a.id).tint, null, "undo: no colour of its own again");
+  const n = note(400, 0);
+  commit(setItemOps(clock, board, n.id, { tint: 2 }));
+  assert.equal(board.item(n.id).tint, 2, "text takes a people colour too");
+  board.apply({ t: "iset", id: clock.next(), i: n.id, f: { tint: 9 } });
+  assert.equal(board.item(n.id).tint, 2, "an unknown colour is refused");
+  const loop = commit(lassoOps(clock, board, [-50, -50, 300, -50, 300, 200, -50, 200], "m1"));
+  assert.equal(board.lassos()[0].tint ?? null, null);
+  const c = commit(tintLassoOps(clock, board, loop.id, 6));
+  assert.equal(board.lassos()[0].tint, 6);
+  commit(tintLassoOps(clock, board, loop.id, 1));
+  assert.equal(board.lassos()[0].tint, 1, "the later colour wins");
+  commit({ ops: invertBoardOps(board, clock, c.atoms, "undo") });
+  assert.equal(board.lassos()[0].tint, null, "undoing the first colour puts back none");
+});
+
+test("정리: cards laid in one row from the left, tops at the highest, an even gap; a rounded loop goes round a box", async () => {
+  const { rowLayout, boxLoop, insideLoop } = await import("../src/core/board.js");
+  const placed = rowLayout([{ id: "b", x: 300, y: 90, w: 100, h: 50 }, { id: "a", x: 20, y: 140, w: 120, h: 80 }, { id: "c", x: 160, y: 10, w: 60, h: 40 }], 24);
+  assert.deepEqual(placed, [{ id: "a", x: 20, y: 10 }, { id: "c", x: 164, y: 10 }, { id: "b", x: 248, y: 10 }]);
+  const pts = boxLoop(0, 0, 400, 100, 20);
+  assert.ok(pts.length >= 16 && pts.length % 2 === 0 && pts.every(Number.isInteger));
+  assert.ok(insideLoop(pts, 200, 50) && insideLoop(pts, 5, 50) && !insideLoop(pts, 200, 140), "the box's inside is inside");
+});

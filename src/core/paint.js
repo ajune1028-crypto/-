@@ -31,6 +31,20 @@ const MIN_CONTRAST = 4.75;
 
 const cache = new Map();
 
+/**
+ * The people colour (an index into PALETTE) nearest in hue to a glass colour, among those not
+ * taken (else the nearest of all): so my words and recordings come in "my colour". A grey
+ * glass, or none, has no preference (null).
+ */
+export function nearestPeopleColor(hex, taken = new Set()) {
+  if (typeof hex !== "string" || !/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  const { c, h } = hexToOklch(hex.toLowerCase());
+  if (c < 0.05) return null;
+  const apart = (a) => { const d = Math.abs(a - h) % 360; return Math.min(d, 360 - d); };
+  const order = PALETTE.map((p, i) => [i, apart(p.h)]).sort((p, q) => p[1] - q[1]).map(([i]) => i);
+  return order.find((i) => !taken.has(i)) ?? order[0];
+}
+
 export function memberColor(index, theme) {
   const i = ((index % PALETTE.length) + PALETTE.length) % PALETTE.length;
   const key = theme + i;

@@ -15,7 +15,7 @@ import { currentTheme, onThemeChange } from "./theme.js";
 import { Timeline, timeText } from "./song-view.js";
 import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
-import { memberColor, INK } from "../core/paint.js";
+import { memberColor, INK, PALETTE } from "../core/paint.js";
 import {
   MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps,
   joinClipOps, joinWithSourceOps, combinedSource,
@@ -56,6 +56,7 @@ export function mountSongRoom(body, app, session, frame) {
   let frameReq = 0;
   let alive = true;
   let menu = null;
+  let menuView = "main"; // the clip menu's words, or "tints" (색)
   let editor = null;
   let closeAdd = null;
   const peerRecs = new Map(); // peer key → { row, at, since, name, color }
@@ -136,6 +137,11 @@ export function mountSongRoom(body, app, session, frame) {
 
   // ---- drawing ------------------------------------------------------------------
 
+  /** A clip's colour: its own (색), else the colour of whoever recorded it. */
+  function clipColor(clip) {
+    return clip.tint != null ? memberColor(clip.tint, currentTheme()) : colorOf(clip.by);
+  }
+
   function colorOf(by) {
     const m = session.room.member(by);
     return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()];
@@ -170,7 +176,7 @@ export function mountSongRoom(body, app, session, frame) {
     let empty = null;
     if (!loaded) empty = "노래를 불러오는 중…";
     return {
-      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: colorOf, mode: settings().songMode, showWave: settings().showWave,
+      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
@@ -536,6 +542,7 @@ export function mountSongRoom(body, app, session, frame) {
   // ---- clips ----------------------------------------------------------------------
 
   function select(id) {
+    if (id !== selected) menuView = "main";
     selected = id && song.clip(id) && !song.clip(id).removed ? id : null;
     if (selected) selectedRow = song.layout().find((c) => c.id === selected)?.lane ?? selectedRow;
     session.setPresence(presence());
@@ -716,12 +723,22 @@ export function mountSongRoom(body, app, session, frame) {
     }
     // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
     const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
-    menu.replaceChildren(...[
+    // 색: the people colours in place of the menu (small, so it covers little), and 기본 (the recorder's).
+    if (menuView === "tints" && !locked) {
+      const now = clip.tint ?? null;
+      menu.replaceChildren(
+        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(now === i),
+          style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
+        item("clip-tint-none", "기본", () => { menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: null })); draw(); }, now !== null),
+        item("clip-tint-back", "←", () => { menuView = "main"; placeMenu(); }));
+    } else menu.replaceChildren(...[
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
       item("clip-copy", "복사", () => copyClip(clip.id)),
       item("clip-paste", "붙여넣기", () => pasteClip(), !!clipboardItem(app.store, "song-clip") && !readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
+        h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), "색"),
       item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
       item("clip-notes", "음 편집", () => editNotes(clip.id)),
       item("clip-send", "보내기", () => sendClip(clip.id)),
@@ -781,7 +798,7 @@ export function mountSongRoom(body, app, session, frame) {
     const clip = song.clip(id);
     if (!clip) return;
     editor = openNoteEditor(root, {
-      song, clipId: id, clock: session.clock, color: colorOf(clip.by),
+      song, clipId: id, clock: session.clock, color: clipColor(clip),
       commit: (made) => apply(made),
       preview: async (p, seconds) => { if (await ready()) player.preview(p, seconds); },
       canEdit: () => !readOnly() && !song.clip(id)?.locked,

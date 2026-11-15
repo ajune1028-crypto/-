@@ -1032,7 +1032,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .board-lines .badge text { fill: #fff; font: 800 13px var(--font); }
 /* 올가미: a dashed loop under the cards; its chip stays the same size at any zoom. */
 .board-loops { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
-.board-loops path { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.board-loops path { fill: color-mix(in srgb, var(--lc, var(--accent)) 10%, transparent); stroke: var(--lc, var(--accent)); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .board-loops path.drawing { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke-dasharray: none; }
 .board.lassoing, .board.lassoing .card { cursor: crosshair; }
 /* 잇기 by a line: the line as it is drawn, and the cards it has passed, numbered. */

@@ -11,7 +11,7 @@ import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { getSettings } from "../identity.js";
 import { memberColor } from "../core/paint.js";
-import { currentTheme } from "./theme.js";
+import { currentTheme, myPeopleColor } from "./theme.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -232,7 +232,7 @@ export function showHome(app) {
           const memberId = newMemberId();
           session.commit("room", createRoomOps(session.clock, {
             kind, name: roomName, tz: localZone(), now: Date.now(), memberId, memberName: myName,
-            pin: code ? await makeVerifier(code) : null,
+            pin: code ? await makeVerifier(code) : null, color: myPeopleColor(getSettings(app.store)) ?? 0,
           }));
           rememberRoom(app.store, { id, kind, name: roomName, memberId, local });
           app.store.set("last", { name: myName, pin: code });

@@ -211,8 +211,9 @@ scenario("second device: finds the room, joins as a new person with another colo
   await click(b, "#others .room-row");
   await joinNew(b, { name: "나래" });
   assert.equal(await b.eval("location.hash"), "#r-" + id);
-  assert.equal(await myColor(a), 0);
-  assert.equal(await myColor(b), 1);
+  // Each comes in the colour nearest their glass (both blue here): the maker blue, the second the next nearest free.
+  assert.equal(await myColor(a), PALETTE.findIndex((p) => p.key === "blue"));
+  assert.ok(Number.isInteger(await myColor(b)) && (await myColor(b)) !== (await myColor(a)), "another colour");
   await a.waitFor(`window.__app.session.room.members().length === 2`);
   await a.waitFor(`document.querySelectorAll("#people .dot").length === 2`);
 });
@@ -238,6 +239,40 @@ scenario("home: a room's row shows the colours of who is in it once a friend has
   await a.waitFor(`window.__app.session.room.members().length === 2`);
   await click(a, "#back");
   await a.waitFor(`document.querySelectorAll('${row} .room-people .dot').length === 2`);
+});
+
+// Rooms made before 15 November gave their maker the first colour (coral): one I am alone in takes mine, once.
+scenario("colour: a room I am alone in that gave me the first colour takes my colour once; chosen back, it stays; with a friend in it nothing changes", async ({ open }) => {
+  const blue = PALETTE.findIndex((p) => p.key === "blue");
+  const asBefore = (page) => page.eval(`(() => { const s = window.__app.session; s.commit("room", [{ t: "mem", id: s.clock.next(), m: s.memberId, k: "color", v: 0 }]); window.__app.store.set("colourFixed", {}); return 1; })()`);
+  const a = await open({ dev: "a" });
+  const id = await createRoom(a, { room: "옛 방" });
+  assert.equal(await myColor(a), blue);
+  await asBefore(a);
+  await a.waitFor(`window.__app.session.me.color === 0`);
+  await click(a, "#back");
+  await click(a, `.room-row[data-id="${id}"]`);
+  await a.waitFor(`window.__app.session?.me?.color === ${blue}`);
+  // Once only: made coral again (as by 내 색), it stays coral.
+  await a.eval(`(() => { const s = window.__app.session; s.commit("room", [{ t: "mem", id: s.clock.next(), m: s.memberId, k: "color", v: 0 }]); return 1; })()`);
+  await click(a, "#back");
+  await click(a, `.room-row[data-id="${id}"]`);
+  await a.waitFor(q("#room-title"));
+  await frames(a);
+  assert.equal(await myColor(a), 0, "chosen back, it stays");
+  // With a friend in it, nothing changes.
+  await click(a, "#back");
+  const other = await createRoom(a, { room: "둘 방" });
+  await asBefore(a);
+  const b = await open({ dev: "b", hash: "r-" + other });
+  await joinNew(b, { name: "나래" });
+  await a.waitFor(`window.__app.session.room.members().length === 2`);
+  await click(a, "#back");
+  await click(a, `.room-row[data-id="${other}"]`);
+  await a.waitFor(q("#room-title"));
+  await a.front(); // a page behind another draws no frames
+  await frames(a);
+  assert.equal(await myColor(a), 0, "a room with a friend keeps the colours people know each other by");
 });
 
 scenario("code: a room opens by typing its code", async ({ open }) => {
@@ -269,7 +304,7 @@ scenario("returning: the right code makes another device the same person", async
   await click(c, "#enter");
   await c.waitFor(q("#room-title"));
   assert.equal(await c.eval("window.__app.session.me.id"), await a.eval("window.__app.session.me.id"));
-  assert.equal(await myColor(c), 0);
+  assert.equal(await myColor(c), await myColor(a), "the same person, the same colour");
   assert.equal(await c.eval("window.__app.session.room.members().length"), 1);
 });
 
@@ -723,7 +758,7 @@ scenario("overflow: a very long unbroken string wraps and never widens the page"
 
 // ---- design and error states -----------------------------------------------------
 
-import { contrast, memberColor, INK, PAPER } from "../src/core/paint.js";
+import { contrast, memberColor, INK, PAPER, PALETTE } from "../src/core/paint.js";
 
 /** "rgb(…)", "rgba(…)" or "color(srgb r g b / a)" (what color-mix() computes to) → "#rrggbb". */
 const hex = (css) => {
@@ -744,7 +779,7 @@ scenario("contrast: ink, muted text and all eight colours read on the paper, lig
         word: getComputedStyle(${TODAY}.querySelector(".draw .w")).color, drawInk: getComputedStyle(${TODAY}.querySelector(".draw")).color }; })()`);
     assert.equal(hex(css.paper), PAPER[theme], "the stylesheet and the colour rules agree on the paper");
     assert.equal(hex(css.ink), INK[theme], "and on the ink");
-    assert.equal(hex(css.word), memberColor(0, theme));
+    assert.equal(hex(css.word), memberColor(await myColor(a), theme), "my words in my colour");
     assert.equal(hex(css.drawInk), INK[theme]);
     for (const [name, value] of Object.entries({ ink: css.ink, muted: css.muted, word: css.word })) {
       assert.ok(contrast(hex(value), hex(css.paper)) >= 4.5, `${theme} ${name} ${contrast(hex(value), hex(css.paper)).toFixed(2)}`);
@@ -1390,6 +1425,38 @@ scenario("song: split at the playhead, copy, paste on another row, mute, delete,
   assert.equal(clips[0].length, first.length, "back to the one clip it was");
   await click(page, "#redo");
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+});
+
+// The owner: "녹음 저거 직사각형이 지금 빨간색이잖아 저거를 내색깔로" and "녹음 누르면 색깔 바꾸기도".
+scenario("song: a recording comes in my colour (the people colour nearest my glass colour, not the first one); 색 gives it another that a friend sees too; 기본 brings mine back; undo", async ({ open, fixtures }) => {
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a);
+  const blue = PALETTE.findIndex((p) => p.key === "blue");
+  assert.equal(await myColor(a), blue, "a blue glass (the default): I am blue, not the first colour (coral)");
+  await importSound(a, fixtures.doremi);
+  const b = await open({ dev: "b", hash: "r-" + id });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`window.__app.session.doc("song").layout().length === 1`);
+  const clipRgb = (p) => p.eval(`(() => { const el = document.querySelector(".clip[data-id]"); const e = document.createElement("i"); e.style.color = getComputedStyle(el).getPropertyValue("--c"); document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
+  const mine = await clipRgb(a);
+  assert.equal(mine, await a.eval(`getComputedStyle(document.querySelector("#people .dot")).backgroundColor`), "the rectangle is in my colour");
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-tint");
+  await a.waitFor(q('#clip-menu [data-tint="6"]'));
+  const want = await a.eval(`getComputedStyle(document.querySelector('#clip-menu [data-tint="6"]')).backgroundColor`);
+  await click(a, '#clip-menu [data-tint="6"]');
+  await a.waitFor(`window.__app.session.doc("song").layout()[0].tint === 6`);
+  assert.equal(await clipRgb(a), want, "the rectangle takes the colour chosen");
+  await b.waitFor(`window.__app.session.doc("song").layout()[0].tint === 6`);
+  await b.waitFor(`(() => { const el = document.querySelector(".clip[data-id]"); return el && getComputedStyle(el).getPropertyValue("--c").trim() !== ""; })()`);
+  // 기본: whoever recorded it again.
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-tint");
+  await click(a, "#clip-tint-none");
+  await a.waitFor(`window.__app.session.doc("song").layout()[0].tint === null`);
+  assert.equal(await clipRgb(a), mine);
+  await click(a, "#undo");
+  await a.waitFor(`window.__app.session.doc("song").layout()[0].tint === 6`);
 });
 
 // The owner: "15초에 거기 가가지고 그 한번 터치해서… 분할 누르면 거기 딱 이렇게 끊겨서" - the tap is the place.
@@ -2338,6 +2405,81 @@ scenario("whiteboard: the board runs to every edge of the screen under the float
   await frames(page);
   assert.deepEqual(await inView(), [true, true], "모두 보기 shows them in the part in view");
   await click(page, "#mode-all");
+});
+
+// The owner: "올가미 기능에서 색깔 바꾸기… 막 여러가지… 올가미기능은 많은걸 할 수 있게".
+scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop and every card in it; 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 2; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#mode-all");
+  await click(page, "#add-note");
+  await writeMemo(page, "후렴");
+  // A card's own colour.
+  await click(page, ".card.song");
+  await page.waitFor(q("#card-menu #card-tint"));
+  await click(page, "#card-tint");
+  await click(page, '#card-menu [data-tint="2"]');
+  await page.waitFor(`${board}.items().filter((i) => i.tint === 2).length === 1`);
+  // A loop round all three.
+  await click(page, "#mode-lasso");
+  const box = await page.eval(`(() => { const rs = [...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect()); const v = document.getElementById("room-body").getBoundingClientRect(); const rail = document.getElementById("board-rail").getBoundingClientRect(); return { l: Math.max(v.left + 24, Math.min(...rs.map((r) => r.left)) - 14), t: Math.max(v.top + 24, Math.min(...rs.map((r) => r.top)) - 14), r: Math.min(rail.left - 6, Math.max(...rs.map((r) => r.right)) + 14), b: Math.min(v.bottom - 24, Math.max(...rs.map((r) => r.bottom)) + 14) }; })()`);
+  const pts = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 20]];
+  await page.touch("start", [pts[0]]);
+  for (let k = 1; k < pts.length; k++) for (let i = 1; i <= 6; i++) await page.touch("move", [[pts[k - 1][0] + ((pts[k][0] - pts[k - 1][0]) * i) / 6, pts[k - 1][1] + ((pts[k][1] - pts[k - 1][1]) * i) / 6]]);
+  await page.touch("end");
+  await page.waitFor(`${board}.lassos().length === 1`);
+  const first = await page.eval(`${board}.lassos()[0].id`);
+  // 색: the loop and all three cards.
+  await click(page, `[id="lasso-more-${first}"]`);
+  await click(page, "#lasso-tint");
+  await click(page, '#lasso-menu [data-tint="5"]');
+  await page.waitFor(`${board}.lassos()[0].tint === 5 && ${board}.items().length === 3 && ${board}.items().every((i) => i.tint === 5)`);
+  assert.ok(await page.eval(`document.querySelector('.board-loops path[data-lasso="${first}"]').getAttribute("style")?.includes("--lc")`), "the loop is drawn in its colour");
+  // 정리: one row, tops even, 24 apart, inside a new loop of the same colour.
+  await click(page, `[id="lasso-more-${first}"]`);
+  await click(page, "#lasso-tidy");
+  await page.waitFor(`${board}.lassos().length === 1 && ${board}.lassos()[0].id !== ${JSON.stringify(first)}`);
+  await frames(page);
+  const row = await page.eval(`[...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect()).sort((p, q) => p.left - q.left).map((r) => [r.top, r.left, r.right])`);
+  assert.ok(row.every((r) => Math.abs(r[0] - row[0][0]) < 1.5), "tops even: " + JSON.stringify(row));
+  for (let i = 1; i < row.length; i++) assert.ok(Math.abs(row[i][1] - row[i - 1][2] - 24) < 2.5, "24 apart: " + JSON.stringify(row));
+  const loop = await page.eval(`${board}.lassos()[0]`);
+  assert.equal(loop.tint, 5, "the new loop keeps the colour");
+  await page.waitFor(`document.querySelector('[id="lasso-play-${loop.id}"]')?.textContent.startsWith("▶ 2곡")`);
+  // 잇기: the two songs, from the left.
+  const more = `[id="lasso-more-${loop.id}"]`;
+  await click(page, more);
+  await click(page, "#lasso-chain");
+  await page.waitFor(`${board}.links().length === 1`);
+  // 음소거, then 소리 켜기.
+  await click(page, more);
+  await click(page, "#lasso-mute");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").every((i) => i.muted)`);
+  await click(page, more);
+  assert.equal(await text(page, "#lasso-mute"), "소리 켜기");
+  await click(page, "#lasso-mute");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").every((i) => !i.muted)`);
+  // 반복: its ▶ goes round again (it plays now) and says so; a tap on ▶ stops it, the mark stays.
+  await click(page, more);
+  await click(page, "#lasso-repeat");
+  await page.waitFor(`document.querySelector('[id="lasso-play-${loop.id}"]').textContent === "■ 멈춤 ↻"`);
+  await click(page, `[id="lasso-play-${loop.id}"]`);
+  await page.waitFor(`document.querySelector('[id="lasso-play-${loop.id}"]').textContent === "▶ 2곡 ↻"`);
+  await click(page, more);
+  assert.equal(await text(page, "#lasso-repeat"), "반복 끄기");
+  await click(page, "#lasso-repeat");
+  await page.waitFor(`document.querySelector('[id="lasso-play-${loop.id}"]').textContent === "▶ 2곡"`);
+  // Undo takes back one step at a time: 소리 켜기 first.
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").every((i) => i.muted)`);
 });
 
 // 본질 5.5: "사진도 넣었다 뺄다 할 수 있고 브러쉬도 있고 필기도 가능하고" - 전체 draws with the text room's brushes.

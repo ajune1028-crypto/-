@@ -5,7 +5,7 @@ import { watchPickers } from "./picker-watch.js";
 import { fileOps } from "../core/files.js";
 import { fromBase64 } from "../core/b64.js";
 import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
-import { applyTheme, applyAccent, applyTextScale, currentTheme, ACCENTS, TEXT_SIZES } from "./theme.js";
+import { applyTheme, applyAccent, applyTextScale, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
@@ -117,6 +117,18 @@ export function showRoom(app, roomId) {
     });
     remember();
     session.setPresence({ m: memberId });
+    // Rooms made before 15 November gave their maker the first colour (coral, a red). A room I am
+    // still alone in takes my colour once (the one nearest my glass colour), so what I write and
+    // record there comes in it; after that "내 색" in the room's settings is mine to choose.
+    const fixed = app.store.get("colourFixed", {});
+    if (!fixed[roomId]) {
+      const me = session.room.member(memberId);
+      const want = myPeopleColor(getSettings(app.store));
+      if (me && me.color === 0 && session.room.members().length === 1 && want != null && want !== 0 && !session.transport.readOnly) {
+        session.commit("room", memberOps(session.clock, memberId, { color: want }));
+      }
+      app.store.set("colourFixed", { ...fixed, [roomId]: true });
+    }
 
     const title = h("h1", { id: "room-title" });
     const people = h("div", { class: "people", id: "people" });

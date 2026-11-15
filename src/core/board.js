@@ -52,6 +52,8 @@ const FIELD_OK = {
   // Plain text on the board: its colour (the ink colours) and size (1 small, 2, 3 large).
   color: (v) => INK_COLORS.includes(v),
   size: (v) => v === 1 || v === 2 || v === 3,
+  // Any card's colour of its own: a people colour (0-7); null: the colour of whoever placed it.
+  tint: (v) => v === null || isInt(v, 0, 7),
   // A song card's notes after 음 편집 or the like; checked against the card's kind once it is known.
   data: (v) => !!v && typeof v === "object" && !Array.isArray(v),
 };
@@ -179,6 +181,13 @@ export class BoardDoc {
         this.lassosById.set(op.id, { id: op.id, pts: op.pts.slice(), by: op.by, x: 0, y: 0, at: op.id, rm: 0 });
         return this.done(op);
       }
+      case "lacl": {
+        if (!validId(op.la) || !FIELD_OK.tint(op.tint)) return this.setAside(op);
+        const loop = this.lassosById.get(op.la);
+        if (!loop) return this.wait(op.la, op);
+        if (!loop.tat || cmpId(op.id, loop.tat) > 0) Object.assign(loop, { tint: op.tint, tat: op.id });
+        return this.done(op);
+      }
       case "lamv": {
         if (!validId(op.la) || !FIELD_OK.x(op.x) || !FIELD_OK.y(op.y)) return this.setAside(op);
         const loop = this.lassosById.get(op.la);
@@ -244,7 +253,7 @@ export class BoardDoc {
   /** 올가미 loops as they stand now, oldest first: { id, pts: [x, y, x, y…], by, x, y }. */
   lassos() {
     return [...this.lassosById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id))
-      .map((l) => ({ id: l.id, by: l.by, x: l.x, y: l.y, pts: l.pts.map((v, i) => v + (i % 2 ? l.y : l.x)) }));
+      .map((l) => ({ id: l.id, by: l.by, x: l.x, y: l.y, tint: l.tint ?? null, pts: l.pts.map((v, i) => v + (i % 2 ? l.y : l.x)) }));
   }
 
   /** Visible cards, oldest first (the order they are drawn in). */
@@ -340,8 +349,8 @@ export function setItemOps(clock, board, itemId, fields) {
   const prev = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!FIELD_OK[k]) continue;
-    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" ? v : Math.round(v);
-    prev[k] = item[k];
+    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" ? v : k === "tint" ? (v === null ? null : Math.round(v)) : Math.round(v);
+    prev[k] = k === "tint" ? item.tint ?? null : item[k];
   }
   return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
 }
@@ -396,6 +405,7 @@ export function invertBoardOps(board, clock, atoms, dir) {
     else if (atom.k === "set") ops.push({ t: "iset", id: clock.next(), i: atom.item, f: { ...(undo ? atom.prev : atom.next) } });
     else if (atom.k === "lasso-add") show(board.lassosById, "larm", "la", atom.lasso, !undo);
     else if (atom.k === "lasso-del") show(board.lassosById, "larm", "la", atom.lasso, undo);
+    else if (atom.k === "lasso-tint") ops.push({ t: "lacl", id: clock.next(), la: atom.lasso, tint: undo ? atom.prev : atom.next });
     else if (atom.k === "lasso-move") {
       const [x, y] = undo ? atom.prev : atom.next;
       ops.push({ t: "lamv", id: clock.next(), la: atom.lasso, x, y });
@@ -588,6 +598,46 @@ export function moveLassoOps(clock, board, lassoId, dx, dy) {
   if (next[0] === loop.x && next[1] === loop.y) return { ops: [], atoms: [] };
   clock.atLeast(board.maxN);
   return { ops: [{ t: "lamv", id: clock.next(), la: lassoId, x: next[0], y: next[1] }], atoms: [{ k: "lasso-move", lasso: lassoId, prev: [loop.x, loop.y], next }] };
+}
+
+/** A loop's colour (a people colour 0-7, or null for the plain one). */
+export function tintLassoOps(clock, board, lassoId, tint) {
+  const loop = board.lassosById.get(lassoId);
+  if (!loop || loop.rm % 2 === 1 || !FIELD_OK.tint(tint)) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "lacl", id: clock.next(), la: lassoId, tint }], atoms: [{ k: "lasso-tint", lasso: lassoId, prev: loop.tint ?? null, next: tint }] };
+}
+
+/**
+ * 정리: boxes { id, x, y, w, h } laid in one row from the left (by where they stood), every top
+ * at the highest one's, an even gap between. Returns where each goes: [{ id, x, y }].
+ */
+export function rowLayout(boxes, gap = 24) {
+  const sorted = boxes.slice().sort((p, q) => p.x - q.x || p.y - q.y);
+  if (!sorted.length) return [];
+  const top = Math.min(...sorted.map((b) => b.y));
+  let x = sorted[0].x;
+  return sorted.map((b) => {
+    const at = { id: b.id, x: Math.round(x), y: Math.round(top) };
+    x += b.w + gap;
+    return at;
+  });
+}
+
+/** A loop's points round a box, its corners rounded by r (whole numbers, as a drawn loop's). */
+export function boxLoop(x0, y0, x1, y1, r = 24) {
+  const pts = [];
+  const corner = (cx, cy, from) => {
+    for (let i = 0; i <= 3; i++) {
+      const a = ((from + i * 30) * Math.PI) / 180;
+      pts.push(Math.round(cx + r * Math.cos(a)), Math.round(cy + r * Math.sin(a)));
+    }
+  };
+  corner(x1 - r, y0 + r, 270); // top right
+  corner(x1 - r, y1 - r, 0); // bottom right
+  corner(x0 + r, y1 - r, 90); // bottom left
+  corner(x0 + r, y0 + r, 180); // top left
+  return pts;
 }
 
 export function removeLassoOps(clock, board, lassoId) {

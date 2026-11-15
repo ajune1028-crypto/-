@@ -46,6 +46,8 @@ const FIELD_OK = {
   locked: (v) => typeof v === "boolean",
   // Who locked it: they and the room's owner may unlock it.
   lockBy: (v) => v === null || (typeof v === "string" && v.length > 0 && v.length <= 40),
+  // A colour of its own (a people colour, 0-7); null: the colour of whoever recorded it.
+  tint: (v) => v === null || isInt(v, 0, 7),
 };
 export const CLIP_FIELDS = Object.keys(FIELD_OK);
 
@@ -415,7 +417,7 @@ export function setClipOps(clock, song, clipId, fields) {
   if (!clip) return { ops: [], atoms: [] };
   clock.atLeast(song.maxN);
   const prev = {};
-  for (const k of Object.keys(fields)) prev[k] = clip[k];
+  for (const k of Object.keys(fields)) prev[k] = k === "tint" ? clip.tint ?? null : clip[k];
   return { ops: [{ t: "cset", id: clock.next(), c: clipId, f: { ...fields } }], atoms: [{ k: "set", clip: clipId, prev, next: { ...fields } }] };
 }
 

@@ -269,3 +269,23 @@ test("박자: the song's tempo and meter, set and undone; the latest wins in any
   assert.deepEqual(other.tempo(), { bpm: 120, beats: 6, unit: 8 }, "arriving out of order, the later still wins");
   assert.equal(song.apply({ t: "tempo", id: clock.next(), bpm: 999, beats: 4, unit: 4, by: "m1" }), "unknown");
 });
+
+test("a clip may take a colour of its own (a people colour, 0-7); null is the recorder's again; undo puts back what it was", () => {
+  const { song, clock, commit, src } = setup();
+  const made = addClipOps(clock, song, { src, row: 0, start: 0, length: 1600, by: "m1", at: 1 });
+  commit(made.ops);
+  const id = song.layout()[0].id;
+  assert.equal(song.clip(id).tint ?? null, null, "no colour of its own at first");
+  const set = setClipOps(clock, song, id, { tint: 3 });
+  commit(set.ops);
+  assert.equal(song.clip(id).tint, 3);
+  commit(invertSongOps(song, clock, set.atoms, "undo"));
+  assert.equal(song.clip(id).tint, null, "undo: the recorder's colour again (null, not a missing value)");
+  commit(setClipOps(clock, song, id, { tint: null }).ops);
+  assert.equal(song.clip(id).tint, null);
+  for (const bad of [8, -1, 1.5, "red"]) {
+    const before = song.clip(id).tint;
+    song.apply({ t: "cset", id: clock.next(), c: id, f: { tint: bad } });
+    assert.equal(song.clip(id).tint, before, "refused: " + bad);
+  }
+});

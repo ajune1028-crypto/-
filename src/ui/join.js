@@ -2,11 +2,14 @@
 // someone already in the room, proven with their personal code.
 
 import { h, iconButton, mount, inputRow, segmented, formBox } from "./dom.js";
-import { currentTheme } from "./theme.js";
+import { currentTheme, myPeopleColor } from "./theme.js";
+import { getSettings } from "../identity.js";
 import { memberColor } from "../core/paint.js";
 import { Attempts, newMemberId, makeVerifier, checkVerifier, validPin, joinOps } from "../core/room.js";
 
 export function showJoin(app, session, onDone) {
+  // The colour nearest my glass colour that nobody here has; else the first free one.
+  const myColor = () => myPeopleColor(getSettings(app.store), session.room) ?? session.room.freeColor();
   const root = app.root;
   const attempts = new Attempts();
   const last = app.store.get("last", {});
@@ -22,7 +25,7 @@ export function showJoin(app, session, onDone) {
     const name = inputRow("join-name", "별명", { maxLength: 20, value: typed.name, oninput: () => { typed.name = name.input.value; } });
     const pin = inputRow("join-pin", "개인 식별 코드 (숫자 5자리, 안 정해도 돼요)", { maxLength: 5, inputMode: "numeric", value: typed.pin, oninput: () => { typed.pin = pin.input.value; } });
     return formBox(enterNew, name.row,
-      h("p", { class: "preview" }, dot(session.room.freeColor()), "내 글은 이 색으로 써져요. 들어온 뒤에 바꿀 수 있어요."),
+      h("p", { class: "preview" }, dot(myColor()), "내 글은 이 색으로 써져요. 들어온 뒤에 바꿀 수 있어요."),
       pin.row,
       h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }),
       error, h("button", { class: "btn", id: "enter", type: "button", text: "들어가기", onclick: enterNew }));
@@ -50,7 +53,7 @@ export function showJoin(app, session, onDone) {
     if (!name) return void (error.textContent = "별명을 적어 주세요.");
     if (pin && !validPin(pin)) return void (error.textContent = "개인 식별 코드는 숫자 5자리예요.");
     const memberId = newMemberId();
-    session.commit("room", joinOps(session.clock, session.room, { memberId, name, pin: pin ? await makeVerifier(pin) : null, now: Date.now() }));
+    session.commit("room", joinOps(session.clock, session.room, { memberId, name, pin: pin ? await makeVerifier(pin) : null, now: Date.now(), color: myColor() }));
     app.store.set("last", { name, pin });
     onDone(memberId);
   }

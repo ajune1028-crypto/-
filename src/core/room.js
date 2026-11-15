@@ -213,16 +213,17 @@ export function memberOps(clock, memberId, fields) {
   return Object.entries(fields).map(([k, v]) => ({ t: "mem", id: clock.next(), m: memberId, k, v }));
 }
 
-export function createRoomOps(clock, { kind, name, tz, now, memberId, memberName, pin }) {
+export function createRoomOps(clock, { kind, name, tz, now, memberId, memberName, pin, color = 0 }) {
   const facts = { kind, name, tz, createdAt: now, createdBy: memberId };
   return [
     ...Object.entries(facts).map(([k, v]) => ({ t: "meta", id: clock.next(), k, v })),
-    ...memberOps(clock, memberId, { name: memberName, color: 0, pin: pin ?? null, joinedAt: now }),
+    ...memberOps(clock, memberId, { name: memberName, color, pin: pin ?? null, joinedAt: now }),
   ];
 }
 
-export function joinOps(clock, room, { memberId, name, pin, now }) {
-  return memberOps(clock, memberId, { name, color: room.freeColor(), pin: pin ?? null, joinedAt: now });
+/** A newcomer's ops; `color` is the colour they prefer (their glass colour's), else the first free one. */
+export function joinOps(clock, room, { memberId, name, pin, now, color = null }) {
+  return memberOps(clock, memberId, { name, color: color ?? room.freeColor(), pin: pin ?? null, joinedAt: now });
 }
 
 /** The address that opens a room: the page's own address with the room after the #. */

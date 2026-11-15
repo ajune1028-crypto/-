@@ -23,7 +23,7 @@ import { SPEEDS } from "./song-room.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
-import { memberColor, INK, contrast } from "../core/paint.js";
+import { memberColor, INK, contrast, PALETTE } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
 import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
@@ -31,6 +31,7 @@ import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
+  tintLassoOps, rowLayout, boxLoop,
 } from "../core/board.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
@@ -75,6 +76,7 @@ export function mountBoardRoom(body, app, session, frame) {
   let cutting = false; // 분할: the next tap on a song card cuts it there
   const lassoing = () => mode === "lasso"; // 올가미 (its own mode): one finger draws loops
   let soloLasso = null; // the loop whose cards are playing
+  const repeating = new Set(); // loops whose ▶ goes round again (반복; this device)
   let loopDrag = null; // a loop being dragged by its chip: { id, dx, dy } on the board
   let chipDragged = false;
   let player = null;
@@ -277,7 +279,7 @@ export function mountBoardRoom(body, app, session, frame) {
       el.style.left = item.x * sx + "px";
       el.style.top = item.y + "px";
       el.style.width = widthOf(item) + "px";
-      el.style.setProperty("--c", colorOf(item.by));
+      el.style.setProperty("--c", item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by));
       el.classList.toggle("chosen", item.id === selected);
       el.classList.toggle("link-from", item.id === linkFrom);
       el.classList.toggle("playing", item.id === playing);
@@ -286,7 +288,7 @@ export function mountBoardRoom(body, app, session, frame) {
       // The inside is built again only when what it shows changes; never for a stretch,
       // so a finger resting on a card keeps its touch through a pinch.
       if (item.kind === "note") {
-        el.style.setProperty("--tc", inkColor(item.color || "black"));
+        el.style.setProperty("--tc", item.tint != null ? memberColor(item.tint, currentTheme()) : inkColor(item.color || "black"));
         el.dataset.size = String(item.size || 2);
       }
       const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted;
@@ -438,7 +440,7 @@ export function mountBoardRoom(body, app, session, frame) {
   function drawLassos() {
     const all = board.lassos();
     const shift = (l) => (loopDrag?.id === l.id ? [loopDrag.dx, loopDrag.dy] : [0, 0]);
-    const html = all.map((l) => `<path data-lasso="${l.id}" d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
+    const html = all.map((l) => `<path data-lasso="${l.id}"${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
     if (loopGroup.dataset.html !== html) {
       loopGroup.dataset.html = html;
       loopGroup.innerHTML = html;
@@ -468,7 +470,7 @@ export function mountBoardRoom(body, app, session, frame) {
       const count = lassoOrder(board, l.id).length;
       const sounding = soloLasso === l.id && !!player?.playing;
       const play = chip.querySelector(".lasso-play");
-      const text = sounding ? "■ 멈춤" : `▶ ${count}곡`;
+      const text = (sounding ? "■ 멈춤" : `▶ ${count}곡`) + (repeating.has(l.id) ? " ↻" : "");
       if (play.textContent !== text || !chip.sizes) {
         play.textContent = text;
         // Its size lying down and standing up, for placeChips.
@@ -579,23 +581,53 @@ export function mountBoardRoom(body, app, session, frame) {
     return chip;
   }
 
-  /** What the cards inside a loop can do together: 복사, 지우기, 레퍼런스에 넣기. */
+  /**
+   * What the cards inside a loop can do together (the owner: "올가미기능은 많은걸 할 수 있게"):
+   * 색 (the loop and every card in it), 정리 (one row, the loop round it), 잇기 (order lines from
+   * the left), 음소거 / 소리 켜기, 반복 (its ▶ goes round again), 복사, 레퍼런스에 넣기, 지우기.
+   * Each is one undo step; what cannot be done with these cards is not offered.
+   */
   function openLassoMenu(id, chip) {
     closeExtra?.();
     const inside = () => itemsInLoop(board, id);
     const one = (bid, text, onclick) => h("button", { type: "button", id: bid, text, onclick: (e) => { e.stopPropagation(); close(); onclick(); } });
     const can = !readOnly();
-    const box = h("div", { class: "clip-menu card-menu lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미 메뉴" },
-      one("lasso-copy", "복사", () => copyLasso(inside())),
-      can && one("lasso-delete", "지우기", () => deleteLasso(inside())),
-      one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(inside())));
+    const box = h("div", { class: "clip-menu card-menu lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미 메뉴" });
+    const fill = (view) => {
+      const loop = board.lassos().find((l) => l.id === id);
+      const cards = inside();
+      const songs = cards.filter((c) => c.kind === "song");
+      if (view === "tints") {
+        const now = loop?.tint ?? null;
+        box.replaceChildren(
+          ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(now === i),
+            style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); close(); tintLasso(id, i); } })),
+          one("lasso-tint-none", "기본", () => tintLasso(id, null)));
+        return;
+      }
+      box.replaceChildren(...[
+        can && h("button", { type: "button", id: "lasso-tint", onclick: (e) => { e.stopPropagation(); fill("tints"); place(); } },
+          h("span", { class: "menu-swatch", style: { background: loop?.tint != null ? memberColor(loop.tint, currentTheme()) : "var(--accent)" } }), "색"),
+        can && cards.length > 0 && one("lasso-tidy", "정리", () => tidyLasso(id)),
+        can && songs.length > 1 && one("lasso-chain", "잇기", () => chainLasso(id)),
+        can && songs.length > 0 && one("lasso-mute", songs.some((c) => !c.muted) ? "음소거" : "소리 켜기", () => muteLasso(id)),
+        songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
+        one("lasso-copy", "복사", () => copyLasso(inside())),
+        one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(inside())),
+        can && one("lasso-delete", "지우기", () => deleteLasso(inside())),
+      ].filter(Boolean));
+    };
+    const place = () => {
+      const area = body.getBoundingClientRect();
+      const r = chip.getBoundingClientRect();
+      const room = rail.getBoundingClientRect().left - area.left - 6;
+      box.style.maxWidth = Math.max(160, room - 6) + "px";
+      box.style.left = Math.max(6, Math.min(room - box.offsetWidth, r.left - area.left + r.width / 2 - box.offsetWidth / 2)) + "px";
+      box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.bottom - area.top + 6)) + "px";
+    };
+    fill("main");
     body.append(box);
-    const area = body.getBoundingClientRect();
-    const r = chip.getBoundingClientRect();
-    const room = rail.getBoundingClientRect().left - area.left - 6;
-    box.style.maxWidth = Math.max(160, room - 6) + "px";
-    box.style.left = Math.max(6, Math.min(room - box.offsetWidth, r.left - area.left + r.width / 2 - box.offsetWidth / 2)) + "px";
-    box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.bottom - area.top + 6)) + "px";
+    place();
     let open = true;
     const stopGuard = closeOnOutside((t) => box.contains(t), () => close(), box);
     function close() {
@@ -606,6 +638,92 @@ export function mountBoardRoom(body, app, session, frame) {
       if (closeExtra === close) closeExtra = null;
     }
     closeExtra = close;
+  }
+
+  /** Many board changes as one undo step. */
+  function applyAll(made) {
+    const atoms = [];
+    for (const m of made) {
+      if (!m?.ops?.length) continue;
+      session.commit("board", m.ops);
+      atoms.push(...m.atoms);
+    }
+    record(atoms);
+    draw();
+  }
+
+  /** 색: the loop and every card inside take one people colour (null: each its own again). */
+  function tintLasso(id, tint) {
+    const made = [tintLassoOps(session.clock, board, id, tint)];
+    for (const card of itemsInLoop(board, id)) if ((card.tint ?? null) !== tint) made.push(setItemOps(session.clock, board, card.id, { tint }));
+    applyAll(made);
+  }
+
+  /** 정리: the cards inside in one row from the left, tops even, and the loop drawn again round them. */
+  function tidyLasso(id) {
+    const loop = board.lassos().find((l) => l.id === id);
+    const cards = itemsInLoop(board, id);
+    if (!loop || !cards.length) return;
+    // Measured as they stand on screen (song cards stretch with sx), then put back in board units.
+    const boxes = cards.map((c) => {
+      const el = content.querySelector(`.card[data-id="${c.id}"]`);
+      return { id: c.id, x: c.x * sx, y: c.y, w: el ? el.offsetWidth : widthOf(c), h: el ? el.offsetHeight : 60 };
+    });
+    const placed = rowLayout(boxes, 24);
+    const made = placed.map((p) => setItemOps(session.clock, board, p.id, { x: Math.round(p.x / sx), y: p.y }));
+    const size = new Map(boxes.map((b) => [b.id, b]));
+    const pad = 22;
+    const x0 = placed[0].x - pad;
+    const y0 = placed[0].y - pad;
+    const x1 = Math.max(...placed.map((p) => p.x + size.get(p.id).w)) + pad;
+    const y1 = Math.max(...placed.map((p) => p.y + size.get(p.id).h)) + pad;
+    const atoms = [];
+    for (const m of made) {
+      if (!m.ops.length) continue;
+      session.commit("board", m.ops);
+      atoms.push(...m.atoms);
+    }
+    const gone = removeLassoOps(session.clock, board, id);
+    session.commit("board", gone.ops);
+    atoms.push(...gone.atoms);
+    const again = lassoOps(session.clock, board, boxLoop(Math.round(x0 / sx), y0, Math.round(x1 / sx), y1, 22), session.memberId);
+    if (again.ops.length) {
+      session.commit("board", again.ops);
+      atoms.push(...again.atoms);
+      if (loop.tint != null) {
+        const t = tintLassoOps(session.clock, board, again.id, loop.tint);
+        session.commit("board", t.ops);
+        atoms.push(...t.atoms);
+      }
+      if (repeating.delete(id)) repeating.add(again.id);
+      if (soloLasso === id) soloLasso = again.id;
+    }
+    record(atoms);
+    draw();
+  }
+
+  /** 잇기: order lines between the song cards inside, from the left (one undo step). */
+  function chainLasso(id) {
+    const ids = itemsInLoop(board, id).filter((c) => c.kind === "song").sort((p, q) => p.x - q.x || p.y - q.y).map((c) => c.id);
+    if (ids.length < 2) return;
+    linkChain(ids);
+    linkFrom = null;
+    draw();
+  }
+
+  /** 음소거: every song inside goes quiet; when all are quiet, 소리 켜기 brings them back. */
+  function muteLasso(id) {
+    const songs = itemsInLoop(board, id).filter((c) => c.kind === "song");
+    const mute = songs.some((c) => !c.muted);
+    applyAll(songs.filter((c) => !!c.muted !== mute).map((c) => setItemOps(session.clock, board, c.id, { muted: mute })));
+  }
+
+  /** 반복: the loop's ▶ goes round and round until it is stopped (on this device). Turning it on plays it. */
+  function toggleRepeat(id) {
+    if (repeating.delete(id)) return void draw();
+    repeating.add(id);
+    draw();
+    if (!(soloLasso === id && player?.playing)) playLasso(id);
   }
 
   /** The cards as they stand relative to each other, ready to be put down elsewhere. */
@@ -755,22 +873,31 @@ export function mountBoardRoom(body, app, session, frame) {
       menu.forItem = item.id;
       menu.view = "main";
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, menu.view].join("|");
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, menu.view].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
       const one = (id, text, onclick) => h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
-      menu.replaceChildren(...(item.kind === "song" ? [
+      // 색 for a song or a photo card: the people colours in place of the menu, and 기본 (whoever placed it).
+      const tints = () => [
+        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String((item.tint ?? null) === i),
+          style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: i })); } })),
+        item.tint != null && one("card-tint-none", "기본", () => { menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: null })); }),
+      ];
+      const tintButton = () => can && h("button", { type: "button", id: "card-tint", onclick: (e) => { e.stopPropagation(); menu.view = "tints"; placeMenu(true); } },
+        h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
+      menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
         can && one("card-cut", "분할", () => { cutting = true; draw(); }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
+        tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
       ] : item.kind === "note" && menu.view === "colors" ? [
         // Plain text's colours, in place of the menu (small, so it covers little).
         ...INK_COLORS.map((c) => h("button", { type: "button", class: "menu-dot", data: { textColor: c }, "aria-label": "글자 색", "aria-pressed": String((item.color || "black") === c),
-          style: { background: inkColor(c) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { color: c })); } })),
+          style: { background: inkColor(c) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { color: c, tint: null })); } })),
       ] : item.kind === "note" ? [
         can && one("card-edit", "고치기", () => write(item.id)),
         can && h("button", { type: "button", id: "card-color", onclick: (e) => { e.stopPropagation(); menu.view = "colors"; placeMenu(true); } },
@@ -778,6 +905,7 @@ export function mountBoardRoom(body, app, session, frame) {
         can && one("card-size", ["작게", "보통", "크게"][(item.size || 2) - 1], () => apply(setItemOps(session.clock, board, item.id, { size: ((item.size || 2) % 3) + 1 }))),
         can && one("card-delete", "지우기", () => removeSelected()),
       ] : [
+        tintButton(),
         can && one("card-delete", "지우기", () => removeSelected()),
       ]).filter(Boolean));
     }
@@ -1741,7 +1869,15 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!ctx) return null;
     player?.close();
     const s = settings();
-    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => { playing = null; solo = null; soloLasso = null; draw(); } });
+    player = new SongPlayer(ctx, { song: () => song, audioFor: (id) => audio.get(id) || null, onEnd: () => {
+      // 반복: a loop that should go round again starts over (only a play that reached its end comes here).
+      const again = soloLasso && repeating.has(soloLasso) && board.lassos().some((l) => l.id === soloLasso) ? soloLasso : null;
+      playing = null;
+      solo = null;
+      soloLasso = null;
+      draw();
+      if (again && alive) playLasso(again);
+    } });
     player.setMode(s.songMode);
     player.setTone(s.pianoTone);
     player.setSpeed(s.songSpeed || 1);
