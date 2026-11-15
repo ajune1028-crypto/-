@@ -14,7 +14,7 @@
 // be dragged by its chip and taken off, and it closes itself the shortest way
 // when the end does not reach the start.
 
-import { h, icon, iconButton, segmented, openSheet, toast } from "./dom.js";
+import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
@@ -534,6 +534,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const item = selected ? board.item(selected) : null;
     const el = item && !item.removed && !cutting && mode !== "link" ? content.querySelector(`.card[data-id="${item.id}"]`) : null;
     if (!el) {
+      menu?.stopGuard?.();
       menu?.remove();
       menu = null;
       return;
@@ -542,6 +543,10 @@ export function mountBoardRoom(body, app, session, frame) {
       menu = h("div", { class: "clip-menu card-menu", id: "card-menu", role: "toolbar", "aria-label": "카드 메뉴" });
       body.append(menu);
       build = true;
+      // A tap anywhere else only puts the menu away (the card itself and the tool bars still work).
+      menu.stopGuard = closeOnOutside(
+        (t) => menu?.contains(t) || !!content.querySelector(`.card[data-id="${selected}"]`)?.contains(t),
+        () => { selected = null; draw(); }, menu);
     }
     const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly()].join("|");
     if (build && menu.dataset.key !== key) {
@@ -1106,14 +1111,14 @@ export function mountBoardRoom(body, app, session, frame) {
     const top = anchor ? anchor.getBoundingClientRect().top - body.getBoundingClientRect().top : 8;
     menu.style.top = Math.max(8, top) + "px";
     body.append(menu);
-    const away = (e) => { if (!menu.contains(e.target) && e.target !== anchor && !anchor?.contains(e.target)) close(); };
-    setTimeout(() => document.addEventListener("pointerdown", away, true), 0);
+    let stopGuard = () => {};
+    setTimeout(() => { if (open) stopGuard = closeOnOutside((t) => menu.contains(t) || t === anchor || !!anchor?.contains(t), () => close(), menu); }, 0);
     let open = true;
     function close() {
       if (!open) return;
       open = false;
       menu.remove();
-      document.removeEventListener("pointerdown", away, true);
+      stopGuard();
       if (closeExtra === close) closeExtra = null;
     }
     closeExtra = close;
@@ -1420,6 +1425,7 @@ export function mountBoardRoom(body, app, session, frame) {
       alive = false;
       cancelAnimationFrame(frameReq);
       closeExtra?.();
+      menu?.stopGuard?.();
       menu?.remove();
       editor?.close();
       stopPickers();

@@ -72,6 +72,64 @@ export function iconButton(id, name, label, onclick, cap = null) {
   return h("button", { class: "icon-btn", id, type: "button", "aria-label": label, data: cap ? { cap } : undefined, onclick }, icon(name));
 }
 
+/** The screen's frame: bars, tool rows and sheets work as usual while a menu is open. */
+const FRAME = ".room > .bar, .room-top, .toolbar, .board-rail, .ink-tools, .sel-tools, .scrim, .panel, .drawer, .home-top, .home-foot";
+
+/**
+ * While a menu is open, a press on the content outside it (another card, another clip, the
+ * empty board) only puts the menu away: that press, its lift and its click never reach what
+ * lies underneath, so nothing there is chosen or pressed. inside(target): what still counts
+ * as the menu's own (the menu, what it belongs to); the frame always does. A second finger
+ * (a pinch) passes. Returns stop().
+ */
+export function closeOnOutside(inside, close, menu = null) {
+  const swallow = (e) => {
+    e.stopImmediatePropagation();
+    if (e.cancelable) e.preventDefault();
+  };
+  const down = (e) => {
+    // A menu whose screen has gone (another room, home) keeps no hold on the page.
+    if (menu && !menu.isConnected) return void stop();
+    if (e.pointerType === "touch" && !e.isPrimary) return;
+    if (inside(e.target) || e.target.closest?.(FRAME)) return;
+    swallow(e);
+    stop();
+    // Only this press (with any finger that joins it, as in a pinch): their lifts, the mouse
+    // events copied from them, and the click they make.
+    const held = new Set([e.pointerId]);
+    const touch = e.pointerType === "touch";
+    let lifted = 0;
+    const lift = (ev) => {
+      if (!held.has(ev.pointerId)) return;
+      swallow(ev);
+      held.delete(ev.pointerId);
+      if (!held.size) lifted = Date.now();
+    };
+    const copy = (ev) => { if (!lifted || Date.now() - lifted < 60) swallow(ev); };
+    const click = (ev) => {
+      if (lifted && Date.now() - lifted < 400) swallow(ev);
+      if (lifted) end();
+    };
+    const next = (ev) => {
+      if (touch && held.size && ev.pointerType === "touch") {
+        swallow(ev);
+        held.add(ev.pointerId);
+      } else end();
+    };
+    const types = [["pointerup", lift], ["pointercancel", lift], ["mousedown", copy], ["mouseup", copy], ["click", click], ["pointerdown", next]];
+    const end = () => {
+      for (const [t, fn] of types) window.removeEventListener(t, fn, true);
+      clearTimeout(timer);
+    };
+    for (const [t, fn] of types) window.addEventListener(t, fn, true);
+    const timer = setTimeout(end, 4000);
+    close();
+  };
+  window.addEventListener("pointerdown", down, true);
+  const stop = () => window.removeEventListener("pointerdown", down, true);
+  return stop;
+}
+
 export function mount(root, ...nodes) {
   root.replaceChildren(...nodes.flat(Infinity).filter((n) => n !== null && n !== undefined && n !== false));
 }

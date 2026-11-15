@@ -1211,7 +1211,11 @@ async function importSound(page, file, clips = 1) {
 
 /** Makes sure a clip is the chosen one (a tap on a chosen clip would put its menu away). */
 async function choose(page, sel) {
-  if (!(await page.eval(`${q(sel)}.classList.contains("selected")`))) await click(page, sel);
+  // With another clip's menu open, the first tap only puts that menu away (nothing underneath is chosen).
+  for (let i = 0; i < 2 && !(await page.eval(`${q(sel)}.classList.contains("selected")`)); i++) {
+    await click(page, sel);
+    await page.waitFor(`${q(sel)}.classList.contains("selected") || !${q("#clip-menu")}`).catch(() => {});
+  }
   await page.waitFor(`${q(sel)}.classList.contains("selected") && ${q("#clip-menu")}`);
 }
 
@@ -2519,6 +2523,31 @@ scenario("whiteboard: each song card has its own ▶ - one tap plays just that c
   assert.equal(await page.eval(`window.__played[0]`), leftmost);
   await click(page, "#board-play");
   void first;
+});
+
+scenario("menus: with a card's menu open, a tap on another card only puts the menu away (nothing there is chosen or played); the next tap chooses it; the room's bars still work", async ({ open }) => {
+  const page = await open({ width: 600, height: 800 });
+  await createBoard(page);
+  for (const memo of ["하나", "둘"]) {
+    await click(page, "#add-note");
+    await page.waitFor(q("#note-text"));
+    await fill(page, "#note-text", memo);
+    await click(page, "#note-save");
+    await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
+  }
+  const ids = await page.eval(`window.__app.session.doc("board").items().map((i) => i.id)`);
+  // The memo just written is chosen, with its menu.
+  await page.waitFor(`${q("#card-menu")} && document.querySelector('.card[data-id="${ids[1]}"]').classList.contains("chosen")`);
+  // A tap on the other card: the menu goes, and the other card is not chosen.
+  await click(page, `.card[data-id="${ids[0]}"]`);
+  await page.waitFor(`!${q("#card-menu")}`);
+  assert.ok(!(await page.eval(`document.querySelector(".card.chosen")`)), "nothing chosen by the tap that closed the menu");
+  // The next tap chooses it.
+  await click(page, `.card[data-id="${ids[0]}"]`);
+  await page.waitFor(`${q("#card-menu")} && document.querySelector('.card[data-id="${ids[0]}"]').classList.contains("chosen")`);
+  // The room's own bars still work while a menu is open.
+  await click(page, "#mode-move");
+  await page.waitFor(`${q("#mode-move")}.getAttribute("aria-pressed") === "true"`);
 });
 
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {

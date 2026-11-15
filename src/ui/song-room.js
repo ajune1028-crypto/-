@@ -10,7 +10,7 @@
 // and seen; the speed button plays 0.5x to 3x; the tone button switches the
 // piano between 밝게 and 어둡게. Those three are this device's own choice.
 
-import { h, icon, iconButton, segmented, toggle, openSheet, toast } from "./dom.js";
+import { h, icon, iconButton, segmented, toggle, openSheet, toast, closeOnOutside } from "./dom.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { Timeline, timeText } from "./song-view.js";
 import { openNoteEditor } from "./note-editor.js";
@@ -687,6 +687,7 @@ export function mountSongRoom(body, app, session, frame) {
   // The small menu by a chosen clip.
   function placeMenu() {
     if (!selected || rec) {
+      menu?.stopGuard?.();
       menu?.remove();
       menu = null;
       return;
@@ -701,6 +702,11 @@ export function mountSongRoom(body, app, session, frame) {
     if (!menu) {
       menu = h("div", { class: "clip-menu", id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
       body.append(menu);
+      // A tap anywhere else only puts the menu away; the chosen clip, the time bar (to place
+      // the playhead for 분할) and the tool bars still work.
+      menu.stopGuard = closeOnOutside(
+        (t) => menu?.contains(t) || !!document.querySelector(`.clip[data-id="${selected}"]`)?.contains(t) || !!t.closest?.("#ruler"),
+        () => select(null), menu);
     }
     const item = (id, text, onclick, disabled = false) => h("button", { type: "button", id, text, disabled, onclick: (e) => { e.stopPropagation(); onclick(); } });
     menu.replaceChildren(
@@ -952,6 +958,7 @@ export function mountSongRoom(body, app, session, frame) {
     },
     close() {
       alive = false;
+      menu?.stopGuard?.();
       stopFrames();
       clearTimeout(presenceTimer);
       clearInterval(friendTimer);
