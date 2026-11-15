@@ -865,7 +865,12 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 /* Drawing reaches past the paper's sides to the screen's edges; the paper grows downwards to hold drawings. */
 /* A canvas is a replaced element: left and right do not stretch it, so its size is set outright
    (without it, its own pixel size becomes its size and it doubles on every redraw). */
-.paper canvas.ink { position: absolute; top: 0; left: -0.9rem; width: calc(100% + 1.8rem); height: 100%; z-index: 2; pointer-events: none; }
+.paper canvas.ink { position: absolute; top: 0; left: -0.9rem; width: calc(100% + 1.8rem); height: 100%; z-index: 0; pointer-events: none; }
+/* Drawings lie beneath the words (they never hide them); while the pen is on, the words let
+   the pen through to the drawing layer. */
+.paper { isolation: isolate; }
+.paper > .layers { position: relative; z-index: 1; }
+.paper.inking > .layers { pointer-events: none; }
 .paper canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .paper canvas.ink[data-tool="eraser"] { cursor: cell; }
 .ink-tools, .sel-tools {

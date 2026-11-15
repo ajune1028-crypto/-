@@ -93,6 +93,7 @@ export class InkLayer {
   setTool(tool) {
     this.tool = tool;
     this.canvas.classList.toggle("on", !!tool);
+    this.host.classList.toggle("inking", !!tool);
     this.canvas.dataset.tool = tool || "";
   }
 

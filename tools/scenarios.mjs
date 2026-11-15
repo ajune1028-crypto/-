@@ -1927,6 +1927,10 @@ scenario("drawing: pen, brushes and both erasers on today's sheet; the other dev
   await stroke(a, box.x + box.w * 0.2, box.x + box.w * 0.7, box.y + box.h * 0.3);
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().some((s) => s.b === "highlighter" && s.c === "yellow")`);
   await a.front();
+  // Drawings lie beneath the words (the owner: 그림은 아래로), and while the pen is on it still
+  // reaches the drawing layer through them.
+  const layering = await a.eval(`(() => { const p = ${TODAY}.querySelector(".paper"); const c = p.querySelector("canvas.ink"); const l = p.querySelector(".layers"); const r = p.getBoundingClientRect(); return { canvas: Number(getComputedStyle(c).zIndex), words: Number(getComputedStyle(l).zIndex), hit: document.elementFromPoint(r.left + r.width / 2, r.top + 20)?.matches("canvas.ink") }; })()`);
+  assert.ok(layering.canvas < layering.words && layering.hit, "drawings under the words, the pen still draws: " + JSON.stringify(layering));
   // The drawing layer covers the paper (and a little past its sides), never more: a canvas that
   // takes its own pixel size as its size would double on every redraw until the phone gives up.
   const layer = await a.eval(`(() => { const c = ${TODAY}.querySelector("canvas.ink").getBoundingClientRect(); const p = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { cw: c.width, ch: c.height, pw: p.width, ph: p.height }; })()`);
@@ -2292,7 +2296,7 @@ const cardBox = (page, n = 0) => page.eval(`(() => { const c = [...document.quer
 scenario("whiteboard 노래 모드: modes on top, each mode's tools on the right; 내 노래 slides in from the right; song cards are as long as their songs and stretch sideways", async ({ open, out, fixtures }) => {
   const page = await open();
   await songThenBoard(page, fixtures);
-  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".board-modes button")].map((b) => b.textContent)`), ["전체", "이동", "잇기", "노래"]);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".board-modes button")].map((b) => b.textContent)`), ["전체", "이동", "잇기", "노래", "올가미"]);
   const rail = () => page.eval(`[...document.querySelectorAll("#board-rail button, #board-rail label")].map((b) => b.id)`);
   assert.ok((await rail()).includes("add-note"), "전체 has its own tools on the right");
   await click(page, "#mode-song");
@@ -2425,8 +2429,10 @@ scenario("whiteboard 올가미: a loop drawn round one card with a finger closes
     await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
   }
   const board = `window.__app.session.doc("board")`;
-  await click(page, "#lasso-tool");
-  await page.waitFor(`${q("#lasso-tool")}.getAttribute("aria-pressed") === "true" && ${q("#board-hint")}.textContent.includes("둘러")`);
+  // 올가미 is its own mode, next to 노래.
+  await click(page, "#mode-lasso");
+  await page.waitFor(`${q("#mode-lasso")}.getAttribute("aria-pressed") === "true" && ${q("#board-hint")}.textContent.includes("둘러")`);
+  assert.ok(!(await page.eval(q("#lasso-tool"))), "not a tool inside 노래 any more");
   const first = await cardBox(page, 0);
   const second = await cardBox(page, 1);
   // One finger round the first card, the end stopping short of the start.
@@ -2498,8 +2504,20 @@ scenario("whiteboard 올가미: a loop drawn round one card with a finger closes
   await page.touch("start", [tapAt]);
   await page.touch("end");
   await page.waitFor(q("#card-menu #card-play"));
-  await click(page, "#lasso-tool");
-  await page.waitFor(`${q("#lasso-tool")}.getAttribute("aria-pressed") === "false"`);
+  // A drag inside the loop moves the loop and the card in it together (one undo step).
+  const inside = await page.eval(`(() => { const c = document.querySelector('.card[data-id="${first.id}"]').getBoundingClientRect(); return [c.left + c.width / 2, c.top + c.height * 0.7]; })()`);
+  const before = await page.eval(`[${board}.item(${JSON.stringify(first.id)}).y, ${board}.lassos()[0].y]`);
+  await page.touch("start", [inside]);
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[inside[0], inside[1] + i * 10]]);
+  await page.touch("end");
+  await page.waitFor(`${board}.item(${JSON.stringify(first.id)}).y !== ${before[0]}`);
+  const after = await page.eval(`[${board}.item(${JSON.stringify(first.id)}).y, ${board}.lassos()[0].y]`);
+  assert.ok(Math.abs((after[0] - before[0]) - (after[1] - before[1])) < 1 && after[0] - before[0] > 30, "card and loop moved together: " + JSON.stringify({ before, after }));
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.item(${JSON.stringify(first.id)}).y === ${before[0]} && ${board}.lassos()[0].y === ${before[1]}`);
+  // Out of 올가미, a drag moves the board, not a loop.
+  await click(page, "#mode-song");
+  await page.waitFor(`${q("#mode-lasso")}.getAttribute("aria-pressed") === "false"`);
   const pan0 = await page.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
   const empty = await page.eval(`(() => { const b = document.getElementById("board"); const r = b.getBoundingClientRect(); for (let y = r.bottom - 30; y > r.top + 30; y -= 20) for (let x = r.left + 150; x < r.right - 90; x += 20) { const e = document.elementFromPoint(x, y); if (e === b || e?.id === "board-content") return [x, y]; } return null; })()`);
   assert.ok(empty, "an empty spot on the board");
@@ -2615,7 +2633,7 @@ scenario("whiteboard: text is plain text with a colour and a size; the 올가미
   await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
   await click(page, "#song-drawer .song-pick");
   await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
-  await click(page, "#lasso-tool");
+  await click(page, "#mode-lasso");
   // Round both cards, inside the board (not on its rounded corners) and clear of the tools on the right.
   const box = await page.eval(`(() => { const rs = [...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect()); const b = document.getElementById("board").getBoundingClientRect(); const rail = document.getElementById("board-rail").getBoundingClientRect(); return { l: Math.max(b.left + 24, Math.min(...rs.map((r) => r.left)) - 12), t: Math.max(b.top + 24, Math.min(...rs.map((r) => r.top)) - 12), r: Math.min(rail.left - 6, Math.max(...rs.map((r) => r.right)) + 12), b: Math.min(b.bottom - 24, Math.max(...rs.map((r) => r.bottom)) + 12) }; })()`);
   const pts = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 20]];

@@ -9,10 +9,10 @@
 // records or imports straight onto the board; a chosen song card can be cut
 // where it is tapped, muted, note-edited and copied; 잇기 keeps orders in slots
 // 1, 2, 3… to switch between. ▶ plays the song cards in order: chains where their
-// first card stands, other cards from the leftmost. 올가미 (in 노래): a loop drawn
-// round some cards stays on the board; its ▶ plays only the cards inside, it can
-// be dragged by its chip and taken off, and it closes itself the shortest way
-// when the end does not reach the start.
+// first card stands, other cards from the leftmost. 올가미 (its own mode, next to 노래):
+// a loop drawn round some cards stays on the board; its ▶ plays only the cards inside,
+// a drag inside it moves it with its cards, its chip drags just the loop, ✕ takes it
+// off, and it closes itself the shortest way when the end does not reach the start.
 
 import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside } from "./dom.js";
 import { watchFingers } from "./fingers.js";
@@ -30,7 +30,7 @@ import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
-  lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop,
+  lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
 } from "../core/board.js";
 import { INK_COLORS } from "../core/ink.js";
 import { inkColor } from "./ink.js";
@@ -70,7 +70,7 @@ export function mountBoardRoom(body, app, session, frame) {
   let selected = null;
   let linkFrom = null;
   let cutting = false; // 분할: the next tap on a song card cuts it there
-  let lassoTool = false; // 올가미: one finger draws a loop instead of moving things
+  const lassoing = () => mode === "lasso"; // 올가미 (its own mode): one finger draws loops
   let soloLasso = null; // the loop whose cards are playing
   let loopDrag = null; // a loop being dragged by its chip: { id, dx, dy } on the board
   let chipDragged = false;
@@ -117,7 +117,7 @@ export function mountBoardRoom(body, app, session, frame) {
   });
   const stopPhotoWatch = watchPickers([photoInput], () => { if (alive) toast(root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200); });
 
-  const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"]], mode, (m) => setMode(m), "boardMode");
+  const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"], ["lasso", "올가미", "mode-lasso"]], mode, (m) => setMode(m), "boardMode");
   modes.classList.add("board-modes");
   frame.top.append(h("div", { class: "board-top" }, modes,
     h("div", { class: "song-top-left" },
@@ -142,7 +142,9 @@ export function mountBoardRoom(body, app, session, frame) {
     mode = m;
     linkFrom = null;
     cutting = false;
-    if (m !== "song") lassoTool = false;
+    // A new mode starts clean: no card chosen, no menu standing over the board.
+    selected = null;
+
     closeExtra?.();
     draw();
   }
@@ -217,7 +219,7 @@ export function mountBoardRoom(body, app, session, frame) {
     for (const el of [...content.querySelectorAll(".card")]) if (!keep.has(el.dataset.id)) el.remove();
     drawLines();
     drawLassos();
-    surface.classList.toggle("lassoing", lassoTool);
+    surface.classList.toggle("lassoing", lassoing());
     drawRail();
     placeMenu(true);
     // A hint shows for a few seconds after it changes, then fades (it never stays over the board).
@@ -238,7 +240,7 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function hintText(items) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
-    if (lassoTool) return "재생할 카드들을 한 번에 둘러 그리세요. 끝이 시작에 안 닿아도 알아서 닫혀요.";
+    if (lassoing()) return "카드들을 둘러 그리세요(끝이 안 닿아도 닫혀요). 테두리 안을 끌면 안의 카드와 함께 옮겨져요.";
     if (!items.length) return mode === "song" ? "오른쪽 '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요." : "오른쪽 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.";
     if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나, 카드에서 카드로 줄을 그으세요. 번호를 누르면 그 줄이 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
@@ -555,11 +557,18 @@ export function mountBoardRoom(body, app, session, frame) {
     toast(root, n ? `레퍼런스에 ${n}개를 넣었어요` : "레퍼런스에 넣을 글이나 노래 카드가 없어요", 3000);
   }
 
-  function toggleLasso() {
-    lassoTool = !lassoTool;
-    selected = null;
-    cutting = false;
-    draw();
+  /** Takes every loop off (one undo step). */
+  function removeAllLassos() {
+    const ops = [];
+    const atoms = [];
+    for (const l of board.lassos()) {
+      const made = removeLassoOps(session.clock, board, l.id);
+      ops.push(...made.ops);
+      atoms.push(...made.atoms);
+    }
+    if (!ops.length) return void toast(root, "풀 올가미가 없어요");
+    stopPlaying();
+    apply({ ops, atoms });
   }
 
   // ---- the tools on the right ------------------------------------------------------
@@ -581,7 +590,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, lassoTool, s.lineColors || "rainbow"].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow"].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -602,11 +611,17 @@ export function mountBoardRoom(body, app, session, frame) {
       song: [
         can && railButton("my-songs", "library", "내 노래", () => openSongDrawer()),
         can && railButton("board-add-sound", "upload", "소리 넣기", () => openAddSound()),
-        can && railButton("lasso-tool", "lasso", "올가미", () => toggleLasso(), { pressed: lassoTool }),
         railButton("stretch-in", "stretch", "늘이기", () => stretchAt(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchAt(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
         railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+      ],
+      // 올가미: its loops play what is inside; their ⋯ copies, removes, sends to 레퍼런스.
+      lasso: [
+        railButton("board-fit", "fit", "모두 보기", () => fitAll()),
+        railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
+        railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        can && railButton("lasso-clear", "eraser", "모두 풀기", () => removeAllLassos()),
       ],
     }[mode];
     rail.replaceChildren(...tools.filter(Boolean));
@@ -882,15 +897,18 @@ export function mountBoardRoom(body, app, session, frame) {
     draw();
   }
 
-  // 올가미: with the tool on, one finger (or the mouse, or a pen) draws a loop, over the
-  // cards too. A tap still chooses a card; a second finger zooms and draws nothing.
+  // 올가미 mode: one finger (or the mouse, or a pen) draws a loop, over the cards too; a drag
+  // that starts inside a loop moves the loop with the cards inside it. A tap still chooses a
+  // card; a second finger zooms and draws or moves nothing.
   surface.addEventListener("pointerdown", (e) => {
-    if (!lassoTool || fingers.pinching || e.button > 0 || e.target.closest(".lasso-chip")) return;
+    if (!lassoing() || fingers.pinching || e.button > 0 || e.target.closest(".lasso-chip")) return;
     e.stopPropagation();
     if (readOnly()) return;
     const pid = e.pointerId;
     const onCard = e.target.closest(".card")?.dataset.id || null;
     const p = toBoard(e.clientX, e.clientY);
+    const holder = board.lassos().slice().reverse().find((l) => insideLoop(l.pts, p.x, p.y));
+    if (holder) return void moveGroup(e, holder, onCard);
     const loop = { pts: [p.x, p.y], last: [e.clientX, e.clientY], moved: false };
     const live = document.createElementNS(SVG, "path");
     live.setAttribute("class", "drawing");
@@ -933,8 +951,76 @@ export function mountBoardRoom(body, app, session, frame) {
     surface.addEventListener("pointercancel", cancel);
   }, true);
 
+  /** A loop dragged from inside: it and the cards in it move together, as one undo step. */
+  function moveGroup(e, loop, onCard) {
+    const pid = e.pointerId;
+    const start = { x: e.clientX, y: e.clientY };
+    const cards = itemsInLoop(board, loop.id).map((i) => ({ id: i.id, x: i.x, y: i.y, el: content.querySelector(`.card[data-id="${i.id}"]`) }));
+    let moved = false;
+    let dx = 0;
+    let dy = 0;
+    surface.setPointerCapture?.(pid);
+    const mine = (ev) => ev.pointerId === pid;
+    const show = () => {
+      for (const c of cards) {
+        if (!c.el) continue;
+        c.el.style.left = (c.x + dx) * sx + "px";
+        c.el.style.top = c.y + dy + "px";
+      }
+      loopDrag = { id: loop.id, dx, dy };
+      drawLassos();
+    };
+    const move = (ev) => {
+      if (!mine(ev)) return;
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 6) return;
+      moved = true;
+      dx = (ev.clientX - start.x) / (zoom * sx);
+      dy = (ev.clientY - start.y) / zoom;
+      show();
+    };
+    const finish = () => {
+      surface.removeEventListener("pointermove", move);
+      surface.removeEventListener("pointerup", up);
+      surface.removeEventListener("pointercancel", cancel);
+      loopDrag = null;
+      gesture = null;
+    };
+    const up = (ev) => {
+      if (!mine(ev)) return;
+      finish();
+      if (!moved) {
+        selected = onCard;
+        return void draw();
+      }
+      const ops = [];
+      const atoms = [];
+      for (const c of cards) {
+        const made = setItemOps(session.clock, board, c.id, { x: c.x + dx, y: c.y + dy });
+        ops.push(...made.ops);
+        atoms.push(...made.atoms);
+      }
+      const shifted = moveLassoOps(session.clock, board, loop.id, dx, dy);
+      ops.push(...shifted.ops);
+      atoms.push(...shifted.atoms);
+      if (!apply({ ops, atoms })) draw();
+    };
+    const cancel = (ev) => {
+      if (ev && !mine(ev)) return;
+      finish();
+      dx = 0;
+      dy = 0;
+      show();
+      loopDrag = null;
+      draw();
+    };
+    gesture = cancel;
+    surface.addEventListener("pointermove", move);
+    surface.addEventListener("pointerup", up);
+    surface.addEventListener("pointercancel", cancel);
+  }
+
   surface.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoTool) return;
+    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoing()) return;
     pan = { id: e.pointerId, x: e.clientX, y: e.clientY, px: panX, py: panY, moved: false };
     surface.setPointerCapture?.(e.pointerId);
   });
