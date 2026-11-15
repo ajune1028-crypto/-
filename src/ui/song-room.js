@@ -989,7 +989,7 @@ export function mountSongRoom(body, app, session, frame) {
   // ---- keys ---------------------------------------------------------------------------
 
   function onKey(e) {
-    if (e.target.closest?.("input, textarea, [contenteditable]") || root.querySelector(".scrim")) return;
+    if (e.target.closest?.("input, textarea, [contenteditable]") || root.querySelector(".scrim:not(.closing)")) return;
     const cmd = e.metaKey || e.ctrlKey;
     if (e.key === " ") { e.preventDefault(); togglePlay(); }
     else if ((e.key === "Backspace" || e.key === "Delete") && selected) { e.preventDefault(); deleteClip(selected); }

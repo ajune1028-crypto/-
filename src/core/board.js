@@ -46,7 +46,7 @@ const isText = (v, max) => typeof v === "string" && v.length <= max;
 const FIELD_OK = {
   x: (v) => isInt(v, -1000000, 1000000),
   y: (v) => isInt(v, -1000000, 1000000),
-  w: (v) => isInt(v, 60, 2000),
+  w: (v) => isInt(v, 60, 20000), // a song card may be stretched long in time (노래)
   text: (v) => isText(v, 4000),
   muted: (v) => typeof v === "boolean",
   // Plain text on the board: its colour (the ink colours) and size (1 small, 2, 3 large).

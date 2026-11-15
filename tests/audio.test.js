@@ -313,3 +313,16 @@ test("the waveform summary follows a gain without measuring again", async () => 
   assert.equal(got.length, want.length);
   for (let i = 0; i < got.length; i++) assert.ok(Math.abs(got[i] - want[i]) <= 2, `peak ${i}: ${got[i]} vs ${want[i]}`);
 });
+
+test("a singer who is a little flat all through (45 cents) still gets the notes meant: the take's own tuning is found first", async () => {
+  // Every note 0.45 semitones low, give or take a little: rounded one by one, some would fall a key down.
+  const wobble = [0.08, -0.06, 0.05, -0.04, 0.07, -0.05, 0.03];
+  const sig = sing(MELODY.map((n, i) => ({ ...n, midi: n.midi - 0.45 + wobble[i] })), { rate: 48000 });
+  sig.truth = sig.truth.map((t) => ({ ...t, midi: Math.round(t.midi + 0.45) }));
+  assertNotes(await analyze(sig), sig.truth);
+});
+
+test("in tune, the tuning step changes nothing", async () => {
+  const sig = sing(MELODY, { rate: 48000 });
+  assertNotes(await analyze(sig), sig.truth);
+});

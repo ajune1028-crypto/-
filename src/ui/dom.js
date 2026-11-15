@@ -184,16 +184,65 @@ export function toggle(id, label, checked, onChange) {
 
 /** Bottom sheet inside the app column. Returns a function that closes it. */
 export function openSheet(root, title, build) {
-  const panel = h("section", { class: "panel", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", { text: title }));
+  // A close button in the head: one tap, always (the owner: "한 번 누르면 안 나가지고").
+  const shut = h("button", { class: "icon-btn sheet-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back"));
+  const panel = h("section", { class: "panel", role: "dialog", "aria-modal": "true", "aria-label": title }, h("div", { class: "sheet-head" }, h("h2", { text: title }), shut));
   const scrim = h("div", { class: "scrim" }, panel);
   const onKey = (event) => { if (event.key === "Escape") close(); };
   const closers = [];
+  let closing = false;
   function close() {
-    if (!scrim.isConnected) return;
+    if (!scrim.isConnected || closing) return;
+    closing = true;
     for (const fn of closers) fn();
-    scrim.remove();
     document.removeEventListener("keydown", onKey);
+    // It slides back down (and the dark fades) before it goes; it takes no more touches meanwhile.
+    scrim.classList.add("closing");
+    scrim.inert = true;
+    const gone = () => scrim.remove();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return gone();
+    setTimeout(gone, 260);
   }
+  // Pulled down from the top of its content, it follows the finger and goes (a short pull springs
+  // back). Content scrolled down is scrolled up first; only a pull that starts at the top closes it
+  // (the owner: "조금이라도 아래로 스크롤 된 상태이면… 한 번 더 아래로 내리면 내려가는 식").
+  let pull = null;
+  panel.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || closing) return void (pull = null);
+    const t = e.touches[0];
+    const inField = !!e.target.closest?.("input, textarea, select, [contenteditable='true']");
+    pull = panel.scrollTop <= 0 && !inField ? { y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
+  }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (!pull || e.touches.length !== 1) return;
+    const dy = e.touches[0].clientY - pull.y;
+    if (!pull.on && (dy < 6 || panel.scrollTop > 0)) {
+      if (dy < -4) pull = null; // a push up scrolls the content as usual
+      return;
+    }
+    pull.on = true;
+    pull.dy = Math.max(0, dy);
+    e.preventDefault();
+    panel.style.transition = "none";
+    panel.style.transform = `translateY(${pull.dy}px)`;
+    scrim.style.setProperty("--pull", String(Math.min(1, pull.dy / Math.max(1, panel.offsetHeight))));
+  }, { passive: false });
+  const letGo = () => {
+    if (!pull?.on) return void (pull = null);
+    const speed = pull.dy / Math.max(1, performance.now() - pull.at);
+    const far = pull.dy > panel.offsetHeight * 0.28 || speed > 0.6;
+    pull = null;
+    panel.style.transition = "";
+    if (far) {
+      panel.style.transform = "translateY(105%)";
+      close();
+    } else {
+      panel.style.transform = "";
+      scrim.style.removeProperty("--pull");
+    }
+  };
+  panel.addEventListener("touchend", letGo);
+  panel.addEventListener("touchcancel", letGo);
   // A press on the dark around the sheet only closes it: nothing underneath is pressed.
   scrim.addEventListener("pointerdown", (event) => {
     if (event.target !== scrim) return;

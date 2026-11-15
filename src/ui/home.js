@@ -312,7 +312,7 @@ export function showHome(app) {
       }))
     .finally(() => {
       slow = false;
-      if (!closeSheet || !root.querySelector(".scrim")) draw();
+      if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
   return () => {

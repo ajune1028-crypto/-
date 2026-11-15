@@ -53,10 +53,9 @@ import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting } from "../identity.js";
 
 const SVG = "http://www.w3.org/2000/svg";
-const MIN_SX = 0.4;
-const MAX_SX = 8;
-const MIN_ZOOM = 0.3;
-const MAX_ZOOM = 2.5;
+// Far out to see a big board whole, near in to draw small (the owner: "축소를 완전 많이").
+const MIN_ZOOM = 0.04;
+const MAX_ZOOM = 5;
 const SLOTS_SHOWN = 5;
 const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -70,7 +69,6 @@ export function mountBoardRoom(body, app, session, frame) {
   let panX = 24;
   let panY = 24;
   let sx = 1; // 노래: song cards (and where cards stand) stretched sideways in time; 1 in every other mode
-  let songSx = 1; // the stretch 노래 keeps for when it comes back (the other modes show the true places)
   let cursor = null; // { id, ms }: where the chosen song card was tapped again (its position line)
   let mode = "all";
   let selected = null;
@@ -109,6 +107,11 @@ export function mountBoardRoom(body, app, session, frame) {
   loops.append(loopGroup);
   const content = h("div", { class: "board-content", id: "board-content" }, loops, lines);
   const surface = h("div", { class: "board", id: "board" }, content);
+  // A pen or a long press on the board never starts a text selection or the phone's menu
+  // (they broke strokes on an iPad); the words being written keep theirs.
+  const ownText = (t) => !!t?.closest?.("textarea, input, [contenteditable='true']");
+  surface.addEventListener("selectstart", (e) => { if (!ownText(e.target)) e.preventDefault(); });
+  surface.addEventListener("contextmenu", (e) => { if (!ownText(e.target)) e.preventDefault(); });
   const rail = h("div", { class: "board-rail", id: "board-rail" });
   const hint = h("p", { class: "board-hint", id: "board-hint" });
   const status = h("p", { class: "board-status", id: "board-status", role: "status", hidden: true });
@@ -233,15 +236,19 @@ export function mountBoardRoom(body, app, session, frame) {
   const colorOf = (by) => { const m = session.room.member(by); return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()]; };
   const settings = () => getSettings(app.store);
   const writeStyle = () => ({ color: "black", size: 2, ...(settings().boardText || {}) });
-  /** A card's width on the board: song cards stretch with sx. */
-  const widthOf = (item) => (item.kind === "song" ? item.w * sx : item.w);
+  // 노래's stretch is one card's own (the owner: "이 녹음된 것만 늘리려고 했는데 다른 것까지 다
+  // 늘려주면"): the card under the wheel or the fingers gets longer in time, nothing else moves.
+  // While it is being stretched its width is shown here; it is kept (one undo step) when it rests.
+  let stretching = null; // { id, w, timer }
+  /** A card's width on the board (a card being stretched: as it is now). */
+  const widthOf = (item) => (stretching?.id === item.id ? stretching.w : item.w);
 
   function setMode(m) {
     finishWriting();
     if (m !== "all" && pen.tool) setPen(null);
     // The sideways stretch is 노래's way of looking at songs in time; the other modes show the
     // cards where they really stand. The middle of the view stays where it is.
-    const want = m === "song" ? songSx : 1;
+    const want = 1;
     if (want !== sx) {
       const v = body.getBoundingClientRect();
       const cx = v.left + v.width / 2;
@@ -1013,8 +1020,8 @@ export function mountBoardRoom(body, app, session, frame) {
       song: [
         can && railButton("my-songs", "library", "내 노래", () => openSongDrawer()),
         can && railButton("board-add-sound", "upload", "소리 넣기", () => openAddSound()),
-        railButton("stretch-in", "stretch", "늘이기", () => stretchAt(1.4)),
-        railButton("stretch-out", "squeeze", "줄이기", () => stretchAt(1 / 1.4)),
+        railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
+        railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
         railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
         // With a loop in hand: only its part (pressed), or the whole board.
@@ -1143,18 +1150,37 @@ export function mountBoardRoom(body, app, session, frame) {
     place();
   }
 
-  /** 노래: song cards longer or shorter in time, around a point (the middle by default). */
-  function stretchAt(f, cx, soon = false) {
-    const r = body.getBoundingClientRect();
-    const ax = cx ?? r.left + r.width / 2;
-    const ay = r.top + r.height / 2;
-    const at = toBoard(ax, ay);
-    sx = clamp(sx * f, MIN_SX, MAX_SX);
-    if (mode === "song") songSx = sx;
-    keepUnder(ax, ay, at);
-    if (soon) drawSoon();
-    else draw();
+  /** 노래: one song card longer or shorter in time (its left edge stays); kept when it rests. */
+  function stretchCard(id, f, from = null) {
+    const item = board.item(id);
+    if (!item || item.kind !== "song" || readOnly()) return;
+    const was = stretching?.id === id ? stretching.w : from ?? item.w;
+    const w = Math.round(clamp(was * f, 60, 20000));
+    clearTimeout(stretching?.timer);
+    if (stretching && stretching.id !== id) keepStretch();
+    stretching = { id, w, timer: setTimeout(keepStretch, 450) };
+    drawSoon();
   }
+
+  /** The stretched width becomes the card's own (seen by everyone; one undo step). */
+  function keepStretch() {
+    const s = stretching;
+    if (!s) return;
+    clearTimeout(s.timer);
+    stretching = null;
+    const item = board.item(s.id);
+    if (item && item.w !== s.w) apply(setItemOps(session.clock, board, s.id, { w: s.w }));
+    else drawSoon();
+  }
+
+  /** 늘이기 / 줄이기 on the right: the chosen song card. */
+  function stretchChosen(f) {
+    if (!selected || board.item(selected)?.kind !== "song") return void toast(root, "늘이거나 줄일 노래 카드를 먼저 눌러 고르세요", 2600);
+    stretchCard(selected, f);
+  }
+
+  /** The song card under a point, if any. */
+  const songCardAt = (x, y) => document.elementFromPoint(x, y)?.closest?.(".card.song")?.dataset.id || null;
 
   /** 이동: every card in view. */
   function fitAll() {
@@ -1580,9 +1606,12 @@ export function mountBoardRoom(body, app, session, frame) {
   surface.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 2) return;
     const [mx, my] = middle(e.touches);
+    // Both fingers on the same song card in 노래: that card is stretched, not the board zoomed.
+    const a = songCardAt(e.touches[0].clientX, e.touches[0].clientY);
+    const card = mode === "song" && a && a === songCardAt(e.touches[1].clientX, e.touches[1].clientY) ? a : null;
     pinch = {
       d: spread(e.touches), dx: Math.abs(e.touches[0].clientX - e.touches[1].clientX), dy: Math.abs(e.touches[0].clientY - e.touches[1].clientY),
-      zoom, sx, at: toBoard(mx, my),
+      zoom, sx, at: toBoard(mx, my), card, w: card ? widthOf(board.item(card)) : 0,
     };
     pan = null;
   }, { passive: true });
@@ -1590,26 +1619,30 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
     const [mx, my] = middle(e.touches);
-    if (mode === "song") {
+    if (mode === "song" && pinch.card) {
+      // Two fingers on one song card in 노래: spreading them sideways makes that card longer in time.
       const dx = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
-      const dy = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
-      if (pinch.dx > 40) sx = clamp(pinch.sx * (dx / pinch.dx), MIN_SX, MAX_SX);
-      if (pinch.dy > 40) zoom = clamp(pinch.zoom * (dy / pinch.dy), MIN_ZOOM, MAX_ZOOM);
-      keepUnder(mx, my, pinch.at);
-      drawSoon();
+      if (pinch.dx > 40) stretchCard(pinch.card, (dx / pinch.dx) * (pinch.w / (stretching?.id === pinch.card ? stretching.w : pinch.w)), pinch.w);
     } else {
       zoom = clamp(pinch.zoom * (spread(e.touches) / pinch.d), MIN_ZOOM, MAX_ZOOM);
       keepUnder(mx, my, pinch.at);
       place();
     }
   }, { passive: false });
-  surface.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; });
+  surface.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+      if (pinch?.card) keepStretch();
+      pinch = null;
+    }
+  });
   // A computer's wheel: zoom (in 노래, stretch in time; Alt zooms there); Shift moves sideways.
   surface.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (e.shiftKey) { panX -= e.deltaY; place(); return; }
     const f = Math.exp(-e.deltaY / 400);
-    if (mode === "song" && !e.altKey) stretchAt(f, e.clientX, true);
+    // In 노래, the wheel on a song card makes just that card longer or shorter in time; elsewhere it zooms.
+    const card = mode === "song" && !e.altKey ? songCardAt(e.clientX, e.clientY) : null;
+    if (card) stretchCard(card, f);
     else zoomAt(f, e.clientX, e.clientY);
   }, { passive: false });
 

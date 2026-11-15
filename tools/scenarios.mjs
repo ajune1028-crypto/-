@@ -23,12 +23,14 @@ const click = async (page, sel) => {
     // in front may not advance its animations at all.
     const moving = document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.contains(el) && a.effect.getComputedTiming().iterations !== Infinity);
     await Promise.race([Promise.all(moving.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 500))]);
-    el.scrollIntoView({ block: "nearest", inline: "nearest" });
-    const r = el.getBoundingClientRect();
+    // What is there now (a menu may have been drawn again while it came to rest).
+    const now = ${q(sel)} || el;
+    now.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const r = now.getBoundingClientRect();
     if (!r.width || !r.height) throw new Error("${name} has no size on screen");
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const hit = document.elementFromPoint(x, y);
-    if (!hit || !(hit === el || el.contains(hit))) {
+    if (!hit || !(hit === now || now.contains(hit))) {
       const what = !hit ? "nothing" : hit.id ? "#" + hit.id : hit.tagName.toLowerCase() + (hit.className ? "." + String(hit.className).split(" ").join(".") : "");
       throw new Error("${name} cannot be pressed: " + what + " is on top of it");
     }
@@ -873,7 +875,8 @@ scenario("diagnostics: the panel names the transport, what is unsent, and the ve
   assert.equal(facts["마지막 오류"], "없음");
 });
 
-scenario("wide screen: lying down or on a computer the app takes the width; the writing stays a 360 column", async ({ open, out }) => {
+// The owner: "꽉 채워졌으면", "텍스트를 담고 있는 그것까지 옆으로 늘어나야".
+scenario("wide screen: lying down or on a computer the app and the writing take the whole width", async ({ open, out }) => {
   const page = await open({ width: 1280, height: 800 });
   await createRoom(page);
   await focusEnd(page);
@@ -881,8 +884,8 @@ scenario("wide screen: lying down or on a computer the app takes the width; the 
   const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); const s = document.querySelector(".sheets").getBoundingClientRect(); return { orient: document.documentElement.dataset.orient, width: b.width, height: b.height, sheetLeft: s.left, sheetWidth: s.width, scroll: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(${TODAY}.querySelector(".draw")).fontSize), rem: parseFloat(getComputedStyle(document.documentElement).fontSize) }; })()`);
   assert.equal(r.orient, "landscape");
   assert.ok(r.width === 1280 && r.height === 800 && r.scroll <= 1280, JSON.stringify(r));
-  assert.ok(Math.abs(r.rem - 20) < 0.01 && Math.abs(r.font - 20) < 0.1, "scaled by the height: " + JSON.stringify(r));
-  assert.ok(Math.abs(r.sheetWidth - 22.5 * r.rem) <= 1 && Math.abs(r.sheetLeft + r.sheetWidth / 2 - 640) <= 1, "the writing column is 360 wide and centred: " + JSON.stringify(r));
+  assert.ok(Math.abs(r.rem - 19.2) < 0.01 && Math.abs(r.font - 19.2) < 0.1, "scaled by the height: " + JSON.stringify(r));
+  assert.ok(r.sheetWidth >= 1280 - 4 * r.rem, "the writing takes the width: " + JSON.stringify(r));
   await page.shot(out("room-wide.png"));
 });
 
@@ -990,7 +993,7 @@ scenario("invite: a new room shows a link to send, and the link opens the room o
   await a.waitFor(q(".toast"));
   assert.match(await text(a, ".toast"), /^(링크를 복사했어요|링크를 길게 눌러 복사해 주세요)$/);
   await click(a, "#invite-done");
-  assert.equal(await a.eval(`document.querySelector(".scrim") === null`), true);
+  await a.waitFor(`document.querySelector(".scrim") === null`);
   await click(a, "#invite");
   await a.waitFor(q("#invite-link"));
   const b = await open({ dev: "b" });
@@ -1679,7 +1682,7 @@ scenario("song: where the page may not use the microphone, the record button say
   // What the phone's recorder app hands back comes in like any file.
   await page.setFiles("#song-capture", [fixtures.doremi]);
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1 && ${q("#song-status")}.hidden`, 20000);
-  assert.equal(await page.eval(`!!document.querySelector("#add-sound")`), false, "the sheet closed by itself");
+  await page.waitFor(`!document.querySelector("#add-sound")`, 2000); // the sheet closed by itself (it slides away first)
   assert.equal((await noteNames(page)).length, 5);
 });
 
@@ -1893,7 +1896,7 @@ scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints th
   await createRoom(page, { room: "유리 방" });
   await click(page, "#room-settings");
   await settled(page);
-  const presets = await page.eval(`[...document.querySelectorAll(".swatch[data-key]")].map((b) => [b.dataset.key, b.dataset.accent, b.getAttribute("aria-label")])`);
+  const presets = await page.eval(`[...document.querySelectorAll(".swatch[data-key]:not([data-key='clear'])")].map((b) => [b.dataset.key, b.dataset.accent, b.getAttribute("aria-label")])`);
   assert.deepEqual(presets.map((p) => p[2]), ["빨강", "주황", "노랑", "초록", "파랑", "남색", "보라", "갈색", "핑크", "흑백"]);
   const hue = ([r, g, b]) => {
     const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
@@ -1924,6 +1927,12 @@ scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints th
       const want = hue([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
       assert.ok(gap(hue(stop), want) < 8, `${theme} ${name}: the glass takes the colour (${hue(stop).toFixed(1)}° vs ${want.toFixed(1)}°): ${got.bar}`);
     }
+    // 투명 (the owner: "투명 색깔도"): clear glass, no colour of its own.
+    await click(page, '[data-key="clear"]');
+    const clear = await page.eval(`(() => ({ glass: document.documentElement.dataset.glass, bar: getComputedStyle(document.querySelector(".room > .bar")).backgroundImage, pressed: document.querySelector('[data-key="clear"]').getAttribute("aria-pressed") }))()`);
+    assert.equal(clear.glass, "clear");
+    assert.equal(clear.pressed, "true");
+    assert.ok(!tinted(clear.bar) || tinted(clear.bar).every((v, _, a) => Math.abs(v - a[0]) < 0.02), `${theme}: the clear glass is colourless: ${clear.bar}`);
   }
 });
 
@@ -2589,7 +2598,7 @@ scenario("whiteboard: the board runs to every edge of the screen under the float
 });
 
 // The owner: "많이 확대 및 축소하거나 옆으로 옮기면서 할 때 배열들이 이상하게… 선들이 이상하게".
-scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노래 stretch belongs to 노래 (other modes show the true places); order lines follow a card while it is dragged; loop chips shrink when zoomed out", async ({ open, fixtures }) => {
+scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; far out (to a twentieth); zoom moves nothing against anything else; 노래 stretches only the card stretched; order lines follow a card while it is dragged; loop chips shrink when zoomed out", async ({ open, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2603,28 +2612,45 @@ scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노�
   await click(page, "#mode-link");
   for (let n = 0; n < 2; n++) { const c = await cardBox(page, n); await page.tap(c.cx, c.cy + 20); await frames(page); }
   await page.waitFor(`${board}.links().length === 1`);
-  // 노래 stretches the songs sideways; back in 전체 they stand where they really are.
+  // 노래 stretches only the card stretched (the owner: "이 녹음된 것만 늘리려고 했는데 다른 것까지
+  // 다 늘려주면"): the other stays as it was, where it was.
   await click(page, "#mode-all");
   const plain = await cardBox(page, 1);
+  const other = await cardBox(page, 0);
   await click(page, "#mode-song");
+  await page.tap(plain.cx, plain.cy + 20);
+  await page.waitFor(`document.querySelector(".card.chosen")?.dataset.id === ${JSON.stringify(plain.id)}`);
   await click(page, "#stretch-in");
   await click(page, "#stretch-in");
+  await frames(page);
   const stretched = await cardBox(page, 1);
   assert.ok(stretched.w > plain.w * 1.8, "stretched in 노래: " + plain.w + " → " + stretched.w);
+  const still = await cardBox(page, 0);
+  assert.ok(Math.abs(still.w - other.w) < 1 && Math.abs(still.x - other.x) < 1, "the other card did not change: " + JSON.stringify({ other, still }));
+  await page.waitFor(`${board}.item(${JSON.stringify(plain.id)}).w > ${Math.round(plain.w * 1.8)}`, 3000);
   await click(page, "#mode-all");
+  // Zoom moves nothing against anything else: the gap between two cards grows exactly as they do.
+  const before = [await cardBox(page, 0), await cardBox(page, 1)];
+  const mid = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  for (let i = 0; i < 3; i++) await page.wheel(mid[0], mid[1], -200);
   await frames(page);
-  const back = await cardBox(page, 1);
-  assert.ok(Math.abs(back.w - plain.w) < 1, "전체 shows the true size: " + JSON.stringify({ plain, back }));
-  await click(page, "#mode-song");
+  const after = [await cardBox(page, 0), await cardBox(page, 1)];
+  const k = after[0].w / before[0].w;
+  assert.ok(Math.abs(after[1].w / before[1].w - k) < 0.02 && Math.abs((after[1].x - after[0].x) / (before[1].x - before[0].x) - k) < 0.02, "zoom scales every card and gap alike: " + JSON.stringify({ before, after }));
+  for (let i = 0; i < 3; i++) await page.wheel(mid[0], mid[1], 200);
   await frames(page);
-  assert.ok(Math.abs((await cardBox(page, 1)).w - stretched.w) < 1, "노래 keeps its own stretch");
-  await click(page, "#mode-all");
   // Zoomed far in, nothing of the cards shows over the bars.
   const v = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return [r.left + r.width / 2, r.top + 40]; })()`);
   for (let i = 0; i < 16; i++) await page.wheel(v[0], v[1], -200);
   await frames(page);
   const over = await page.eval(`(() => { const out = []; for (const el of document.querySelectorAll("#room-top button, .room > .bar button")) { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); if (hit && hit.closest(".board")) out.push(el.id || el.textContent); } return out; })()`);
   assert.deepEqual(over, [], "the bars stay on top of the board");
+  // Zoomed out far: to a twentieth (the owner: "축소를 완전 많이").
+  for (let i = 0; i < 60; i++) await page.wheel(v[0], v[1] + 200, 200);
+  await frames(page);
+  const far = await page.eval(`(() => { const m = /scale\\(([0-9.]+)\\)/.exec(document.getElementById("board-content").style.transform); return m ? Number(m[1]) : 1; })()`);
+  assert.ok(far <= 0.06, "zoomed out to " + far);
+  for (let i = 0; i < 20; i++) await page.wheel(v[0], v[1] + 200, -200);
   // Zoomed out, a loop's chip gets smaller with the board.
   for (let i = 0; i < 30; i++) await page.wheel(v[0], v[1] + 200, 200);
   await frames(page);
@@ -3076,6 +3102,7 @@ scenario("whiteboard 노래 모드: modes on top, each mode's tools on the right
   // Sideways: buttons and two fingers stretch the card in time; its height and the board's size stay.
   const a = await cardBox(page);
   await click(page, "#stretch-in");
+  await frames(page);
   const b = await cardBox(page);
   assert.ok(Math.abs(b.w / a.w - 1.4) < 0.05 && Math.abs(b.h - a.h) < 1, `stretched ${a.w} → ${b.w}, height ${a.h} → ${b.h}`);
   await page.pinch([[b.cx - 30, b.cy], [b.cx + 30, b.cy]], [[b.cx - 60, b.cy], [b.cx + 60, b.cy]]);
@@ -3850,4 +3877,62 @@ scenario("레퍼런스: what is inside stays inside its rounded glass; scrolled 
   assert.ok(box.b[1] <= box.p[1] + 0.5, "the scrolling part ends inside the glass: " + JSON.stringify(box));
   assert.ok(box.last[2] >= box.p[2] && box.last[3] <= box.p[3], "the recording is no wider than the glass: " + JSON.stringify(box));
   if (box.scrolls) assert.ok(box.last[1] <= box.p[1] - 12, "at the end the last recording is clear of the bottom edge: " + JSON.stringify(box));
+});
+
+
+// The owner: "한 번 누르면 안 나가지고", "조금이라도 아래로 스크롤 된 상태이면… 한 번 더 아래로 내리면 내려가는 식".
+scenario("sheets: one tap on its close button closes it; pulled down from the top it goes, but content scrolled down scrolls up first", async ({ open }) => {
+  const page = await open({ width: 390, height: 560 });
+  await page.waitFor(q("#home-settings"));
+  await click(page, "#home-settings");
+  await page.waitFor(q(".panel .sheet-close"));
+  await click(page, ".panel .sheet-close");
+  await page.waitFor(`!document.querySelector(".scrim")`, 2000);
+  // Pulled from the top: it follows and goes.
+  await click(page, "#home-settings");
+  await page.waitFor(q(".panel h2"));
+  await page.front();
+  await frames(page);
+  const top = await page.eval(`(() => { const r = document.querySelector(".panel h2").getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; })()`);
+  await page.touch("start", [top]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[top[0], top[1] + i * 30]]);
+  await page.touch("end");
+  await page.waitFor(`!document.querySelector(".scrim")`, 2000);
+  // Scrolled down a little: the first pull only brings the content back up; the next one closes.
+  await click(page, "#home-settings");
+  await page.waitFor(q(".panel h2"));
+  await frames(page);
+  const scrolls = await page.eval(`(() => { const p = document.querySelector(".panel"); p.scrollTop = 60; return p.scrollHeight > p.clientHeight; })()`);
+  if (scrolls) {
+    const mid = await page.eval(`(() => { const r = document.querySelector(".panel").getBoundingClientRect(); return [r.left + 30, r.top + 120]; })()`);
+    await page.touch("start", [mid]);
+    for (let i = 1; i <= 6; i++) await page.touch("move", [[mid[0], mid[1] + i * 25]]);
+    await page.touch("end");
+    await frames(page);
+    assert.ok(await page.eval(`!!document.querySelector(".scrim:not(.closing)")`), "a pull that began scrolled down does not close it");
+  }
+});
+
+// The owner's iPad screenshots: drawing selected the bar's words (blue handles, 복사하기·찾아보기) and broke strokes.
+scenario("drawing with a pen never selects text: the bars, the board and the tools take no selection; a long fast stroke stays one stroke", async ({ open }) => {
+  const page = await open({ width: 820, height: 1180 });
+  await createBoard(page);
+  const app = await page.eval(`(() => ({ app: document.getElementById("app").getBoundingClientRect().width, view: innerWidth }))()`);
+  assert.equal(app.app, app.view, "the app fills an iPad's width (no black sides)");
+  assert.deepEqual(await page.eval(`[".room > .bar", "#room-title", ".board-modes", "#board", ".toolbar"].map((s) => getComputedStyle(document.querySelector(s)).webkitUserSelect || getComputedStyle(document.querySelector(s)).userSelect)`), ["none", "none", "none", "none", "none"]);
+  await click(page, "#board-pen");
+  await page.waitFor(`document.querySelector("#board canvas.ink.on")`);
+  const r = await page.eval(`(() => { const b = document.getElementById("room-body").getBoundingClientRect(); return { x: b.left + 80, y: b.top + 160 }; })()`);
+  await page.front();
+  await page.stylus("down", r.x, r.y);
+  for (let i = 1; i <= 60; i++) await page.stylus("move", r.x + i * 9, r.y + Math.sin(i / 5) * 60);
+  await page.stylus("up", r.x + 540, r.y);
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  assert.equal(await page.eval(`String(getSelection())`), "", "nothing got selected");
+  // A long press on the title with a finger selects nothing either.
+  const t = await page.eval(`(() => { const r = document.getElementById("room-title").getBoundingClientRect(); return [r.left + 10, r.top + r.height / 2]; })()`);
+  await page.touch("start", [t]);
+  await pause(900);
+  await page.touch("end");
+  assert.equal(await page.eval(`String(getSelection())`), "");
 });

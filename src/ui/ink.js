@@ -113,9 +113,12 @@ export class InkLayer {
 
   /** Points in hundredths of a rem from the host's top left. */
   point(e) {
-    const r = this.host.getBoundingClientRect();
+    // While a line is drawn the page does not move under it: its place is read once.
+    const frame = this.live?.frame || { r: this.host.getBoundingClientRect(), w: this.host.offsetWidth };
+    if (this.live && !this.live.frame) this.live.frame = frame;
+    const r = frame.r;
     // The page may be zoomed (text room pinch): on-screen size over laid-out size is the zoom.
-    const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
+    const zoom = frame.w ? r.width / frame.w : 1;
     const rem = remPx() * zoom;
     const pressure = e.pointerType === "pen" || (e.pressure > 0 && e.pressure !== 0.5) ? e.pressure : 0.5;
     if (this.view) {
@@ -154,11 +157,14 @@ export class InkLayer {
     c.addEventListener("pointermove", (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
+      // Every point the pen passed (not only one per frame), drawn at the next frame: the line
+      // keeps up with the pen however fast it goes.
       for (const ev of e.getCoalescedEvents?.() || [e]) this.live.pts.push(...this.point(ev));
-      this.render();
+      this.renderSoon();
     });
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
+      if (e.type === "pointerup" && !this.live.erase) for (const ev of e.getCoalescedEvents?.() || []) this.live.pts.push(...this.point(ev));
       const live = this.live;
       this.live = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
@@ -206,13 +212,37 @@ export class InkLayer {
       const scale = (remPx() / 100) * ratio * zoom;
       g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
     }
-    // Strokes being moved (the 올가미 dragging what it holds) are drawn where they are going.
+    // What is already drawn is kept as a picture and drawn again only when it changes (or the view
+    // moves); while a line is being drawn only that line is painted over it each frame.
     const shift = this.shift;
-    for (const s of this.ink().strokes()) {
-      const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-      this.paint(g, pts, s.c, s.w, s.b || "pen");
+    const t = g.getTransform();
+    const key = [this.ink().version, w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
+    if (!this.kept || this.kept.key !== key) {
+      const pic = this.kept?.canvas || document.createElement("canvas");
+      pic.width = w;
+      pic.height = hgt;
+      const pg = pic.getContext("2d");
+      pg.setTransform(t);
+      for (const s of this.ink().strokes()) {
+        const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
+        this.paint(pg, pts, s.c, s.w, s.b || "pen");
+      }
+      this.kept = { key, canvas: pic };
     }
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(this.kept.canvas, 0, 0);
+    g.restore();
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
+  }
+
+  /** One drawing per frame however many points came. */
+  renderSoon() {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.render();
+    });
   }
 
   /** The paper is at least as tall as its lowest drawing, and, while drawing, has room below. */
@@ -267,6 +297,7 @@ export class InkLayer {
   }
 
   destroy() {
+    cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.canvas.remove();
   }

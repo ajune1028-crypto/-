@@ -181,7 +181,8 @@ h1, h2, p { margin: 0; }
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 22.5rem;
+  /* Any screen, filled (the owner: "꽉 채워졌으면", "그 칸에 맞춰서 늘어나야"): no column, no black sides. */
+  width: 100%;
   height: 100%;
   margin: 0 auto;
   background: var(--paper);
@@ -442,7 +443,10 @@ h1, h2, p { margin: 0; }
   box-shadow: var(--glass-shine), 0 -14px 40px rgb(20 40 90 / 0.2);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
-  animation: rise 0.22s ease-out;
+  /* Slides up and settles the way an iPhone sheet does (and back down when it closes). */
+  animation: sheet-in 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  overscroll-behavior: contain;
 }
 /* The small grip that says: this sheet slid up, and goes back down. */
 .panel::before {
@@ -999,8 +1003,7 @@ label.btn { display: grid; place-items: center; cursor: pointer; text-align: cen
 /* ---- lying down (가로) and computers ------------------------------------------ */
 /* The app takes the width; the song timeline gets all of it. The writing sheet
    keeps its 360 column, so text wraps and drawings sit exactly as upright. */
-html[data-orient="landscape"] #app { width: min(100%, 75rem); }
-html[data-orient="landscape"] .sheets { max-width: 22.5rem; width: 100%; margin-inline: auto; }
+html[data-orient="landscape"] #app { width: 100%; }
 html[data-orient="landscape"] .scrim { justify-content: center; }
 html[data-orient="landscape"] .panel { width: min(100%, 32rem); border-radius: 1.8rem 1.8rem 0 0; }
 html[data-orient="landscape"] .panel.editor-panel { width: min(100%, 52rem); }
@@ -1289,4 +1292,66 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
     --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
     --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
   }
+}
+
+/* Nothing but text fields and the words being written can be selected: a pen stroke or a long
+   press never brings up the text selection (blue handles, 복사하기·찾아보기) over the bars, the
+   board or the timeline (the owner's iPad screenshots). */
+.room, .home, .float, .panel { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.room input, .room textarea, .home input, .home textarea, .float input, .float textarea, .panel input, .panel textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.room [contenteditable="true"], .panel [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+.code, .panel .code { -webkit-user-select: all; user-select: all; }
+
+/* Wide screens: sheets stand as a centred card (as on an iPad), everything else fills the screen. */
+@media (min-width: 700px) {
+  .scrim { justify-content: center; }
+  .panel { width: min(100%, 34rem); border-radius: 1.8rem 1.8rem 0 0; }
+  .panel.editor-panel { width: min(100%, 56rem); }
+  .join, .center { width: min(100%, 32rem); margin-inline: auto; }
+}
+
+/* The whiteboard: its bars and tools float without a coloured glow around them (the owner: the colour
+   that "sprays" past the glass under the title was distracting there), and the board reaches the
+   very top edge, so no strip of the room's background shows above the bars in the dark. */
+.room[data-kind="creative-board"] > .bar,
+.room[data-kind="creative-board"] .board-modes,
+.room[data-kind="creative-board"] .rail-btn,
+.room[data-kind="creative-board"] > .toolbar,
+.room[data-kind="creative-board"] .ink-tools { box-shadow: var(--glass-shine), 0 1px 2px rgb(0 0 0 / 0.14); }
+
+/* Clear glass (투명): no colour of its own; frosted, so words on it still read. */
+:root[data-glass="clear"] {
+  --tint: #8c919c;
+  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.42) 0%, rgb(255 255 255 / 0.22) 100%);
+  --glass-edge: rgb(255 255 255 / 0.6);
+}
+:root[data-glass="clear"][data-theme="dark"] {
+  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
+  --glass-edge: rgb(255 255 255 / 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-glass="clear"]:not([data-theme="light"]) {
+    --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
+    --glass-edge: rgb(255 255 255 / 0.16);
+  }
+}
+.swatch.clear { background: repeating-conic-gradient(rgb(160 166 178 / 0.55) 0 25%, rgb(255 255 255 / 0.85) 0 50%) 0 0 / 0.6rem 0.6rem; }
+
+/* Sheets: a head with the title and one close button; in and out with the same easing. */
+.sheet-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.sheet-head h2 { flex: 1; margin: 0; }
+.sheet-close { flex: none; width: 2.2rem; height: 2.2rem; margin: -0.3rem -0.5rem -0.3rem 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.sheet-close svg { width: 1.1rem; height: 1.1rem; transform: rotate(-90deg); }
+.scrim { animation: scrim-in 0.3s ease; }
+.scrim.closing { animation: scrim-out 0.26s ease forwards; pointer-events: none; }
+.scrim.closing .panel { animation: sheet-out 0.26s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes sheet-out { to { transform: translateY(105%); } }
+@keyframes scrim-in { from { background-color: transparent; } }
+@keyframes scrim-out { to { background-color: transparent; } }
+/* Menus and floating panels open from where they are, a little smaller and clear at first. */
+.clip-menu, .float, .lasso-menu { animation: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) {
+  .panel, .scrim, .scrim.closing, .scrim.closing .panel, .clip-menu, .float, .lasso-menu { animation: none; transition: none; }
 }

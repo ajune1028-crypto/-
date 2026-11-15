@@ -346,7 +346,7 @@ export function mountTextRoom(body, app, session) {
   // Words stay chosen while the row is used; leaving the sheets for anything else puts it away.
   const onFocusOut = () => setTimeout(() => {
     const active = document.activeElement;
-    if (sel && !list.contains(active) && !selTools.contains(active) && !document.querySelector(".scrim")) {
+    if (sel && !list.contains(active) && !selTools.contains(active) && !document.querySelector(".scrim:not(.closing)")) {
       sel = null;
       drawSel();
     }

@@ -42,7 +42,9 @@ export function fitScale() {
     const hgt = window.innerHeight;
     const landscape = w > hgt * 1.05;
     root.dataset.orient = landscape ? "landscape" : "portrait";
-    const k = landscape ? Math.min(1.25, Math.max(0.85, hgt / 520)) : Math.min(1.4, Math.max(0.8, w / 360));
+    // A phone grows with its width; a tablet or a computer keeps a comfortable size and uses
+    // its extra room for more of the board, the timeline and the page (the app fills the screen).
+    const k = landscape ? Math.min(1.2, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.25, Math.max(1.05, w / 640));
     root.style.setProperty("--k", String(k));
   };
   set();
@@ -72,7 +74,11 @@ export const ACCENTS = [
   ["brown", "갈색", "#8a5a36"],
   ["pink", "핑크", "#e05298"],
   ["graphite", "흑백", "#3a3d46"],
+  // Clear glass (the owner: "투명 색깔도"): no colour of its own, the room shows through; its
+  // buttons take the black-and-white accent.
+  ["clear", "투명", "clear"],
 ];
+const CLEAR_ACCENT = "#3a3d46";
 
 export const TEXT_SIZES = [[0.9, "작게"], [1, "보통"], [1.15, "크게"], [1.3, "아주 크게"]];
 
@@ -81,6 +87,9 @@ const ACCENT_VARS = ["--accent", "--accent-top", "--accent-bottom", "--accent-2"
 /** null puts the app's own colours back. */
 export function applyAccent(hex) {
   for (const name of ACCENT_VARS) root.style.removeProperty(name);
+  if (hex === "clear") root.dataset.glass = "clear";
+  else delete root.dataset.glass;
+  if (hex === "clear") hex = CLEAR_ACCENT;
   if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return;
   for (const [name, value] of Object.entries(accentColors(hex.toLowerCase()))) root.style.setProperty(name, value);
 }
@@ -92,6 +101,7 @@ export function applyTextScale(scale) {
 
 /** My glass colour as a hex: the one I chose, else the blue one. */
 export function glassHex(settings) {
+  if (settings?.accent === "clear") return CLEAR_ACCENT;
   return settings?.accent || ACCENTS.find(([key]) => key === "blue")[2];
 }
 

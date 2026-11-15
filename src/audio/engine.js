@@ -122,8 +122,23 @@ export class SongPlayer {
     this.dry = ctx.createGain();
     this.wet = ctx.createGain();
     this.reverb = ctx.createConvolver();
-    this.bus.connect(this.dry);
-    this.bus.connect(this.reverb);
+    // The piano's body: a little warmth low down, and air on top for 밝게 (rounded off for 어둡게).
+    this.body = ctx.createBiquadFilter ? ctx.createBiquadFilter() : null;
+    this.air = ctx.createBiquadFilter ? ctx.createBiquadFilter() : null;
+    if (this.body && this.air) {
+      this.body.type = "lowshelf";
+      this.body.frequency.value = 240;
+      this.body.gain.value = 2.5;
+      this.air.type = "highshelf";
+      this.air.frequency.value = 6500;
+      this.bus.connect(this.body);
+      this.body.connect(this.air);
+      this.air.connect(this.dry);
+      this.air.connect(this.reverb);
+    } else {
+      this.bus.connect(this.dry);
+      this.bus.connect(this.reverb);
+    }
     this.dry.connect(this.out);
     this.reverb.connect(this.wet);
     this.wet.connect(this.out);
@@ -140,6 +155,7 @@ export class SongPlayer {
     this.reverb.buffer = ir;
     this.wet.gain.value = reverbMix(tone);
     this.dry.gain.value = 1 - reverbMix(tone) * 0.5;
+    if (this.air) this.air.gain.value = tone === "dark" ? -4 : 1.5;
     if (this.playing) this.restart();
   }
 

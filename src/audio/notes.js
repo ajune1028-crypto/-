@@ -209,15 +209,43 @@ export function segmentNotes(frames) {
       next.link = piece.link;
     }
   }
-  return joinWobbles(notes).map((note) => {
+  const joined = joinWobbles(notes);
+  // The take's own tuning: a singer who is a little flat (or sharp) all through means the notes a
+  // little above (below) where they land. Its offset from the piano's keys is read from all the
+  // notes together (weighted by length) and taken off before each note is rounded to a key.
+  const centres = joined.map((note) => ({ c: median(note.own), w: note.own.length }));
+  const tune = tuningOffset(centres);
+  return joined.map((note, i) => {
     let level = 0;
     for (let k = note.first; k <= note.last; k++) level += frames[k].rms;
     level /= note.last - note.first + 1;
     return {
       t: Math.max(0, frameTime(note.first) - HOP_SECONDS / 2 + ONSET_SHIFT),
       d: (note.last - note.first + 1) * HOP_SECONDS,
-      p: Math.round(median(note.own)),
+      p: Math.round(centres[i].c - tune),
       v: Math.min(1, Math.max(0.05, level / loud)),
     };
   });
+}
+
+/**
+ * How far (in semitones, -0.5..0.5) a take sits from the piano's tuning: the mean of each note's
+ * distance to its nearest key, taken round the circle and weighted by length. Few or short notes
+ * say too little: then 0.
+ */
+export function tuningOffset(centres) {
+  let x = 0;
+  let y = 0;
+  let total = 0;
+  for (const { c, w } of centres) {
+    if (!Number.isFinite(c)) continue;
+    const a = 2 * Math.PI * (c - Math.round(c));
+    x += Math.cos(a) * w;
+    y += Math.sin(a) * w;
+    total += w;
+  }
+  if (centres.length < 3 || total < 3 * MIN_NOTE_FRAMES) return 0;
+  // The notes must agree on it; scattered distances mean the take is simply in tune, loosely.
+  if (Math.hypot(x, y) / total < 0.6) return 0;
+  return Math.atan2(y, x) / (2 * Math.PI);
 }

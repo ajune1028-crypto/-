@@ -30,10 +30,10 @@ export function displaySettings(app, { withColors }) {
   const accents = h("div", { class: "swatches", id: "accents", role: "group", "aria-label": "포인트 색" });
   const paintAccents = (hex) => { for (const b of accents.querySelectorAll("[data-accent]")) b.setAttribute("aria-pressed", String(b.dataset.accent === hex)); };
   for (const [key, name, hex] of ACCENTS) {
-    accents.append(h("button", { class: "swatch", type: "button", data: { accent: hex, key }, "aria-label": name, title: name, style: { background: hex },
+    accents.append(h("button", { class: "swatch" + (key === "clear" ? " clear" : ""), type: "button", data: { accent: hex, key }, "aria-label": name, title: name, style: key === "clear" ? {} : { background: hex },
       onclick: () => { change("accent", key === "blue" ? null : hex); paintAccents(hex); } }));
   }
-  const well = h("input", { type: "color", id: "accent-own", value: current, "aria-label": "직접 고르기",
+  const well = h("input", { type: "color", id: "accent-own", value: current === "clear" ? "#3a3d46" : current, "aria-label": "직접 고르기",
     oninput: () => { change("accent", well.value); paintAccents(well.value); } });
   accents.append(h("span", { class: "swatch own", data: { accent: ACCENTS.some(([, , hex]) => hex === current) ? "" : current }, title: "직접 고르기" }, well));
   paintAccents(current);
