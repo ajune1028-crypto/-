@@ -58,17 +58,26 @@ export async function launch({ port = 9333, args = [] } = {}) {
   const proc = spawn(findChrome(), [
     "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--disable-extensions",
     "--disable-background-networking", "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
-    "--disable-backgrounding-occluded-windows", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=127.0.0.1", ...args, `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank",
-  ], { stdio: "ignore" });
+    "--disable-backgrounding-occluded-windows", "--disable-dev-shm-usage", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=127.0.0.1", ...args, `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank",
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+  // What Chrome says on its way up, kept to explain a start that never comes.
+  let said = "";
+  proc.stderr.on("data", (d) => { said = (said + d).slice(-4000); });
+  let exited = null;
+  proc.on("exit", (code, signal) => { exited = code ?? signal; });
   let url;
-  for (let i = 0; i < 150 && !url; i++) {
+  // A cold machine (a CI runner) can take a while to bring Chrome up.
+  for (let i = 0; i < 600 && !url && exited === null; i++) {
     try {
       url = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl;
     } catch {
       await sleep(100);
     }
   }
-  if (!url) throw new Error("Chrome did not start");
+  if (!url) {
+    proc.kill();
+    throw new Error(`Chrome did not start${exited !== null ? " (it exited: " + exited + ")" : ""}. It said:\n${said.trim().split("\n").slice(-15).join("\n")}`);
+  }
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   let seq = 0;
