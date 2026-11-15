@@ -594,7 +594,12 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 
 /* ---- text room ------------------------------------------------------------ */
 
-.sheets { display: flex; flex-direction: column; gap: 1.1rem; padding: 0.4rem 0.9rem 1.5rem; }
+.sheets { display: flex; flex-direction: column; gap: 1.1rem; padding: 0.4rem 0.9rem 1.5rem; min-height: 100%; }
+/* Today's sheet is the page itself, down to the bottom of the screen (the owner: "하나의 텍스트
+   적을 공간"), and its typing layer covers all of it: a tap low on the empty page writes at the end. */
+.sheet.today { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sheet.today > .paper { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sheet.today > .paper > .layers { flex: 1 0 auto; }
 .sheets > .pill { align-self: center; }
 .day { margin: 0 0 0.45rem 0.4rem; font-size: 0.72rem; font-weight: 600; color: var(--soft); }
 /* The writing sheet: bright and nearly solid, so all eight colours read. The thin
@@ -611,9 +616,10 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   content: "";
   position: absolute;
   inset: 0;
-  padding: 1.5px;
   border-radius: inherit;
-  background: linear-gradient(135deg, var(--frame-a), var(--frame-b));
+  /* A glass edge, light on top, rather than a coloured ring: the page should not look like a form field. */
+  padding: 1px;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--frame-a) 70%, transparent), color-mix(in srgb, var(--frame-b) 22%, transparent) 55%, color-mix(in srgb, var(--frame-b) 40%, transparent));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);

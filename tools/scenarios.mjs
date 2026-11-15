@@ -643,9 +643,11 @@ scenario("layers: the drawn text and the input box always have the same height",
     const m = await a.eval(`(() => { const s = ${TODAY}; const ta = s.querySelector("textarea"); const draw = s.querySelector(".draw");
       const probe = ta.cloneNode(); probe.value = ta.value; probe.style.height = "0"; probe.style.minHeight = "0"; ta.parentElement.append(probe);
       const need = probe.scrollHeight; probe.remove();
-      return { need, draw: draw.scrollHeight, min: parseFloat(getComputedStyle(draw).minHeight) || 0, box: ta.clientHeight, drawBox: draw.clientHeight }; })()`);
+      return { need, draw: draw.scrollHeight, min: parseFloat(getComputedStyle(draw).minHeight) || 0, box: ta.clientHeight, drawBox: draw.clientHeight, scroll: ta.scrollHeight - ta.clientHeight }; })()`);
     assert.ok(Math.abs(Math.max(m.need, m.min) - m.draw) <= 1, JSON.stringify(sample.slice(0, 20)) + " " + JSON.stringify(m));
-    assert.ok(Math.abs(m.box - m.drawBox) <= 1, "input box covers the drawn text " + JSON.stringify(m));
+    // The input box covers the drawn text and never scrolls inside (today's box reaches down
+    // the whole page since 15 November, so a tap low on the page writes at the end).
+    assert.ok(m.box >= m.drawBox - 1 && m.scroll <= 1, "input box covers the drawn text " + JSON.stringify(m));
   }
 });
 
@@ -1679,6 +1681,26 @@ scenario("glass colours: each of 빨주노초파남보갈핑 and 흑백 tints th
 
 // ---- drawing -----------------------------------------------------------------------------------------
 
+// 본질 (5.3): "하나의 텍스트 적을 공간" - today's sheet is the page itself, not a box with dead space under it.
+scenario("text room: today's sheet runs to the bottom of the screen, and a tap low on its empty part writes at the end", async ({ open }) => {
+  const page = await open();
+  await createRoom(page);
+  await focusEnd(page);
+  await page.type("첫 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄"`);
+  const box = await page.eval(`(() => {
+    const b = document.getElementById("room-body").getBoundingClientRect();
+    const p = ${TODAY}.querySelector(".paper").getBoundingClientRect();
+    return { body: b.bottom, paper: p.bottom, x: p.left + p.width / 2 };
+  })()`);
+  assert.ok(box.body - box.paper < 40, "the paper reaches the bottom of the room: " + JSON.stringify(box));
+  await page.eval(`document.activeElement.blur()`);
+  await page.tap(box.x, box.paper - 40);
+  await page.waitFor(`document.activeElement?.classList.contains("typing")`);
+  await page.type(" 이어서");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄 이어서"`);
+});
+
 scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes out, for the friend too; it can be taken out", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
@@ -1827,11 +1849,13 @@ scenario("text room: two fingers never zoom smaller than the screen; with the pe
   await a.pinch([[mid[0] - 90, mid[1]], [mid[0] + 90, mid[1]]], [[mid[0] - 30, mid[1]], [mid[0] + 30, mid[1]]]);
   await frames(a);
   assert.ok(Math.abs((await box()).lw - b0.lw) < 1, "no blank space beside the page");
-  // Pen on: today's paper opens room below the words to draw in.
+  // Pen on: there is room below the words to draw in (today's sheet is the whole page since
+  // 15 November, so the room is the page; a long page grows past its words).
   await click(a, "#pen");
   await a.waitFor(`!${q("#ink-tools")}.hidden`);
   const b2 = await box();
-  assert.ok(b2.h > b0.h + 150, `room to draw below: ${b0.h} → ${b2.h}`);
+  const below = await a.eval(`(() => { const d = ${TODAY}.querySelector(".draw").getBoundingClientRect(); const p = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { room: p.bottom - d.bottom, body: document.getElementById("room-body").clientHeight }; })()`);
+  assert.ok(below.room > below.body * 0.5, `room to draw below the words: ${JSON.stringify(below)}`);
   // A line from just left of the paper down into the new room.
   const x0 = b2.left - 8;
   const y0 = b2.top + 30;
@@ -1843,11 +1867,13 @@ scenario("text room: two fingers never zoom smaller than the screen; with the pe
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
   const s = await a.eval(`(() => { const st = window.__app.session.doc("k:${day}").strokes()[0]; const rem = parseFloat(getComputedStyle(document.documentElement).fontSize); let lowest = 0; for (let i = 1; i < st.pts.length; i += 3) lowest = Math.max(lowest, st.pts[i]); return { firstX: st.pts[0], lowest: (lowest / 100) * rem }; })()`);
   assert.ok(s.firstX < 0, "the line began left of the paper and was kept: " + s.firstX);
-  // Pen off: the extra room goes, but the paper still holds the whole drawing.
+  // Pen off: the paper still holds the whole drawing, and is still the page down to the bottom.
   await click(a, "#pen");
   await frames(a);
   const b3 = await box();
-  assert.ok(b3.h >= s.lowest && b3.h < b2.h, `the paper holds the drawing: ${b3.h} (lowest point ${s.lowest.toFixed(0)}, with the pen ${b2.h})`);
+  assert.ok(b3.h >= s.lowest, `the paper holds the drawing: ${b3.h} (lowest point ${s.lowest.toFixed(0)}, with the pen ${b2.h})`);
+  const bottom = await a.eval(`document.getElementById("room-body").getBoundingClientRect().bottom`);
+  assert.ok(bottom - b3.bottom < 40, `the paper is the page: ${b3.bottom} of ${bottom}`);
 });
 
 scenario("text room: two fingers zoom the page, words and drawings together; nothing reflows; the spot between the fingers stays; a line drawn zoomed lands under the finger", async ({ open }) => {

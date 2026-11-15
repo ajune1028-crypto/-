@@ -272,8 +272,9 @@ export function mountTextRoom(body, app, session) {
       editor.ink = new InkLayer({
         host: editor.paper,
         blocked: () => fingers.pinching,
-        // While the pen is on, today's paper leaves room to draw below the words.
-        room: () => (day === today ? body.clientHeight * 0.6 : 0),
+        // While the pen is on, today's paper leaves room to draw below the words (a short page
+        // already reaches the bottom of the screen; a long one grows past its last line).
+        room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
         onStroke: ({ pts, color, width, brush }) => {
           const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
