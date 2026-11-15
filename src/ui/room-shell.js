@@ -113,6 +113,7 @@ export function showRoom(app, roomId) {
     session.setMe(memberId);
     const remember = () => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
+      people: session.room.members().map((m) => m.color),
     });
     remember();
     session.setPresence({ m: memberId });

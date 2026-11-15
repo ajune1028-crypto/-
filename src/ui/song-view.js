@@ -492,7 +492,7 @@ export class Timeline {
         const start = Math.max(0, Math.round((left / this.pps) * 1000 / 10) * 10);
         const row = Math.max(0, Math.round((e.clientY - d.grabY - this.inset - box.top) / this.rowH));
         this.on.move(id, start, row);
-      } else if (!d.panning) this.on.select(id);
+      } else if (!d.panning) this.on.select(id, this.msAt(e.clientX));
       if (this.model) this.render(this.model);
     };
     el.addEventListener("pointerup", (e) => end(e, false));

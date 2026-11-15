@@ -68,7 +68,13 @@ export function mountSongRoom(body, app, session, frame) {
       select(null);
       seek(ms);
     },
-    select: (id) => select(selected === id ? null : id),
+    // A tap is a place too (the owner: "15초에 거기 가가지고 그 한번 터치해서… 분할 누르면 거기 딱"):
+    // stopped, the playhead comes to where the clip was touched, unless it already stood
+    // inside that clip (put there on the time bar first). A tap on the chosen clip aims again.
+    select: (id, ms) => {
+      if (ms != null && !rec && !player?.playing && (selected === id || !insideClip(id))) seek(ms);
+      select(id);
+    },
     move: (id, start, row) => moveClip(id, start, row),
     canMove: (id) => !readOnly() && !song.clip(id)?.locked,
     zoomed: () => placeMenu(),
@@ -708,18 +714,20 @@ export function mountSongRoom(body, app, session, frame) {
         (t) => menu?.contains(t) || !!document.querySelector(`.clip[data-id="${selected}"]`)?.contains(t) || !!t.closest?.("#ruler"),
         () => select(null), menu);
     }
-    const item = (id, text, onclick, disabled = false) => h("button", { type: "button", id, text, disabled, onclick: (e) => { e.stopPropagation(); onclick(); } });
-    menu.replaceChildren(
-      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !!rec),
+    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
+    const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
+    menu.replaceChildren(...[
+      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
+      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
       item("clip-copy", "복사", () => copyClip(clip.id)),
-      item("clip-paste", "붙여넣기", () => pasteClip(), !clipboardItem(app.store, "song-clip") || readOnly()),
-      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), readOnly()),
-      item("clip-split", "분할", () => splitClip(clip.id), locked || !insideClip(clip.id)),
-      item("clip-join", "잇기", () => joinClip(clip.id), locked || !next || next.locked || !!busy),
+      item("clip-paste", "붙여넣기", () => pasteClip(), !!clipboardItem(app.store, "song-clip") && !readOnly()),
+      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
       item("clip-notes", "음 편집", () => editNotes(clip.id)),
       item("clip-send", "보내기", () => sendClip(clip.id)),
-      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), readOnly()),
-      item("clip-delete", "삭제", () => deleteClip(clip.id), locked));
+      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly()),
+      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked),
+    ].filter(Boolean));
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
     let left = box.left - area.left + box.width / 2 - w / 2;

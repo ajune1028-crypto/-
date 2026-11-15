@@ -198,6 +198,16 @@ test("a store keeps values across instances over the same storage, under its pre
   assert.deepEqual(openStore(storage, "devA:").get("rooms", []).map((r) => r.id), ["r2"]);
 });
 
+test("a remembered room keeps who is in it (their colours) for home, until it is told again", () => {
+  const store = openStore(memoryStorage(), "p:");
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1", people: ["red", "blue"] }, 10);
+  assert.deepEqual(roomEntry(store, "r1").people, ["red", "blue"]);
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방 새이름", memberId: "m1" }, 20);
+  assert.deepEqual(roomEntry(store, "r1").people, ["red", "blue"], "an entry told without people keeps the ones it knew");
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1", people: ["red", "blue", "green", "teal", "pink", "olive", "brown"] }, 30);
+  assert.deepEqual(roomEntry(store, "r1").people, ["red", "blue", "green", "teal", "pink", "olive"], "six at most");
+});
+
 test("the local transport works where BroadcastChannel is refused", async (t) => {
   const real = globalThis.BroadcastChannel;
   globalThis.BroadcastChannel = class { constructor() { throw new Error("refused"); } };

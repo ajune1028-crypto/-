@@ -217,6 +217,29 @@ scenario("second device: finds the room, joins as a new person with another colo
   await a.waitFor(`document.querySelectorAll("#people .dot").length === 2`);
 });
 
+// 본질 1 (같이): home is the door to the rooms, and the door says who is behind it.
+scenario("home: a room's row shows the colours of who is in it once a friend has come; a room of one shows none", async ({ open }) => {
+  const a = await open({ dev: "a" });
+  const id = await createRoom(a, { room: "같이 쓰는 방" });
+  const row = `.room-row[data-id="${id}"]`;
+  await click(a, "#back");
+  await a.waitFor(q(row));
+  assert.equal(await a.eval(`document.querySelectorAll('${row} .room-people .dot').length`), 0, "alone: no dots");
+  const b = await open({ dev: "b" });
+  await b.waitFor(q("#others .room-row"));
+  await click(b, "#others .room-row");
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`window.__app.session.room.members().length === 2`);
+  await click(b, "#back");
+  await b.waitFor(`document.querySelectorAll('${row} .room-people .dot').length === 2`);
+  const colours = await b.eval(`[...document.querySelectorAll('${row} .room-people .dot')].map((d) => getComputedStyle(d).backgroundColor)`);
+  assert.notEqual(colours[0], colours[1], "each person in their own colour");
+  await click(a, row);
+  await a.waitFor(`window.__app.session.room.members().length === 2`);
+  await click(a, "#back");
+  await a.waitFor(`document.querySelectorAll('${row} .room-people .dot').length === 2`);
+});
+
 scenario("code: a room opens by typing its code", async ({ open }) => {
   const a = await open({ dev: "a" });
   const id = await createRoom(a);
@@ -1367,6 +1390,35 @@ scenario("song: split at the playhead, copy, paste on another row, mute, delete,
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
 });
 
+// The owner: "15초에 거기 가가지고 그 한번 터치해서… 분할 누르면 거기 딱 이렇게 끊겨서" - the tap is the place.
+scenario("song: a tap on a clip puts the playhead where it was tapped, so 분할 cuts there; the menu shows only what can be done now", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const [first] = await songClips(page);
+  // After the import the playhead stands at the end of the take, outside it.
+  const at = await page.eval(`(() => {
+    const tl = document.getElementById("timeline");
+    const r = document.getElementById("ruler").getBoundingClientRect();
+    const c = document.querySelector(".clip[data-id]").getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return { x: r.left + 0.9 * rem + ${first.start + 800} / 1000 * Number(tl.dataset.pps), y: c.top + c.height / 2 };
+  })()`);
+  await page.tap(at.x, at.y);
+  await page.waitFor(`${q(".clip[data-id]")}.classList.contains("selected") && ${q("#clip-menu")}`);
+  assert.equal(await page.eval(`document.querySelectorAll("#clip-menu button:disabled").length`), 0, "no greyed buttons");
+  assert.equal(await page.eval(`!!${q("#clip-paste")}`), false, "nothing copied yet: no 붙여넣기");
+  assert.equal(await page.eval(`!!${q("#clip-join")}`), false, "no clip after it: no 잇기");
+  await click(page, "#clip-split");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
+  const clips = await songClips(page);
+  assert.ok(Math.abs(clips[0].length - 800) < 40, "cut where the clip was tapped: " + JSON.stringify(clips));
+  // Once something is copied and a clip follows on the row, 붙여넣기 and 잇기 are there.
+  await choose(page, `.clip[data-id="${clips[0].id}"]`);
+  await click(page, "#clip-copy");
+  await page.waitFor(`${q("#clip-paste")} && ${q("#clip-join")} && !document.querySelector("#clip-menu button:disabled")`);
+});
+
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 scenario("song: with a finger too, a held clip moves and a quick drag scrolls", async ({ open, fixtures }) => {
@@ -1959,7 +2011,7 @@ scenario("song: 잇기 joins the two halves of a split back into one, and two ta
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
   const [front] = await songClips(page);
   await choose(page, `.clip[data-id="${front.id}"]`);
-  await page.waitFor(`!${q("#clip-join")}.disabled`);
+  await page.waitFor(`${q("#clip-join")} && !${q("#clip-join")}.disabled`);
   await click(page, "#clip-join");
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
   assert.equal((await songClips(page))[0].length, first.length);
@@ -2194,9 +2246,10 @@ scenario("song: a locked clip cannot be deleted, cut or moved, and its locker un
   await choose(page, ".clip[data-id]");
   await click(page, "#clip-lock");
   await page.waitFor(`window.__app.session.doc("song").layout()[0].locked === true`);
-  await page.waitFor(`${q("#clip-delete")}.disabled && ${q("#clip-split")}.disabled && ${q("#clip-lock")}.textContent === "잠금 풀기"`);
+  // A locked clip's menu has no 삭제 and no 분할 at all (what cannot be done is not shown).
+  await page.waitFor(`!${q("#clip-delete")} && !${q("#clip-split")} && ${q("#clip-lock")}.textContent === "잠금 풀기"`);
   await click(page, "#clip-lock");
-  await page.waitFor(`window.__app.session.doc("song").layout()[0].locked === false && !${q("#clip-delete")}.disabled`);
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].locked === false && ${q("#clip-delete")} && !${q("#clip-delete")}.disabled`);
 });
 
 scenario("song: while a friend records, their row shows it growing with their name", async ({ open }) => {

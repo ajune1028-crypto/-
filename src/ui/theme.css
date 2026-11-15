@@ -293,6 +293,9 @@ h1, h2, p { margin: 0; }
 .room-kind { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.08rem 0.45rem 0.08rem 0.3rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--tint) 16%, transparent); }
 .room-kind svg { width: 0.85rem; height: 0.85rem; flex: none; }
 .room-when { font-size: 0.7rem; color: var(--muted); }
+/* The people in a room, as overlapping colour dots (home: who is behind the door). */
+.room-people { display: inline-flex; align-items: center; padding-left: 0.2rem; }
+.room-people .dot { width: 0.62rem; height: 0.62rem; margin-left: -0.2rem; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--paper); }
 .group-label { margin: 1.4rem 0 0.1rem; padding: 0 0.25rem; font-size: 0.7rem; color: var(--muted); }
 .group-label + .rooms { margin-top: 0.4rem; }
 .empty { margin-top: 1.4rem; padding: 0 0.25rem; font-size: 0.8rem; color: var(--muted); }

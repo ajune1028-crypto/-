@@ -10,6 +10,8 @@ import { dayKey, dayLabel, hourLabel } from "../core/time.js";
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { getSettings } from "../identity.js";
+import { memberColor } from "../core/paint.js";
+import { currentTheme } from "./theme.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -44,7 +46,10 @@ export function showHome(app) {
       h("span", { class: "room-name", text: room.name }),
       h("span", { class: "room-meta" },
         h("span", { class: "room-kind" }, icon(kind?.icon || "lines"), kind?.name || "새 버전의 방"),
-        when && h("span", { class: "room-when", text: when })));
+        when && h("span", { class: "room-when", text: when }),
+        // Who is behind the door: the colours of the people in it, once it is more than me.
+        room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
+          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))));
     if (!mine) return row;
     const hold = () => {
       held = true;

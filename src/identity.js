@@ -67,11 +67,17 @@ export function setSetting(store, key, value) {
  * Adds the room to this device's list, or updates it in place.
  * `local` marks a room that lives on this device only; once set it stays.
  */
-export function rememberRoom(store, { id, kind, name, memberId, local }, now = Date.now()) {
+/**
+ * Puts a room on this device's list. `people` are the colours of who is in it (home shows
+ * them: the door says who is behind it); told without them, the entry keeps the ones it had.
+ */
+export function rememberRoom(store, { id, kind, name, memberId, local, people }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
   if (local || (i >= 0 && rooms[i].local)) entry.local = true;
+  const known = Array.isArray(people) ? people : i >= 0 ? rooms[i].people : null;
+  if (known?.length) entry.people = known.slice(0, 6);
   if (i >= 0) rooms[i] = entry;
   else rooms.push(entry);
   store.set("rooms", rooms);
