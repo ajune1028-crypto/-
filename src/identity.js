@@ -2,6 +2,8 @@
 // name and personal code typed, and display settings. Works from memory when
 // the browser refuses storage.
 
+import { validPreview } from "./core/preview.js";
+
 export const DEFAULT_SETTINGS = {
   theme: "system", colors: true, mixing: true,
   // Your own accent colour (null: the app's blue) and the size of written text.
@@ -71,13 +73,16 @@ export function setSetting(store, key, value) {
  * Puts a room on this device's list. `people` are the colours of who is in it (home shows
  * them: the door says who is behind it); told without them, the entry keeps the ones it had.
  */
-export function rememberRoom(store, { id, kind, name, memberId, local, people }, now = Date.now()) {
+export function rememberRoom(store, { id, kind, name, memberId, local, people, preview }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
   if (local || (i >= 0 && rooms[i].local)) entry.local = true;
   const known = Array.isArray(people) ? people : i >= 0 ? rooms[i].people : null;
   if (known?.length) entry.people = known.slice(0, 6);
+  // What home shows of it (core/preview.js): given when the room is left; otherwise the last one stays.
+  const seen = preview !== undefined ? preview : i >= 0 ? rooms[i].preview : null;
+  if (validPreview(seen)) entry.preview = seen;
   if (i >= 0) rooms[i] = entry;
   else rooms.push(entry);
   store.set("rooms", rooms);

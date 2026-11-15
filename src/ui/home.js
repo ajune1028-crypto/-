@@ -4,6 +4,7 @@ import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast } from 
 import { duplicateRoom, putIntoBoard, putRoomIntoSong } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
+import { validPreview } from "../core/preview.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
@@ -20,6 +21,34 @@ function whenLabel(ms) {
   const tz = localZone();
   const day = dayKey(ms, tz);
   return day === dayKey(Date.now(), tz) ? hourLabel(ms, tz) : dayLabel(day).split(" ").slice(0, 2).join(" ");
+}
+
+/**
+ * What a room holds, at a glance (the owner chose 홈 미리보기): kept when the room was last left on
+ * this device. Its last line; its notes as small bars along the song; its cards as a tiny map.
+ */
+function previewOf(room) {
+  const p = room.preview;
+  if (!validPreview(p)) return null;
+  if (p.t === "text") return h("span", { class: "room-preview room-preview-text", text: p.line });
+  if (p.t === "song") {
+    if (!p.notes.length && !p.clips?.length) return null;
+    const pct = (v) => v / 10 + "%";
+    return h("span", { class: "room-preview room-preview-song", "aria-hidden": "true" },
+      (p.clips || []).map(([x, w]) => h("span", { class: "pv-clip", style: { left: pct(x), width: pct(w) } })),
+      p.notes.map(([x, w, y]) => h("span", { class: "pv-note", style: { left: pct(x), width: pct(w), top: 8 + y * 0.62 + "%" } })));
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "room-preview room-preview-board");
+  svg.setAttribute("viewBox", "0 0 100 60");
+  svg.setAttribute("aria-hidden", "true");
+  for (const [x, y, w, hgt, k] of p.cards) {
+    const r = document.createElementNS(NS, "rect");
+    for (const [key, v] of Object.entries({ x, y, width: w, height: hgt, rx: 1.6, class: "pv-card pv-" + k })) r.setAttribute(key, v);
+    svg.append(r);
+  }
+  return svg;
 }
 
 export function showHome(app) {
@@ -50,7 +79,8 @@ export function showHome(app) {
         when && h("span", { class: "room-when", text: when }),
         // Who is behind the door: the colours of the people in it, once it is more than me.
         room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
-          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))));
+          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))),
+      previewOf(room));
     if (!mine) return row;
     const hold = () => {
       held = true;

@@ -157,6 +157,40 @@ scenario("home: each room says what kind it is; nothing flashes blue; corners ta
   assert.notEqual(light.daily[0], dark.daily[0], "the glass wash is lighter in light mode and deeper in dark");
 });
 
+scenario("home 미리보기: a room's row shows what it holds as it was left - a text room its last line, a song room its notes as bars, a whiteboard a tiny map of its cards", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createRoom(page, { room: "글 방" });
+  await focusEnd(page);
+  await page.type("첫 줄");
+  await page.key("Enter");
+  await page.type("오늘 마지막 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄\\n오늘 마지막 줄"`);
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="daily-text"] .room-preview-text'));
+  assert.equal(await text(page, '.room-row[data-room-kind="daily-text"] .room-preview-text'), "오늘 마지막 줄");
+  await createSongRoom(page, { room: "노래 방" });
+  await importSound(page, fixtures.doremi);
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="creative-song"] .room-preview-song .pv-note'));
+  const bars = await page.eval(`[...document.querySelectorAll('.room-row[data-room-kind="creative-song"] .pv-note')].map((n) => n.getBoundingClientRect().top)`);
+  assert.ok(bars.length >= 5, "the notes as bars: " + bars.length);
+  assert.ok(new Set(bars.map(Math.round)).size >= 3, "at their heights: " + bars);
+  await createBoard(page, { room: "보드" });
+  await click(page, "#add-note");
+  await writeMemo(page, "메모 하나");
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="creative-board"] .room-preview-board .pv-n'));
+  await page.shot(out("home-previews.png"));
+  // Taken off the list from inside the room, it does not come back when the room closes.
+  await click(page, '.room-row[data-room-kind="daily-text"]');
+  await page.waitFor(q("#room-title"));
+  await click(page, "#room-settings");
+  await click(page, "#leave");
+  await page.waitFor(`location.hash === "" || location.hash === "#"`);
+  await page.waitFor(q(".room-row"));
+  assert.ok(!(await page.eval(`window.__app.store.get("rooms", []).some((r) => r.kind === "daily-text")`)), "the text room stays off my list");
+});
+
 scenario("home: a long press on a room offers 열기, 복제, 링크 복사, 화이트보드에 넣기 and 목록에서 빼기; 복제 makes '… 복사본' with the same words; 화이트보드에 넣기 puts its lines on a board", async ({ open }) => {
   const page = await open();
   await createRoom(page, { room: "글 방" });

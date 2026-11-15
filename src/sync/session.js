@@ -122,6 +122,11 @@ export class RoomSession extends Emitter {
     return held;
   }
 
+  /** Whether a document's stored ops have been asked for (it is read, or being read). */
+  isLoaded(id) {
+    return this.loading.has(id);
+  }
+
   /** Reads a document's stored ops (once) and resolves with its holder. */
   async load(id) {
     await this.loadDoc(id);

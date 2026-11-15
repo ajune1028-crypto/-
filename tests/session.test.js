@@ -208,6 +208,18 @@ test("a remembered room keeps who is in it (their colours) for home, until it is
   assert.deepEqual(roomEntry(store, "r1").people, ["red", "blue", "green", "teal", "pink", "olive"], "six at most");
 });
 
+test("a remembered room keeps what home shows of it until it is left again; a bad one is not kept", () => {
+  const store = openStore(memoryStorage(), "pv:");
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1", preview: { t: "text", line: "마지막 줄" } }, 10);
+  assert.deepEqual(roomEntry(store, "r1").preview, { t: "text", line: "마지막 줄" });
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1" }, 20);
+  assert.deepEqual(roomEntry(store, "r1").preview, { t: "text", line: "마지막 줄" }, "told without one, it keeps the one it knew");
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1", preview: null }, 30);
+  assert.equal(roomEntry(store, "r1").preview, undefined, "an emptied room shows nothing");
+  rememberRoom(store, { id: "r1", kind: "daily-text", name: "방", memberId: "m1", preview: { t: "text", line: 7 } }, 40);
+  assert.equal(roomEntry(store, "r1").preview, undefined);
+});
+
 test("the local transport works where BroadcastChannel is refused", async (t) => {
   const real = globalThis.BroadcastChannel;
   globalThis.BroadcastChannel = class { constructor() { throw new Error("refused"); } };

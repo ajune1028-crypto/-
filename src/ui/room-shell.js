@@ -10,6 +10,7 @@ import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { watchContrast } from "./contrast.js";
+import { textPreview, songPreview, boardPreview } from "../core/preview.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { memberColor, PALETTE } from "../core/paint.js";
@@ -114,11 +115,22 @@ export function showRoom(app, roomId) {
   function enter(memberId) {
     if (!alive) return;
     session.setMe(memberId);
-    const remember = () => rememberRoom(app.store, {
+    // withPreview: also what home shows of the room (its last line, its notes, its cards), worked
+    // out when the room is left or the app goes to the background.
+    const remember = (withPreview = false) => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
       people: session.room.members().map((m) => m.color),
+      ...(withPreview ? { preview: previewNow() } : {}),
     });
     remember();
+    // Only while the room is still in my list ('방 나가기' takes it out, and leaving must not bring it back).
+    const keepPreview = () => { if (roomEntry(app.store, roomId)) remember(true); };
+    const hidden = () => { if (document.visibilityState === "hidden") keepPreview(); };
+    document.addEventListener("visibilitychange", hidden);
+    offs.push(() => {
+      document.removeEventListener("visibilitychange", hidden);
+      keepPreview();
+    });
     session.setPresence({ m: memberId });
     // Rooms made before 15 November gave their maker the first colour (coral, a red). A room I am
     // still alone in takes my colour once (the one nearest my glass colour), so what I write and
@@ -235,6 +247,24 @@ export function showRoom(app, roomId) {
   }
 
   const isLocal = () => !!roomEntry(app.store, roomId)?.local;
+
+  /** What home shows of this room now; undefined keeps the one kept before (e.g. nothing read yet). */
+  function previewNow() {
+    try {
+      const kind = session.room.meta("kind") || "daily-text";
+      if (kind === "daily-text") {
+        const days = session.days();
+        const read = days.filter((day) => session.isLoaded("s:" + day));
+        const seen = textPreview(read.map((day) => session.sheet(day).text()));
+        return seen || (read.length < days.length ? undefined : null);
+      }
+      if (kind === "creative-song") return session.isLoaded("song") ? songPreview(session.doc("song")) : undefined;
+      if (kind === "creative-board") return session.isLoaded("board") ? boardPreview(session.doc("board")) : undefined;
+    } catch (err) {
+      console.warn(err);
+    }
+    return undefined;
+  }
 
   function unsupported(body) {
     body.append(h("div", { class: "center", id: "unsupported" },

@@ -301,6 +301,16 @@ h1, h2, p { margin: 0; }
 /* The people in a room, as overlapping colour dots (home: who is behind the door). */
 .room-people { display: inline-flex; align-items: center; padding-left: 0.2rem; }
 .room-people .dot { width: 0.62rem; height: 0.62rem; margin-left: -0.2rem; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--paper); }
+/* 홈 미리보기: what the room holds, as it was last left - its last line, its notes, its cards. */
+.room-preview { display: block; margin-top: 0.3rem; }
+.room-preview-text { overflow: hidden; font-size: 0.78rem; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
+.room-preview-song { position: relative; height: 1.3rem; overflow: hidden; border-radius: 0.4rem; }
+.room-preview-song .pv-clip { position: absolute; top: 0; bottom: 0; border-radius: 0.4rem; background: color-mix(in srgb, var(--tint) 10%, transparent); }
+.room-preview-song .pv-note { position: absolute; height: 18%; min-width: 3px; border-radius: 999px; background: color-mix(in srgb, var(--tint) 72%, var(--ink) 8%); }
+.room-preview-board { width: 4.6rem; height: 2.76rem; border-radius: 0.45rem; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.room-preview-board .pv-s { fill: color-mix(in srgb, var(--tint) 60%, transparent); }
+.room-preview-board .pv-n { fill: color-mix(in srgb, var(--ink) 24%, transparent); }
+.room-preview-board .pv-p { fill: color-mix(in srgb, var(--ink) 14%, transparent); }
 .group-label { margin: 1.4rem 0 0.1rem; padding: 0 0.25rem; font-size: 0.7rem; color: var(--muted); }
 .group-label + .rooms { margin-top: 0.4rem; }
 .empty { margin-top: 1.4rem; padding: 0 0.25rem; font-size: 0.8rem; color: var(--muted); }
