@@ -66,7 +66,9 @@ export function mountBoardRoom(body, app, session, frame) {
   let zoom = 1;
   let panX = 24;
   let panY = 24;
-  let sx = 1; // 노래: song cards (and where cards stand) stretched sideways in time
+  let sx = 1; // 노래: song cards (and where cards stand) stretched sideways in time; 1 in every other mode
+  let songSx = 1; // the stretch 노래 keeps for when it comes back (the other modes show the true places)
+  let cursor = null; // { id, ms }: where the chosen song card was tapped again (its position line)
   let mode = "all";
   let selected = null;
   let writer = null; // words being written in place: { id, ta, el, fresh, before, made, timer, stop }
@@ -229,6 +231,18 @@ export function mountBoardRoom(body, app, session, frame) {
   function setMode(m) {
     finishWriting();
     if (m !== "all" && pen.tool) setPen(null);
+    // The sideways stretch is 노래's way of looking at songs in time; the other modes show the
+    // cards where they really stand. The middle of the view stays where it is.
+    const want = m === "song" ? songSx : 1;
+    if (want !== sx) {
+      const v = body.getBoundingClientRect();
+      const cx = v.left + v.width / 2;
+      const cy = v.top + v.height / 2;
+      const at = toBoard(cx, cy);
+      sx = want;
+      keepUnder(cx, cy, at);
+    }
+    if (cursor && m === "link") cursor = null;
     mode = m;
     linkFrom = null;
     cutting = false;
@@ -243,7 +257,10 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function place() {
     content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
-    content.style.setProperty("--unzoom", String(1 / zoom)); // loop chips keep their size
+    // Loop chips keep their size when zoomed in and get smaller with the board when zoomed out;
+    // too small to aim at, they take no taps (the board under them moves instead).
+    content.style.setProperty("--unzoom", String(Math.min(1, 1 / zoom)));
+    content.classList.toggle("far", zoom < 0.5);
     placeChips();
     if (menu) placeMenu(false);
     if (writer) placeWriter();
@@ -310,6 +327,7 @@ export function mountBoardRoom(body, app, session, frame) {
     }
     for (const el of [...content.querySelectorAll(".card")]) if (!keep.has(el.dataset.id)) el.remove();
     drawLines();
+    drawCursor();
     drawLassos();
     surface.classList.toggle("lassoing", lassoing());
     drawRail();
@@ -378,8 +396,9 @@ export function mountBoardRoom(body, app, session, frame) {
     });
   }
 
-  function drawLines() {
-    const items = new Map(board.items().map((i) => [i.id, i]));
+  /** Order lines between cards; `moving` ({ id: { x, y } }) holds where cards being dragged stand now. */
+  function drawLines(moving = null) {
+    const items = new Map(board.items().map((i) => [i.id, moving?.[i.id] ? { ...i, ...moving[i.id] } : i]));
     const style = settings().lineColors || "rainbow";
     const mine = colorOf(session.memberId);
     const parts = [];
@@ -888,7 +907,7 @@ export function mountBoardRoom(body, app, session, frame) {
         h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
       menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
-        can && one("card-cut", "분할", () => { cutting = true; draw(); }),
+        can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
         tintButton(),
@@ -955,6 +974,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const ay = r.top + r.height / 2;
     const at = toBoard(ax, ay);
     sx = clamp(sx * f, MIN_SX, MAX_SX);
+    if (mode === "song") songSx = sx;
     keepUnder(ax, ay, at);
     if (soon) drawSoon();
     else draw();
@@ -1043,6 +1063,7 @@ export function mountBoardRoom(body, app, session, frame) {
         const p = at(ev);
         el.style.left = p.x * sx + "px";
         el.style.top = p.y + "px";
+        drawLines({ [id]: p }); // the order lines follow the card while it moves
       };
       const stop = () => {
         el.removeEventListener("pointermove", move);
@@ -1065,7 +1086,10 @@ export function mountBoardRoom(body, app, session, frame) {
         }
         if (start.moved && !readOnly()) return void apply(setItemOps(session.clock, board, id, at(ev)));
         if (cutting && item.kind === "song" && !readOnly()) return void cutAt(id, el, ev.clientX);
+        // A song card tapped again: a line where it was tapped says "here" (▶ plays from it, 분할 cuts there).
+        if (item.kind === "song" && selected === id && !e.target.closest?.(".card-play")) return void setCursor(id, el, ev.clientX);
         if (item.kind === "note" && !readOnly() && (mode === "write" || (selected === id && mode === "all"))) return void write(id);
+        if (cursor && cursor.id !== id) cursor = null;
         selected = id;
         draw();
       };
@@ -1074,6 +1098,7 @@ export function mountBoardRoom(body, app, session, frame) {
         stop();
         el.style.left = start.ix * sx + "px";
         el.style.top = start.iy + "px";
+        drawLines();
       };
       gesture = cancel;
       el.addEventListener("pointermove", move);
@@ -1202,6 +1227,7 @@ export function mountBoardRoom(body, app, session, frame) {
       }
       loopDrag = { id: loop.id, dx, dy };
       drawLassos();
+      drawLines(Object.fromEntries(cards.map((c) => [c.id, { x: c.x + dx, y: c.y + dy }])));
     };
     const move = (ev) => {
       if (!mine(ev)) return;
@@ -1976,8 +2002,54 @@ export function mountBoardRoom(body, app, session, frame) {
     const song = cardsSong([card]);
     if (!(await makePlayer(song, await recordingsOf(song, ctx)))) return;
     solo = id;
-    player.play(0);
+    // From the position line when it stands on this card, else from the start.
+    player.play(cursor?.id === id ? Math.min(cursor.ms, card.data.dur - 1) : 0);
     follow([[id, card.data.dur]]);
+    draw();
+  }
+
+  /** Shows the position line (and its time) on the chosen song card, and a light tick each second while chosen. */
+  function drawCursor() {
+    if (cursor && (cursor.id !== selected || !board.item(cursor.id) || board.item(cursor.id).removed)) cursor = null;
+    for (const el of content.querySelectorAll(".card.song")) {
+      const item = board.item(el.dataset.id);
+      const notes = el.querySelector(".card-notes");
+      if (!item || !notes) continue;
+      const chosen = item.id === selected;
+      notes.classList.toggle("ticks", chosen);
+      if (chosen) notes.style.setProperty("--sec", (100000 / Math.max(1, item.data.dur)) + "%");
+      let line = notes.querySelector(".card-cursor");
+      if (cursor?.id !== item.id) {
+        line?.remove();
+        continue;
+      }
+      if (!line) notes.append(line = h("i", { class: "card-cursor", "aria-hidden": "true" }, h("b", { class: "card-cursor-time" })));
+      line.style.left = (cursor.ms / item.data.dur) * 100 + "%";
+      line.firstChild.textContent = (Math.floor(cursor.ms / 100) / 10).toFixed(1) + "초";
+    }
+  }
+
+  /** The position line on a chosen song card: where the finger came down, in the card's own time. */
+  function setCursor(id, el, clientX) {
+    const item = board.item(id);
+    const area = el.querySelector(".card-notes") || el;
+    const r = area.getBoundingClientRect();
+    if (!item || !r.width) return;
+    const ratio = clamp((clientX - r.left) / r.width, 0, 1);
+    cursor = { id, ms: Math.round(ratio * item.data.dur) };
+    draw();
+  }
+
+  /** 분할 at the position line. */
+  function cutAtMs(id, ms) {
+    const made = splitCardOps(session.clock, board, id, ms, session.memberId);
+    cursor = null;
+    if (!made.ops.length) {
+      toast(root, "끝에 너무 가까워서 자를 수 없어요");
+      return void draw();
+    }
+    apply(made);
+    selected = made.ids[0];
     draw();
   }
 

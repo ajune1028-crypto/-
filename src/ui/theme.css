@@ -1015,7 +1015,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* ---- whiteboard ---------------------------------------------------------------- */
 /* The whiteboard runs under the bars to every edge of the screen (the owner: "엄청 크게…
    무한적으로"); the bars float over it as glass. The room body stays the part in view. */
-.room-body.board-body { position: relative; overflow: visible; }
+.room-body.board-body { position: relative; overflow: visible; z-index: 0; } /* its own layer: nothing of the board rises over the bars */
 .room[data-kind="creative-board"] > :is(.bar, .banner, .room-top, .toolbar, .ink-tools) { position: relative; z-index: 2; }
 /* 그리기 on the whiteboard: a screen-sized canvas beneath the cards, drawn in the board's own frame;
    while the pen is on, the cards let every touch through to it. */
@@ -1067,6 +1067,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-len { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .card-notes { position: relative; height: 3.4rem; margin-top: 0.35rem; border-radius: 0.5rem; background: color-mix(in srgb, var(--c) 8%, transparent); }
+/* A chosen song card shows its seconds (a light tick each), and where it was tapped again: a line with its time. */
+.card-notes.ticks { background-image: repeating-linear-gradient(to right, transparent 0 calc(var(--sec) - 1px), color-mix(in srgb, var(--c) 30%, transparent) calc(var(--sec) - 1px) var(--sec)); }
+.card-cursor { position: absolute; top: -0.35rem; bottom: -0.35rem; z-index: 2; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
+.card-cursor-time { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 0.1rem; padding: 0.05rem 0.3rem; border-radius: 0.35rem; background: var(--ink); color: var(--paper); font: 800 0.62rem var(--font); white-space: nowrap; }
+.board-content.far .lasso-chip, .board-content.far .badge { pointer-events: none; }
 .board-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .board-modes { width: 100%; max-width: 27rem; }
 .board-modes button { padding: 0 0.1rem; letter-spacing: -0.02em; }

@@ -2410,6 +2410,108 @@ scenario("whiteboard: the board runs to every edge of the screen under the float
   await click(page, "#mode-all");
 });
 
+// The owner: "많이 확대 및 축소하거나 옆으로 옮기면서 할 때 배열들이 이상하게… 선들이 이상하게".
+scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노래 stretch belongs to 노래 (other modes show the true places); order lines follow a card while it is dragged; loop chips shrink when zoomed out", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 2; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#mode-link");
+  for (let n = 0; n < 2; n++) { const c = await cardBox(page, n); await page.tap(c.cx, c.cy + 20); await frames(page); }
+  await page.waitFor(`${board}.links().length === 1`);
+  // 노래 stretches the songs sideways; back in 전체 they stand where they really are.
+  await click(page, "#mode-all");
+  const plain = await cardBox(page, 1);
+  await click(page, "#mode-song");
+  await click(page, "#stretch-in");
+  await click(page, "#stretch-in");
+  const stretched = await cardBox(page, 1);
+  assert.ok(stretched.w > plain.w * 1.8, "stretched in 노래: " + plain.w + " → " + stretched.w);
+  await click(page, "#mode-all");
+  await frames(page);
+  const back = await cardBox(page, 1);
+  assert.ok(Math.abs(back.w - plain.w) < 1, "전체 shows the true size: " + JSON.stringify({ plain, back }));
+  await click(page, "#mode-song");
+  await frames(page);
+  assert.ok(Math.abs((await cardBox(page, 1)).w - stretched.w) < 1, "노래 keeps its own stretch");
+  await click(page, "#mode-all");
+  // Zoomed far in, nothing of the cards shows over the bars.
+  const v = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return [r.left + r.width / 2, r.top + 40]; })()`);
+  for (let i = 0; i < 16; i++) await page.wheel(v[0], v[1], -200);
+  await frames(page);
+  const over = await page.eval(`(() => { const out = []; for (const el of document.querySelectorAll("#room-top button, .room > .bar button")) { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); if (hit && hit.closest(".board")) out.push(el.id || el.textContent); } return out; })()`);
+  assert.deepEqual(over, [], "the bars stay on top of the board");
+  // Zoomed out, a loop's chip gets smaller with the board.
+  for (let i = 0; i < 30; i++) await page.wheel(v[0], v[1] + 200, 200);
+  await frames(page);
+  // An order line follows a card while it is dragged.
+  for (let i = 0; i < 10; i++) await page.wheel(v[0], v[1] + 200, -200);
+  await frames(page);
+  await click(page, "#mode-move");
+  await click(page, "#board-fit");
+  await click(page, "#mode-all");
+  await frames(page);
+  const card = await cardBox(page, 0);
+  const d0 = await page.eval(`document.querySelector(".board-lines path").getAttribute("d")`);
+  await page.press(card.cx, card.cy + 20);
+  for (let i = 1; i <= 6; i++) await page.moveTo(card.cx, card.cy + 20 + i * 15);
+  const d1 = await page.eval(`document.querySelector(".board-lines path").getAttribute("d")`);
+  assert.notEqual(d1, d0, "the line moved with the card before it was let go");
+  await page.release(card.cx, card.cy + 110);
+  await page.waitFor(`${board}.items().some((i) => i.y > 40)`);
+});
+
+// The owner: "두번째나 두번 이상인 것들은 내가 터치한 그 부분의 초로 가게 돼… 세로선이… 거기서 재생하면 거기서부터… 분할을 누르면 분할".
+scenario("whiteboard song card: the first tap shows its menu (▶ first); a second tap puts a line with its time where tapped; ▶ plays from there and the menu stays; 분할 cuts there", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  await click(page, "#my-songs");
+  await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+  await click(page, "#song-drawer .song-pick");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
+  await click(page, "#mode-all");
+  const board = `window.__app.session.doc("board")`;
+  const card = await cardBox(page, 0);
+  const notesBox = await page.eval(`(() => { const r = document.querySelector(".card.song .card-notes").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await page.tap(notesBox.x + notesBox.w * 0.5, notesBox.y + notesBox.h / 2);
+  await page.waitFor(`${q("#card-menu")} && ${q("#card-menu button")}.id === "card-play"`);
+  assert.ok(!(await page.eval(`document.querySelector(".card.song .card-cursor")`)), "no line after the first tap");
+  // A second tap: a line where tapped, with its time.
+  await page.tap(notesBox.x + notesBox.w * 0.4, notesBox.y + notesBox.h / 2);
+  await page.waitFor(q(".card.song .card-cursor"));
+  const at = await page.eval(`(() => { const c = document.querySelector(".card.song .card-cursor").getBoundingClientRect(); return c.left; })()`);
+  assert.ok(Math.abs(at - (notesBox.x + notesBox.w * 0.4)) < 3, "the line is where the finger was");
+  const dur = await page.eval(`${board}.items()[0].data.dur`);
+  const said = await text(page, ".card.song .card-cursor-time");
+  assert.ok(/^\d+\.\d초$/.test(said) && Math.abs(parseFloat(said) - (dur * 0.4) / 1000) <= 0.15, "its time: " + said + " of " + dur + " ms");
+  assert.ok(await page.eval(`!!${q("#card-menu")}`), "the menu is still there");
+  // ▶ plays from the line, and the menu stays while it plays.
+  await click(page, "#card-menu #card-play");
+  await page.waitFor(`${q("#card-menu #card-play")}?.textContent === "■ 멈춤"`);
+  const line = await page.eval(`parseFloat(document.querySelector(".card.song .card-line")?.style.left || "-1")`);
+  assert.ok(line >= 39, "played from the line, not from the start: " + line);
+  await click(page, "#card-menu #card-play");
+  await page.waitFor(`${q("#card-menu #card-play")}?.textContent === "▶ 듣기"`);
+  // 분할 cuts at the line.
+  await click(page, "#card-menu #card-cut");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 2`);
+  const parts = await page.eval(`${board}.items().filter((i) => i.kind === "song").map((i) => i.data.dur).sort((a, b) => a - b)`);
+  assert.ok(Math.abs(parts[0] - dur * 0.4) < dur * 0.05, "cut at the line: " + JSON.stringify(parts) + " of " + dur);
+  // Without a line (the part just made is chosen, no line yet), 분할 asks for a tap, and that tap cuts.
+  await page.waitFor(`${q("#card-menu #card-cut")} && !document.querySelector(".card-cursor")`);
+  await click(page, "#card-menu #card-cut");
+  const chosen = await page.eval(`(() => { const r = document.querySelector(".card.chosen .card-notes").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.tap(chosen[0], chosen[1]);
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 3`);
+});
+
 // The owner: "올가미 기능에서 색깔 바꾸기… 막 여러가지… 올가미기능은 많은걸 할 수 있게".
 scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop and every card in it; 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
@@ -2692,11 +2794,12 @@ scenario("whiteboard 노래 모드: cut a card where it is tapped, mute it, edit
   await page.waitFor(`${board}.items()[0].muted === true && document.querySelector(".card.song").classList.contains("muted")`);
   await click(page, "#card-mute");
   await page.waitFor(`${board}.items()[0].muted === false`);
-  // 분할: then tap the card where to cut, a little left of the middle.
+  // 분할 cuts at the position line: the chosen card tapped a little left of the middle puts the line there.
   const dur = await page.eval(`${board}.items()[0].data.dur`);
-  await click(page, "#card-cut");
   const box = await cardBox(page);
   await page.tap(box.x + box.w * 0.4, box.cy);
+  await page.waitFor(q(".card.song .card-cursor"));
+  await click(page, "#card-cut");
   await page.waitFor(`${board}.items().length === 2`);
   const durs = await page.eval(`${board}.items().map((i) => i.data.dur).sort((a, b) => a - b)`);
   assert.equal(durs[0] + durs[1], dur, "the two parts make the whole");
