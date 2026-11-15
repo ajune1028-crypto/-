@@ -4159,6 +4159,28 @@ scenario("song 줄 머리: each row has a head at the left edge - who sang on it
   assert.equal(await page.eval(`window.__app.player.song().layout().length`), 2, "all rows again");
 });
 
+scenario("song 옆 패널: on a wide screen lying down the chosen clip's name and actions stand at the side, the timeline keeps the rest; another clip is chosen with one tap; with nothing chosen the side says what the song is", async ({ open, out, fixtures }) => {
+  const page = await open({ width: 1180, height: 820 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await tapEmptyRow(page);
+  await tapTime(page, 0);
+  await importSound(page, fixtures.doremi, 2);
+  await page.waitFor(q("#song-side #clip-menu"));
+  const m = await page.eval(`(() => { const t = document.getElementById("timeline").getBoundingClientRect(), s = document.getElementById("song-side").getBoundingClientRect(); return { tRight: t.right, sLeft: s.left, info: document.getElementById("clip-info")?.textContent || "" }; })()`);
+  assert.ok(m.tRight <= m.sLeft, "the timeline ends before the side panel: " + JSON.stringify(m));
+  assert.match(m.info, /doremi/, "the clip's name: " + m.info);
+  const ids = await page.eval(`window.__app.session.doc("song").layout().map((c) => c.id)`);
+  const chosen = () => page.eval(`document.querySelector(".clip.selected")?.dataset.id || null`);
+  const other = (await chosen()) === ids[0] ? ids[1] : ids[0];
+  await click(page, `.clip[data-id="${other}"]`);
+  await page.waitFor(`document.querySelector(".clip.selected")?.dataset.id === ${JSON.stringify(other)}`);
+  await page.shot(out("song-side.png"));
+  await tapEmptyRow(page);
+  await page.waitFor(`!document.querySelector(".clip.selected") && ${q("#side-summary")}`);
+  assert.match(await text(page, "#side-summary"), /클립 2개/);
+});
+
 scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
   const page = await open({ width: 700, height: 900 });
   await createBoard(page);

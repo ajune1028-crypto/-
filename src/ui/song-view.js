@@ -472,18 +472,20 @@ export class Timeline {
     this.ruler.addEventListener("pointercancel", endScrub);
 
     // An empty spot: a tap moves the playhead there and picks that row.
-    this.lanes.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".clip, .row-head") || this.fingers.pinching) return;
+    // (Below the rows counts too: the whole empty part of the timeline, not the time bar.)
+    const notEmpty = (t) => t.closest(".clip, .row-head, .ruler");
+    this.content.addEventListener("pointerdown", (e) => {
+      if (notEmpty(e.target) || this.fingers.pinching) return;
       down = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() };
     });
-    this.lanes.addEventListener("pointerup", (e) => {
-      if (!down || e.pointerId !== down.id || e.target.closest(".clip, .row-head")) return;
+    this.content.addEventListener("pointerup", (e) => {
+      if (!down || e.pointerId !== down.id || notEmpty(e.target)) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
       if (moved > SLOP_PX) return;
       this.on.tapEmpty(this.msAt(e.clientX), this.rowAt(e.clientY));
     });
-    this.lanes.addEventListener("pointercancel", () => { down = null; });
+    this.content.addEventListener("pointercancel", () => { down = null; });
 
     // Two fingers: spreading sideways zooms time, spreading up and down makes rows taller.
     let pinch = null;

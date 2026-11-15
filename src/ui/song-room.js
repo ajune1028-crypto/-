@@ -145,6 +145,14 @@ export function mountSongRoom(body, app, session, frame) {
   const status = h("div", { class: "song-status", id: "song-status", role: "status", hidden: true });
   const start = h("div", { class: "song-start", id: "song-start", hidden: true });
   body.append(status, start);
+  // 옆 패널 (the owner chose it for an iPad lying down): on a wide screen the chosen clip's words
+  // and actions stand at the side instead of floating over the rows; with nothing chosen, what the
+  // song is. The timeline keeps the rest of the width, so nothing is covered.
+  const side = h("aside", { class: "song-side", id: "song-side", "aria-label": "고른 클립" });
+  body.append(side);
+  const wideSide = matchMedia("(min-width: 1000px) and (min-height: 600px) and (orientation: landscape)");
+  const onWide = () => { if (alive) { menu?.stopGuard?.(); menu?.remove(); menu = null; draw(); } };
+  wideSide.addEventListener?.("change", onWide);
 
   const readOnly = () => !!app.transport?.readOnly || !!session.transport.readOnly;
   const mic = micSupport();
@@ -301,6 +309,7 @@ export function mountSongRoom(body, app, session, frame) {
     start.hidden = !showStart;
     drawButtons();
     placeMenu();
+    drawSide();
     editor?.refresh();
   }
 
@@ -1046,14 +1055,18 @@ export function mountSongRoom(body, app, session, frame) {
     if (!box) return;
     const locked = clip.locked || readOnly();
     const next = song.nextOnRow(clip.id);
+    const docked = wideSide.matches;
     if (!menu) {
-      menu = h("div", { class: "clip-menu", id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
-      body.append(menu);
+      menu = h("div", { class: "clip-menu" + (docked ? " side" : ""), id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
+      (docked ? side : body).append(menu);
       // A tap anywhere else only puts the menu away; the chosen clip, the time bar (to place
-      // the playhead for 분할) and the tool bars still work.
-      menu.stopGuard = closeOnOutside(
-        (t) => menu?.contains(t) || !!document.querySelector(`.clip[data-id="${selected}"]`)?.contains(t) || !!t.closest?.("#ruler"),
-        () => select(null), menu);
+      // the playhead for 분할) and the tool bars still work. At the side it covers nothing, so a
+      // tap elsewhere does what it does (another clip is chosen at once).
+      if (!docked) {
+        menu.stopGuard = closeOnOutside(
+          (t) => menu?.contains(t) || !!document.querySelector(`.clip[data-id="${selected}"]`)?.contains(t) || !!t.closest?.("#ruler"),
+          () => select(null), menu);
+      }
     }
     // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
     const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
@@ -1089,6 +1102,7 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly()),
       item("clip-delete", "삭제", () => deleteClip(clip.id), !locked),
     ].filter(Boolean));
+    if (docked) return;
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
     let left = box.left - area.left + box.width / 2 - w / 2;
@@ -1097,6 +1111,27 @@ export function mountSongRoom(body, app, session, frame) {
     if (top < 4) top = box.bottom - area.top + 6;
     menu.style.left = left + "px";
     menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
+  }
+
+  /** The side panel with nothing chosen: what the song is, and how to see a clip here. */
+  function drawSide() {
+    if (!wideSide.matches) return;
+    let rest = side.querySelector("#side-summary");
+    if (menu) return void rest?.remove();
+    if (!rest) {
+      rest = h("div", { class: "side-summary", id: "side-summary" });
+      side.prepend(rest);
+    }
+    const clips = song.layout();
+    const people = [...new Set(clips.map((c) => c.by))].map((by) => session.room.member(by)?.name).filter(Boolean);
+    const key = [clips.length, song.rowCount(), Math.round(song.end() / 100), people.join()].join("|");
+    if (rest.dataset.key === key) return;
+    rest.dataset.key = key;
+    rest.replaceChildren(
+      h("p", { class: "side-title", text: "이 노래" }),
+      h("p", { class: "side-facts", text: clips.length ? `클립 ${clips.length}개 · 줄 ${Math.max(1, song.rowCount() - 1)}개 · ${timeText(song.end())}` : "아직 클립이 없어요" }),
+      people.length > 0 && h("p", { class: "side-facts", text: people.join(", ") + "이(가) 불렀어요" }),
+      h("p", { class: "help", text: "클립을 누르면 그 클립의 이름과 할 일이 여기에 나와요." }));
   }
 
   /** 보내기: puts the clip on a whiteboard as a song card, straight into that room. */
@@ -1338,6 +1373,7 @@ export function mountSongRoom(body, app, session, frame) {
     },
     close() {
       alive = false;
+      wideSide.removeEventListener?.("change", onWide);
       menu?.stopGuard?.();
       stopFrames();
       clearTimeout(presenceTimer);
