@@ -1228,3 +1228,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 녹음 on home: the takes are kept in 레퍼런스's 녹음, to send to a room when wanted. */
 .rec-pill { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 800; }
 .rec-count { min-width: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 12%, transparent); font-size: 0.72rem; text-align: center; }
+
+/* 올가미: what it takes (곡·글·그림·전체), its neon when it closes, and 노래 working on its part only. */
+.lasso-chip .lasso-kind { background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: 0.78rem; }
+#lasso-kinds button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.board-loops path.neon { stroke-dasharray: none; stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--lc, var(--accent))) drop-shadow(0 0 9px var(--lc, var(--accent))); }
+.board-loops path.drawing.near { filter: drop-shadow(0 0 5px var(--lc, var(--accent))); stroke-width: 3; }
+.card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s; }
+.board-content.focus .card:not(.in-focus) { opacity: 0.3; }

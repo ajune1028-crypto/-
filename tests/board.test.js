@@ -337,3 +337,13 @@ test("잇기 branches: one card may lead to several (the later line comes after,
   board.apply({ t: "link", id: clock.next(), a: e.id, b: d.id, by: "m2" }); // ... but if it comes from elsewhere it is left out
   assert.deepEqual(playOrder(board).map((i) => i.id), [a.id, b.id, d.id, c.id, e.id]);
 });
+
+test("올가미 holds drawings too: a stroke is inside when its middle is (strokes count in hundredths of a 16 px rem)", async () => {
+  const { strokesInLoop } = await import("../src/core/board.js");
+  const unit = 100 / 16;
+  const loop = [0, 0, 400, 0, 400, 300, 0, 300];
+  const inside = { id: "s1", pts: [100 * unit, 100 * unit, 50, 200 * unit, 120 * unit, 50] };
+  const outside = { id: "s2", pts: [500 * unit, 100 * unit, 50, 600 * unit, 120 * unit, 50] };
+  const across = { id: "s3", pts: [350 * unit, 50 * unit, 50, 480 * unit, 60 * unit, 50] }; // its middle (415) is outside
+  assert.deepEqual(strokesInLoop([inside, outside, across], loop, unit), ["s1"]);
+});

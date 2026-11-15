@@ -2480,6 +2480,96 @@ scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노�
   await page.waitFor(`${board}.items().some((i) => i.y > 40)`);
 });
 
+// The owner: "곡, 텍스트, 그림, 전체… 순서 정리… 붙여넣기… 처음 부분과 끝부분이 엄청 미세하게 가깝다거나… 다른 손가락으로
+// 한 번 터치… 왼쪽 딸깍을 누르고 있다가 오른쪽 딸깍… 빛나면서 네온 같이… 노래 모드에서 그 올가미 선택한 부분만".
+scenario("whiteboard 올가미 closing and kinds: brought back to its start it closes before the lift and shines; a second finger's tap and a right click close it too; 곡·글·그림·전체 decide what 지우기 and a drag take (drawings move with it); 붙여넣기 puts what was copied inside; in 노래 only its part plays", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  await click(page, "#my-songs");
+  await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+  await click(page, "#song-drawer .song-pick");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#mode-all");
+  await click(page, "#add-note");
+  await writeMemo(page, "가사");
+  // A drawing beside them.
+  await click(page, "#board-pen");
+  const v = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); const c = [...document.querySelectorAll(".card")].map((e) => e.getBoundingClientRect()); return { l: Math.min(...c.map((r) => r.left)), t: Math.min(...c.map((r) => r.top)), r: Math.max(...c.map((r) => r.right)), b: Math.max(...c.map((r) => r.bottom)), bottom: r.bottom }; })()`);
+  await page.press(v.l + 10, v.b + 30);
+  for (let i = 1; i <= 6; i++) await page.moveTo(v.l + 10 + i * 15, v.b + 30 + (i % 2) * 8);
+  await page.release(v.l + 100, v.b + 30);
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  await click(page, "#board-pen");
+  await click(page, "#mode-lasso");
+  // Round everything, coming right back to the start: it closes (and shines) before the finger lifts.
+  const box = { l: v.l - 16, t: v.t - 16, r: Math.min(v.r + 16, 520), b: v.b + 60 };
+  const ring = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 4]];
+  await page.touch("start", [ring[0]]);
+  for (let k = 1; k < ring.length; k++) for (let i = 1; i <= 8; i++) await page.touch("move", [[ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * i) / 8, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * i) / 8]]);
+  await page.waitFor(`${board}.lassos().length === 1`);
+  assert.ok(await page.eval(`!!document.querySelector(".board-loops path.neon")`), "it shines when it closes");
+  await page.touch("end");
+  const loop = await page.eval(`${board}.lassos()[0].id`);
+  assert.equal(await text(page, `[id="lasso-kind-${loop}"]`), "전체 3", "전체: the song, the text and the drawing");
+  // 글 only: 지우기 takes the text and nothing else.
+  await click(page, `[id="lasso-kind-${loop}"]`);
+  await click(page, '#lasso-kinds [data-loop-kind="note"]');
+  await page.waitFor(`${q(`[id="lasso-kind-${loop}"]`)}.textContent === "글 1"`);
+  assert.ok(await page.eval(`${q(`[id="lasso-play-${loop}"]`)}.hidden`), "no ▶ while it takes text only");
+  await click(page, `[id="lasso-more-${loop}"]`);
+  await click(page, "#lasso-delete");
+  await page.waitFor(`${board}.items().length === 1 && window.__app.session.doc("k:board").strokes().length === 1`);
+  // 그림 only: a drag inside moves the drawing, not the song card.
+  await click(page, `[id="lasso-kind-${loop}"]`);
+  await click(page, '#lasso-kinds [data-loop-kind="draw"]');
+  const songY = await page.eval(`${board}.items()[0].y`);
+  const x0 = await page.eval(`window.__app.session.doc("k:board").strokes()[0].pts[0]`);
+  const inside = [box.l + 30, box.b - 10];
+  await page.touch("start", [inside]);
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[inside[0] + i * 10, inside[1]]]);
+  await page.touch("end");
+  await page.waitFor(`window.__app.session.doc("k:board").strokes()[0].pts[0] !== ${x0}`);
+  assert.equal(await page.eval(`${board}.items()[0].y`), songY, "the song card stayed");
+  // 붙여넣기: a copied song goes inside the loop, and the loop goes round it.
+  await click(page, `[id="lasso-kind-${loop}"]`);
+  await click(page, '#lasso-kinds [data-loop-kind="song"]');
+  const lid = await page.eval(`${board}.lassos()[0].id`);
+  await click(page, `[id="lasso-more-${lid}"]`);
+  await click(page, "#lasso-copy");
+  await click(page, `[id="lasso-more-${lid}"]`);
+  await click(page, "#lasso-paste");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 2 && ${board}.lassos().length === 1`);
+  const now = await page.eval(`${board}.lassos()[0].id`);
+  await page.waitFor(`document.querySelector('[id="lasso-play-${now}"]')?.textContent.startsWith("▶ 2곡")`);
+  // In 노래, the loop's part only: what is outside dims.
+  await click(page, "#mode-song");
+  await page.waitFor(`document.getElementById("board-content").classList.contains("focus")`);
+  await page.waitFor(q("#song-focus"));
+  await click(page, "#song-focus");
+  await page.waitFor(`!document.getElementById("board-content").classList.contains("focus")`);
+  // A second finger's quick tap closes a loop being drawn while the first finger is still down.
+  await click(page, "#mode-lasso");
+  const empty = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return [r.left + 50, r.bottom - 120]; })()`);
+  const arc = [];
+  for (let i = 1; i <= 8; i++) arc.push([empty[0] + i * 14, empty[1] - (i <= 4 ? i * 16 : (8 - i) * 16)]);
+  await page.touch("start", [empty]);
+  for (const pt of arc) await page.touch("move", [pt]);
+  const last = arc[arc.length - 1];
+  await page.touch("start", [last, [last[0] + 120, last[1] - 80]]);
+  await page.touchIds("end", [[1, last[0] + 120, last[1] - 80]]); // the second finger lifts where it came down; the first stays
+  await page.waitFor(`${board}.lassos().length === 2`, 3000);
+  await page.touch("end");
+  // A right click while the left button is held closes one too.
+  const m0 = [empty[0] + 220, empty[1]];
+  await page.press(m0[0], m0[1]);
+  for (let i = 1; i <= 8; i++) await page.moveTo(m0[0] + i * 12, m0[1] - (i <= 4 ? i * 14 : (8 - i) * 14));
+  await page.rightWhileLeft(m0[0] + 96, m0[1]);
+  await page.waitFor(`${board}.lassos().length === 3`, 3000);
+  await page.release(m0[0] + 96, m0[1]);
+});
+
 // The owner: "두번째나 두번 이상인 것들은 내가 터치한 그 부분의 초로 가게 돼… 세로선이… 거기서 재생하면 거기서부터… 분할을 누르면 분할".
 scenario("whiteboard song card: the first tap shows its menu (▶ first); a second tap puts a line with its time where tapped; ▶ plays from there and the menu stays; 분할 cuts there", async ({ open, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
@@ -2526,7 +2616,7 @@ scenario("whiteboard song card: the first tap shows its menu (▶ first); a seco
 });
 
 // The owner: "올가미 기능에서 색깔 바꾸기… 막 여러가지… 올가미기능은 많은걸 할 수 있게".
-scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop and every card in it; 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
+scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop only (the cards keep their own); 순서 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2555,11 +2645,12 @@ scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop 
   await page.touch("end");
   await page.waitFor(`${board}.lassos().length === 1`);
   const first = await page.eval(`${board}.lassos()[0].id`);
-  // 색: the loop and all three cards.
+  // 색: the loop's own colour; the cards keep theirs ("내 고유색을 바꾸는 게 아니라 거기 색깔을").
   await click(page, `[id="lasso-more-${first}"]`);
   await click(page, "#lasso-tint");
   await click(page, '#lasso-menu [data-tint="5"]');
-  await page.waitFor(`${board}.lassos()[0].tint === 5 && ${board}.items().length === 3 && ${board}.items().every((i) => i.tint === 5)`);
+  await page.waitFor(`${board}.lassos()[0].tint === 5 && ${board}.items().length === 3`);
+  assert.deepEqual(await page.eval(`${board}.items().map((i) => i.tint ?? null).sort()`), [2, null, null], "the cards keep their own colours");
   assert.ok(await page.eval(`document.querySelector('.board-loops path[data-lasso="${first}"]').getAttribute("style")?.includes("--lc")`), "the loop is drawn in its colour");
   // 정리: one row, tops even, 24 apart, inside a new loop of the same colour.
   await click(page, `[id="lasso-more-${first}"]`);

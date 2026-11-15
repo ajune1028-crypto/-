@@ -153,6 +153,25 @@ export function eraseOps(clock, ink, strokeId) {
   return { ops: [{ t: "srm", id: clock.next(), s: strokeId, n: stroke.rm + 1 }], atoms: [{ k: "ink-", s: strokeId }] };
 }
 
+/**
+ * Strokes moved by (dx, dy) stroke units, as the 올가미 moves what is inside it: each goes and comes
+ * back further along (the same colour, width and brush). One undo step puts them back.
+ */
+export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
+  const ops = [];
+  const atoms = [];
+  for (const id of ids) {
+    const s = ink.get(id);
+    if (!s || s.rm % 2 === 1) continue;
+    const gone = eraseOps(clock, ink, id);
+    const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, by, brush: s.b || "pen" });
+    ops.push(...gone.ops, ...made.ops);
+    atoms.push(...gone.atoms, ...made.atoms);
+  }
+  return { ops, atoms };
+}
+
 /** Undo or redo of drawing and erasing, judged against the drawing as it is now. */
 export function invertInkOps(ink, clock, atoms, dir) {
   clock.atLeast(ink.maxN);

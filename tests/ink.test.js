@@ -105,3 +105,19 @@ test("the area eraser is a stroke of its own: it rubs out what lies under it, an
   ink.applyAll(invertInkOps(ink, clock, rub.atoms, "undo"));
   assert.deepEqual(ink.strokes().map((s) => s.b), ["pen"]);
 });
+
+test("올가미 moves drawings: a stroke moved is the same stroke further along (one undo step puts it back)", async () => {
+  const { InkDoc, strokeOps, moveStrokesOps, invertInkOps } = await import("../src/core/ink.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const ink = new InkDoc();
+  const clock = new Clock("a");
+  const commit = (made) => { for (const op of made.ops) ink.apply(op); return made; };
+  commit(strokeOps(clock, ink, { pts: [0, 0, 50, 100, 0, 50, 200, 0, 50], color: "blue", width: 2, by: "m1", brush: "marker" }));
+  const [s] = ink.strokes();
+  const moved = commit(moveStrokesOps(clock, ink, [s.id], 30, -20, "m1"));
+  assert.equal(ink.strokes().length, 1);
+  const now = ink.strokes()[0];
+  assert.deepEqual([now.pts.slice(0, 2), now.c, now.w, now.b], [[30, -20], "blue", 2, "marker"], "moved, the same colour, width and brush");
+  for (const op of invertInkOps(ink, clock, moved.atoms, "undo")) ink.apply(op);
+  assert.deepEqual(ink.strokes().map((x) => x.id), [s.id], "undo: the stroke where it was");
+});

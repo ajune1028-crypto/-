@@ -31,9 +31,9 @@ import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
-  tintLassoOps, rowLayout, boxLoop,
+  tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
-import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
+import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
@@ -79,6 +79,12 @@ export function mountBoardRoom(body, app, session, frame) {
   const lassoing = () => mode === "lasso"; // 올가미 (its own mode): one finger draws loops
   let soloLasso = null; // the loop whose cards are playing
   const repeating = new Set(); // loops whose ▶ goes round again (반복; this device)
+  // What a loop's actions take (the owner: "곡, 텍스트, 그림, 전체"): "all", "song", "note" (글) or
+  // "draw" (그림: drawings and photos); this device, 전체 at first.
+  const loopKinds = new Map();
+  let focusLoop = null; // the loop last used: in 노래 only its part is played and worked on
+  let focusOff = false; // 노래's 올가미 부분만 turned off
+  let glowLoop = null; // a loop just closed: it shines like neon a moment, and what it holds with it
   let loopDrag = null; // a loop being dragged by its chip: { id, dx, dy } on the board
   let chipDragged = false;
   let player = null;
@@ -328,6 +334,7 @@ export function mountBoardRoom(body, app, session, frame) {
     for (const el of [...content.querySelectorAll(".card")]) if (!keep.has(el.dataset.id)) el.remove();
     drawLines();
     drawCursor();
+    drawLoopMarks();
     drawLassos();
     surface.classList.toggle("lassoing", lassoing());
     drawRail();
@@ -459,7 +466,7 @@ export function mountBoardRoom(body, app, session, frame) {
   function drawLassos() {
     const all = board.lassos();
     const shift = (l) => (loopDrag?.id === l.id ? [loopDrag.dx, loopDrag.dy] : [0, 0]);
-    const html = all.map((l) => `<path data-lasso="${l.id}"${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
+    const html = all.map((l) => `<path data-lasso="${l.id}"${l.id === glowLoop ? ` class="neon"` : ""}${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
     if (loopGroup.dataset.html !== html) {
       loopGroup.dataset.html = html;
       loopGroup.innerHTML = html;
@@ -490,8 +497,15 @@ export function mountBoardRoom(body, app, session, frame) {
       const sounding = soloLasso === l.id && !!player?.playing;
       const play = chip.querySelector(".lasso-play");
       const text = (sounding ? "■ 멈춤" : `▶ ${count}곡`) + (repeating.has(l.id) ? " ↻" : "");
-      if (play.textContent !== text || !chip.sizes) {
+      const k = kindOf(l.id);
+      const held = loopHolds(l.id, k);
+      const kindText = `${KIND_NAMES[k]} ${held.cards.length + held.strokes.length}`;
+      const kindEl = chip.querySelector(".lasso-kind");
+      const noPlay = k === "note" || k === "draw";
+      if (play.textContent !== text || kindEl.textContent !== kindText || play.hidden !== noPlay || !chip.sizes) {
         play.textContent = text;
+        kindEl.textContent = kindText;
+        play.hidden = noPlay;
         // Its size lying down and standing up, for placeChips.
         const was = chip.classList.contains("side");
         chip.classList.remove("side");
@@ -556,10 +570,13 @@ export function mountBoardRoom(body, app, session, frame) {
       apply(removeLassoOps(session.clock, board, id));
     } });
     const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 레퍼런스", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
-    const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, more, remove);
+    // 곡·글·그림·전체: what the loop's actions take.
+    const kind = h("button", { type: "button", class: "lasso-kind", id: "lasso-kind-" + id, "aria-label": "올가미가 다룰 것 (곡, 글, 그림, 전체)", onclick: () => { if (!chipDragged) openKinds(id, chip); } });
+    const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, kind, more, remove);
     chip.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       chipDragged = false;
+      focusLoop = id;
       if (fingers.pinching || readOnly()) return;
       const start = { x: e.clientX, y: e.clientY };
       const mine = (ev) => ev.pointerId === e.pointerId;
@@ -608,14 +625,14 @@ export function mountBoardRoom(body, app, session, frame) {
    */
   function openLassoMenu(id, chip) {
     closeExtra?.();
-    const inside = () => itemsInLoop(board, id);
+    focusLoop = id;
     const one = (bid, text, onclick) => h("button", { type: "button", id: bid, text, onclick: (e) => { e.stopPropagation(); close(); onclick(); } });
     const can = !readOnly();
     const box = h("div", { class: "clip-menu card-menu lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미 메뉴" });
     const fill = (view) => {
       const loop = board.lassos().find((l) => l.id === id);
-      const cards = inside();
-      const songs = cards.filter((c) => c.kind === "song");
+      const kind = kindOf(id);
+      const songs = kind === "all" || kind === "song" ? itemsInLoop(board, id).filter((c) => c.kind === "song") : [];
       if (view === "tints") {
         const now = loop?.tint ?? null;
         box.replaceChildren(
@@ -624,16 +641,19 @@ export function mountBoardRoom(body, app, session, frame) {
           one("lasso-tint-none", "기본", () => tintLasso(id, null)));
         return;
       }
+      const held = loopHolds(id);
+      const pasteable = !!(clipboardItem(app.store, "board-items") || clipboardItem(app.store, "song-clip"));
       box.replaceChildren(...[
         can && h("button", { type: "button", id: "lasso-tint", onclick: (e) => { e.stopPropagation(); fill("tints"); place(); } },
           h("span", { class: "menu-swatch", style: { background: loop?.tint != null ? memberColor(loop.tint, currentTheme()) : "var(--accent)" } }), "색"),
-        can && cards.length > 0 && one("lasso-tidy", "정리", () => tidyLasso(id)),
+        can && held.cards.length > 0 && one("lasso-tidy", "순서 정리", () => tidyLasso(id)),
         can && songs.length > 1 && one("lasso-chain", "잇기", () => chainLasso(id)),
         can && songs.length > 0 && one("lasso-mute", songs.some((c) => !c.muted) ? "음소거" : "소리 켜기", () => muteLasso(id)),
         songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
-        one("lasso-copy", "복사", () => copyLasso(inside())),
-        one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(inside())),
-        can && one("lasso-delete", "지우기", () => deleteLasso(inside())),
+        can && pasteable && one("lasso-paste", "붙여넣기", () => pasteIntoLoop(id)),
+        one("lasso-copy", "복사", () => copyLasso(loopHolds(id))),
+        one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(loopHolds(id).cards)),
+        can && one("lasso-delete", "지우기", () => deleteLasso(loopHolds(id))),
       ].filter(Boolean));
     };
     const place = () => {
@@ -671,17 +691,54 @@ export function mountBoardRoom(body, app, session, frame) {
     draw();
   }
 
-  /** 색: the loop and every card inside take one people colour (null: each its own again). */
+  const KIND_NAMES = { all: "전체", song: "곡", note: "글", draw: "그림" };
+  const kindOf = (id) => loopKinds.get(id) || "all";
+
+  /** What a loop holds of a kind: { cards, strokes } (drawings count for 그림 and 전체). */
+  function loopHolds(id, kind = kindOf(id)) {
+    const loop = board.lassos().find((l) => l.id === id);
+    if (!loop) return { cards: [], strokes: [] };
+    const cards = itemsInLoop(board, id).filter((c) => kind === "all" || (kind === "song" && c.kind === "song") || (kind === "note" && c.kind === "note") || (kind === "draw" && c.kind === "photo"));
+    const strokes = kind === "all" || kind === "draw" ? strokesInLoop(session.doc(INK_DOC).strokes(), loop.pts, INK_UNIT) : [];
+    return { cards, strokes };
+  }
+
+  /** The 곡·글·그림·전체 choice by a loop's chip, each with how many it holds. */
+  function openKinds(id, chip) {
+    closeExtra?.();
+    const box = h("div", { class: "clip-menu card-menu lasso-menu", id: "lasso-kinds", role: "toolbar", "aria-label": "올가미가 다룰 것" },
+      ["song", "note", "draw", "all"].map((k) => {
+        const held = loopHolds(id, k);
+        return h("button", { type: "button", data: { loopKind: k }, "aria-pressed": String(kindOf(id) === k), text: `${KIND_NAMES[k]} ${held.cards.length + held.strokes.length}`,
+          onclick: (e) => { e.stopPropagation(); close(); loopKinds.set(id, k); focusLoop = id; draw(); } });
+      }));
+    body.append(box);
+    const area = body.getBoundingClientRect();
+    const r = chip.getBoundingClientRect();
+    const room = rail.getBoundingClientRect().left - area.left - 6;
+    box.style.left = Math.max(6, Math.min(room - box.offsetWidth, r.left - area.left)) + "px";
+    box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.bottom - area.top + 6)) + "px";
+    let open = true;
+    const stopGuard = closeOnOutside((t) => box.contains(t), () => close(), box);
+    function close() {
+      if (!open) return;
+      open = false;
+      stopGuard();
+      box.remove();
+      if (closeExtra === close) closeExtra = null;
+    }
+    closeExtra = close;
+  }
+
+  /** 색: the loop's own colour (the cards keep theirs: "내 고유색을 바꾸는 게 아니라 거기 색깔을"). */
   function tintLasso(id, tint) {
-    const made = [tintLassoOps(session.clock, board, id, tint)];
-    for (const card of itemsInLoop(board, id)) if ((card.tint ?? null) !== tint) made.push(setItemOps(session.clock, board, card.id, { tint }));
-    applyAll(made);
+    applyAll([tintLassoOps(session.clock, board, id, tint)]);
   }
 
   /** 정리: the cards inside in one row from the left, tops even, and the loop drawn again round them. */
   function tidyLasso(id) {
     const loop = board.lassos().find((l) => l.id === id);
-    const cards = itemsInLoop(board, id);
+    const cards = loopHolds(id).cards;
     if (!loop || !cards.length) return;
     // Measured as they stand on screen (song cards stretch with sx), then put back in board units.
     const boxes = cards.map((c) => {
@@ -716,6 +773,8 @@ export function mountBoardRoom(body, app, session, frame) {
       }
       if (repeating.delete(id)) repeating.add(again.id);
       if (soloLasso === id) soloLasso = again.id;
+      if (loopKinds.has(id)) loopKinds.set(again.id, loopKinds.get(id));
+      if (focusLoop === id) focusLoop = again.id;
     }
     record(atoms);
     draw();
@@ -746,28 +805,94 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   /** The cards as they stand relative to each other, ready to be put down elsewhere. */
-  function copyLasso(items) {
-    if (!items.length) return void toast(root, "올가미 안에 카드가 없어요");
-    const x0 = Math.min(...items.map((i) => i.x));
-    const y0 = Math.min(...items.map((i) => i.y));
+  /** The cards (and drawings) as they stand to each other, ready to be put down elsewhere. */
+  function copyLasso({ cards: items, strokes = [] }) {
+    const ink = session.doc(INK_DOC);
+    const lines = strokes.map((sid) => ink.get(sid)).filter(Boolean);
+    if (!items.length && !lines.length) return void toast(root, "올가미 안에 고른 것이 없어요");
+    // The group's corner, in board pixels (drawings count in INK_UNITs).
+    const xs = [...items.map((i) => i.x), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 0).map((v) => v / INK_UNIT))];
+    const ys = [...items.map((i) => i.y), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 1).map((v) => v / INK_UNIT))];
+    const x0 = Math.min(...xs);
+    const y0 = Math.min(...ys);
     copyItem(app.store, {
       kind: "board-items",
       items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, color: i.color, size: i.size })),
+      strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, b: l.b || "pen" })),
     });
-    toast(root, `카드 ${items.length}장을 복사했어요. 화이트보드의 '붙이기'로 넣을 수 있어요`, 3200);
+    toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
   }
 
-  function deleteLasso(items) {
-    if (!items.length || readOnly()) return void toast(root, "올가미 안에 카드가 없어요");
-    const ops = [];
+  function deleteLasso({ cards: items, strokes = [] }) {
+    if ((!items.length && !strokes.length) || readOnly()) return void toast(root, "올가미 안에 고른 것이 없어요");
     const atoms = [];
     for (const i of items) {
       const made = removeItemOps(session.clock, board, i.id);
-      ops.push(...made.ops);
+      session.commit("board", made.ops);
       atoms.push(...made.atoms);
     }
-    apply({ ops, atoms });
-    toast(root, `카드 ${items.length}장을 지웠어요. 되돌리기로 살릴 수 있어요`, 3200);
+    for (const sid of strokes) {
+      const made = eraseOps(session.clock, session.doc(INK_DOC), sid);
+      session.commit(INK_DOC, made.ops);
+      atoms.push(...made.atoms.map((a) => ({ ...a, doc: INK_DOC })));
+    }
+    record(atoms);
+    draw();
+    inkSoon();
+    toast(root, `${items.length + strokes.length}개를 지웠어요. 되돌리기로 살릴 수 있어요`, 3200);
+  }
+
+  /** 붙여넣기 into a loop: what was copied goes to the right of what the loop holds, and the loop goes round it all. */
+  function pasteIntoLoop(id) {
+    const loop = board.lassos().find((l) => l.id === id);
+    if (!loop || readOnly()) return;
+    const group = clipboardItem(app.store, "board-items");
+    const clip = !group && clipboardItem(app.store, "song-clip");
+    if (!group && !clip) return void toast(root, "복사한 것이 없어요");
+    const list = group ? group.items : [{ kind: "song", dx: 0, dy: 0, data: cardFromClip(clip) }];
+    const inside = itemsInLoop(board, id);
+    const boxes = inside.map((c) => {
+      const el = content.querySelector(`.card[data-id="${c.id}"]`);
+      return { x: c.x, y: c.y, w: (el ? el.offsetWidth : widthOf(c)) / sx, h: el ? el.offsetHeight : 60 };
+    });
+    let x0, y0, x1, y1;
+    if (boxes.length) {
+      x0 = Math.min(...boxes.map((b) => b.x)); y0 = Math.min(...boxes.map((b) => b.y));
+      x1 = Math.max(...boxes.map((b) => b.x + b.w)); y1 = Math.max(...boxes.map((b) => b.y + b.h));
+    } else {
+      x0 = Math.min(...loop.pts.filter((_, k) => k % 2 === 0)) + 20; y0 = Math.min(...loop.pts.filter((_, k) => k % 2 === 1)) + 20;
+      x1 = x0 - 24; y1 = y0;
+    }
+    const at = { x: x1 + 24, y: y0 };
+    const made = pasteGroup(list, { strokes: group?.strokes || [], at, quiet: true });
+    if (!made) return;
+    // The loop goes round what it held and what came in.
+    let mx1 = x1, my1 = y1;
+    for (const it of made.items) {
+      const el = content.querySelector(`.card[data-id="${it.id}"]`);
+      mx1 = Math.max(mx1, it.x + (el ? el.offsetWidth / sx : 200));
+      my1 = Math.max(my1, it.y + (el ? el.offsetHeight : 100));
+    }
+    const atoms = [...made.atoms];
+    const gone = removeLassoOps(session.clock, board, id);
+    session.commit("board", gone.ops);
+    atoms.push(...gone.atoms);
+    const again = lassoOps(session.clock, board, boxLoop(Math.round(Math.min(x0, at.x) - 22), Math.round(y0 - 22), Math.round(mx1 + 22), Math.round(my1 + 22), 22), session.memberId);
+    if (again.ops.length) {
+      session.commit("board", again.ops);
+      atoms.push(...again.atoms);
+      if (loop.tint != null) {
+        const t = tintLassoOps(session.clock, board, again.id, loop.tint);
+        session.commit("board", t.ops);
+        atoms.push(...t.atoms);
+      }
+      if (loopKinds.has(id)) loopKinds.set(again.id, loopKinds.get(id));
+      if (repeating.delete(id)) repeating.add(again.id);
+      focusLoop = again.id;
+    }
+    record(atoms);
+    draw();
+    toast(root, `올가미에 ${made.items.length + made.strokes}개를 붙였어요`);
   }
 
   /** Song cards go to 레퍼런스 as recordings, text as notes (on this device only, as all of 레퍼런스). */
@@ -819,7 +944,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", JSON.stringify(writeStyle())].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", JSON.stringify(writeStyle()), focusLoop, focusOff, board.lassos().length].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -853,6 +978,8 @@ export function mountBoardRoom(body, app, session, frame) {
         railButton("stretch-out", "squeeze", "줄이기", () => stretchAt(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
         railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        // With a loop in hand: only its part (pressed), or the whole board.
+        !!focusLoop && railButton("song-focus", "fit", "올가미만", () => { focusOff = !focusOff; draw(); }, { pressed: !focusOff }),
       ],
       // 올가미: its loops play what is inside; their ⋯ copies, removes, sends to 레퍼런스.
       lasso: [
@@ -1169,53 +1296,122 @@ export function mountBoardRoom(body, app, session, frame) {
     const p = toBoard(e.clientX, e.clientY);
     const holder = board.lassos().slice().reverse().find((l) => insideLoop(l.pts, p.x, p.y));
     if (holder) return void moveGroup(e, holder, onCard);
-    const loop = { pts: [p.x, p.y], last: [e.clientX, e.clientY], moved: false };
+    const loop = { pts: [p.x, p.y], last: [e.clientX, e.clientY], start: [e.clientX, e.clientY], length: 0, moved: false, second: null, done: false };
     const live = document.createElementNS(SVG, "path");
     live.setAttribute("class", "drawing");
     loops.append(live);
     surface.setPointerCapture?.(pid);
     const mine = (ev) => ev.pointerId === pid;
+    // Closing (the owner: "처음 부분과 끝부분이 엄청 진짜 미세하게 가깝다거나", "다른 손가락으로 한 번
+    // 터치할 시에", "왼쪽 딸깍을 누르고 있다가 오른쪽 딸깍"): the end brought right back to the start
+    // (SNAP px) closes it at once; so do a quick tap of a second finger and a right click while the left
+    // is held. Let go anywhere else and it still closes the shortest way. A closed loop shines like neon.
+    const SNAP = 14;
+    const NEAR = 44;
+    const LONG = 160;
+    const close = () => {
+      if (loop.done) return;
+      loop.done = true;
+      finish();
+      if (!loop.moved) return;
+      const made = lassoOps(session.clock, board, loop.pts, session.memberId);
+      if (!made.ops.length) return void toast(root, "조금 더 크게 둘러 주세요");
+      apply(made);
+      shine(made.id);
+    };
     const move = (ev) => {
-      if (!mine(ev) || Math.hypot(ev.clientX - loop.last[0], ev.clientY - loop.last[1]) < 5) return;
+      if (!mine(ev) || loop.done) return;
+      if (ev.buttons & 2) return void close(); // a right click while the left is held
+      if (loop.second) return; // a second finger is down: a tap closes, a pinch zooms
+      if (Math.hypot(ev.clientX - loop.last[0], ev.clientY - loop.last[1]) < 5) return;
       loop.moved = true;
+      loop.length += Math.hypot(ev.clientX - loop.last[0], ev.clientY - loop.last[1]);
       loop.last = [ev.clientX, ev.clientY];
       const q = toBoard(ev.clientX, ev.clientY);
       loop.pts.push(q.x, q.y);
       live.setAttribute("d", loopPath(loop.pts));
+      const back = Math.hypot(ev.clientX - loop.start[0], ev.clientY - loop.start[1]);
+      live.classList.toggle("near", loop.length > LONG && back < NEAR);
+      if (loop.length > LONG && back < SNAP) close();
+    };
+    // A second finger: lifted quickly where it came down, it closes the loop; moved, it is a pinch.
+    const second = (ev) => {
+      if (ev.pointerId === pid || ev.pointerType !== "touch" || loop.done) return;
+      loop.second = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, t: performance.now() };
+    };
+    const secondMove = (ev) => {
+      const s2 = loop.second;
+      if (!s2 || ev.pointerId !== s2.id) return;
+      if (Math.hypot(ev.clientX - s2.x, ev.clientY - s2.y) > 14) cancel(); // a pinch: no loop
+    };
+    const secondUp = (ev) => {
+      const s2 = loop.second;
+      if (!s2 || ev.pointerId !== s2.id) return;
+      if (performance.now() - s2.t < 450 && Math.hypot(ev.clientX - s2.x, ev.clientY - s2.y) <= 14) close();
+      else cancel();
+    };
+    const rightClick = (ev) => {
+      ev.preventDefault();
+      close();
     };
     const finish = () => {
       surface.removeEventListener("pointermove", move);
       surface.removeEventListener("pointerup", up);
       surface.removeEventListener("pointercancel", cancel);
+      surface.removeEventListener("pointerdown", second, true);
+      window.removeEventListener("pointermove", secondMove, true);
+      window.removeEventListener("pointerup", secondUp, true);
+      surface.removeEventListener("contextmenu", rightClick);
       live.remove();
       gesture = null;
     };
     const up = (ev) => {
-      if (!mine(ev)) return;
-      finish();
+      if (!mine(ev) || loop.done) return;
       if (!loop.moved) {
+        loop.done = true;
+        finish();
         selected = onCard;
         return void draw();
       }
-      const made = lassoOps(session.clock, board, loop.pts, session.memberId);
-      if (!made.ops.length) return void toast(root, "조금 더 크게 둘러 주세요");
-      apply(made);
+      close();
     };
     const cancel = (ev) => {
-      if (ev && !mine(ev)) return;
+      if (ev && ev.pointerId !== undefined && !mine(ev) && ev.pointerId !== loop.second?.id) return;
+      loop.done = true;
       finish();
     };
-    gesture = cancel;
+    // Two fingers usually mean a pinch: the loop waits to see whether the second one only taps.
+    gesture = () => {};
     surface.addEventListener("pointermove", move);
     surface.addEventListener("pointerup", up);
     surface.addEventListener("pointercancel", cancel);
+    surface.addEventListener("pointerdown", second, true);
+    window.addEventListener("pointermove", secondMove, true);
+    window.addEventListener("pointerup", secondUp, true);
+    surface.addEventListener("contextmenu", rightClick);
   }, true);
+
+  /** A loop just closed shines like neon for a moment, and what it holds glows with it. */
+  function shine(id) {
+    if (!id) return;
+    glowLoop = id;
+    focusLoop = id;
+    draw();
+    setTimeout(() => {
+      if (glowLoop !== id) return;
+      glowLoop = null;
+      if (alive) draw();
+    }, 1400);
+  }
 
   /** A loop dragged from inside: it and the cards in it move together, as one undo step. */
   function moveGroup(e, loop, onCard) {
     const pid = e.pointerId;
     const start = { x: e.clientX, y: e.clientY };
-    const cards = itemsInLoop(board, loop.id).map((i) => ({ id: i.id, x: i.x, y: i.y, el: content.querySelector(`.card[data-id="${i.id}"]`) }));
+    focusLoop = loop.id;
+    const held = loopHolds(loop.id);
+    const cards = held.cards.map((i) => ({ id: i.id, x: i.x, y: i.y, el: content.querySelector(`.card[data-id="${i.id}"]`) }));
+    const strokeIds = new Set(held.strokes);
     let moved = false;
     let dx = 0;
     let dy = 0;
@@ -1230,6 +1426,9 @@ export function mountBoardRoom(body, app, session, frame) {
       loopDrag = { id: loop.id, dx, dy };
       drawLassos();
       drawLines(Object.fromEntries(cards.map((c) => [c.id, { x: c.x + dx, y: c.y + dy }])));
+      // The drawings it holds show where they are going.
+      boardInk.shift = strokeIds.size ? { ids: strokeIds, dx: dx * INK_UNIT, dy: dy * INK_UNIT } : null;
+      inkSoon();
     };
     const move = (ev) => {
       if (!mine(ev)) return;
@@ -1253,17 +1452,24 @@ export function mountBoardRoom(body, app, session, frame) {
         selected = onCard;
         return void draw();
       }
-      const ops = [];
       const atoms = [];
       for (const c of cards) {
         const made = setItemOps(session.clock, board, c.id, { x: c.x + dx, y: c.y + dy });
-        ops.push(...made.ops);
+        session.commit("board", made.ops);
         atoms.push(...made.atoms);
       }
       const shifted = moveLassoOps(session.clock, board, loop.id, dx, dy);
-      ops.push(...shifted.ops);
+      session.commit("board", shifted.ops);
       atoms.push(...shifted.atoms);
-      if (!apply({ ops, atoms })) draw();
+      if (strokeIds.size) {
+        const inked = moveStrokesOps(session.clock, session.doc(INK_DOC), [...strokeIds], dx * INK_UNIT, dy * INK_UNIT, session.memberId);
+        session.commit(INK_DOC, inked.ops);
+        atoms.push(...inked.atoms.map((a) => ({ ...a, doc: INK_DOC })));
+      }
+      boardInk.shift = null;
+      record(atoms);
+      draw();
+      inkSoon();
     };
     const cancel = (ev) => {
       if (ev && !mine(ev)) return;
@@ -1271,6 +1477,8 @@ export function mountBoardRoom(body, app, session, frame) {
       dx = 0;
       dy = 0;
       show();
+      boardInk.shift = null;
+      inkSoon();
       loopDrag = null;
       draw();
     };
@@ -1592,32 +1800,48 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function addSong() {
     const group = clipboardItem(app.store, "board-items");
-    if (group) return void pasteGroup(group.items);
+    if (group) return void pasteGroup(group.items, { strokes: group.strokes || [] });
     const item = clipboardItem(app.store, "song-clip");
     if (!item) return void toast(root, "노래 방에서 클립을 '복사'하면 여기에 붙일 수 있어요. '내 노래'에서 골라도 돼요.", 4200);
     placeCard(cardFromClip(item));
   }
 
   /** 붙이기 of cards copied with a loop: they keep their places to each other, in view, as one undo step. */
-  function pasteGroup(list) {
-    if (readOnly() || !Array.isArray(list) || !list.length) return;
-    const r = surface.getBoundingClientRect();
-    const at = toBoard(r.left + 24, r.top + 24);
-    const ops = [];
+  /** Copied cards (and drawings) put down together, as one undo step: in view, or at `at`. */
+  function pasteGroup(list, { strokes = [], at = null, quiet = false } = {}) {
+    if (readOnly() || !Array.isArray(list) || (!list.length && !strokes.length)) return null;
+    if (!at) {
+      const r = body.getBoundingClientRect();
+      at = toBoard(r.left + 24, r.top + 24);
+    }
     const atoms = [];
+    const items = [];
     for (const it of list) {
-      const made = addItemOps(session.clock, board, { kind: it.kind, x: at.x + it.dx, y: at.y + it.dy, data: it.data, by: session.memberId });
+      const made = addItemOps(session.clock, board, { kind: it.kind, x: Math.round(at.x + it.dx), y: Math.round(at.y + it.dy), data: it.data, by: session.memberId });
       if (!made.ops.length) continue;
-      board.apply(made.ops[0]);
-      ops.push(...made.ops);
+      session.commit("board", made.ops);
       atoms.push(...made.atoms);
+      items.push({ id: made.id, x: Math.round(at.x + it.dx), y: Math.round(at.y + it.dy) });
       if (it.kind === "note" && (it.color || it.size)) {
-        const look = setItemOps(session.clock, board, made.id, { ...(it.color ? { color: it.color } : {}), ...(it.size ? { size: it.size } : {}) });
-        ops.push(...look.ops);
+        session.commit("board", setItemOps(session.clock, board, made.id, { ...(it.color ? { color: it.color } : {}), ...(it.size ? { size: it.size } : {}) }).ops);
       }
     }
-    apply({ ops, atoms });
-    toast(root, `카드 ${atoms.length}장을 붙였어요`);
+    for (const l of strokes) {
+      const pts = l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v + at.x * INK_UNIT) : k % 3 === 1 ? Math.round(v + at.y * INK_UNIT) : v));
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color: l.c, width: l.w, by: session.memberId, brush: l.b || "pen" });
+      session.commit(INK_DOC, made.ops);
+      atoms.push(...made.atoms.map((a) => ({ ...a, doc: INK_DOC })));
+    }
+    if (quiet) {
+      draw();
+      inkSoon();
+      return { atoms, items, strokes: strokes.length };
+    }
+    record(atoms);
+    draw();
+    inkSoon();
+    toast(root, `${items.length + strokes.length}개를 붙였어요`);
+    return { atoms, items, strokes: strokes.length };
   }
 
   function removeSelected() {
@@ -1976,6 +2200,8 @@ export function mountBoardRoom(body, app, session, frame) {
   /** ▶ in the toolbar: every song card in order. */
   async function togglePlay() {
     if (player?.playing) return stopPlaying();
+    // In 노래 with a loop in hand, 전체 재생 is that part.
+    if (mode === "song" && focusLoop && !focusOff && board.lassos().some((l) => l.id === focusLoop)) return void playLasso(focusLoop);
     const order = playOrder(board);
     if (!order.length) return void toast(root, "재생할 노래 카드가 없어요");
     const ctx = await audioContext();
@@ -2008,6 +2234,23 @@ export function mountBoardRoom(body, app, session, frame) {
     player.play(cursor?.id === id ? Math.min(cursor.ms, card.data.dur - 1) : 0);
     follow([[id, card.data.dur]]);
     draw();
+  }
+
+  /**
+   * 노래 works on the last-used loop's part only ("노래 모드에서 그 올가미 선택한 부분만"): the rest dims and
+   * 전체 재생 plays that part; a loop just closed lights up what it holds.
+   */
+  function drawLoopMarks() {
+    const all = board.lassos();
+    if (focusLoop && !all.some((l) => l.id === focusLoop)) focusLoop = null;
+    const focusing = mode === "song" && !!focusLoop && !focusOff;
+    const inFocus = focusing ? new Set(itemsInLoop(board, focusLoop).map((c) => c.id)) : null;
+    const glowing = glowLoop && all.some((l) => l.id === glowLoop) ? new Set(loopHolds(glowLoop).cards.map((c) => c.id)) : null;
+    content.classList.toggle("focus", focusing);
+    for (const el of content.querySelectorAll(".card")) {
+      el.classList.toggle("in-focus", !!inFocus?.has(el.dataset.id));
+      el.classList.toggle("lasso-glow", !!glowing?.has(el.dataset.id));
+    }
   }
 
   /** Shows the position line (and its time) on the chosen song card, and a light tick each second while chosen. */

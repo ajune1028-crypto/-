@@ -667,6 +667,20 @@ export function itemsInLoop(board, lassoId) {
   return board.items().filter((item) => insideLoop(loop.pts, item.x + item.w / 2, item.y + cardHeight(item) / 2));
 }
 
+/** The drawings inside a loop (by the middle of each stroke); strokes count in `unit`s per board pixel. */
+export function strokesInLoop(strokes, loopPts, unit = 100 / 16) {
+  const out = [];
+  for (const s of strokes) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < s.pts.length; i += 3) {
+      x0 = Math.min(x0, s.pts[i]); x1 = Math.max(x1, s.pts[i]);
+      y0 = Math.min(y0, s.pts[i + 1]); y1 = Math.max(y1, s.pts[i + 1]);
+    }
+    if (insideLoop(loopPts, (x0 + x1) / 2 / unit, (y0 + y1) / 2 / unit)) out.push(s.id);
+  }
+  return out;
+}
+
 /** The song cards inside a loop (their middles), in the order they play: lines first, then from the left. */
 export function lassoOrder(board, lassoId) {
   const loop = board.lassos().find((l) => l.id === lassoId);

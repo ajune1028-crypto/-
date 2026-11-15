@@ -172,6 +172,16 @@ export async function launch({ port = 9333, args = [] } = {}) {
         const type = "touch" + kind[0].toUpperCase() + kind.slice(1);
         await s("Input.dispatchTouchEvent", { type, touchPoints: points.map(([x, y], id) => ({ x, y, id, radiusX: 6, radiusY: 6, force: 1 })) });
       },
+      /** Like touch, with each finger's own id: [[id, x, y], …] (to lift one finger and keep another). */
+      touchIds: async (kind, points = []) => {
+        if (!touchOn) {
+          await s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+          touchOn = true;
+        }
+        await s("Page.bringToFront");
+        const type = "touch" + kind[0].toUpperCase() + kind.slice(1);
+        await s("Input.dispatchTouchEvent", { type, touchPoints: points.map(([id, x, y]) => ({ x, y, id, radiusX: 6, radiusY: 6, force: 1 })) });
+      },
       /** Two fingers set down at from (one after the other), moved in steps to to, then lifted. */
       pinch: async (from, to, { steps = 8, lift = true } = {}) => {
         await api.touch("start", [from[0]]);
@@ -188,6 +198,11 @@ export async function launch({ port = 9333, args = [] } = {}) {
         }
       },
       release: (x, y) => mouse("mouseReleased", x, y, 1),
+      /** A right click while the left button is held down (as when a loop is closed with the mouse). */
+      rightWhileLeft: async (x, y) => {
+        await s("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "right", buttons: 3, clickCount: 1, pointerType: "mouse" });
+        await s("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "right", buttons: 1, clickCount: 1, pointerType: "mouse" });
+      },
       /** A stylus on the glass: kind is "down", "move" or "up". */
       stylus: (kind, x, y) => s("Input.dispatchMouseEvent", {
         type: { down: "mousePressed", move: "mouseMoved", up: "mouseReleased" }[kind], x, y, button: "left",

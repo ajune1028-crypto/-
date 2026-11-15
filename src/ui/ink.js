@@ -206,7 +206,12 @@ export class InkLayer {
       const scale = (remPx() / 100) * ratio * zoom;
       g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
     }
-    for (const s of this.ink().strokes()) this.paint(g, s.pts, s.c, s.w, s.b || "pen");
+    // Strokes being moved (the 올가미 dragging what it holds) are drawn where they are going.
+    const shift = this.shift;
+    for (const s of this.ink().strokes()) {
+      const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
+      this.paint(g, pts, s.c, s.w, s.b || "pen");
+    }
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
   }
 
