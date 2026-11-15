@@ -1043,7 +1043,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 올가미: a dashed loop under the cards; its chip stays the same size at any zoom. */
 .board-loops { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .board-loops path { fill: color-mix(in srgb, var(--lc, var(--accent)) 10%, transparent); stroke: var(--lc, var(--accent)); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.board-loops path.drawing { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke-dasharray: none; }
+/* While it is drawn, the loop is a neon line only (nothing filled); closed, it is the plain loop again. */
+.board-loops path.drawing { fill: none; stroke-dasharray: none; stroke-width: 3; filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 6px var(--accent)); }
 .board.lassoing, .board.lassoing .card { cursor: crosshair; }
 /* 잇기 by a line: the line as it is drawn, and the cards it has passed, numbered. */
 .board-loops path.chain-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
@@ -1242,8 +1243,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 올가미: what it takes (곡·글·그림·전체), its neon when it closes, and 노래 working on its part only. */
 .lasso-chip .lasso-kind { background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: 0.78rem; }
 #lasso-kinds button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.board-loops path.neon { stroke-dasharray: none; stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--lc, var(--accent))) drop-shadow(0 0 9px var(--lc, var(--accent))); }
-.board-loops path.drawing.near { filter: drop-shadow(0 0 5px var(--lc, var(--accent))); stroke-width: 3; }
+.board-loops path.drawing.near { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 11px var(--accent)); }
 .card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s; }
 .board-content.focus .card:not(.in-focus) { opacity: 0.3; }
 </style>
@@ -11606,7 +11606,6 @@ function mountBoardRoom(body, app, session, frame) {
   const loopKinds = new Map();
   let focusLoop = null; // the loop last used: in 노래 only its part is played and worked on
   let focusOff = false; // 노래's 올가미 부분만 turned off
-  let glowLoop = null; // a loop just closed: it shines like neon a moment, and what it holds with it
   let loopDrag = null; // a loop being dragged by its chip: { id, dx, dy } on the board
   let chipDragged = false;
   let player = null;
@@ -11988,7 +11987,7 @@ function mountBoardRoom(body, app, session, frame) {
   function drawLassos() {
     const all = board.lassos();
     const shift = (l) => (loopDrag?.id === l.id ? [loopDrag.dx, loopDrag.dy] : [0, 0]);
-    const html = all.map((l) => `<path data-lasso="${l.id}"${l.id === glowLoop ? ` class="neon"` : ""}${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
+    const html = all.map((l) => `<path data-lasso="${l.id}"${l.tint != null ? ` style="--lc:${memberColor(l.tint, currentTheme())}"` : ""} d="${loopPath(l.pts, ...shift(l))}Z" />`).join("");
     if (loopGroup.dataset.html !== html) {
       loopGroup.dataset.html = html;
       loopGroup.innerHTML = html;
@@ -12853,7 +12852,10 @@ function mountBoardRoom(body, app, session, frame) {
       loop.pts.push(q.x, q.y);
       live.setAttribute("d", loopPath(loop.pts));
       const back = Math.hypot(ev.clientX - loop.start[0], ev.clientY - loop.start[1]);
-      live.classList.toggle("near", loop.length > LONG && back < NEAR);
+      const near = loop.length > LONG && back < NEAR;
+      live.classList.toggle("near", near);
+      // Nearly closed: what it is about to hold lights up with the line ("그 애들을 포함하는 느낌").
+      previewHold(near ? loop.pts : null);
       if (loop.length > LONG && back < SNAP) close();
     };
     // A second finger: lifted quickly where it came down, it closes the loop; moved, it is a pinch.
@@ -12885,6 +12887,7 @@ function mountBoardRoom(body, app, session, frame) {
       window.removeEventListener("pointerup", secondUp, true);
       surface.removeEventListener("contextmenu", rightClick);
       live.remove();
+      previewHold(null);
       gesture = null;
     };
     const up = (ev) => {
@@ -12913,17 +12916,19 @@ function mountBoardRoom(body, app, session, frame) {
     surface.addEventListener("contextmenu", rightClick);
   }, true);
 
-  /** A loop just closed shines like neon for a moment, and what it holds glows with it. */
+  /** A loop just closed is the plain loop again ("원래 하던 대로"); it is the one 노래 works on now. */
   function shine(id) {
     if (!id) return;
-    glowLoop = id;
     focusLoop = id;
     draw();
-    setTimeout(() => {
-      if (glowLoop !== id) return;
-      glowLoop = null;
-      if (alive) draw();
-    }, 1400);
+  }
+
+  /** While a loop is nearly closed, the cards its line goes round light up with it (null: none). */
+  function previewHold(pts) {
+    for (const el of content.querySelectorAll(".card")) {
+      const inside = !!pts && insideLoop(pts, (el.offsetLeft + el.offsetWidth / 2) / sx, el.offsetTop + el.offsetHeight / 2);
+      el.classList.toggle("lasso-glow", inside);
+    }
   }
 
   /** A loop dragged from inside: it and the cards in it move together, as one undo step. */
@@ -13767,12 +13772,8 @@ function mountBoardRoom(body, app, session, frame) {
     if (focusLoop && !all.some((l) => l.id === focusLoop)) focusLoop = null;
     const focusing = mode === "song" && !!focusLoop && !focusOff;
     const inFocus = focusing ? new Set(itemsInLoop(board, focusLoop).map((c) => c.id)) : null;
-    const glowing = glowLoop && all.some((l) => l.id === glowLoop) ? new Set(loopHolds(glowLoop).cards.map((c) => c.id)) : null;
     content.classList.toggle("focus", focusing);
-    for (const el of content.querySelectorAll(".card")) {
-      el.classList.toggle("in-focus", !!inFocus?.has(el.dataset.id));
-      el.classList.toggle("lasso-glow", !!glowing?.has(el.dataset.id));
-    }
+    for (const el of content.querySelectorAll(".card")) el.classList.toggle("in-focus", !!inFocus?.has(el.dataset.id));
   }
 
   /** Shows the position line (and its time) on the chosen song card, and a light tick each second while chosen. */
