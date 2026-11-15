@@ -43,9 +43,17 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **내 색** = 글라스 색: 방을 만들거나 들어올 때 사람 색은 내 글라스 색과 색상이 가장 가까운 빈 색(`nearestPeopleColor`, `myPeopleColor`). 그래서 녹음 직사각형이 처음부터 내 색이다(전에는 만든 사람이 늘 첫 색 산호=빨강). 혼자 있는 옛 방은 이 기기에서 처음 열 때 한 번만 내 색으로 바뀐다(`colourFixed`), 친구가 있는 방은 그대로.
   - **색**: 녹음(노래 방 클립, 화이트보드 노래·사진 카드)을 누르면 '색' → 사람 색 8개와 '기본'. 클립·카드의 `tint`(0~7, null=녹음한 사람 색), 모두에게, 되돌리기 한 번.
   - **올가미 ⋯**: 색(올가미 선과 안의 카드 전부, `lacl` op), 정리(안의 카드를 왼쪽부터 한 줄로, 위를 맞추고 24px 간격, 올가미를 그 둘레로 다시 그림: `rowLayout`, `boxLoop`), 잇기(안의 노래를 왼쪽부터 순서 줄로), 음소거/소리 켜기, 반복(▶가 멈출 때까지 다시, ↻ 표시, 이 기기만), 복사, 레퍼런스에 넣기, 지우기. 할 수 없는 것은 안 보인다.
+- **11월 15일 늦게 (재시작 뒤, 사용자: "내 녹음으로 직접 해 보고 싶다", 홈 녹음, 화이트보드 직사각형, 잇기 갈래, 올가미)**: 본질 문서 7-2절. 사용자는 지금 **직접 해 보려는 중**이다.
+  - **예시 녹음**(`audio/example.js`: 앱이 직접 부른 도레미파솔미도, 실제 녹음과 같은 길로 읽음): 녹음 목록을 처음 열었을 때 비어 있으면 한 번 들어간다(`exampleTake` 표시). 원본 소리도 이 기기에 있다.
+  - **홈 '녹음'**: 레퍼런스의 녹음 탭을 연다(같은 목록). 녹음마다 **보내기**(내 노래 방 = 끝에 클립, 화이트보드 = 오른쪽에 카드: `room-actions.js`의 `putSoundInto`). 책 버튼은 다시 누르면 닫힌다.
+  - Claude 안의 **'크롬에서 열기'**는 공개 주소(`sound-in.js`의 `PUBLIC_APP`, githack)로 간다: 로그인 없이 열리고 녹음된다(전에는 Claude 로그인이 필요한 페이지로 가서 "페이지를 찾을 수 없습니다").
+  - 화이트보드 노래 카드: 첫 탭은 메뉴(▶ 먼저), 다시 누르면 **위치 선**(시간 표시, `cursor`), ▶는 거기서부터, 분할은 거기서. 고른 카드에는 초마다 옅은 눈금.
+  - 확대·이동 버그: 판이 위 막대 위로 튀어나오던 것(판 몸통이 자기 층 `z-index:0`), 노래 모드의 옆으로 늘이기가 다른 모드에 남던 것(`songSx`: 늘이기는 노래 모드에만), 카드를 끌 때 순서 줄이 안 따라오던 것(`drawLines(moving)`), 축소하면 올가미 칩도 작아지고 아주 작으면 눌리지 않음.
+  - **잇기 갈래**: 한 카드에서 여러 줄(나중 줄이 다음 번호), 한 카드 앞에는 한 카드만, 순서는 줄을 끝까지 따라간 뒤 다음 줄(깊이 우선). 그래서 한 카드는 한 번만 재생된다.
+  - **올가미**: 칩에 곡·글·그림·전체(그림 = 그린 획과 사진), 묶음 동작이 그것만 다룬다(끌기·순서 정리·복사·붙여넣기·레퍼런스·지우기, 그린 획도 함께 움직이고 복사됨: `strokesInLoop`, `moveStrokesOps`). 색은 올가미 선만. 끝이 시작점 14px 안에 오면 바로 닫히고 네온처럼 빛남, 다른 손가락으로 톡 치거나 마우스 왼쪽을 누른 채 오른쪽 클릭해도 닫힘. 노래 모드에서는 마지막에 쓴 올가미 부분만(나머지는 흐리게, 전체 재생도 그 부분, 오른쪽 '올가미만'으로 끔).
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
-- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 밤 판, 9번째: 본질 문서대로 고친 판, 내 색, 올가미). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
+- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 늦은 판, 10번째: 예시 녹음, 홈 녹음, 위치 선, 잇기 갈래, 올가미). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
 - **GitHub**: 11월 15일부터 올리기가 된다(사용자가 GitHub를 연결함). 작업 브랜치를 올리고, 확인된 상태를 `main`에 합친다(허락받음).
 - **다음 (본질 순, 본질 문서 8절)**: ① 서버 켜기(사용자)와 실제 두 기기 시험 ② 노래 원본을 방으로(친구가 내 목소리를 듣는다: 방의 `files`, ADPCM) ③ 홈에 "새로 온 것"(서버가 방마다 마지막 변경을 알려 줘야 함) ④ 사진 방(셀로그), 통합 방 ⑤ 노래 잇기 창, 그림 필압 ⑥ 글쓰기 방(A4·스크롤) ⑦ 방 비밀번호. 실제 목소리 채점도 남아 있다.
 - **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소), 작업 브랜치 `claude/voice-piano-conversion-scaffold-fnjrk8`. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
@@ -63,15 +71,15 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 250개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 254개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 119개. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 125개. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
 ```
 
 - 화면 시나리오는 Chrome이나 Edge가 필요하다. 자동으로 찾고, 못 찾으면 `CHROME_BIN`에 실행 파일 경로를 넣는다.
 - 시나리오 브라우저는 가짜 마이크로 뜬다: `out/fixtures/mic.wav`(합성한 노랫소리, 정답 음을 안다)를 마이크로 들려준다. `out/fixtures/doremi.wav`는 "소리 가져오기"용이고, ffmpeg가 있으면 같은 노래를 m4a(삼성 녹음 형식)·mp3·webm으로도 만들어 가져오기를 시험한다(없으면 그 시나리오만 건너뜀). 모두 `tools/e2e.mjs`가 매번 만든다.
-- 손가락은 `page.touch("start"|"move"|"end", [[x, y], …])`와 `page.pinch(from, to)`, 스타일러스는 `page.stylus("down"|"move"|"up", x, y)`, 파일 선택 창을 실제로 열린 것처럼 붙잡으려면 `page.interceptChooser(true)`로 한다. Chrome의 실제 터치 경로를 지나서 포인터·터치 이벤트가 폰과 같은 차례로 온다.
+- 손가락은 `page.touch("start"|"move"|"end", [[x, y], …])`와 `page.pinch(from, to)`, 한 손가락만 떼려면 `page.touchIds("end", [[id, x, y]])`(id는 손가락 순서), 왼쪽을 누른 채 오른쪽 클릭은 `page.rightWhileLeft(x, y)`, 스타일러스는 `page.stylus("down"|"move"|"up", x, y)`, 파일 선택 창을 실제로 열린 것처럼 붙잡으려면 `page.interceptChooser(true)`로 한다. Chrome의 실제 터치 경로를 지나서 포인터·터치 이벤트가 폰과 같은 차례로 온다.
 - 끌기(꾹 눌러 옮기기, 펜)는 `page.press/moveTo/release`로 한다. Chrome은 뒤에 있는 페이지에 움직임을 프레임마다만 넘기므로 `press`가 페이지를 앞으로 가져온다. 그림이나 화면 캡처를 뒤쪽 페이지에서 할 때는 `page.front()`.
 - 로컬에서 두 사람 흉내: 같은 주소로 탭 두 개를 `?dev=a`, `?dev=b`로 연다. `?dev`가 없으면 공개 주소처럼 "이 기기만" 방이 된다. `?ns=이름`은 저장 공간을 분리한다(테스트용).
 - `dist/`와 `out/`은 git에 없다.

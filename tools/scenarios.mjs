@@ -2482,7 +2482,7 @@ scenario("whiteboard zoom: zoomed far in, cards stay beneath the bars; the 노�
 
 // The owner: "곡, 텍스트, 그림, 전체… 순서 정리… 붙여넣기… 처음 부분과 끝부분이 엄청 미세하게 가깝다거나… 다른 손가락으로
 // 한 번 터치… 왼쪽 딸깍을 누르고 있다가 오른쪽 딸깍… 빛나면서 네온 같이… 노래 모드에서 그 올가미 선택한 부분만".
-scenario("whiteboard 올가미 closing and kinds: brought back to its start it closes before the lift and shines; a second finger's tap and a right click close it too; 곡·글·그림·전체 decide what 지우기 and a drag take (drawings move with it); 붙여넣기 puts what was copied inside; in 노래 only its part plays", async ({ open, fixtures }) => {
+scenario("whiteboard 올가미 closing and kinds: brought back to its start it closes before the lift and shines; a second finger's tap and a right click close it too; 곡·글·그림·전체 decide what 지우기 and a drag take (drawings move with it); 붙여넣기 puts what was copied inside; in 노래 only its part plays", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2510,6 +2510,7 @@ scenario("whiteboard 올가미 closing and kinds: brought back to its start it c
   for (let k = 1; k < ring.length; k++) for (let i = 1; i <= 8; i++) await page.touch("move", [[ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * i) / 8, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * i) / 8]]);
   await page.waitFor(`${board}.lassos().length === 1`);
   assert.ok(await page.eval(`!!document.querySelector(".board-loops path.neon")`), "it shines when it closes");
+  await page.shot(out("board-lasso-neon.png"));
   await page.touch("end");
   const loop = await page.eval(`${board}.lassos()[0].id`);
   assert.equal(await text(page, `[id="lasso-kind-${loop}"]`), "전체 3", "전체: the song, the text and the drawing");
@@ -2571,7 +2572,7 @@ scenario("whiteboard 올가미 closing and kinds: brought back to its start it c
 });
 
 // The owner: "두번째나 두번 이상인 것들은 내가 터치한 그 부분의 초로 가게 돼… 세로선이… 거기서 재생하면 거기서부터… 분할을 누르면 분할".
-scenario("whiteboard song card: the first tap shows its menu (▶ first); a second tap puts a line with its time where tapped; ▶ plays from there and the menu stays; 분할 cuts there", async ({ open, fixtures }) => {
+scenario("whiteboard song card: the first tap shows its menu (▶ first); a second tap puts a line with its time where tapped; ▶ plays from there and the menu stays; 분할 cuts there", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2595,6 +2596,8 @@ scenario("whiteboard song card: the first tap shows its menu (▶ first); a seco
   const said = await text(page, ".card.song .card-cursor-time");
   assert.ok(/^\d+\.\d초$/.test(said) && Math.abs(parseFloat(said) - (dur * 0.4) / 1000) <= 0.15, "its time: " + said + " of " + dur + " ms");
   assert.ok(await page.eval(`!!${q("#card-menu")}`), "the menu is still there");
+  await page.front();
+  await page.shot(out("board-cursor.png"));
   // ▶ plays from the line, and the menu stays while it plays.
   await click(page, "#card-menu #card-play");
   await page.waitFor(`${q("#card-menu #card-play")}?.textContent === "■ 멈춤"`);
@@ -3434,7 +3437,7 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
 
 // The owner: "처음에 홈화면 UI에 녹음 기능… 녹음하고서 어떤 방에 보낼 수 있게… 쌓아 두거나 모아 둘 수… 레퍼런스에서도 보기가 가능"
 // and "너가 예시로 한번 아티팩트에 녹음 있는 걸 넣어 볼래".
-scenario("home 녹음: the button opens the kept recordings with an example take to try (heard, seven notes); 보내기 puts a take into a song room as a clip and onto a whiteboard as a card; the book button opens and closes 레퍼런스", async ({ open }) => {
+scenario("home 녹음: the button opens the kept recordings with an example take to try (heard, seven notes); 보내기 puts a take into a song room as a clip and onto a whiteboard as a card; the book button opens and closes 레퍼런스", async ({ open, out }) => {
   const page = await open();
   await createSongRoom(page, { room: "보낼 노래 방" });
   await click(page, "#back");
@@ -3445,6 +3448,8 @@ scenario("home 녹음: the button opens the kept recordings with an example take
   await page.waitFor(`document.getElementById("reference") && !document.getElementById("ref-sounds-part").hidden`);
   await page.waitFor(`[...document.querySelectorAll(".ref-sound .pick-name")].some((n) => n.textContent.startsWith("예시 녹음"))`, 20000);
   assert.equal(await page.eval(`document.querySelector(".ref-sound").querySelectorAll(".note").length`), 7, "the example sings seven notes");
+  await page.front();
+  await page.shot(out("home-record.png"));
   const id = await page.eval(`document.querySelector(".ref-sound").dataset.id`);
   await click(page, `#ref-play-${id}`);
   await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "■ 멈춤"`);
