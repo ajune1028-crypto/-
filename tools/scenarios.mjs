@@ -154,6 +154,47 @@ scenario("home: each room says what kind it is; nothing flashes blue; corners ta
   assert.notEqual(light.daily[0], dark.daily[0], "the glass wash is lighter in light mode and deeper in dark");
 });
 
+scenario("home: a long press on a room offers 열기, 복제, 링크 복사, 화이트보드에 넣기 and 목록에서 빼기; 복제 makes '… 복사본' with the same words; 화이트보드에 넣기 puts its lines on a board", async ({ open }) => {
+  const page = await open();
+  await createRoom(page, { room: "글 방" });
+  await focusEnd(page);
+  await page.type("첫 줄");
+  await page.key("Enter");
+  await page.type("둘째 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄\\n둘째 줄"`);
+  await click(page, "#back");
+  await createBoard(page, { room: "모으는 보드" });
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="daily-text"]'));
+  const holdRow = async (sel) => {
+    const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.touch("start", [at]);
+    await pause(700);
+    await page.touch("end");
+    await page.waitFor(q("#room-actions"));
+  };
+  await holdRow('.room-row[data-room-kind="daily-text"]');
+  assert.ok(await page.eval(`location.hash === "" || location.hash === "#"`), "the long press did not open the room");
+  for (const id of ["room-open", "room-duplicate", "room-copy-link", "room-to-board", "room-forget"]) assert.ok(await page.eval(q("#" + id)), id);
+  await click(page, "#room-duplicate");
+  await page.waitFor(`[...document.querySelectorAll(".room-row .room-name")].some((n) => n.textContent === "글 방 복사본")`, 10000);
+  // Into the whiteboard: its two lines as text.
+  await holdRow('.room-row[data-room-kind="daily-text"]');
+  await click(page, "#room-to-board");
+  await page.waitFor(q("#room-actions [data-board]"));
+  await click(page, "#room-actions [data-board]");
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("2개를 넣었어요")`, 10000);
+  // The copy holds the same words.
+  const copy = await page.eval(`[...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === "글 방 복사본").dataset.id`);
+  await click(page, `.room-row[data-id="${copy}"]`);
+  await page.waitFor(`${TODAY} && window.__app.session?.sheet(${TODAY}.dataset.day).text() === "첫 줄\\n둘째 줄"`, 10000);
+  assert.equal(await text(page, "#room-title"), "글 방 복사본");
+  await click(page, "#back");
+  const boardId = await page.eval(`window.__app.store.get("rooms", []).find((r) => r.name === "모으는 보드").id`);
+  await click(page, `.room-row[data-id="${boardId}"]`);
+  await page.waitFor(`window.__app.session?.doc("board").items().filter((i) => i.kind === "note").map((i) => i.text).join("|") === "첫 줄|둘째 줄"`, 10000);
+});
+
 scenario("create: on the creative side 노래 만들기 and 화이트보드 are open and 글쓰기 says 준비 중", async ({ open }) => {
   const page = await open();
   await click(page, "#add-creative");

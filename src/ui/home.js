@@ -1,8 +1,9 @@
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
-import { h, icon, iconButton, mount, inputRow, openSheet, formBox } from "./dom.js";
+import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast } from "./dom.js";
+import { duplicateRoom, putIntoBoard } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
-import { rememberRoom } from "../identity.js";
+import { rememberRoom, forgetRoom } from "../identity.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
@@ -26,13 +27,88 @@ export function showHome(app) {
   let closeSheet = null;
 
   // A room's row says what kind of room it is, so a whiteboard is told from a song room at a glance.
-  function roomRow(room, when) {
+  // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
+  function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
-    return h("button", { class: "room-row", type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: () => app.go("r-" + room.id) },
+    let held = false;
+    let timer = null;
+    let start = null;
+    const row = h("button", { class: "room-row", type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: (e) => {
+      if (held) {
+        held = false;
+        e.preventDefault();
+        return;
+      }
+      app.go("r-" + room.id);
+    } },
       h("span", { class: "room-name", text: room.name }),
       h("span", { class: "room-meta" },
         h("span", { class: "room-kind" }, icon(kind?.icon || "lines"), kind?.name || "새 버전의 방"),
         when && h("span", { class: "room-when", text: when })));
+    if (!mine) return row;
+    const hold = () => {
+      held = true;
+      clearTimeout(timer);
+      roomMenu(room);
+    };
+    row.addEventListener("pointerdown", (e) => {
+      held = false;
+      start = { x: e.clientX, y: e.clientY };
+      clearTimeout(timer);
+      timer = setTimeout(hold, 500);
+    });
+    row.addEventListener("pointermove", (e) => { if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer); });
+    for (const t of ["pointerup", "pointercancel", "pointerleave"]) row.addEventListener(t, () => clearTimeout(timer));
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!held) hold();
+    });
+    return row;
+  }
+
+  function roomMenu(room) {
+    const boards = app.store.get("rooms", []).filter((r) => r.kind === "creative-board" && r.id !== room.id);
+    sheet(room.name, (panel, close) => {
+      const busy = (text) => { panel.querySelector("#room-actions").replaceChildren(h("p", { class: "help", id: "room-action-busy", text })); };
+      const pickBoard = () => {
+        panel.querySelector("#room-actions").replaceChildren(
+          h("p", { class: "help", text: "어느 화이트보드에 넣을까요?" }),
+          ...(boards.length ? boards.map((b) => h("button", { class: "btn quiet", type: "button", data: { board: b.id }, text: b.name, onclick: async () => {
+            busy("넣는 중…");
+            try {
+              const n = await putIntoBoard(app, room, b);
+              close();
+              toast(root, n ? `'${b.name}'에 ${n}개를 넣었어요` : "넣을 것이 아직 없어요", 3200);
+            } catch (err) {
+              console.warn(err);
+              close();
+              toast(root, "넣지 못했어요. 두 방을 한 번씩 열었다가 다시 해 주세요.", 3600);
+            }
+          } })) : [h("p", { class: "help", text: "화이트보드 방이 아직 없어요. 창작 +에서 만들 수 있어요." })]));
+      };
+      panel.append(h("div", { class: "form", id: "room-actions" },
+        h("button", { class: "btn", type: "button", id: "room-open", text: "열기", onclick: () => { close(); app.go("r-" + room.id); } }),
+        h("button", { class: "btn quiet", type: "button", id: "room-duplicate", text: "복제", onclick: async () => {
+          busy("복제하는 중…");
+          try {
+            await duplicateRoom(app, room);
+            close();
+            toast(root, "복제했어요");
+            draw();
+          } catch (err) {
+            console.warn(err);
+            close();
+            toast(root, "복제하지 못했어요", 3200);
+          }
+        } }),
+        h("button", { class: "btn quiet", type: "button", id: "room-copy-link", text: "링크 복사", onclick: () => {
+          const link = app.linkFor(room.id);
+          Promise.resolve().then(() => navigator.clipboard.writeText(link)).then(() => toast(root, "링크를 복사했어요"), () => toast(root, link, 8000));
+          close();
+        } }),
+        h("button", { class: "btn quiet", type: "button", id: "room-to-board", text: "화이트보드에 넣기", onclick: () => pickBoard() }),
+        h("button", { class: "btn quiet", type: "button", id: "room-forget", text: "목록에서 빼기", onclick: () => { forgetRoom(app.store, room.id); close(); draw(); toast(root, "목록에서 뺐어요. 방은 그대로 있어요"); } })));
+    });
   }
 
   function half(side, title, note, emptyText) {
@@ -44,7 +120,7 @@ export function showHome(app) {
         h("h1", { class: "half-title", text: title }),
         h("p", { class: "half-note", text: note }),
         mine.length
-          ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at))))
+          ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),

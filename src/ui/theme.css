@@ -1175,3 +1175,6 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .ref-room { margin: 0.35rem 0 0; }
 .ref-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0; border-top: 1px solid var(--line); }
 .ref-item p { flex: 1; min-width: 0; margin: 0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A long press on a room opens its actions, not the phone's own menu. */
+.room-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
