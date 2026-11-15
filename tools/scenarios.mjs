@@ -566,8 +566,12 @@ scenario("mix: a double tap seeps, then blends, then resets, on both screens", a
     for (const p of [a, b]) await p.waitFor(`(() => { const w = ${TODAY}.querySelectorAll(".draw .w")[1]; return w.dataset.paint === "${paint}" && w.dataset.level === "${level}"; })()`);
   };
   let [x, y] = await wordCentre(a, "둘");
+  // 띠리링 and a swirl when the colours mix (the owner); counted where the sound is made.
+  await a.eval(`(() => { const real = AudioContext.prototype.createOscillator; window.__bells = 0; AudioContext.prototype.createOscillator = function () { window.__bells++; return real.call(this); }; return true; })()`);
+  await a.front();
   await a.dblTap(x, y);
   await expect("seep", 1);
+  await a.waitFor(`window.__bells >= 4`, 3000);
   assert.match((await words(b))[1].bg, /linear-gradient\(to right/);
   await a.shot(out("room-seep.png"));
   await a.dblTap(x, y);
@@ -4068,4 +4072,13 @@ scenario("song 올가미: drawn round two clips it gathers them; together they m
   await page.waitFor(`${song}.layout().length === 0 && !document.getElementById("group-menu")`);
   await click(page, "#undo");
   await page.waitFor(`${song}.layout().length === 2`);
+});
+
+scenario("settings: 효과음 and 진동 can be turned off (and the chime then stays quiet)", async ({ open }) => {
+  const [a, b] = await together(open);
+  await click(a, "#room-settings");
+  await a.waitFor(q("#set-sounds"));
+  assert.ok(await a.eval(q("#set-haptics")));
+  await a.eval(`(() => { document.getElementById("set-sounds").click(); return true; })()`);
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).soundEffects`), false);
 });

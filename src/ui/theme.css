@@ -1380,3 +1380,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .group-menu button { min-height: 2.2rem; padding: 0 0.7rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
 .group-menu .group-count { align-self: center; padding: 0 0.5rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; }
 .icon-btn[aria-pressed="true"]#song-lasso { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* 색 섞기: the colours swirl once through the word as they mix. */
+.w.swirl { animation: swirl 0.7s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes swirl {
+  0% { filter: hue-rotate(0deg) saturate(1); transform: scale(1); }
+  40% { filter: hue-rotate(160deg) saturate(1.6); transform: scale(1.08); }
+  100% { filter: hue-rotate(360deg) saturate(1); transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .w.swirl { animation: none; } }

@@ -44,6 +44,8 @@ export function displaySettings(app, { withColors }) {
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
     toggle("set-reference", "레퍼런스 기능 (나만 보는 메모)", settings.reference, (on) => change("reference", on)),
+    toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
+    toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }

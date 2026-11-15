@@ -5,6 +5,7 @@
 // (한글 composition, selection handles, paste). The box may lag behind while a
 // syllable is being composed, so every character it shows is tracked by id.
 
+import { chime, buzz } from "./chime.js";
 import { h } from "./dom.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
@@ -167,9 +168,21 @@ export class SheetEditor {
     if (!this.canMix()) return;
     const word = document.elementsFromPoint(event.clientX, event.clientY).find((el) => el.classList?.contains("w") && this.draw.contains(el));
     if (!word) return;
-    const { ops, atoms } = mixOps(this.sheet, this.session.clock, word.dataset.anchor);
+    const anchor = word.dataset.anchor;
+    const { ops, atoms } = mixOps(this.sheet, this.session.clock, anchor);
     this.session.commit(this.doc, ops);
     this.record(atoms.map((atom) => ({ ...atom, doc: this.doc })), false);
+    // 띠리링, a little buzz, and the colours swirl once in the word (the owner's "색이 섞이는 띠리링").
+    if (ops.length) {
+      chime(this.app);
+      buzz(this.app, 10);
+      requestAnimationFrame(() => {
+        const el = this.draw.querySelector(`.w[data-anchor="${CSS.escape(anchor)}"]`);
+        if (!el) return;
+        el.classList.add("swirl");
+        setTimeout(() => el.classList.remove("swirl"), 750);
+      });
+    }
     // A double tap normally selects the word; here it mixes instead.
     const at = this.input.selectionStart;
     this.input.setSelectionRange(at, at);
