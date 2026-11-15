@@ -3892,8 +3892,8 @@ scenario("sheets: one tap on its close button closes it; pulled down from the to
   await click(page, "#home-settings");
   await page.waitFor(q(".panel h2"));
   await page.front();
-  await frames(page);
-  const top = await page.eval(`(() => { const r = document.querySelector(".panel h2").getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; })()`);
+  // Where it rests (a page that is not in front may not run its slide-in at all).
+  const top = await page.eval(`(() => { for (const a of document.querySelector(".panel").getAnimations()) a.finish(); const r = document.querySelector(".panel h2").getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; })()`);
   await page.touch("start", [top]);
   for (let i = 1; i <= 8; i++) await page.touch("move", [[top[0], top[1] + i * 30]]);
   await page.touch("end");
@@ -3901,7 +3901,7 @@ scenario("sheets: one tap on its close button closes it; pulled down from the to
   // Scrolled down a little: the first pull only brings the content back up; the next one closes.
   await click(page, "#home-settings");
   await page.waitFor(q(".panel h2"));
-  await frames(page);
+  await page.eval(`(() => { for (const a of document.querySelector(".panel").getAnimations()) a.finish(); return true; })()`);
   const scrolls = await page.eval(`(() => { const p = document.querySelector(".panel"); p.scrollTop = 60; return p.scrollHeight > p.clientHeight; })()`);
   if (scrolls) {
     const mid = await page.eval(`(() => { const r = document.querySelector(".panel").getBoundingClientRect(); return [r.left + 30, r.top + 120]; })()`);

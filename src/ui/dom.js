@@ -210,6 +210,8 @@ export function openSheet(root, title, build) {
   panel.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1 || closing) return void (pull = null);
     const t = e.touches[0];
+    // Caught while still sliding in: it stops where it is and follows the finger from there.
+    for (const a of panel.getAnimations()) a.finish();
     const inField = !!e.target.closest?.("input, textarea, select, [contenteditable='true']");
     pull = panel.scrollTop <= 0 && !inField ? { y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
   }, { passive: true });
