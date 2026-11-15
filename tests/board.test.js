@@ -268,3 +268,18 @@ test("photo cards: a small picture stands on the board, moves and goes like any 
   assert.equal(orderColor(2, "pastel"), PASTEL_COLORS[1]);
   assert.equal(orderColor(5, "mine", "#123456"), "#123456");
 });
+
+test("plain text on the board takes a colour and a size; a loop finds every card inside it, of any kind", async () => {
+  const { itemsInLoop, lassoOps } = await import("../src/core/board.js");
+  const { board, clock, commit, note, song } = setup();
+  const t = note(0, 0, "가사");
+  commit(setItemOps(clock, board, t.id, { color: "blue", size: 3 }));
+  assert.deepEqual([board.item(t.id).color, board.item(t.id).size], ["blue", 3]);
+  assert.equal(board.apply({ t: "iset", id: clock.next(), i: t.id, f: { color: "pink" } }), "unknown", "only the ink colours");
+  assert.equal(board.apply({ t: "iset", id: clock.next(), i: t.id, f: { size: 9 } }), "unknown");
+  const s1 = song(300);
+  const far = note(2000, 0, "멀리");
+  const loop = commit(lassoOps(clock, board, [-50, -50, 700, -50, 700, 200, -50, 200], "m1"));
+  assert.deepEqual(itemsInLoop(board, loop.id).map((i) => i.id).sort(), [t.id, s1.id].sort());
+  void far;
+});

@@ -21,6 +21,7 @@
 import { cmpId, validId, Clock } from "./crdt.js";
 import { SongDoc } from "./song.js";
 import { fromBase64, toBase64 } from "./b64.js";
+import { INK_COLORS } from "./ink.js";
 
 /** 빨 주 노 초 파 남 보 검. */
 export const ORDER_COLORS = ["#e5484d", "#f2802a", "#e8b422", "#2f9e5b", "#2f7bf0", "#3b45c4", "#9a4fd8", "#2b2b30"];
@@ -48,6 +49,9 @@ const FIELD_OK = {
   w: (v) => isInt(v, 60, 2000),
   text: (v) => isText(v, 4000),
   muted: (v) => typeof v === "boolean",
+  // Plain text on the board: its colour (the ink colours) and size (1 small, 2, 3 large).
+  color: (v) => INK_COLORS.includes(v),
+  size: (v) => v === 1 || v === 2 || v === 3,
   // A song card's notes after 음 편집 or the like; checked against the card's kind once it is known.
   data: (v) => !!v && typeof v === "object" && !Array.isArray(v),
 };
@@ -336,7 +340,7 @@ export function setItemOps(clock, board, itemId, fields) {
   const prev = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!FIELD_OK[k]) continue;
-    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" ? v : Math.round(v);
+    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" ? v : Math.round(v);
     prev[k] = item[k];
   }
   return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
@@ -591,6 +595,20 @@ export function removeLassoOps(clock, board, lassoId) {
   if (!loop || loop.rm % 2 === 1) return { ops: [], atoms: [] };
   clock.atLeast(board.maxN);
   return { ops: [{ t: "larm", id: clock.next(), la: lassoId, n: loop.rm + 1 }], atoms: [{ k: "lasso-del", lasso: lassoId }] };
+}
+
+/** How tall a card stands, for what is inside a loop: songs by SONG_CARD_H, text by its size, photos by their shape. */
+function cardHeight(item) {
+  if (item.kind === "song") return SONG_CARD_H;
+  if (item.kind === "photo") return Math.round((item.w * item.data.h) / item.data.w) + 10;
+  return 28 + 10 * (item.size || 2);
+}
+
+/** Every card inside a loop (by its middle), of any kind, oldest first. */
+export function itemsInLoop(board, lassoId) {
+  const loop = board.lassos().find((l) => l.id === lassoId);
+  if (!loop) return [];
+  return board.items().filter((item) => insideLoop(loop.pts, item.x + item.w / 2, item.y + cardHeight(item) / 2));
 }
 
 /** The song cards inside a loop (their middles), in the order they play: lines first, then from the left. */

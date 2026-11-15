@@ -1024,7 +1024,16 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .lasso-chip.side { flex-direction: column; }
 .lasso-chip.side button { padding: 0 0.45rem; }
 .card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
-.card.memo { background: var(--gloss), color-mix(in srgb, #ffd84d 26%, var(--paper)); border-color: color-mix(in srgb, #e0b000 50%, transparent); }
+/* Text on the board is plain text (no box), in its own colour and size. */
+.card.memo { padding: 0.15rem 0.3rem; border-color: transparent; background: none; box-shadow: none; }
+.card.memo .card-text { color: var(--tc, var(--ink)); font-size: 1rem; font-weight: 600; line-height: 1.45; }
+.card.memo[data-size="1"] .card-text { font-size: 0.82rem; }
+.card.memo[data-size="3"] .card-text { font-size: 1.4rem; font-weight: 700; line-height: 1.3; }
+.card.memo.chosen { box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: 2px; }
+.menu-dot { width: 1.35rem; height: 1.35rem; margin: 0 0.05rem; padding: 0; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
+.menu-dot[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.menu-swatch { display: inline-block; width: 0.8rem; height: 0.8rem; margin-right: 0.25rem; border-radius: 50%; vertical-align: -0.05rem; box-shadow: 0 0 0 1px var(--line); }
+.lasso-chip .lasso-more { min-width: 2.2rem; padding: 0 0.4rem; font-size: 1.1rem; }
 .card.chosen { box-shadow: var(--gloss-edge), 0 0 0 2px var(--ink), 0 6px 18px rgb(30 50 100 / 0.2); }
 .card.link-from { box-shadow: 0 0 0 3px var(--accent), 0 6px 18px rgb(30 50 100 / 0.2); }
 .card.playing { box-shadow: var(--gloss-edge), 0 0 0 3px #e5484d, 0 0 22px rgb(229 72 77 / 0.35); }

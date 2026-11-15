@@ -2550,6 +2550,61 @@ scenario("menus: with a card's menu open, a tap on another card only puts the me
   await page.waitFor(`${q("#mode-move")}.getAttribute("aria-pressed") === "true"`);
 });
 
+scenario("whiteboard: text is plain text with a colour and a size; the 올가미's ⋯ copies, sends to 레퍼런스 and removes the cards inside; another board pastes them as they stood", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  const board = `window.__app.session.doc("board")`;
+  await click(page, "#add-note");
+  await page.waitFor(q("#note-text"));
+  await fill(page, "#note-text", "가사 첫 줄");
+  await click(page, "#note-save");
+  await page.waitFor(`${q("#card-menu")} && ${q("#card-menu #card-color")}`);
+  await click(page, "#card-color");
+  await page.waitFor(q('#card-menu [data-text-color="blue"]'));
+  await click(page, '#card-menu [data-text-color="blue"]');
+  await page.waitFor(`${board}.items().find((i) => i.kind === "note").color === "blue"`);
+  await click(page, "#card-size");
+  await page.waitFor(`${board}.items().find((i) => i.kind === "note").size === 3`);
+  const look = await page.eval(`(() => { const c = document.querySelector(".card.memo"); const t = c.querySelector(".card-text"); return { bg: getComputedStyle(c).backgroundColor, border: getComputedStyle(c).borderTopColor, size: parseFloat(getComputedStyle(t).fontSize), color: getComputedStyle(t).color }; })()`);
+  assert.equal(look.bg, "rgba(0, 0, 0, 0)", "no box");
+  assert.ok(look.size > 20, "large: " + look.size);
+  // A song card next to it, then a loop round both.
+  await click(page, "#mode-song");
+  await click(page, "#my-songs");
+  await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+  await click(page, "#song-drawer .song-pick");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
+  await click(page, "#lasso-tool");
+  // Round both cards, inside the board (not on its rounded corners) and clear of the tools on the right.
+  const box = await page.eval(`(() => { const rs = [...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect()); const b = document.getElementById("board").getBoundingClientRect(); const rail = document.getElementById("board-rail").getBoundingClientRect(); return { l: Math.max(b.left + 24, Math.min(...rs.map((r) => r.left)) - 12), t: Math.max(b.top + 24, Math.min(...rs.map((r) => r.top)) - 12), r: Math.min(rail.left - 6, Math.max(...rs.map((r) => r.right)) + 12), b: Math.min(b.bottom - 24, Math.max(...rs.map((r) => r.bottom)) + 12) }; })()`);
+  const pts = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 20]];
+  await page.touch("start", [pts[0]]);
+  for (let k = 1; k < pts.length; k++) for (let i = 1; i <= 6; i++) await page.touch("move", [[pts[k - 1][0] + ((pts[k][0] - pts[k - 1][0]) * i) / 6, pts[k - 1][1] + ((pts[k][1] - pts[k - 1][1]) * i) / 6]]);
+  await page.touch("end");
+  await page.waitFor(`${board}.lassos().length === 1`);
+  const loopId = await page.eval(`${board}.lassos()[0].id`);
+  const more = `[id="lasso-more-${loopId}"]`;
+  await click(page, more);
+  await click(page, "#lasso-copy");
+  assert.equal(await page.eval(`window.__app.store.get("clipboard", null)?.items?.length`), 2);
+  await click(page, more);
+  await click(page, "#lasso-ref");
+  assert.ok(await page.eval(`window.__app.store.get("reference-notes", []).some((n) => n.text === "가사 첫 줄") || JSON.stringify(window.__app.store.get("reference", [])).includes("가사 첫 줄")`), "the text is a 레퍼런스 note");
+  assert.equal(await page.eval(`window.__app.store.get("reference-sounds", []).length`), 1, "the song is a 레퍼런스 recording");
+  await click(page, more);
+  await click(page, "#lasso-delete");
+  await page.waitFor(`${board}.items().length === 0`);
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.items().length === 2`);
+  // Another board pastes the two as they stood, the text still blue and large.
+  await click(page, "#back");
+  await createBoard(page, { room: "두 번째 보드" });
+  await click(page, "#add-song");
+  await page.waitFor(`${board}.items().length === 2`);
+  const pasted = await page.eval(`${board}.items().find((i) => i.kind === "note")`);
+  assert.deepEqual([pasted.text, pasted.color, pasted.size], ["가사 첫 줄", "blue", 3]);
+});
+
 scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, and slot 1 brings them back", async ({ open }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);
@@ -2592,7 +2647,8 @@ scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains t
   }
   const board = `window.__app.session.doc("board")`;
   // A memo's words read on its yellow (the small note bars inside clips are another thing).
-  const memoInk = await page.eval(`(() => { const t = document.querySelector(".card.memo .card-text"); return t && [getComputedStyle(t).color, getComputedStyle(t.closest(".card")).backgroundColor, getComputedStyle(t).fontWeight]; })()`);
+  // (Text on the board is plain text now: its words read on the board itself.)
+  const memoInk = await page.eval(`(() => { const t = document.querySelector(".card.memo .card-text"); return t && [getComputedStyle(t).color, getComputedStyle(document.getElementById("board")).backgroundColor, getComputedStyle(t).fontWeight]; })()`);
   assert.ok(memoInk, "memo cards are .card.memo");
   assert.ok(contrast(hex(memoInk[0]), hex(memoInk[1])) >= 4.5, "memo text contrast: " + JSON.stringify(memoInk));
   const centre = (id) => page.eval(`(() => { const r = document.querySelector('.card[data-id="${id}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);

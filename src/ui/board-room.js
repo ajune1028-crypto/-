@@ -30,8 +30,11 @@ import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
-  lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS,
+  lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop,
 } from "../core/board.js";
+import { INK_COLORS } from "../core/ink.js";
+import { inkColor } from "./ink.js";
+import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
@@ -190,6 +193,10 @@ export function mountBoardRoom(body, app, session, frame) {
       el.classList.toggle("cut-ready", cutting && item.kind === "song");
       // The inside is built again only when what it shows changes; never for a stretch,
       // so a finger resting on a card keeps its touch through a pinch.
+      if (item.kind === "note") {
+        el.style.setProperty("--tc", inkColor(item.color || "black"));
+        el.dataset.size = String(item.size || 2);
+      }
       const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted;
       if (el.dataset.key !== key || el.shownData !== item.data) {
         el.dataset.key = key;
@@ -426,7 +433,8 @@ export function mountBoardRoom(body, app, session, frame) {
       if (soloLasso === id) stopPlaying();
       apply(removeLassoOps(session.clock, board, id));
     } });
-    const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, remove);
+    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 레퍼런스", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
+    const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, more, remove);
     chip.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       chipDragged = false;
@@ -468,6 +476,76 @@ export function mountBoardRoom(body, app, session, frame) {
       chip.addEventListener("pointercancel", cancel);
     });
     return chip;
+  }
+
+  /** What the cards inside a loop can do together: 복사, 지우기, 레퍼런스에 넣기. */
+  function openLassoMenu(id, chip) {
+    closeExtra?.();
+    const inside = () => itemsInLoop(board, id);
+    const one = (bid, text, onclick) => h("button", { type: "button", id: bid, text, onclick: (e) => { e.stopPropagation(); close(); onclick(); } });
+    const can = !readOnly();
+    const box = h("div", { class: "clip-menu card-menu lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미 메뉴" },
+      one("lasso-copy", "복사", () => copyLasso(inside())),
+      can && one("lasso-delete", "지우기", () => deleteLasso(inside())),
+      one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(inside())));
+    body.append(box);
+    const area = body.getBoundingClientRect();
+    const r = chip.getBoundingClientRect();
+    const room = rail.getBoundingClientRect().left - area.left - 6;
+    box.style.maxWidth = Math.max(160, room - 6) + "px";
+    box.style.left = Math.max(6, Math.min(room - box.offsetWidth, r.left - area.left + r.width / 2 - box.offsetWidth / 2)) + "px";
+    box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.bottom - area.top + 6)) + "px";
+    let open = true;
+    const stopGuard = closeOnOutside((t) => box.contains(t), () => close(), box);
+    function close() {
+      if (!open) return;
+      open = false;
+      stopGuard();
+      box.remove();
+      if (closeExtra === close) closeExtra = null;
+    }
+    closeExtra = close;
+  }
+
+  /** The cards as they stand relative to each other, ready to be put down elsewhere. */
+  function copyLasso(items) {
+    if (!items.length) return void toast(root, "올가미 안에 카드가 없어요");
+    const x0 = Math.min(...items.map((i) => i.x));
+    const y0 = Math.min(...items.map((i) => i.y));
+    copyItem(app.store, {
+      kind: "board-items",
+      items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, color: i.color, size: i.size })),
+    });
+    toast(root, `카드 ${items.length}장을 복사했어요. 화이트보드의 '붙이기'로 넣을 수 있어요`, 3200);
+  }
+
+  function deleteLasso(items) {
+    if (!items.length || readOnly()) return void toast(root, "올가미 안에 카드가 없어요");
+    const ops = [];
+    const atoms = [];
+    for (const i of items) {
+      const made = removeItemOps(session.clock, board, i.id);
+      ops.push(...made.ops);
+      atoms.push(...made.atoms);
+    }
+    apply({ ops, atoms });
+    toast(root, `카드 ${items.length}장을 지웠어요. 되돌리기로 살릴 수 있어요`, 3200);
+  }
+
+  /** Song cards go to 레퍼런스 as recordings, text as notes (on this device only, as all of 레퍼런스). */
+  function lassoToReference(items) {
+    let n = 0;
+    for (const i of items) {
+      if (i.kind === "note" && (i.text || "").trim()) {
+        addRefNote(app.store, i.text);
+        n++;
+      } else if (i.kind === "song") {
+        const d = i.data;
+        addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob });
+        n++;
+      }
+    }
+    toast(root, n ? `레퍼런스에 ${n}개를 넣었어요` : "레퍼런스에 넣을 글이나 노래 카드가 없어요", 3000);
   }
 
   function toggleLasso() {
@@ -548,7 +626,11 @@ export function mountBoardRoom(body, app, session, frame) {
         (t) => menu?.contains(t) || !!content.querySelector(`.card[data-id="${selected}"]`)?.contains(t),
         () => { selected = null; draw(); }, menu);
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly()].join("|");
+    if (menu.forItem !== item.id) {
+      menu.forItem = item.id;
+      menu.view = "main";
+    }
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, menu.view].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
@@ -560,8 +642,15 @@ export function mountBoardRoom(body, app, session, frame) {
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
+      ] : item.kind === "note" && menu.view === "colors" ? [
+        // Plain text's colours, in place of the menu (small, so it covers little).
+        ...INK_COLORS.map((c) => h("button", { type: "button", class: "menu-dot", data: { textColor: c }, "aria-label": "글자 색", "aria-pressed": String((item.color || "black") === c),
+          style: { background: inkColor(c) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { color: c })); } })),
       ] : item.kind === "note" ? [
         can && one("card-edit", "고치기", () => editNote(item.id)),
+        can && h("button", { type: "button", id: "card-color", onclick: (e) => { e.stopPropagation(); menu.view = "colors"; placeMenu(true); } },
+          h("span", { class: "menu-swatch", style: { background: inkColor(item.color || "black") } }), "색"),
+        can && one("card-size", ["작게", "보통", "크게"][(item.size || 2) - 1], () => apply(setItemOps(session.clock, board, item.id, { size: ((item.size || 2) % 3) + 1 }))),
         can && one("card-delete", "지우기", () => removeSelected()),
       ] : [
         can && one("card-delete", "지우기", () => removeSelected()),
@@ -569,9 +658,12 @@ export function mountBoardRoom(body, app, session, frame) {
     }
     const area = body.getBoundingClientRect();
     const box = el.getBoundingClientRect();
+    // Never over the tools on the right: the menu wraps onto another line instead.
+    const room = rail.getBoundingClientRect().left - area.left - 6;
+    menu.style.maxWidth = Math.max(160, room - 6) + "px";
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
-    const left = Math.max(6, Math.min(area.width - w - 6, box.left - area.left + box.width / 2 - w / 2));
+    const left = Math.max(6, Math.min(room - w, box.left - area.left + box.width / 2 - w / 2));
     let top = box.top - area.top - hgt - 8;
     if (top < 4) top = box.bottom - area.top + 8;
     menu.style.left = left + "px";
@@ -996,9 +1088,33 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   function addSong() {
+    const group = clipboardItem(app.store, "board-items");
+    if (group) return void pasteGroup(group.items);
     const item = clipboardItem(app.store, "song-clip");
     if (!item) return void toast(root, "노래 방에서 클립을 '복사'하면 여기에 붙일 수 있어요. '내 노래'에서 골라도 돼요.", 4200);
     placeCard(cardFromClip(item));
+  }
+
+  /** 붙이기 of cards copied with a loop: they keep their places to each other, in view, as one undo step. */
+  function pasteGroup(list) {
+    if (readOnly() || !Array.isArray(list) || !list.length) return;
+    const r = surface.getBoundingClientRect();
+    const at = toBoard(r.left + 24, r.top + 24);
+    const ops = [];
+    const atoms = [];
+    for (const it of list) {
+      const made = addItemOps(session.clock, board, { kind: it.kind, x: at.x + it.dx, y: at.y + it.dy, data: it.data, by: session.memberId });
+      if (!made.ops.length) continue;
+      board.apply(made.ops[0]);
+      ops.push(...made.ops);
+      atoms.push(...made.atoms);
+      if (it.kind === "note" && (it.color || it.size)) {
+        const look = setItemOps(session.clock, board, made.id, { ...(it.color ? { color: it.color } : {}), ...(it.size ? { size: it.size } : {}) });
+        ops.push(...look.ops);
+      }
+    }
+    apply({ ops, atoms });
+    toast(root, `카드 ${atoms.length}장을 붙였어요`);
   }
 
   function removeSelected() {
