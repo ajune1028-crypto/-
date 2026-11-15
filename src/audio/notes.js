@@ -165,10 +165,11 @@ function joinWobbles(notes) {
 }
 
 /**
- * Notes from frames ({ hz, conf, rms } every 10 ms, as `trackPitch` gives them).
+ * The stretches of frames that are one note each: [{ first, last, own (the pitch, in semitones,
+ * of its own frames) }], and how loud the take's loud parts are.
  */
-export function segmentNotes(frames) {
-  if (!frames.length) return [];
+export function notePieces(frames) {
+  if (!frames.length) return { pieces: [], loud: 1 };
   const { m, loud } = voicedPitch(frames);
   // Pieces: stretches of steady pitch. `link` says what separated a piece from
   // the one before it inside the same run: a pitch move or a loudness dip.
@@ -209,23 +210,36 @@ export function segmentNotes(frames) {
       next.link = piece.link;
     }
   }
-  const joined = joinWobbles(notes);
+  return { pieces: joinWobbles(notes), loud };
+}
+
+/** A piece's pitch (semitones, between keys) and its weight when the take's tuning is read. */
+export const pieceCentre = (piece) => ({ c: median(piece.own), w: piece.own.length });
+
+/**
+ * Notes from frames ({ hz, conf, rms } every 10 ms, as `trackPitch` gives them).
+ * `first`: the frame number of frames[0] (a line cut out of a longer take).
+ */
+export function segmentNotes(frames, { first = 0 } = {}) {
+  const { pieces, loud } = notePieces(frames);
   // The take's own tuning: a singer who is a little flat (or sharp) all through means the notes a
   // little above (below) where they land. Its offset from the piano's keys is read from all the
   // notes together (weighted by length) and taken off before each note is rounded to a key.
-  const centres = joined.map((note) => ({ c: median(note.own), w: note.own.length }));
-  const tune = tuningOffset(centres);
-  return joined.map((note, i) => {
-    let level = 0;
-    for (let k = note.first; k <= note.last; k++) level += frames[k].rms;
-    level /= note.last - note.first + 1;
-    return {
-      t: Math.max(0, frameTime(note.first) - HOP_SECONDS / 2 + ONSET_SHIFT),
-      d: (note.last - note.first + 1) * HOP_SECONDS,
-      p: Math.round(centres[i].c - tune),
-      v: Math.min(1, Math.max(0.05, level / loud)),
-    };
-  });
+  const tune = tuningOffset(pieces.map(pieceCentre));
+  return pieces.map((piece) => pieceNote(piece, frames, { first, loud, tune }));
+}
+
+/** One piece as a note { t, d, p, v }. */
+export function pieceNote(piece, frames, { first = 0, loud = 1, tune = 0 } = {}) {
+  let level = 0;
+  for (let k = piece.first; k <= piece.last; k++) level += frames[k].rms;
+  level /= piece.last - piece.first + 1;
+  return {
+    t: Math.max(0, frameTime(piece.first + first) - HOP_SECONDS / 2 + ONSET_SHIFT),
+    d: (piece.last - piece.first + 1) * HOP_SECONDS,
+    p: Math.round(median(piece.own) - tune),
+    v: Math.min(1, Math.max(0.05, level / loud)),
+  };
 }
 
 /**
