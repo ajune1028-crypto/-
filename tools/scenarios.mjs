@@ -1461,7 +1461,11 @@ scenario("song: a recording comes in my colour (the people colour nearest my gla
   await choose(a, ".clip[data-id]");
   await click(a, "#clip-tint");
   await a.waitFor(q('#clip-menu [data-tint="6"]'));
-  assert.equal(await a.eval(`document.getElementById("clip-menu").textContent.trim()`), "←", "only the dots and ← (no 기본 while it is the recorder's colour, no stray words)");
+  assert.ok(!(await a.eval(q("#clip-tint-none"))), "no 기본 while it is the recorder's colour");
+  // Whose it is: the maker's name by their colour; a dot that is someone's here carries their first letter.
+  assert.match(await text(a, "#clip-owner"), /의 녹음 · 기본은 .+의 색/);
+  assert.ok((await a.eval(`[...document.querySelectorAll("#clip-menu .menu-dot")].filter((d) => d.textContent).length`)) >= 2, "the two people's colours are marked");
+  assert.ok(!(await a.eval(`document.getElementById("clip-menu").textContent.includes("false")`)), "no stray words");
   await a.front();
   await a.shot(out("song-clip-colours.png"));
   const want = await a.eval(`getComputedStyle(document.querySelector('#clip-menu [data-tint="6"]')).backgroundColor`);
@@ -2724,19 +2728,22 @@ scenario("whiteboard 올가미 closing and kinds: drawn, its line is neon and wh
   const empty = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return [r.left + 50, r.bottom - 120]; })()`);
   const arc = [];
   for (let i = 1; i <= 8; i++) arc.push([empty[0] + i * 14, empty[1] - (i <= 4 ? i * 16 : (8 - i) * 16)]);
+  // (One 올가미 at a time: each new one takes the place of the one before.)
+  const before1 = await page.eval(`${board}.lassos()[0].id`);
   await page.touch("start", [empty]);
   for (const pt of arc) await page.touch("move", [pt]);
   const last = arc[arc.length - 1];
   await page.touch("start", [last, [last[0] + 120, last[1] - 80]]);
   await page.touchIds("end", [[1, last[0] + 120, last[1] - 80]]); // the second finger lifts where it came down; the first stays
-  await page.waitFor(`${board}.lassos().length === 2`, 3000);
+  await page.waitFor(`${board}.lassos().length === 1 && ${board}.lassos()[0].id !== ${JSON.stringify(before1)}`, 3000);
   await page.touch("end");
   // A right click while the left button is held closes one too.
+  const before2 = await page.eval(`${board}.lassos()[0].id`);
   const m0 = [empty[0] + 220, empty[1]];
   await page.press(m0[0], m0[1]);
   for (let i = 1; i <= 8; i++) await page.moveTo(m0[0] + i * 12, m0[1] - (i <= 4 ? i * 14 : (8 - i) * 14));
   await page.rightWhileLeft(m0[0] + 96, m0[1]);
-  await page.waitFor(`${board}.lassos().length === 3`, 3000);
+  await page.waitFor(`${board}.lassos().length === 1 && ${board}.lassos()[0].id !== ${JSON.stringify(before2)}`, 3000);
   await page.release(m0[0] + 96, m0[1]);
 });
 
@@ -2788,7 +2795,7 @@ scenario("whiteboard song card: the first tap shows its menu (▶ first); a seco
 });
 
 // The owner: "올가미 기능에서 색깔 바꾸기… 막 여러가지… 올가미기능은 많은걸 할 수 있게".
-scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop only (the cards keep their own); 순서 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
+scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 first asks what (곡·글·그림·전체), then colours those and the loop, never a person's colour; one 올가미 at a time; 순서 정리 lays them in one row inside a new loop; 잇기 joins the songs from the left; 음소거 and 소리 켜기; 반복 marks its ▶; undo", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -2817,13 +2824,38 @@ scenario("whiteboard 올가미 more: a card's own 색; ⋯ 색 colours the loop 
   await page.touch("end");
   await page.waitFor(`${board}.lassos().length === 1`);
   const first = await page.eval(`${board}.lassos()[0].id`);
-  // 색: the loop's own colour; the cards keep theirs ("내 고유색을 바꾸는 게 아니라 거기 색깔을").
+  // 색 (the owner: "올가미에서 선택 영역을 했으면 거기서 무슨 색을 할거냐", 곡·텍스트·그림·전체;
+  // "내 고유색을 바꾸는게 아니라 그냥 거기 색깔을"): first what, then the colour.
+  const myDot = () => page.eval(`getComputedStyle(document.querySelector("#people .dot")).backgroundColor`);
+  const mine = await myDot();
   await click(page, `[id="lasso-more-${first}"]`);
   await click(page, "#lasso-tint");
+  await page.waitFor(q("#lasso-tint-kinds"));
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#lasso-tint-kinds button")].map((b) => [b.textContent, b.getAttribute("aria-pressed")])`),
+    [["곡 2", "false"], ["글 1", "false"], ["그림 0", "false"], ["전체 3", "true"]]);
+  await click(page, '#lasso-tint-kinds [data-tint-kind="song"]');
+  await page.waitFor(`${q('#lasso-tint-kinds [data-tint-kind="song"]')}?.getAttribute("aria-pressed") === "true"`);
   await click(page, '#lasso-menu [data-tint="5"]');
-  await page.waitFor(`${board}.lassos()[0].tint === 5 && ${board}.items().length === 3`);
-  assert.deepEqual(await page.eval(`${board}.items().map((i) => i.tint ?? null).sort()`), [2, null, null], "the cards keep their own colours");
+  await page.waitFor(`${board}.lassos()[0].tint === 5 && ${board}.items().filter((i) => i.kind === "song").every((i) => i.tint === 5)`);
+  assert.equal(await page.eval(`${board}.items().find((i) => i.kind === "note").tint ?? null`), null, "the words were not chosen: they keep theirs");
   assert.ok(await page.eval(`document.querySelector('.board-loops path[data-lasso="${first}"]').getAttribute("style")?.includes("--lc")`), "the loop is drawn in its colour");
+  // Now the words: 글, then a colour.
+  await click(page, `[id="lasso-more-${first}"]`);
+  await click(page, "#lasso-tint");
+  await click(page, '#lasso-tint-kinds [data-tint-kind="note"]');
+  await page.waitFor(`${q('#lasso-tint-kinds [data-tint-kind="note"]')}?.getAttribute("aria-pressed") === "true"`);
+  await click(page, '#lasso-menu [data-tint="3"]');
+  await page.waitFor(`${board}.items().find((i) => i.kind === "note").tint === 3`);
+  assert.deepEqual(await page.eval(`${board}.items().filter((i) => i.kind === "song").map((i) => i.tint)`), [5, 5], "the songs keep the colour they took");
+  assert.equal(await myDot(), mine, "my own colour never changed");
+  await click(page, "#board-undo");
+  await page.waitFor(`(${board}.items().find((i) => i.kind === "note").tint ?? null) === null`);
+  // Back to 전체 for what follows.
+  await click(page, `[id="lasso-more-${first}"]`);
+  await click(page, "#lasso-tint");
+  await click(page, '#lasso-tint-kinds [data-tint-kind="all"]');
+  await page.key("Escape").catch(() => {});
+  await click(page, "#mode-lasso");
   // 정리: one row, tops even, 24 apart, inside a new loop of the same colour.
   await click(page, `[id="lasso-more-${first}"]`);
   await click(page, "#lasso-tidy");
@@ -3213,6 +3245,17 @@ scenario("whiteboard 올가미: a loop drawn round one card with a finger closes
   await page.waitFor(`${board}.lassos().length === 0 && !document.querySelector(".lasso-chip")`);
   await click(page, "#board-undo");
   await page.waitFor(`${board}.lassos().length === 1 && document.querySelector(".lasso-chip")`);
+  // One 올가미 at a time (the owner: "올가미 툴은 하나만"): a new one takes the old one's place; undo brings the old one back.
+  // (Drawn on an empty part of the board, away from the loop: a drag that starts inside a loop moves it.)
+  const spot = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return { cx: r.left + r.width * 0.4, cy: r.bottom - 170, w: 90, h: 70 }; })()`);
+  const again = ring(spot, 14, 0.86);
+  await page.touch("start", [again[0]]);
+  for (const pt of again.slice(1)) await page.touch("move", [pt]);
+  await page.touch("end");
+  await page.waitFor(`${board}.lassos().length === 1 && ${board}.lassos()[0].id !== ${JSON.stringify(loopId)}`);
+  assert.equal(await page.eval(`document.querySelectorAll(".lasso-chip").length`), 1);
+  await click(page, "#board-undo");
+  await page.waitFor(`${board}.lassos().length === 1 && ${board}.lassos()[0].id === ${JSON.stringify(loopId)}`);
   // A second finger while drawing means zoom: no loop is made.
   const other = ring(second, 14, 0.5);
   await page.touch("start", [other[0]]);
@@ -3785,4 +3828,26 @@ scenario("whiteboard: a song card has its own 빠르기 too: shorter as it plays
   await click(page, "#card-menu #card-cut");
   await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 2`);
   assert.deepEqual(await page.eval(`${board}.items().map((i) => i.speed)`), [1.5, 1.5]);
+});
+
+// The owner (two screenshots): scrolled down, what is inside 레퍼런스 stuck out of its rounded glass.
+scenario("레퍼런스: what is inside stays inside its rounded glass; scrolled to the end, the last recording sits clear of the edge", async ({ open }) => {
+  const page = await open({ width: 390, height: 700 });
+  await page.waitFor(q("#home-record"));
+  await click(page, "#home-record");
+  await page.waitFor(`document.querySelectorAll("#reference .ref-sound").length >= 1`, 15000);
+  const box = await page.eval(`(() => {
+    const panel = document.getElementById("reference");
+    const body = panel.querySelector(".float-body");
+    body.scrollTop = body.scrollHeight;
+    const p = panel.getBoundingClientRect();
+    const b = body.getBoundingClientRect();
+    const cards = [...panel.querySelectorAll(".ref-sound")];
+    const last = cards[cards.length - 1].getBoundingClientRect();
+    return { overflow: getComputedStyle(panel).overflow, p: [p.top, p.bottom, p.left, p.right], b: [b.top, b.bottom], last: [last.top, last.bottom, last.left, last.right], scrolls: body.scrollHeight > body.clientHeight };
+  })()`);
+  assert.equal(box.overflow, "hidden", "the glass clips what is inside to its rounded corners");
+  assert.ok(box.b[1] <= box.p[1] + 0.5, "the scrolling part ends inside the glass: " + JSON.stringify(box));
+  assert.ok(box.last[2] >= box.p[2] && box.last[3] <= box.p[3], "the recording is no wider than the glass: " + JSON.stringify(box));
+  if (box.scrolls) assert.ok(box.last[1] <= box.p[1] - 12, "at the end the last recording is clear of the bottom edge: " + JSON.stringify(box));
 });

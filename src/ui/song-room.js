@@ -32,6 +32,8 @@ import { resample, toMono, louder } from "../audio/dsp.js";
 import { toBase64, scalePeaks } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
 import { keepTake, takeWhere } from "./keep-take.js";
+import { soundTitle } from "./names.js";
+import { reachableRooms, meIn } from "./room-actions.js";
 import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
 import { addItemOps, cardFromClip, keptFields, setItemOps } from "../core/board.js";
@@ -89,10 +91,12 @@ export function mountSongRoom(body, app, session, frame) {
   // The time, and under it the song's 박자; a tap opens the 박자 sheet.
   const clockTime = h("span", { class: "clock-time", id: "song-clock", text: "0:00.0" });
   const beatLabel = h("span", { class: "clock-beat", id: "beat-label", text: "♩ 박자" });
-  const clock = h("button", { class: "song-clock", id: "beat", type: "button", "aria-label": "박자 (빠르기, 박자표, 메트로놈)", onclick: () => openBeatSheet() }, clockTime, beatLabel);
+  const clock = h("button", { class: "song-clock", id: "beat", type: "button", "aria-label": "박자 (빠르기, 박자표, 메트로놈)", onclick: () => openBeatSheet(), data: { contrast: "" } }, clockTime, beatLabel);
   const zoomOut = iconButton("zoom-out", "zoomOut", "좁게 보기", () => timeline.setZoom(timeline.pps / 1.4, playhead));
   const zoomIn = iconButton("zoom-in", "zoomIn", "넓게 보기", () => timeline.setZoom(timeline.pps * 1.4, playhead));
   const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"]], settings().songMode, (mode) => setMode(mode), "mode");
+  // They lie straight on the room's background: they read it (white, black or a deeper black).
+  for (const el of [zoomOut, zoomIn, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
   modeSwitch.setAttribute("aria-label", "듣는 방식");
   frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn), modeSwitch));
@@ -142,6 +146,28 @@ export function mountSongRoom(body, app, session, frame) {
   function clipColor(clip) {
     return clip.tint != null ? memberColor(clip.tint, currentTheme()) : colorOf(clip.by);
   }
+  /**
+   * What a clip is (the owner: "녹음 직사각형 이름이 안 나와", "mp3 가지고 왔으면 그것의 이름과
+   * 어떤 mp3인지"): its file's name and kind, or 녹음 N for a take made here, and who put it in.
+   */
+/** A colour dot's words: whose colour it is in this room, if anyone's. */
+  function dotLabel(i) {
+    const who = session.room.members().filter((m) => m.color === i).map((m) => m.name);
+    return who.length ? `${who.join(", ")}의 색` : "색 " + (i + 1);
+  }
+  const dotLetter = (i) => session.room.members().find((m) => m.color === i)?.name?.slice(0, 1) || "";
+
+    function clipName(clip) {
+    const src = song.source(clip.src);
+    if (!src) return { title: "", kind: null, long: null, who: "" };
+    let fallback = "녹음";
+    if (!src.name) {
+      const takes = [...new Set(song.layout().map((c) => c.src))].map((id) => song.source(id)).filter((s) => s && !s.name).sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+      fallback = "녹음 " + (takes.findIndex((s) => s.id === src.id) + 1);
+    }
+    return { ...soundTitle(src.name, fallback), who: session.room.member(src.by)?.name || "" };
+  }
+
 
   function colorOf(by) {
     const m = session.room.member(by);
@@ -177,7 +203,7 @@ export function mountSongRoom(body, app, session, frame) {
     let empty = null;
     if (!loaded) empty = "노래를 불러오는 중…";
     return {
-      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, mode: settings().songMode, showWave: settings().showWave,
+      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
@@ -746,15 +772,22 @@ export function mountSongRoom(body, app, session, frame) {
     // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
     const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
     // 색: the people colours in place of the menu (small, so it covers little), and 기본 (the recorder's).
+    const named = clipName(clip);
     if (menuView === "tints" && !locked) {
       const now = clip.tint ?? null;
+      // Whose it is, so a colour that is a person's is not taken for theirs (the owner: "색깔 들어가면은
+      // 누구 건지도 알 수 있게끔"): the maker's name by their colour, and on each dot that is someone's here, their first letter.
+      const owner = session.room.member(song.source(clip.src)?.by || clip.by);
       menu.replaceChildren(...[
-        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(now === i),
-          style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
+        h("p", { class: "menu-info", id: "clip-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(song.source(clip.src)?.by || clip.by) } }), `${owner?.name || "누군가"}의 녹음 · 기본은 ${owner?.name || "그 사람"}의 색`),
+        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": dotLabel(i), title: dotLabel(i), "aria-pressed": String(now === i),
+          text: dotLetter(i), style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
         item("clip-tint-none", "기본", () => { menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: null })); draw(); }, now !== null),
         item("clip-tint-back", "←", () => { menuView = "main"; placeMenu(); }),
       ].filter(Boolean));
     } else menu.replaceChildren(...[
+      // What it is: its name, what it came from, who put it in.
+      h("p", { class: "menu-info", id: "clip-info", text: [named.title, named.long, named.who && named.who + "이(가) 넣음"].filter(Boolean).join(" · ") }),
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
       item("clip-copy", "복사", () => copyClip(clip.id)),
@@ -785,11 +818,18 @@ export function mountSongRoom(body, app, session, frame) {
     const clip = song.clip(id);
     const src = clip && song.source(clip.src);
     if (!src) return;
-    const boards = app.store.get("rooms", []).filter((r) => r.kind === "creative-board");
+    // My whiteboards: the ones this device remembers, and the ones made on my other devices
+    // (home lists those too; they were missing here, so 보내기 said there were none).
     openSheet(root, "화이트보드로 보내기", (panel, close) => {
-      if (!boards.length) return void panel.append(h("p", { class: "help", id: "no-boards", text: "화이트보드 방이 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
-      panel.append(h("div", { class: "kinds", id: "send-boards" }, boards.map((r) => h("button", { class: "kind", type: "button", data: { room: r.id }, onclick: () => { close(); deliver(r, clip, src); } },
-        h("span", { class: "kind-name", text: r.name })))));
+      const wait = h("p", { class: "help", id: "boards-wait", text: "화이트보드를 찾는 중…" });
+      panel.append(wait);
+      reachableRooms(app, ["creative-board"]).then(({ mine, others }) => {
+        wait.remove();
+        if (!mine.length && !others.length) return void panel.append(h("p", { class: "help", id: "no-boards", text: "화이트보드 방이 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
+        const pick = (r) => h("button", { class: "kind", type: "button", data: { room: r.id }, onclick: () => { close(); deliver(r, clip, src); } }, h("span", { class: "kind-name", text: r.name || "화이트보드" }));
+        panel.append(h("div", { class: "kinds", id: "send-boards" }, mine.map(pick)));
+        if (others.length) panel.append(h("p", { class: "group-label", text: "다른 기기에서 만든 방" }), h("div", { class: "kinds", id: "send-boards-others" }, others.map(pick)));
+      });
     });
   }
 
@@ -805,7 +845,8 @@ export function mountSongRoom(body, app, session, frame) {
       const right = items.reduce((a, b) => (!a || b.x + b.w > a.x + a.w ? b : a), null);
       const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
       const data = cardFromClip({ source, offset: clip.offset, length: clip.length });
-      const by = roomEntry(app.store, room.id)?.memberId || session.memberId;
+      // In a whiteboard this device has not opened yet, I come in as myself (my name, colour and code).
+      const by = roomEntry(app.store, room.id)?.memberId || meIn(app, other, room, session.me);
       const made = addItemOps(other.clock, target, { kind: "song", x: right ? right.x + right.w + 60 : 40, y: right ? right.y : 40, data, by });
       other.commit("board", made.ops);
       const keep = keptFields("song", { speed: clip.speed, tint: clip.tint }, data);

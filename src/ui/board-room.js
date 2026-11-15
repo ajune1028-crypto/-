@@ -33,7 +33,7 @@ import {
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
   tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
-import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } from "../core/ink.js";
+import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
@@ -42,6 +42,8 @@ import { audioContext, SongPlayer } from "../audio/engine.js";
 import { decodeWav, encodeWav } from "../audio/wav.js";
 import { toMono, resample, louder } from "../audio/dsp.js";
 import { keepTake, takeWhere } from "./keep-take.js";
+import { soundTitle } from "./names.js";
+import { reachableRooms } from "./room-actions.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
@@ -363,6 +365,12 @@ export function mountBoardRoom(body, app, session, frame) {
     return "";
   }
 
+  /** A song card's name (the owner: "mp3 가지고 왔으면 그것의 이름과 어떤 mp3인지"): "노래 · mp3", or 녹음. */
+  function cardTitle(d) {
+    const t = soundTitle(d.name, "녹음");
+    return t.kind && t.kind !== "녹음" ? `${t.title} · ${t.kind}` : t.title;
+  }
+
   function cardInside(item, place) {
     if (item.kind === "note") return [h("p", { class: "card-text", text: item.text || "빈 메모" })];
     // Once the picture is in, the card is taller: its menu and lines are placed again.
@@ -374,7 +382,7 @@ export function mountBoardRoom(body, app, session, frame) {
         h("button", { type: "button", class: "card-play", "aria-label": "이 카드만 듣기", data: { icon: "play" }, onclick: (e) => { if (e.detail === 0) playCard(item.id); } }, icon("play")),
         place >= 0 && h("span", { class: "card-order", text: String(place + 1) }),
         item.muted && h("span", { class: "card-muted", "aria-label": "음소거" }, icon("muted")),
-        h("span", { class: "card-name", text: d.name || "노래" }),
+        h("span", { class: "card-name", text: cardTitle(d) }),
         // Its own speed beside its length (the length as it sounds at that speed).
         (item.speed || 1) !== 1 && h("b", { class: "speed-badge", text: item.speed + "×" }),
         h("span", { class: "card-len", text: (d.dur / (item.speed || 1) / 1000).toFixed(1) + "초" })),
@@ -636,8 +644,15 @@ export function mountBoardRoom(body, app, session, frame) {
       const kind = kindOf(id);
       const songs = kind === "all" || kind === "song" ? itemsInLoop(board, id).filter((c) => c.kind === "song") : [];
       if (view === "tints") {
+        // The owner: "올가미에서 선택 영역을 했으면 거기서 무슨 색을 할거냐" - 곡, 텍스트, 그림, 전체:
+        // first what takes the colour, then the colour. People's own colours stay as they are.
         const now = loop?.tint ?? null;
         box.replaceChildren(
+          h("div", { class: "lasso-tint-kinds", id: "lasso-tint-kinds" }, ["song", "note", "draw", "all"].map((k) => {
+            const held = loopHolds(id, k);
+            return h("button", { type: "button", data: { tintKind: k }, "aria-pressed": String(kind === k), text: `${KIND_NAMES[k]} ${held.cards.length + held.strokes.length}`,
+              onclick: (e) => { e.stopPropagation(); loopKinds.set(id, k); fill("tints"); place(); draw(); } });
+          })),
           ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(now === i),
             style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); close(); tintLasso(id, i); } })),
           one("lasso-tint-none", "기본", () => tintLasso(id, null)));
@@ -732,9 +747,31 @@ export function mountBoardRoom(body, app, session, frame) {
     closeExtra = close;
   }
 
-  /** 색: the loop's own colour (the cards keep theirs: "내 고유색을 바꾸는 게 아니라 거기 색깔을"). */
+  /**
+   * 색: what the loop works on (its 곡·글·그림·전체) takes the colour, and the loop's line with it
+   * ("내 고유색을 바꾸는 게 아니라 그냥 거기 색깔을": a person's own colour never changes, only these
+   * things'). 기본 gives each back its own (a recording its maker's colour); drawings keep theirs then.
+   * One undo step.
+   */
   function tintLasso(id, tint) {
-    applyAll([tintLassoOps(session.clock, board, id, tint)]);
+    if (readOnly()) return;
+    const held = loopHolds(id);
+    const atoms = [];
+    for (const made of [...held.cards.map((c) => setItemOps(session.clock, board, c.id, { tint })), tintLassoOps(session.clock, board, id, tint)]) {
+      if (!made?.ops?.length) continue;
+      session.commit("board", made.ops);
+      atoms.push(...made.atoms);
+    }
+    if (tint !== null && held.strokes.length) {
+      const made = recolorStrokesOps(session.clock, session.doc(INK_DOC), held.strokes, memberColor(tint, currentTheme()), session.memberId);
+      if (made.ops.length) {
+        session.commit(INK_DOC, made.ops);
+        atoms.push(...made.atoms.map((a) => ({ ...a, doc: INK_DOC })));
+      }
+    }
+    record(atoms);
+    draw();
+    inkSoon();
   }
 
   /** 정리: the cards inside in one row from the left, tops even, and the loop drawn again round them. */
@@ -1027,8 +1064,13 @@ export function mountBoardRoom(body, app, session, frame) {
       const can = !readOnly();
       const one = (id, text, onclick) => h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
       // 색 for a song or a photo card: the people colours in place of the menu, and 기본 (whoever placed it).
+      // Whose it is, so a colour that is a person's is not taken for theirs (the owner: "색깔 들어가면은 누구 건지도").
+      const owner = session.room.member(item.by)?.name || "누군가";
+      const whose = (i) => session.room.members().filter((m) => m.color === i).map((m) => m.name);
       const tints = () => [
-        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String((item.tint ?? null) === i),
+        h("p", { class: "menu-info", id: "card-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(item.by) } }), `${owner}이(가) 넣음 · 기본은 ${owner}의 색`),
+        ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": whose(i).length ? whose(i).join(", ") + "의 색" : "색 " + (i + 1), title: whose(i).join(", "),
+          "aria-pressed": String((item.tint ?? null) === i), text: whose(i)[0]?.slice(0, 1) || "",
           style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: i })); } })),
         item.tint != null && one("card-tint-none", "기본", () => { menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: null })); }),
       ];
@@ -1321,9 +1363,13 @@ export function mountBoardRoom(body, app, session, frame) {
       loop.done = true;
       finish();
       if (!loop.moved) return;
+      const before = board.lassos().map((l) => l.id);
       const made = lassoOps(session.clock, board, loop.pts, session.memberId);
       if (!made.ops.length) return void toast(root, "조금 더 크게 둘러 주세요");
-      apply(made);
+      // One 올가미 at a time (the owner: "올가미 툴은 하나만"): the new one takes the old one's place.
+      const gone = before.map((lid) => removeLassoOps(session.clock, board, lid));
+      if (before.includes(soloLasso)) stopPlaying();
+      apply({ ops: [...made.ops, ...gone.flatMap((g) => g.ops)], atoms: [...made.atoms, ...gone.flatMap((g) => g.atoms)] });
       shine(made.id);
     };
     const move = (ev) => {
@@ -2028,9 +2074,13 @@ export function mountBoardRoom(body, app, session, frame) {
       noteBars(data, "pick-notes"));
     const copied = clipboardItem(app.store, "song-clip");
     if (copied) list.append(h("div", { class: "drawer-section" }, h("p", { class: "drawer-group", text: "복사한 클립" }), pick(cardFromClip(copied), copied.source?.name || "복사한 클립", copied)));
-    const rooms = app.store.get("rooms", []).filter((r) => r.kind === "creative-song").sort((a, b) => b.at - a.at);
-    if (!rooms.length && !copied) list.append(h("p", { class: "help", text: "아직 노래 방이 없어요. 오른쪽 '소리 넣기'로 여기에 바로 넣어도 돼요." }));
+    // My song rooms here, then the ones made on my other devices (home lists those too).
+    const remembered = app.store.get("rooms", []).filter((r) => r.kind === "creative-song").sort((a, b) => b.at - a.at);
+    const rooms = remembered.slice();
     (async () => {
+      for (const extra of (await reachableRooms(app, ["creative-song"])).others) rooms.push(extra);
+      if (!open) return;
+      if (!rooms.length && !copied) list.append(h("p", { class: "help", text: "아직 노래 방이 없어요. 오른쪽 '소리 넣기'로 여기에 바로 넣어도 돼요." }));
       for (const room of rooms) {
         const wait = h("p", { class: "help", text: "불러오는 중…" });
         const box = h("div", { class: "drawer-section" }, h("p", { class: "drawer-room", text: room.name }), wait);

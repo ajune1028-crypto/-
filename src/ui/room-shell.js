@@ -9,6 +9,7 @@ import { applyTheme, applyAccent, applyTextScale, currentTheme, myPeopleColor, A
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
+import { watchContrast } from "./contrast.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { memberColor, PALETTE } from "../core/paint.js";
@@ -199,6 +200,11 @@ export function showRoom(app, roomId) {
     drawTitle();
     drawPeople();
     drawStatus();
+    // Words and icons straight on the background read it and take white or black (contrast.js).
+    {
+      const seen = watchContrast(backdrop.parentElement, backdrop);
+      offs.push(() => seen.stop());
+    }
     drawBackground();
 
     offs.push(

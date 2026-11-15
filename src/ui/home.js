@@ -73,7 +73,9 @@ export function showHome(app) {
   }
 
   function roomMenu(room) {
-    const boards = app.store.get("rooms", []).filter((r) => r.kind === "creative-board" && r.id !== room.id);
+    // My whiteboards here and the ones made on my other devices (listed on home too).
+    const remembered = app.store.get("rooms", []);
+    const boards = [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))].filter((r) => r.kind === "creative-board" && r.id !== room.id);
     sheet(room.name, (panel, close) => {
       const busy = (text) => { panel.querySelector("#room-actions").replaceChildren(h("p", { class: "help", id: "room-action-busy", text })); };
       const pickBoard = () => {

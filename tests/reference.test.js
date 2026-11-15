@@ -26,3 +26,12 @@ test("a take made in a room says which room (a bad 'from' is left out)", () => {
   assert.deepEqual(s.from, { room: "r-abc", name: "우리 노래", kind: "creative-song" });
   assert.equal(addRefSound(store, { name: "x", dur: 1, notes: [], peaks: "", blob: "c", from: { room: 5 } }).from, undefined);
 });
+
+test("the same recording put into 레퍼런스 again stays one line (it comes to the top)", () => {
+  const store = memoryStore();
+  const first = addRefSound(store, { name: "흥얼", dur: 1, notes: [], peaks: "", blob: "b1" }, 1000);
+  addRefSound(store, { name: "다른", dur: 1, notes: [], peaks: "", blob: "b2" }, 2000);
+  const again = addRefSound(store, { name: "흥얼 (보드에서)", dur: 1, notes: [], peaks: "", blob: "b1" }, 3000);
+  assert.equal(again.id, first.id);
+  assert.deepEqual(refSounds(store).map((s) => s.blob), ["b1", "b2"]);
+});

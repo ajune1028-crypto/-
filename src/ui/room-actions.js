@@ -3,10 +3,11 @@
 // song cards, a text room's lines as text, a whiteboard's cards as they are.
 
 import { RoomSession } from "../sync/session.js";
-import { newRoomId } from "../core/room.js";
+import { newRoomId, newMemberId, joinOps } from "../core/room.js";
+import { myPeopleColor } from "./theme.js";
 import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields } from "../core/board.js";
 import { sourceOp, addClipOps } from "../core/song.js";
-import { rememberRoom, roomEntry } from "../identity.js";
+import { rememberRoom, roomEntry, getSettings } from "../identity.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -17,6 +18,42 @@ async function openRoom(app, id) {
     throw new Error("the room did not open");
   }
   return session;
+}
+
+/**
+ * The rooms of these kinds I can reach: the ones this device remembers, and the ones the server
+ * lists that this device has not opened yet (made on my other devices; home shows them under
+ * "다른 기기에서 만든 방"). Resolves with { mine, others }.
+ */
+export async function reachableRooms(app, kinds) {
+  const mine = app.store.get("rooms", []).filter((r) => kinds.includes(r.kind)).sort((a, b) => b.at - a.at);
+  let others = [];
+  try {
+    const transport = await app.ready;
+    const list = await Promise.race([transport.listRooms(), sleep(4000).then(() => [])]);
+    others = list.filter((r) => kinds.includes(r.kind) && !mine.some((m) => m.id === r.id));
+  } catch {
+    others = [];
+  }
+  return { mine, others };
+}
+
+/**
+ * Who I am in a room this device has not opened yet: the one person there with my name (me, from
+ * another device), else a new member with my name, my colour there and my code. From then on the
+ * room is remembered here too. `me` is my member record in the room I am in.
+ */
+export function meIn(app, to, entry, me) {
+  const known = roomEntry(app.store, entry.id)?.memberId;
+  if (known) return known;
+  const same = to.room.members().filter((m) => m.name === me?.name);
+  let id = same.length === 1 ? same[0].id : null;
+  if (!id) {
+    id = newMemberId();
+    to.commit("room", joinOps(to.clock, to.room, { memberId: id, name: me?.name || "나", pin: me?.pin ?? null, now: Date.now(), color: myPeopleColor(getSettings(app.store), to.room) }));
+  }
+  rememberRoom(app.store, { id: entry.id, kind: entry.kind || to.room.meta("kind"), name: entry.name || to.room.meta("name"), memberId: id });
+  return id;
 }
 
 /** Waits (a little) until what was written has gone out. */
@@ -116,10 +153,10 @@ export async function putIntoBoard(app, entry, boardEntry) {
  * after everything it holds (on the first row with room there), a whiteboard as a song card to
  * the right of its cards. Resolves when it has gone out.
  */
-export async function putSoundInto(app, entry, sound) {
+export async function putSoundInto(app, entry, sound, me = null) {
   const to = await openRoom(app, entry.id);
   try {
-    const by = roomEntry(app.store, entry.id)?.memberId || entry.memberId;
+    const by = roomEntry(app.store, entry.id)?.memberId || entry.memberId || meIn(app, to, entry, me || { name: app.store.get("last", null)?.name });
     if (entry.kind === "creative-song") {
       const song = await to.load("song");
       if (!song.canAddClip()) throw new Error("the song is full");

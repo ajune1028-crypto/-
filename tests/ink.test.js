@@ -121,3 +121,19 @@ test("올가미 moves drawings: a stroke moved is the same stroke further along 
   for (const op of invertInkOps(ink, clock, moved.atoms, "undo")) ink.apply(op);
   assert.deepEqual(ink.strokes().map((x) => x.id), [s.id], "undo: the stroke where it was");
 });
+
+test("strokes take another colour (the 올가미's 색 on 그림): each goes and comes back in that colour, one undo puts them back", async () => {
+  const { recolorStrokesOps } = await import("../src/core/ink.js");
+  const ink = new InkDoc();
+  const clock = new Clock("a");
+  const a = strokeOps(clock, ink, { pts: [0, 0, 50, 100, 100, 50], color: "black", width: 2, by: "m" });
+  a.ops.forEach((op) => ink.apply(op));
+  const made = recolorStrokesOps(clock, ink, [a.ops[0].id], "#e5484d", "m");
+  made.ops.forEach((op) => ink.apply(op));
+  const now = ink.strokes();
+  assert.equal(now.length, 1);
+  assert.equal(now[0].c, "#e5484d");
+  assert.deepEqual(now[0].pts, a.ops[0].pts, "where it was");
+  invertInkOps(ink, clock, made.atoms, "undo").forEach((op) => ink.apply(op));
+  assert.deepEqual(ink.strokes().map((s) => s.c), ["black"]);
+});

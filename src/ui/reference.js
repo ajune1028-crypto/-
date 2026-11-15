@@ -8,7 +8,7 @@
 
 import { h, openFloat, openSheet, segmented, toast } from "./dom.js";
 import { exampleTake } from "../audio/example.js";
-import { putSoundInto } from "./room-actions.js";
+import { putSoundInto, reachableRooms } from "./room-actions.js";
 import { getSettings, setSetting } from "../identity.js";
 import { kindInfo } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
@@ -113,8 +113,10 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     /** 보내기: a kept recording into one of my song rooms (a clip after what it holds) or whiteboards (a card). */
     function sendSound(s) {
       stopHearing();
-      const rooms = app.store.get("rooms", []).filter((r) => (r.kind === "creative-song" || r.kind === "creative-board") && r.id !== roomId).sort((a, b) => b.at - a.at);
-      openSheet(app.root, "어느 방으로 보낼까요?", (sheet, close) => {
+      openSheet(app.root, "어느 방으로 보낼까요?", async (sheet, close) => {
+        // My song rooms and whiteboards here, and the ones made on my other devices.
+        const found = await reachableRooms(app, ["creative-song", "creative-board"]);
+        const rooms = [...found.mine, ...found.others].filter((r) => r.id !== roomId);
         if (!rooms.length) return void sheet.append(h("p", { class: "help", id: "send-none", text: "노래 방이나 화이트보드가 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
         sheet.append(h("div", { class: "kinds", id: "send-rooms" }, rooms.map((r) => h("button", { class: "kind", type: "button", data: { sendTo: r.id }, onclick: async () => {
           close();

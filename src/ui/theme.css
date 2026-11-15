@@ -1241,3 +1241,52 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .speed-badge { position: absolute; top: 0.2rem; right: 0.3rem; z-index: 1; padding: 0.04rem 0.32rem; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 0.62rem; font-style: normal; font-weight: 800; line-height: 1.35; font-variant-numeric: tabular-nums; pointer-events: none; }
 .card-head .speed-badge { position: static; flex: none; }
 .ref-from { margin: -0.15rem 0 0.2rem; color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+/* 올가미 색: first what takes the colour (곡·글·그림·전체), then the colour. */
+.lasso-tint-kinds { display: flex; flex-basis: 100%; gap: 0.2rem; margin-bottom: 0.15rem; }
+.lasso-tint-kinds button { flex: 1; min-height: 2rem; padding: 0 0.35rem; border-radius: 999px; font-size: 0.8rem; }
+.lasso-tint-kinds button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* A clip's name, small at its top-left (after its mute and lock marks). */
+.flags { right: 2.4rem; align-items: center; min-width: 0; pointer-events: none; }
+.clip-name { overflow: hidden; color: color-mix(in srgb, var(--ink) 78%, var(--c)); font-size: 0.62rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 2px var(--paper); }
+/* What a recording is, at the head of its menu. */
+.menu-info { display: flex; flex-basis: 100%; align-items: center; gap: 0.35rem; margin: 0 0.2rem 0.1rem; color: var(--muted); font-size: 0.72rem; font-weight: 600; line-height: 1.35; word-break: keep-all; }
+.menu-dot { color: #fff; font-size: 0.66rem; font-weight: 800; text-shadow: 0 0 2px rgb(0 0 0 / 0.55); }
+
+/* A floating panel (레퍼런스) keeps everything inside its rounded glass: what scrolls is clipped to
+   its corners and fades out before its edge, and pulling past the end does not bounce empty space in. */
+.float { overflow: hidden; }
+.float-body {
+  overscroll-behavior: none;
+  padding-bottom: 1.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 0.6rem, #000 calc(100% - 1.1rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 0.6rem, #000 calc(100% - 1.1rem), transparent 100%);
+}
+.float-body::-webkit-scrollbar { width: 4px; }
+.float-body::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--ink) 25%, transparent); }
+
+/* Words and icons straight on a room's background take the ink that reads there (contrast.js):
+   white on a dark backdrop, black on a light one, a deeper black on the brightest, each with a
+   soft halo of the other kind (the owner: "하얀색이 될 건가, 검정색이 될 건가, 아니면 더 진한 검정색"). */
+[data-contrast][data-on="dark"] { --on-ink: #fff; --on-halo: rgb(0 0 0 / 0.42); }
+[data-contrast][data-on="light"] { --on-ink: #17171a; --on-halo: rgb(255 255 255 / 0.62); }
+[data-contrast][data-on="bright"] { --on-ink: #000; --on-halo: rgb(255 255 255 / 0.78); }
+[data-contrast][data-on], [data-contrast][data-on] .clock-beat, [data-contrast][data-on] button:not([aria-pressed="true"]) { color: var(--on-ink); text-shadow: 0 0 6px var(--on-halo), 0 0 2px var(--on-halo); }
+[data-contrast][data-on] svg { filter: drop-shadow(0 0 2.5px var(--on-halo)); }
+[data-contrast][data-on].seg, .seg[data-contrast][data-on] { background: color-mix(in srgb, var(--on-halo) 55%, transparent); }
+
+/* Glass shadows: soft, in my glass colour, never a heavy black (the owner: "검정색이 너무 강해…
+   내가 설정해둔 색깔이랑 비슷하게… 안 진하게"). */
+:root[data-theme="dark"] {
+  --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+  --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
+  --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+    --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
+    --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+  }
+}

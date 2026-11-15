@@ -172,6 +172,22 @@ export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
   return { ops, atoms };
 }
 
+/** Strokes in another colour (the 올가미's 색 on 그림): each goes and comes back the same but for its colour. */
+export function recolorStrokesOps(clock, ink, ids, color, by) {
+  const ops = [];
+  const atoms = [];
+  if (!COLOR_OK(color)) return { ops, atoms };
+  for (const id of ids) {
+    const s = ink.get(id);
+    if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
+    const gone = eraseOps(clock, ink, id);
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, by, brush: s.b || "pen" });
+    ops.push(...gone.ops, ...made.ops);
+    atoms.push(...gone.atoms, ...made.atoms);
+  }
+  return { ops, atoms };
+}
+
 /** Undo or redo of drawing and erasing, judged against the drawing as it is now. */
 export function invertInkOps(ink, clock, atoms, dir) {
   clock.atLeast(ink.maxN);

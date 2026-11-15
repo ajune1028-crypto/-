@@ -244,7 +244,8 @@ export class Timeline {
     const notes = source ? model.notesOf(clip.src) : [];
     el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip), notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
+    const named = model.name ? model.name(clip) : null;
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
@@ -298,6 +299,9 @@ export class Timeline {
     const flags = h("span", { class: "flags" });
     if (clip.muted) flags.append(iconSvg("muted"));
     if (clip.locked) flags.append(iconSvg("lock"));
+    // Its name, small at the top (a file's name and kind: "노래 · mp3"; a take here: "녹음 2").
+    const named = model.name ? model.name(clip) : null;
+    if (named?.title) flags.append(h("span", { class: "clip-name", text: named.kind && named.kind !== "녹음" ? `${named.title} · ${named.kind}` : named.title }));
     if (flags.childNodes.length) parts.push(flags);
     return parts;
   }
