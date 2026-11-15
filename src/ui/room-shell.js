@@ -1,6 +1,10 @@
 // The frame every room shares: top bar, who is here, settings, and the way in.
 
-import { h, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
+import { shrinkPhoto } from "./photo.js";
+import { watchPickers } from "./picker-watch.js";
+import { fileOps } from "../core/files.js";
+import { fromBase64 } from "../core/b64.js";
+import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
 import { applyTheme, applyAccent, applyTextScale, currentTheme, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
@@ -59,6 +63,10 @@ export function diagnostics(app, session) {
   ].filter(Boolean);
   return h("dl", { class: "diag", id: "diag" }, facts.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })]));
 }
+
+/** 배경: grainy gradients a room can take (or a photo of its own). */
+export const BACKGROUNDS = [[1, "노을"], [2, "바다"], [3, "숲"], [4, "라벤더"], [5, "밤하늘"], [6, "복숭아"]];
+const BG_PHOTO_CHARS = 600000; // about 450 kB of JPEG, in 15 parts
 
 export function showRoom(app, roomId) {
   const root = app.root;
@@ -138,7 +146,36 @@ export function showRoom(app, roomId) {
 
     const kind = session.room.meta("kind") || "daily-text";
     const top = h("div", { class: "room-top", id: "room-top" });
+    // The room's background lies behind everything (over the colour field, under its grain).
+    const backdrop = h("div", { class: "room-bg", id: "room-bg", "aria-hidden": "true" });
+    let bgUrl = null;
+    let bgShown = null;
+    const drawBackground = async () => {
+      const bg = session.room.meta("bg") || null;
+      const key = JSON.stringify(bg);
+      const roomEl = backdrop.parentElement;
+      if (!roomEl || key === bgShown) return;
+      const show = (preset, url) => {
+        if (bgUrl && bgUrl !== url) URL.revokeObjectURL(bgUrl);
+        bgUrl = url;
+        if (preset) backdrop.dataset.bg = String(preset);
+        else delete backdrop.dataset.bg;
+        backdrop.style.backgroundImage = url ? `url("${url}")` : "";
+        roomEl.classList.toggle("has-bg", !!(preset || url));
+        bgShown = key;
+      };
+      if (!bg) return void show(null, null);
+      if (bg.p) return void show(bg.p, null);
+      if (!bg.f) return;
+      // A photo: once all its parts have come (each change of the files calls this again).
+      const files = await session.load("files");
+      const file = files.file(bg.f);
+      if (!file || !alive || JSON.stringify(session.room.meta("bg") || null) !== key) return;
+      show(null, URL.createObjectURL(new Blob([fromBase64(file.data)], { type: file.type })));
+    };
+    offs.push(() => { if (bgUrl) URL.revokeObjectURL(bgUrl); });
     mount(root, h("div", { class: "room field " + sideOf(kind), data: { kind } },
+      backdrop,
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
@@ -149,10 +186,13 @@ export function showRoom(app, roomId) {
     drawTitle();
     drawPeople();
     drawStatus();
+    drawBackground();
 
     offs.push(
       session.on("change", ({ doc }) => {
+        if (doc === "files") return void drawBackground();
         if (doc !== "room") return;
+        drawBackground();
         drawTitle();
         drawPeople();
         remember();
@@ -217,6 +257,39 @@ export function showRoom(app, roomId) {
     });
   }
 
+  /** 배경: none, a grainy gradient, or a photo; for the whole room, and anyone may change it. */
+  function backgroundSection() {
+    const now = session.room.meta("bg") || null;
+    const setBg = (v) => {
+      session.commit("room", [{ t: "meta", id: session.clock.next(), k: "bg", v }]);
+      for (const b of choices.children) {
+        const on = b.id === "bg-none" ? !v : b.id === "bg-photo" ? !!v?.f : v?.p === Number(b.dataset.bg);
+        b.setAttribute("aria-pressed", String(on));
+      }
+    };
+    const input = h("input", { type: "file", accept: "image/*", id: "bg-file", class: "vh", tabindex: "-1" });
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.value = "";
+      if (!file || !session) return;
+      toast(root, "배경을 넣는 중이에요…");
+      const photo = await shrinkPhoto(file, BG_PHOTO_CHARS, [1600, 1280, 1024, 800]).catch(() => null);
+      if (!photo) return void toast(root, "이 사진은 읽을 수 없어요", 3200);
+      const made = fileOps(session.clock, { type: "image/jpeg", data: photo.data.slice(photo.data.indexOf(",") + 1), by: session.memberId });
+      session.commit("files", made.ops);
+      setBg({ f: made.id });
+      toast(root, "배경을 바꿨어요");
+    });
+    const stopWatch = watchPickers([input], () => toast(root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200));
+    offs.push(stopWatch);
+    const choices = h("div", { class: "bg-choices", id: "bg-choices" },
+      h("button", { class: "bg-choice none", type: "button", id: "bg-none", "aria-pressed": String(!now), text: "없음", onclick: () => setBg(null) }),
+      ...BACKGROUNDS.map(([n, name]) => h("button", { class: "bg-choice", type: "button", id: "bg-" + n, data: { bg: String(n) }, "aria-label": name, title: name, "aria-pressed": String(now?.p === n), onclick: () => setBg({ p: n }) })),
+      h("label", { class: "bg-choice photo", id: "bg-photo", for: "bg-file", role: "button", "aria-pressed": String(!!now?.f) }, icon("photo"), "내 사진"));
+    return h("div", { class: "section" }, h("p", { class: "section-title", text: "배경" }), input, choices,
+      h("p", { class: "help", text: "방 전체에 보여요. 방에 있는 누구나 바꿀 수 있어요." }));
+  }
+
   function openSettings() {
     const me = session.me;
     if (!me) return;
@@ -251,6 +324,7 @@ export function showRoom(app, roomId) {
             h("div", { class: "with-btn" }, pin, h("button", { class: "btn small", id: "save-pin", type: "button", text: "저장", onclick: savePin })),
             pinError,
             h("p", { class: "help", text: "다른 기기에서 내 이름을 고르고 이 코드를 넣으면 같은 사람으로 들어와요." }))),
+        backgroundSection(close),
         h("div", { class: "section" }, h("p", { class: "section-title", text: "화면" }), displaySettings(app, { withColors: true })),
         screen.settings?.(close),
         h("div", { class: "section" }, h("p", { class: "section-title", text: "초대" }),

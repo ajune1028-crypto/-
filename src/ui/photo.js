@@ -3,8 +3,8 @@
 
 import { MAX_ATT_CHARS } from "../core/crdt.js";
 
-/** { data: "data:image/jpeg;base64,…", w, h } at most maxChars long, or null when it cannot be read. */
-export async function shrinkPhoto(file, maxChars = MAX_ATT_CHARS) {
+/** { data: "data:image/jpeg;base64,…", w, h } at most maxChars long (trying the longest sides first), or null when it cannot be read. */
+export async function shrinkPhoto(file, maxChars = MAX_ATT_CHARS, sides = [720, 560, 440, 340, 260]) {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((resolve, reject) => {
@@ -13,7 +13,7 @@ export async function shrinkPhoto(file, maxChars = MAX_ATT_CHARS) {
       el.onerror = reject;
       el.src = url;
     });
-    for (const side of [720, 560, 440, 340, 260]) {
+    for (const side of sides) {
       const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
       const w = Math.max(1, Math.round(img.naturalWidth * k));
       const h = Math.max(1, Math.round(img.naturalHeight * k));

@@ -508,6 +508,33 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 /* ---- room ----------------------------------------------------------------- */
 
 .room { display: flex; flex-direction: column; height: 100%; }
+/* 배경: a grainy gradient or a photo behind the whole room (over the colour field, under its grain);
+   the sheets turn to glass over it, so it shows without hiding the words. */
+:root {
+  --bg-1: linear-gradient(165deg, #ffd6a5 0%, #ff9a8b 55%, #c779d0 100%);
+  --bg-2: linear-gradient(165deg, #c2e9fb 0%, #81a4fd 60%, #4b6cb7 100%);
+  --bg-3: linear-gradient(165deg, #e0f7c8 0%, #8fd3a6 55%, #3b8d6e 100%);
+  --bg-4: linear-gradient(165deg, #f3e7ff 0%, #c8b6ff 55%, #8b7fe8 100%);
+  --bg-5: linear-gradient(165deg, #2b3a67 0%, #1b1f3b 60%, #0b0d1a 100%);
+  --bg-6: linear-gradient(165deg, #fff1e6 0%, #ffcdb2 55%, #e5989b 100%);
+}
+.room-bg { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center; pointer-events: none; }
+.room-bg[data-bg="1"], .bg-choice[data-bg="1"] { background-image: var(--bg-1); }
+.room-bg[data-bg="2"], .bg-choice[data-bg="2"] { background-image: var(--bg-2); }
+.room-bg[data-bg="3"], .bg-choice[data-bg="3"] { background-image: var(--bg-3); }
+.room-bg[data-bg="4"], .bg-choice[data-bg="4"] { background-image: var(--bg-4); }
+.room-bg[data-bg="5"], .bg-choice[data-bg="5"] { background-image: var(--bg-5); }
+.room-bg[data-bg="6"], .bg-choice[data-bg="6"] { background-image: var(--bg-6); }
+.room.has-bg { --sheet: color-mix(in srgb, var(--paper) 80%, transparent); }
+/* Under a background the colour field steps aside (the grain stays, over the photo). */
+.room.has-bg::before { display: none; }
+.room.has-bg .paper, .room.has-bg .board, .room.has-bg .timeline { -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); }
+.room.has-bg .sheet > .day { width: fit-content; padding: 0.15rem 0.6rem; border-radius: 999px; color: var(--ink); background: var(--glass-bg); }
+.bg-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.bg-choice { display: grid; place-items: center; width: 2.9rem; height: 2.9rem; border-radius: 0.85rem; border: 2px solid var(--glass-edge); background-color: var(--paper); font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.bg-choice[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.bg-choice.photo { display: inline-flex; gap: 0.3rem; width: auto; padding: 0 0.8rem; }
+.bg-choice.photo svg { width: 1rem; height: 1rem; }
 .bar { display: flex; align-items: center; gap: 0.15rem; padding: 0.6rem 0.4rem 0.4rem; flex: none; }
 /* The room's own bar floats as one glass capsule. */
 .room > .bar { margin: 0.6rem 0.6rem 0.45rem; padding: 0.15rem 0.2rem; border-radius: 999px; gap: 0.05rem; }

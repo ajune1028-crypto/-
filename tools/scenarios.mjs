@@ -1671,6 +1671,35 @@ scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠�
   await a.waitFor(`!${sheet(a)}.attachments().some((x) => x.kind === "sound")`);
 });
 
+scenario("room 배경: a gradient from 방 설정 lies behind the room for the friend too; my own photo becomes the background on both screens; the paper turns to glass; 없음 takes it away", async ({ open, out, fixtures }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("배경 바꿔 볼까");
+  await click(a, "#room-settings");
+  await a.waitFor(q("#bg-choices"));
+  await click(a, "#bg-2");
+  for (const p of [a, b]) await p.waitFor(`${q("#room-bg")}.dataset.bg === "2" && document.querySelector(".room").classList.contains("has-bg")`);
+  assert.equal(await a.eval(`${q("#bg-2")}.getAttribute("aria-pressed")`), "true");
+  // My own photo: it travels in parts and shows on both screens once whole.
+  await a.interceptChooser(true);
+  await click(a, "#bg-photo");
+  await a.setFiles("#bg-file", [fixtures.photo]);
+  for (const p of [a, b]) await p.waitFor(`${q("#room-bg")}.style.backgroundImage.startsWith('url("blob:') && !${q("#room-bg")}.dataset.bg`, 10000);
+  const bg = await b.eval(`window.__app.session.room.meta("bg")`);
+  assert.ok(bg.f, "a file of the room");
+  await a.key("Escape");
+  await a.waitFor(`!document.querySelector(".scrim")`);
+  const alpha = await a.eval(`(() => { const c = getComputedStyle(${TODAY}.querySelector(".paper")).backgroundColor; const m = /([\\d.]+)\\)$/.exec(c); return c.startsWith("rgba") || c.includes("/") ? Number(m ? m[1] : 1) : 1; })()`);
+  assert.ok(alpha < 0.95, "the paper is glass over the background: " + alpha);
+  // What shows at a blank spot is the photo, not the room's colour field.
+  assert.equal(await a.eval(`getComputedStyle(document.querySelector(".room"), "::before").display`), "none");
+  await a.shot(out("room-background.png"));
+  await click(a, "#room-settings");
+  await a.waitFor(q("#bg-none"));
+  await click(a, "#bg-none");
+  for (const p of [a, b]) await p.waitFor(`!document.querySelector(".room").classList.contains("has-bg")`);
+});
+
 scenario("text room: 사진 with no words chosen hides the photo in the word at the caret; on an empty sheet it says to write first", async ({ open, fixtures }) => {
   const page = await open();
   await createRoom(page);
