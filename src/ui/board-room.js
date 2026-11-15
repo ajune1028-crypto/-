@@ -14,7 +14,7 @@
 // a drag inside it moves it with its cards, its chip drags just the loop, ✕ takes it
 // off, and it closes itself the shortest way when the end does not reach the start.
 
-import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside } from "./dom.js";
+import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
@@ -137,9 +137,42 @@ export function mountBoardRoom(body, app, session, frame) {
 
   // The big modes on top: the owner's 전체·이동·글쓰기·잇기·노래, and 올가미 beside 노래. Each mode's
   // small tools stand on the right. Zoom is two fingers or the wheel, and 이동's tools.
-  const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["write", "글쓰기", "mode-write"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"], ["lasso", "올가미", "mode-lasso"]], mode, (m) => setMode(m), "boardMode");
-  modes.classList.add("board-modes");
-  frame.top.append(h("div", { class: "board-top" }, modes));
+  // The bar can stand on any edge (a long press lifts it; let go near an edge), and is set up as one
+  // likes: order, which modes show, size, words or icons; the tools on the right move with it (the
+  // owner: "꾹 누르고서… 위 아래 오른쪽 왼쪽 어디든", "커스텀 기능"). All of it per device.
+  const MODE_LIST = [["all", "전체", "mode-all", "board"], ["move", "이동", "mode-move", "fit"], ["write", "글쓰기", "mode-write", "textSize"], ["link", "잇기", "mode-link", "lines"], ["song", "노래", "mode-song", "note"], ["lasso", "올가미", "mode-lasso", "lasso"]];
+  const barLook = () => {
+    const s = settings();
+    const order = Array.isArray(s.boardModesOrder) ? s.boardModesOrder.filter((k) => MODE_LIST.some(([m]) => m === k)) : [];
+    for (const [m] of MODE_LIST) if (!order.includes(m)) order.push(m);
+    const hidden = new Set((Array.isArray(s.boardModesHidden) ? s.boardModesHidden : []).filter((k) => k !== "all"));
+    return { order, hidden, at: ["top", "bottom", "left", "right"].includes(s.boardModesAt) ? s.boardModesAt : "top", size: [1, 2, 3].includes(s.boardBarSize) ? s.boardBarSize : 2, icons: !!s.boardModesIcons, rail: ["auto", "left", "right"].includes(s.boardRailAt) ? s.boardRailAt : "auto" };
+  };
+  const boardTop = h("div", { class: "board-top" });
+  let modes = null;
+  function buildModes() {
+    const look = barLook();
+    const list = look.order.filter((k) => !look.hidden.has(k)).map((k) => MODE_LIST.find(([m]) => m === k));
+    modes = segmented(list.map(([m, name, id]) => [m, name, id]), mode, (m) => setMode(m), "boardMode");
+    modes.classList.add("board-modes");
+    if (look.icons) for (const b of modes.children) {
+      const [, name, , iconName] = MODE_LIST.find(([m]) => m === b.dataset.value);
+      b.replaceChildren(icon(iconName));
+      b.setAttribute("aria-label", name);
+      b.title = name;
+    }
+    wireBarMove(modes);
+    boardTop.replaceChildren(modes);
+    const room = body.closest(".room") || roomShell();
+    if (room) {
+      room.dataset.modesAt = look.at;
+      room.dataset.barSize = String(look.size);
+      room.dataset.modesIcons = String(look.icons);
+      room.dataset.railAt = look.rail === "auto" ? (look.at === "right" ? "left" : "right") : look.rail;
+    }
+  }
+  const roomShell = () => frame.top.closest?.(".room");
+  frame.top.append(boardTop);
 
   const playButton = iconButton("board-play", "play", "전체 재생 (왼쪽부터, 잇기 순서대로)", () => togglePlay(), "전체 재생");
   const penButton = iconButton("board-pen", "pen", "그리기", () => setPen(pen.tool ? null : "pen"), "그리기");
@@ -203,6 +236,10 @@ export function mountBoardRoom(body, app, session, frame) {
     },
   });
   surface.prepend(boardInk.canvas);
+  // While the pen is on the board, the bars and tools step back (the owner chose "그릴 때 막대 옅어지기").
+  const inkingNow = (on) => body.closest(".room")?.classList.toggle("inking-now", on);
+  boardInk.canvas.addEventListener("pointerdown", () => { if (pen.tool) inkingNow(true); });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) boardInk.canvas.addEventListener(type, () => inkingNow(false));
 
   /** 그리기 on or off (null). The pen belongs to 전체: turning it on there from any mode. */
   function setPen(tool) {
@@ -361,13 +398,16 @@ export function mountBoardRoom(body, app, session, frame) {
     toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
     toolbar.querySelector("#board-delete").disabled = !selected || readOnly();
     playButton.replaceChildren(icon(player?.playing ? "pause" : "play"));
-    for (const b of modes.children) b.setAttribute("aria-pressed", String(b.dataset.value === mode));
+    if (modes) for (const b of modes.children) b.setAttribute("aria-pressed", String(b.dataset.value === mode));
   }
+
+  /** Where the mode's tools stand now, in words (they can be moved to the left). */
+  const toolSide = () => (roomEl?.dataset.railAt === "left" ? "왼쪽" : "오른쪽");
 
   function hintText(items) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
     if (lassoing()) return "카드들을 둘러 그리세요(끝이 안 닿아도 닫혀요). 테두리 안을 끌면 안의 카드와 함께 옮겨져요.";
-    if (!items.length) return mode === "song" ? "오른쪽 '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요." : "오른쪽 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.";
+    if (!items.length) return mode === "song" ? `${toolSide()} '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요.` : `${toolSide()} 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.`;
     if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나 줄을 그으세요. 한 카드에서 여러 줄도 돼요(나중 줄이 다음). 번호를 누르면 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
   }
@@ -2064,6 +2104,141 @@ export function mountBoardRoom(body, app, session, frame) {
     closeExtra = close;
   }
 
+  // ---- the mode bar: moved by a long press, set up as one likes ------------------------------
+
+  /** A long press lifts el (a buzz); dragged, it follows the finger and is put down where it is let
+   *  go (onDrop gets that point); held still and let go, onHold. A short tap stays a tap, and a
+   *  second finger before the lift is a pinch, not a lift. */
+  function wireLift(el, { onDrop, onHold }) {
+    let hold = null;
+    const reset = () => { el.classList.remove("lifting"); el.style.transform = ""; };
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      if (hold) {
+        if (!hold.lifted) { clearTimeout(hold.timer); hold = null; }
+        return;
+      }
+      const start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      hold = { start, lifted: false, moved: false, timer: setTimeout(() => {
+        if (!hold) return;
+        hold.lifted = true;
+        el.classList.add("lifting");
+        try { el.setPointerCapture?.(start.id); } catch {}
+        buzz();
+      }, 450) };
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!hold || e.pointerId !== hold.start.id) return;
+      const dx = e.clientX - hold.start.x;
+      const dy = e.clientY - hold.start.y;
+      if (!hold.lifted) {
+        if (Math.hypot(dx, dy) > 8) { clearTimeout(hold.timer); hold = null; }
+        return;
+      }
+      if (Math.hypot(dx, dy) > 8) hold.moved = true;
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+    });
+    el.addEventListener("pointerup", (e) => {
+      if (!hold || e.pointerId !== hold.start.id) return;
+      clearTimeout(hold.timer);
+      const was = hold;
+      hold = null;
+      if (!was.lifted) return;
+      reset();
+      // A long press is not a tap on what it lifted.
+      swallowPress(e);
+      if (!was.moved) return void onHold();
+      onDrop(e.clientX, e.clientY);
+      buzz();
+    });
+    el.addEventListener("pointercancel", (e) => {
+      if (!hold || e.pointerId !== hold.start.id) return;
+      clearTimeout(hold.timer);
+      hold = null;
+      reset();
+    });
+  }
+
+  /** The mode bar goes to the edge nearest where it is let go. */
+  function wireBarMove(bar) {
+    wireLift(bar, {
+      onHold: () => openBarSettings(),
+      onDrop: (x, y) => {
+        const room = body.closest(".room").getBoundingClientRect();
+        const d = { top: y - room.top, bottom: room.bottom - y, left: x - room.left, right: room.right - x };
+        setSetting(app.store, "boardModesAt", Object.entries(d).sort((p, q) => p[1] - q[1])[0][0]);
+        buildModes();
+        measureInsets();
+      },
+    });
+  }
+
+  // The tools on the right move too (the owner chose "오른쪽 도구도 직접 옮기기"): held and let go
+  // on the left half, they stand on the left.
+  wireLift(rail, {
+    onHold: () => openBarSettings(),
+    onDrop: (x) => {
+      const room = body.closest(".room").getBoundingClientRect();
+      setSetting(app.store, "boardRailAt", x < room.left + room.width / 2 ? "left" : "right");
+      buildModes();
+      measureInsets();
+      draw();
+    },
+  });
+
+  /** 막대 꾸미기: where the bar stands, its size, words or icons, the order and which modes show. */
+  function openBarSettings() {
+    closeExtra?.();
+    openSheet(root, "막대 꾸미기", (panel) => {
+      const set = (key, value) => { setSetting(app.store, key, value); buildModes(); measureInsets(); paint(); draw(); };
+      const list = h("div", { class: "bar-order", id: "bar-order" });
+      const paint = () => {
+        const look = barLook();
+        list.replaceChildren(...look.order.map((k, i) => {
+          const [, name] = MODE_LIST.find(([m]) => m === k);
+          const move = (by) => {
+            const order = look.order.slice();
+            const j = i + by;
+            if (j < 0 || j >= order.length) return;
+            [order[i], order[j]] = [order[j], order[i]];
+            set("boardModesOrder", order);
+          };
+          return h("div", { class: "bar-order-row", data: { mode: k } },
+            h("span", { class: "bar-order-name", text: name }),
+            h("button", { type: "button", class: "chip", id: "bar-up-" + k, text: "↑", "aria-label": name + " 앞으로", disabled: i === 0, onclick: () => move(-1) }),
+            h("button", { type: "button", class: "chip", id: "bar-down-" + k, text: "↓", "aria-label": name + " 뒤로", disabled: i === look.order.length - 1, onclick: () => move(1) }),
+            k !== "all" && h("button", { type: "button", class: "chip", id: "bar-show-" + k, "aria-pressed": String(!look.hidden.has(k)), text: look.hidden.has(k) ? "숨김" : "보임", onclick: () => {
+              const hidden = new Set(look.hidden);
+              if (hidden.has(k)) hidden.delete(k);
+              else {
+                hidden.add(k);
+                if (mode === k) setMode("all");
+              }
+              set("boardModesHidden", [...hidden]);
+            } }));
+        }));
+      };
+      const look = barLook();
+      panel.append(h("div", { class: "form", id: "bar-settings" },
+        h("div", { class: "row" }, h("span", { class: "label", text: "자리 (막대를 꾹 눌러 끌어도 돼요)" }),
+          segmented([["top", "위", "bar-at-top"], ["bottom", "아래", "bar-at-bottom"], ["left", "왼쪽", "bar-at-left"], ["right", "오른쪽", "bar-at-right"]], look.at, (v) => set("boardModesAt", v), "barAt")),
+        h("div", { class: "row" }, h("span", { class: "label", text: "크기" }),
+          segmented([["1", "작게", "bar-size-1"], ["2", "보통", "bar-size-2"], ["3", "크게", "bar-size-3"]], String(look.size), (v) => set("boardBarSize", Number(v)), "barSize")),
+        h("div", { class: "row" }, h("span", { class: "label", text: "보기" }),
+          segmented([["words", "글자", "bar-words"], ["icons", "아이콘만", "bar-icons"]], look.icons ? "icons" : "words", (v) => set("boardModesIcons", v === "icons"), "barLook")),
+        h("div", { class: "row" }, h("span", { class: "label", text: "모드 도구 자리 (꾹 눌러 끌어도 돼요)" }),
+          segmented([["auto", "자동", "rail-auto"], ["left", "왼쪽", "rail-left"], ["right", "오른쪽", "rail-right"]], look.rail, (v) => set("boardRailAt", v), "railAt")),
+        h("div", { class: "row" }, h("span", { class: "label", text: "순서와 보이기" }), list),
+        h("button", { type: "button", class: "btn quiet", id: "bar-reset", text: "처음대로", onclick: () => {
+          for (const key of ["boardModesAt", "boardBarSize", "boardModesIcons", "boardRailAt", "boardModesOrder", "boardModesHidden"]) setSetting(app.store, key, undefined);
+          buildModes();
+          measureInsets();
+          paint();
+        } })));
+      paint();
+    });
+  }
+
   // ---- 순서 목록 (the first description's 노래 잇기 창) ------------------------------------
   // "잠시 다른 창으로 넘어와서… 왼쪽부터 녹음했던 음들이 한 줄에 쭉… 순서를 내 마음대로 바꿀 수
   // 있어… 순서의 이어짐을 저장할 수 있는… 1, 2, 3… 왔다 갔다 하면서 들어볼 수 있고". The order
@@ -2295,7 +2470,7 @@ export function mountBoardRoom(body, app, session, frame) {
     (async () => {
       for (const extra of (await reachableRooms(app, ["creative-song"])).others) rooms.push(extra);
       if (!open) return;
-      if (!rooms.length && !copied) list.append(h("p", { class: "help", text: "아직 노래 방이 없어요. 오른쪽 '소리 넣기'로 여기에 바로 넣어도 돼요." }));
+      if (!rooms.length && !copied) list.append(h("p", { class: "help", text: `아직 노래 방이 없어요. ${toolSide()} '소리 넣기'로 여기에 바로 넣어도 돼요.` }));
       for (const room of rooms) {
         const wait = h("p", { class: "help", text: "불러오는 중…" });
         const box = h("div", { class: "drawer-section" }, h("p", { class: "drawer-room", text: room.name }), wait);
@@ -2611,6 +2786,7 @@ export function mountBoardRoom(body, app, session, frame) {
   ];
   session.load("board").then(draw);
   session.load(INK_DOC).then(() => inkSoon());
+  buildModes();
   measureInsets();
   draw();
 

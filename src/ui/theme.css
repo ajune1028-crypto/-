@@ -1389,3 +1389,30 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
   100% { filter: hue-rotate(360deg) saturate(1); transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .w.swirl { animation: none; } }
+
+/* The whiteboard's mode bar on any edge, its size and look; the tools on the other side. */
+.room { position: relative; }
+.board-modes.lifting { position: relative; z-index: 20; transform-origin: center; box-shadow: 0 16px 36px color-mix(in srgb, var(--tint) 30%, transparent); scale: 1.04; transition: scale 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.board-rail.lifting { z-index: 20; scale: 1.04; transition: scale 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.board-rail.lifting .rail-btn { box-shadow: var(--glass-shine), 0 14px 30px color-mix(in srgb, var(--tint) 30%, transparent); }
+.room[data-modes-at="bottom"] .board-top { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 5.4rem; z-index: 3; display: flex; justify-content: center; }
+.room[data-modes-at="left"] .board-top, .room[data-modes-at="right"] .board-top { position: absolute; top: 4.6rem; z-index: 3; }
+.room[data-modes-at="left"] .board-top { left: 0.6rem; }
+.room[data-modes-at="right"] .board-top { right: 0.6rem; }
+.room[data-modes-at="left"] .board-modes, .room[data-modes-at="right"] .board-modes { flex-direction: column; width: auto; max-width: none; border-radius: 1.4rem; }
+.room[data-modes-at="left"] .board-modes button, .room[data-modes-at="right"] .board-modes button { padding: 0.55rem 0.7rem; }
+.room[data-rail-at="left"] .board-rail { right: auto; left: 1rem; direction: ltr; }
+.room[data-modes-at="left"][data-rail-at="left"] .board-rail { left: 5.6rem; }
+.room[data-modes-at="right"][data-rail-at="right"] .board-rail { right: 5.6rem; }
+.room[data-bar-size="1"] .board-modes button { min-height: 2rem; font-size: 0.78rem; }
+.room[data-bar-size="3"] .board-modes button { min-height: 3.2rem; font-size: 1.05rem; }
+.room[data-modes-icons="true"] .board-modes button svg { width: 1.2rem; height: 1.2rem; }
+.room[data-modes-icons="true"] .board-modes { width: auto; }
+/* While the pen is on the board, everything over it steps back. */
+.room.inking-now > .bar, .room.inking-now .board-top, .room.inking-now .board-rail, .room.inking-now > .toolbar, .room.inking-now .ink-tools { opacity: 0.12; transition: opacity 0.2s ease; }
+.room > .bar, .board-top, .board-rail, .room > .toolbar, .ink-tools { transition: opacity 0.35s ease; }
+.bar-order { display: grid; gap: 0.3rem; }
+.bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
+.bar-order-name { font-weight: 700; }
+/* The bar is held and dragged by a finger: the browser must not take that as a scroll. */
+.board-modes, .board-rail > * { touch-action: none; }

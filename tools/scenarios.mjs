@@ -4082,3 +4082,67 @@ scenario("settings: 효과음 and 진동 can be turned off (and the chime then s
   await a.eval(`(() => { document.getElementById("set-sounds").click(); return true; })()`);
   assert.equal(await a.eval(`window.__app.store.get("settings", {}).soundEffects`), false);
 });
+
+// Accepted from the UI review: "모드 막대 옮기기", "막대 꾸미기", "오른쪽 도구도 직접 옮기기", "그릴 때 막대 옅어지기".
+scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
+  const page = await open({ width: 700, height: 900 });
+  await createBoard(page);
+  const room = `document.querySelector(".room")`;
+  const hold = async (sel, to = null) => {
+    const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.touch("start", [at]);
+    await pause(650);
+    if (to) for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 10, at[1] + ((to[1] - at[1]) * i) / 10]]);
+    await page.touch("end");
+  };
+  await hold("#mode-all");
+  await page.waitFor(q("#bar-settings"));
+  assert.equal(await page.eval(`${q("#mode-all")}.getAttribute("aria-pressed")`), "true", "the long press chose no mode");
+  await click(page, "#bar-icons");
+  await page.waitFor(`${room}.dataset.modesIcons === "true" && !!document.querySelector("#mode-song svg")`);
+  assert.equal(await page.eval(`${q("#mode-song")}.getAttribute("aria-label")`), "노래");
+  await click(page, "#bar-show-link");
+  await page.waitFor(`!document.getElementById("mode-link")`);
+  for (let i = 0; i < 4; i++) await click(page, "#bar-up-song");
+  await page.waitFor(`document.querySelector(".board-modes button").id === "mode-song"`);
+  await click(page, "#bar-size-3");
+  await page.waitFor(`${room}.dataset.barSize === "3"`);
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim")`, 2000);
+  // Dragged to the left edge: it stands there upright, the tools go right.
+  await page.front();
+  const r = await page.eval(`(() => { const b = ${room}.getBoundingClientRect(); return [b.left + 8, b.top + b.height / 2]; })()`);
+  await hold("#mode-all", r);
+  await page.waitFor(`${room}.dataset.modesAt === "left"`);
+  const bar = await page.eval(`(() => { const b = document.querySelector(".board-modes").getBoundingClientRect(); return { w: b.width, h: b.height, left: b.left }; })()`);
+  assert.ok(bar.h > bar.w && bar.left < 40, "upright on the left: " + JSON.stringify(bar));
+  assert.equal(await page.eval(`${room}.dataset.railAt`), "right");
+  // The tools are held and let go on the left half: they stand on the left, beside the bar; the long
+  // press added nothing.
+  await click(page, "#mode-all");
+  const cards = await page.eval(`document.querySelectorAll(".card").length`);
+  const mid = await page.eval(`(() => { const b = ${room}.getBoundingClientRect(); return [b.left + b.width * 0.3, b.top + b.height / 2]; })()`);
+  await hold("#add-note", mid);
+  await page.waitFor(`${room}.dataset.railAt === "left"`);
+  const side = await page.eval(`(() => { const t = document.getElementById("board-rail").getBoundingClientRect(), m = document.querySelector(".board-modes").getBoundingClientRect(), b = ${room}.getBoundingClientRect(); return { left: t.left, barRight: m.right, mid: b.left + b.width / 2 }; })()`);
+  assert.ok(side.left >= side.barRight - 1 && side.left < side.mid, "the tools stand on the left, past the bar: " + JSON.stringify(side));
+  assert.equal(await page.eval(`document.querySelectorAll(".card").length`), cards, "the long press added no note");
+  assert.ok(!(await page.eval(`!!document.querySelector(".scrim:not(.closing)")`)), "no sheet opened by the drop");
+  assert.match(await page.eval(`document.querySelector(".board-hint")?.textContent || ""`), /^왼쪽 아이콘으로/, "the hint names the side");
+  await page.front();
+  await page.shot(out("board-bar-left.png"));
+  // Drawing: the bars step back while the pen is down.
+  await click(page, "#board-pen");
+  const p = await page.eval(`(() => { const b = document.getElementById("room-body").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.stylus("down", p[0], p[1]);
+  await page.stylus("move", p[0] + 30, p[1] + 10);
+  assert.ok(await page.eval(`${room}.classList.contains("inking-now")`), "stepped back while drawing");
+  await page.stylus("up", p[0] + 60, p[1] + 20);
+  await page.waitFor(`!${room}.classList.contains("inking-now")`);
+  // 처음대로.
+  await click(page, "#board-pen");
+  await hold(".board-modes button");
+  await page.waitFor(q("#bar-reset"));
+  await click(page, "#bar-reset");
+  await page.waitFor(`${room}.dataset.modesAt === "top" && !!document.getElementById("mode-link") && document.querySelector(".board-modes button").id === "mode-all"`);
+});
