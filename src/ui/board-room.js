@@ -220,8 +220,15 @@ export function mountBoardRoom(body, app, session, frame) {
     surface.classList.toggle("lassoing", lassoTool);
     drawRail();
     placeMenu(true);
-    hint.textContent = hintText(items);
-    hint.hidden = !hint.textContent;
+    // A hint shows for a few seconds after it changes, then fades (it never stays over the board).
+    const said = hintText(items);
+    if (hint.textContent !== said) {
+      hint.textContent = said;
+      hint.style.animation = "none";
+      void hint.offsetWidth;
+      hint.style.animation = "";
+    }
+    hint.hidden = !said;
     toolbar.querySelector("#board-undo").disabled = !undo.canUndo;
     toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
     toolbar.querySelector("#board-delete").disabled = !selected || readOnly();
