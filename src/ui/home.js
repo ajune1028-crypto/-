@@ -1,7 +1,7 @@
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
 import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast } from "./dom.js";
-import { duplicateRoom, putIntoBoard } from "./room-actions.js";
+import { duplicateRoom, putIntoBoard, putRoomIntoSong } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
 import { RoomSession } from "../sync/session.js";
@@ -94,6 +94,31 @@ export function showHome(app) {
             }
           } })) : [h("p", { class: "help", text: "화이트보드 방이 아직 없어요. 창작 +에서 만들 수 있어요." })]));
       };
+      // Where this room's things can go: a whiteboard takes words and songs as cards; a song room takes
+      // a song room's clips or a whiteboard's songs in their order. Each says what will go.
+      const songRooms = [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))].filter((r) => r.kind === "creative-song" && r.id !== room.id);
+      const pickWhere = () => {
+        const what = room.kind === "creative-board" ? "노래 카드를 순서대로" : room.kind === "creative-song" ? "클립 전부를" : "글을";
+        const go = (label, dest, put) => h("button", { class: "btn quiet", type: "button", data: { sendTo: dest.id }, text: `${label}: ${dest.name}`, onclick: async () => {
+          busy("보내는 중…");
+          try {
+            const n = await put(dest);
+            close();
+            toast(root, n ? `'${dest.name}'에 ${n}개를 보냈어요` : "보낼 것이 아직 없어요", 3200);
+          } catch (err) {
+            console.warn(err);
+            close();
+            toast(root, "보내지 못했어요. 두 방을 한 번씩 열었다가 다시 해 주세요.", 3600);
+          }
+        } });
+        const toSong = room.kind === "creative-board" || room.kind === "creative-song" ? songRooms : [];
+        panel.querySelector("#room-actions").replaceChildren(...[
+          h("p", { class: "help", id: "send-what", text: `이 방의 ${what} 어디로 보낼까요?` }),
+          ...toSong.map((d) => go("노래 방", d, (dest) => putRoomIntoSong(app, room, dest))),
+          ...boards.map((d) => go("화이트보드", d, (dest) => putIntoBoard(app, room, dest))),
+          !toSong.length && !boards.length && h("p", { class: "help", text: "보낼 수 있는 방이 아직 없어요. 창작 +에서 만들 수 있어요." }),
+        ].filter(Boolean));
+      };
       panel.append(h("div", { class: "form", id: "room-actions" },
         h("button", { class: "btn", type: "button", id: "room-open", text: "열기", onclick: () => { close(); app.go("r-" + room.id); } }),
         h("button", { class: "btn quiet", type: "button", id: "room-duplicate", text: "복제", onclick: async () => {
@@ -114,6 +139,8 @@ export function showHome(app) {
           Promise.resolve().then(() => navigator.clipboard.writeText(link)).then(() => toast(root, "링크를 복사했어요"), () => toast(root, link, 8000));
           close();
         } }),
+        // 보내기: what this room holds, to where it can go (the owner: "홈화면에서 꾹 누르면 보내기… 뭘 보내고").
+        h("button", { class: "btn quiet", type: "button", id: "room-send", text: "보내기", onclick: () => pickWhere() }),
         h("button", { class: "btn quiet", type: "button", id: "room-to-board", text: "화이트보드에 넣기", onclick: () => pickBoard() }),
         h("button", { class: "btn quiet", type: "button", id: "room-forget", text: "목록에서 빼기", onclick: () => { forgetRoom(app.store, room.id); close(); draw(); toast(root, "목록에서 뺐어요. 방은 그대로 있어요"); } })));
     });

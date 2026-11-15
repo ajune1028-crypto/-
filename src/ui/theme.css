@@ -1355,3 +1355,17 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @media (prefers-reduced-motion: reduce) {
   .panel, .scrim, .scrim.closing, .scrim.closing .panel, .clip-menu, .float, .lasso-menu { animation: none; transition: none; }
 }
+
+/* 순서 목록: the order now as a row of chips (held and moved to reorder), and the saved orders. */
+.order-strip { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.4rem 0 0.8rem; }
+.order-chip { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; padding: 0.4rem 0.7rem 0.4rem 0.4rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 999px; background: var(--gloss), color-mix(in srgb, var(--c) 14%, var(--paper)); touch-action: none; cursor: grab; transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.18s; }
+.order-chip.lifted { z-index: 3; cursor: grabbing; box-shadow: 0 10px 24px color-mix(in srgb, var(--c) 30%, transparent); transition: none; }
+.order-n { display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--c); color: #fff; font-size: 0.72rem; font-weight: 800; }
+.order-name { overflow: hidden; font-size: 0.82rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.order-len { color: var(--muted); font-size: 0.72rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.order-saved { display: grid; gap: 0.45rem; }
+.order-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.2rem 0.5rem; }
+.order-row-name { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.order-row-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.order-row .input { min-width: 0; }

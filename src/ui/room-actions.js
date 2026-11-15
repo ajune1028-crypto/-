@@ -6,7 +6,7 @@ import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, joinOps } from "../core/room.js";
 import { myPeopleColor } from "./theme.js";
 import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields } from "../core/board.js";
-import { sourceOp, addClipOps } from "../core/song.js";
+import { sourceOp, addClipOps, setClipOps } from "../core/song.js";
 import { rememberRoom, roomEntry, getSettings } from "../identity.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -178,4 +178,62 @@ export async function putSoundInto(app, entry, sound, me = null) {
   } finally {
     to.close();
   }
+}
+
+/**
+ * 노래 방으로 보내기: whiteboard song cards, in this order, back to back on one row of a song room,
+ * after everything it holds; each keeps its own speed, colour and mute. Resolves with how many.
+ */
+export async function putCardsIntoSong(app, entry, cards, me = null) {
+  const to = await openRoom(app, entry.id);
+  try {
+    const by = roomEntry(app.store, entry.id)?.memberId || meIn(app, to, entry, me || { name: app.store.get("last", null)?.name });
+    const song = await to.load("song");
+    let at = song.end();
+    const total = cards.reduce((n, c) => n + Math.round(c.data.dur / (c.speed || 1)), 0);
+    const row = song.freeRow(at, Math.max(1, total), 0) ?? 0;
+    let n = 0;
+    for (const card of cards) {
+      if (!song.canAddClip()) break;
+      const d = card.data;
+      const src = sourceOp(to.clock, song, {
+        duration: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })),
+        peaks: d.peaks || "", by, at: Date.now(), blob: d.blob || undefined, name: d.name || undefined,
+      });
+      const clip = addClipOps(to.clock, song, { src: src.id, row, start: at, length: d.dur, by, at: Date.now() });
+      to.commit("song", [src, ...clip.ops]);
+      const looks = {};
+      if ((card.speed || 1) !== 1) looks.speed = card.speed;
+      if (Number.isInteger(card.tint)) looks.tint = card.tint;
+      if (card.muted) looks.muted = true;
+      if (Object.keys(looks).length) to.commit("song", setClipOps(to.clock, song, clip.id, looks).ops);
+      at += Math.round(d.dur / (card.speed || 1));
+      n++;
+    }
+    await sent(to);
+    return n;
+  } finally {
+    to.close();
+  }
+}
+
+/**
+ * 보내기 from home: a song room's clips or a whiteboard's song cards (in their playing order) into
+ * a song room of mine, back to back on one row. Resolves with how many.
+ */
+export async function putRoomIntoSong(app, entry, songEntry) {
+  const from = await openRoom(app, entry.id);
+  let cards = [];
+  try {
+    if (entry.kind === "creative-board") {
+      const board = await from.load("board");
+      cards = board.view().order.filter((i) => i.kind === "song");
+    } else if (entry.kind === "creative-song") {
+      cards = (await cardsOf(from, entry.kind)).map((c) => ({ ...c, by: null }));
+    }
+  } finally {
+    from.close();
+  }
+  if (!cards.length) return 0;
+  return putCardsIntoSong(app, songEntry, cards);
 }

@@ -3936,3 +3936,79 @@ scenario("drawing with a pen never selects text: the bars, the board and the too
   await page.touch("end");
   assert.equal(await page.eval(`String(getSelection())`), "");
 });
+
+// The first description's 노래 잇기 창 ("순서를 내 마음대로 바꿀 수 있어… 순서의 이어짐을 저장… 왔다 갔다 하면서 들어볼 수").
+scenario("순서 목록: the order as a row of chips; a chip dragged to the front plays first; saved with a name, renamed, heard; sent to a song room the cards come in that order on one row", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 860 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 3; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  const board = `window.__app.session.doc("board")`;
+  const before = await page.eval(`window.__app.session.doc("board").view().order.filter((i) => i.kind === "song").map((i) => i.id)`);
+  await click(page, "#order-list");
+  await page.waitFor(`document.querySelectorAll("#order-strip .order-chip").length === 3`);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#order-strip .order-chip")].map((c) => c.dataset.id)`), before);
+  await page.eval(`(() => { for (const a of document.querySelector(".panel").getAnimations()) a.finish(); return true; })()`);
+  // The last chip, held and moved to the front.
+  const [first, , last] = await page.eval(`[...document.querySelectorAll("#order-strip .order-chip")].map((c) => { const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })`);
+  await page.front();
+  await page.touch("start", [last]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[last[0] + ((first[0] - 20 - last[0]) * i) / 8, last[1] + ((first[1] - last[1]) * i) / 8]]);
+  await page.touch("end");
+  const want = [before[2], before[0], before[1]];
+  await page.waitFor(`JSON.stringify(window.__app.session.doc("board").view().order.filter((i) => i.kind === "song").map((i) => i.id)) === ${JSON.stringify(JSON.stringify(want))}`);
+  await page.waitFor(`[...document.querySelectorAll("#order-strip .order-chip")].map((c) => c.dataset.id).join() === ${JSON.stringify(want.join())}`);
+  // Saved, renamed.
+  await click(page, "#order-save");
+  await page.waitFor(`${board}.slots().length === 1 && ${board}.slots()[0].name === "순서 1"`);
+  await click(page, "#order-rename-1");
+  await page.waitFor(q("#order-name-input"));
+  await page.eval(`(() => { const i = document.getElementById("order-name-input"); i.value = "끝곡 먼저"; i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); return true; })()`);
+  await page.waitFor(`${board}.slots()[0].name === "끝곡 먼저"`);
+  // Heard (the order plays).
+  await click(page, "#order-play-1");
+  await page.waitFor(`window.__app.player?.playing || document.querySelector(".card.song.playing")`, 4000);
+  await click(page, "#order-play-1");
+  // Sent to the song room: three clips after what it held, in this order, on one row.
+  await click(page, "#order-send-1");
+  await page.waitFor(q("#send-song-rooms [data-song-room]"), 8000);
+  const songRoom = await page.eval(`document.querySelector("#send-song-rooms [data-song-room]").dataset.songRoom`);
+  await click(page, `#send-song-rooms [data-song-room="${songRoom}"]`);
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("순서대로 보냈어요")`, 10000);
+  await page.goto((await page.eval(`location.href.split("#")[0]`)) + "#r-" + songRoom);
+  await page.waitFor(`window.__app?.session?.roomId === ${JSON.stringify(songRoom)} && window.__app.session.doc("song").layout().length === 4`, 10000);
+  const clips = await page.eval(`window.__app.session.doc("song").layout().map((c) => [c.start, c.lane]).sort((a, b) => a[0] - b[0])`);
+  assert.equal(new Set(clips.slice(1).map((c) => c[1])).size, 1, "the three came on one row: " + JSON.stringify(clips));
+  assert.ok(clips[1][0] < clips[2][0] && clips[2][0] < clips[3][0], "one after another: " + JSON.stringify(clips));
+});
+
+// The owner: "홈화면에서 꾹 누르면 보내기… 거기 보내기 누르면 뭘 보내고".
+scenario("home: a long press on a whiteboard → 보내기 says what goes and lists where; its songs go to a song room in their order", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 860 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  for (let n = 1; n <= 2; n++) {
+    await click(page, "#my-songs");
+    await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+    await click(page, "#song-drawer .song-pick");
+    await page.waitFor(`document.querySelectorAll(".card.song").length === ${n} && !document.getElementById("song-drawer")`);
+  }
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="creative-board"]'));
+  const at = await page.eval(`(() => { const r = ${q('.room-row[data-room-kind="creative-board"]')}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.touch("start", [at]);
+  await pause(700);
+  await page.touch("end");
+  await page.waitFor(q("#room-send"));
+  await click(page, "#room-send");
+  await page.waitFor(q("#send-what"));
+  assert.match(await text(page, "#send-what"), /노래 카드를 순서대로/);
+  const song = await page.eval(`window.__app.store.get("rooms", []).find((r) => r.kind === "creative-song").id`);
+  await click(page, `#room-actions [data-send-to="${song}"]`);
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("2개를 보냈어요")`, 10000);
+});

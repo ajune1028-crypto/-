@@ -390,3 +390,33 @@ test("a copy keeps a card's looks: colour, size, own colour, speed and mute (and
   assert.deepEqual(keptFields("song", { speed: 7, tint: 12, color: "blue" }, data), {}, "a wrong speed or colour is left out; a song has no ink colour");
   assert.deepEqual(keptFields("note", { color: "blue", size: 3, speed: 2 }, { text: "가사" }), { color: "blue", size: 3 });
 });
+
+test("순서 목록: a saved order has a name (kept when saved again), can be renamed, and tells its order without being brought back", async () => {
+  const { slotOrder, nameSlotOps } = await import("../src/core/board.js");
+  const { board, clock, commit, song } = setup();
+  const [a, b, c] = [song(0), song(300), song(600)];
+  commit(linkOps(clock, board, c.id, a.id, "m1"));
+  commit(linkOps(clock, board, a.id, b.id, "m1"));
+  commit(saveSlotOps(clock, board, 1, "m1", "후렴 먼저"));
+  assert.deepEqual(board.slots().map((s) => [s.n, s.name]), [[1, "후렴 먼저"]]);
+  commit(saveSlotOps(clock, board, 1, "m1"));
+  assert.equal(board.slots()[0].name, "후렴 먼저", "saved again without a name: the name stays");
+  commit(nameSlotOps(clock, board, 1, "C-A-B", "m1"));
+  assert.equal(board.slots()[0].name, "C-A-B");
+  // Today's lines go another way; the slot still knows its own order.
+  for (const l of board.links()) commit(unlinkOps(clock, board, l.id));
+  assert.deepEqual(slotOrder(board, 1).map((i) => i.id), [c.id, a.id, b.id]);
+  assert.deepEqual(playOrder(board).map((i) => i.id), [a.id, b.id, c.id], "nothing was brought back");
+});
+
+test("순서 목록: cards put in an order become one line of 잇기, and one undo brings the lines back as they were", async () => {
+  const { orderOps } = await import("../src/core/board.js");
+  const { board, clock, commit, song } = setup();
+  const [a, b, c, d] = [song(0), song(300), song(600), song(900)];
+  commit(linkOps(clock, board, a.id, b.id, "m1"));
+  commit(linkOps(clock, board, c.id, d.id, "m1"));
+  const made = commit(orderOps(clock, board, [d.id, b.id, a.id, c.id], "m1"));
+  assert.deepEqual(playOrder(board).map((i) => i.id), [d.id, b.id, a.id, c.id]);
+  commit({ ops: invertBoardOps(board, clock, made.atoms, "undo") });
+  assert.deepEqual(board.links().map((l) => [l.a, l.b]).sort(), [[a.id, b.id], [c.id, d.id]].sort());
+});

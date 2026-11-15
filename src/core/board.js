@@ -173,7 +173,8 @@ export class BoardDoc {
           op.pairs.every((pair) => Array.isArray(pair) && pair.length === 2 && validId(pair[0]) && validId(pair[1]));
         if (!ok) return this.setAside(op);
         const cur = this.slotsByN.get(op.n);
-        if (!cur || cmpId(op.id, cur.id) > 0) this.slotsByN.set(op.n, { id: op.id, pairs: op.pairs.map((pair) => [pair[0], pair[1]]) });
+        if (op.name !== undefined && !(typeof op.name === "string" && op.name.length <= 30)) return this.setAside(op);
+        if (!cur || cmpId(op.id, cur.id) > 0) this.slotsByN.set(op.n, { id: op.id, pairs: op.pairs.map((pair) => [pair[0], pair[1]]), name: op.name || "" });
         return this.done(op);
       }
       case "lasso": {
@@ -249,7 +250,7 @@ export class BoardDoc {
 
   /** Saved orders, by slot number: [{ n, pairs: [[from, to], …] }]. */
   slots() {
-    return [...this.slotsByN.entries()].sort((p, q) => p[0] - q[0]).map(([n, { pairs }]) => ({ n, pairs: pairs.map((pair) => [...pair]) }));
+    return [...this.slotsByN.entries()].sort((p, q) => p[0] - q[0]).map(([n, { pairs, name }]) => ({ n, pairs: pairs.map((pair) => [...pair]), name: name || "" }));
   }
 
   /** 올가미 loops as they stand now, oldest first: { id, pts: [x, y, x, y…], by, x, y }. */
@@ -271,42 +272,90 @@ export class BoardDoc {
   view() {
     if (this.cache && this.cache.version === this.version) return this.cache;
     const items = [...this.byId.keys()].map((id) => this.item(id)).filter((i) => !i.removed).sort((p, q) => cmpId(p.id, q.id));
-    const shown = new Set(items.map((i) => i.id));
-    // Lines in id order. A card may lead to several (branches) but follows one card only; a line
-    // that would give a card a second card before it, or close a circle, is left out. So every
-    // card has one place in the order and plays once there.
-    const next = new Map(); // card → its lines out, in the order they were drawn
-    const prev = new Map(); // card → the line into it
-    for (const l of [...this.linksById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id))) {
-      if (!shown.has(l.a) || !shown.has(l.b) || l.a === l.b || prev.has(l.b)) continue;
-      let walk = l.a;
-      let circle = false;
-      while (prev.has(walk)) {
-        walk = prev.get(walk).a;
-        if (walk === l.b) { circle = true; break; }
-      }
-      if (circle) continue;
-      if (!next.has(l.a)) next.set(l.a, []);
-      next.get(l.a).push(l);
-      prev.set(l.b, l);
-    }
-    // From each first card (left to right), each line followed to its end before the next line
-    // out of the same card; lines numbered as they will play.
-    const byId = new Map(items.map((i) => [i.id, i]));
-    const heads = items.filter((i) => !prev.has(i.id)).sort((p, q) => p.x - q.x || cmpId(p.id, q.id));
-    const order = [];
-    const links = [];
-    const visit = (card) => {
-      order.push(card);
-      for (const l of next.get(card.id) || []) {
-        links.push({ id: l.id, a: l.a, b: l.b, n: links.length + 1, color: ORDER_COLORS[links.length % ORDER_COLORS.length] });
-        visit(byId.get(l.b));
-      }
-    };
-    for (const head of heads) visit(head);
+    const lines = [...this.linksById.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
+    const { order, links } = orderOf(items, lines);
     this.cache = { version: this.version, items, links, order };
     return this.cache;
   }
+}
+
+/**
+ * The play order that lines give (lines in the order they were drawn: [{ id, a, b }]). A card may
+ * lead to several (branches) but follows one card only; a line that would give a card a second
+ * card before it, or close a circle, is left out. So every card has one place in the order and
+ * plays once there. From each first card (left to right), each line is followed to its end
+ * before the next line out of the same card; lines are numbered as they will play.
+ */
+function orderOf(items, lines) {
+  const shown = new Set(items.map((i) => i.id));
+  const next = new Map(); // card → its lines out, in the order they were drawn
+  const prev = new Map(); // card → the line into it
+  for (const l of lines) {
+    if (!shown.has(l.a) || !shown.has(l.b) || l.a === l.b || prev.has(l.b)) continue;
+    let walk = l.a;
+    let circle = false;
+    while (prev.has(walk)) {
+      walk = prev.get(walk).a;
+      if (walk === l.b) { circle = true; break; }
+    }
+    if (circle) continue;
+    if (!next.has(l.a)) next.set(l.a, []);
+    next.get(l.a).push(l);
+    prev.set(l.b, l);
+  }
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const heads = items.filter((i) => !prev.has(i.id)).sort((p, q) => p.x - q.x || cmpId(p.id, q.id));
+  const order = [];
+  const links = [];
+  const visit = (card) => {
+    order.push(card);
+    for (const l of next.get(card.id) || []) {
+      links.push({ id: l.id, a: l.a, b: l.b, n: links.length + 1, color: ORDER_COLORS[links.length % ORDER_COLORS.length] });
+      visit(byId.get(l.b));
+    }
+  };
+  for (const head of heads) visit(head);
+  return { order, links };
+}
+
+/** 순서 목록: the song cards in the order a saved slot gives, without bringing it back. */
+export function slotOrder(board, n) {
+  const saved = board.slots().find((s) => s.n === n);
+  if (!saved) return [];
+  const items = board.view().items;
+  return orderOf(items, saved.pairs.map(([a, b], k) => ({ id: "s" + k, a, b }))).order.filter((i) => i.kind === "song");
+}
+
+/**
+ * 순서 목록: these cards play in this order (one line of 잇기 through them). Lines that touched
+ * them go; one undo step brings them back.
+ */
+export function orderOps(clock, board, ids, by) {
+  const want = ids.filter((id) => board.item(id) && !board.item(id).removed);
+  if (want.length < 2) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  const set = new Set(want);
+  const ops = [];
+  const atoms = [];
+  for (const l of board.links()) {
+    if (!set.has(l.a) && !set.has(l.b)) continue;
+    ops.push({ t: "lrm", id: clock.next(), l: l.id, n: board.linksById.get(l.id).rm + 1 });
+    atoms.push({ k: "ldel", link: l.id });
+  }
+  for (let k = 1; k < want.length; k++) {
+    const op = { t: "link", id: clock.next(), a: want[k - 1], b: want[k], by };
+    ops.push(op);
+    atoms.push({ k: "ladd", link: op.id });
+  }
+  return { ops, atoms };
+}
+
+/** A saved order's name (the same lines, saved again with it). */
+export function nameSlotOps(clock, board, n, name, by) {
+  const saved = board.slots().find((s) => s.n === n);
+  if (!saved) return { ops: [], atoms: [] };
+  clock.atLeast(board.maxN);
+  return { ops: [{ t: "slot", id: clock.next(), n, pairs: saved.pairs, by, name: String(name || "").trim().slice(0, 30) }], atoms: [] };
 }
 
 /** Song cards in the order they play. */
@@ -519,10 +568,14 @@ export function splitCardOps(clock, board, itemId, at, by) {
 }
 
 /** Keeps the lines as they are now in order slot n (1 to 9). */
-export function saveSlotOps(clock, board, n, by) {
+export function saveSlotOps(clock, board, n, by, name = null) {
   if (!isInt(n, 1, 9)) return { ops: [], atoms: [] };
   clock.atLeast(board.maxN);
-  return { ops: [{ t: "slot", id: clock.next(), n, pairs: board.links().map((l) => [l.a, l.b]), by }], atoms: [] };
+  // Saved again without a name, it keeps the one it had.
+  const keep = name ?? board.slots().find((s) => s.n === n)?.name ?? "";
+  const op = { t: "slot", id: clock.next(), n, pairs: board.links().map((l) => [l.a, l.b]), by };
+  if (keep) op.name = String(keep).trim().slice(0, 30);
+  return { ops: [op], atoms: [] };
 }
 
 /** Brings slot n back: today's lines go, the saved ones (between cards still here) come. Undoable. */

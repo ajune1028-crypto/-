@@ -29,7 +29,7 @@ import { Clock } from "../core/crdt.js";
 import { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
-  cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields,
+  cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
   tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
@@ -43,7 +43,7 @@ import { decodeWav, encodeWav } from "../audio/wav.js";
 import { toMono, resample, louder } from "../audio/dsp.js";
 import { keepTake, takeWhere } from "./keep-take.js";
 import { soundTitle } from "./names.js";
-import { reachableRooms } from "./room-actions.js";
+import { reachableRooms, putCardsIntoSong } from "./room-actions.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
@@ -1013,12 +1013,14 @@ export function mountBoardRoom(body, app, session, frame) {
         can && railButton("write-size", null, "글 크기", () => setWriteStyle({ size: (writeStyle().size % 3) + 1 }), { text: ["작게", "보통", "크게"][writeStyle().size - 1] }),
       ],
       link: [
+        railButton("order-list", "lines", "순서 목록", () => openOrderList()),
         railButton("order-slots", "slots", "순서 칸", () => openSlots()),
         railButton("line-colors", "palette", LINE_STYLES[s.lineColors || "rainbow"], () => nextLineColors()),
         can && railButton("unlink-all", "eraser", "줄 지우기", () => unlinkAll()),
       ],
       song: [
         can && railButton("my-songs", "library", "내 노래", () => openSongDrawer()),
+        railButton("order-list", "lines", "순서 목록", () => openOrderList()),
         can && railButton("board-add-sound", "upload", "소리 넣기", () => openAddSound()),
         railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
@@ -2039,7 +2041,7 @@ export function mountBoardRoom(body, app, session, frame) {
           const s = saved.get(n);
           return h("div", { class: "slot-row" + (s && JSON.stringify(s.pairs) === now ? " current" : "") },
             h("span", { class: "slot-n", text: String(n) }),
-            h("span", { class: "slot-what", text: s ? `줄 ${s.pairs.length}개` : "비어 있음" }),
+            h("span", { class: "slot-what", text: s ? s.name || `줄 ${s.pairs.length}개` : "비어 있음" }),
             s && h("button", { type: "button", class: "chip", id: "slot-use-" + n, text: "불러오기", onclick: () => { apply(useSlotOps(session.clock, board, n, session.memberId)); close(); } }),
             !readOnly() && h("button", { type: "button", class: "chip", id: "slot-save-" + n, text: "저장", onclick: () => { apply(saveSlotOps(session.clock, board, n, session.memberId)); draw(); paint(); toast(root, n + "번 칸에 지금 순서를 담았어요"); } }));
         }),
@@ -2060,6 +2062,186 @@ export function mountBoardRoom(body, app, session, frame) {
       if (closeExtra === close) closeExtra = null;
     }
     closeExtra = close;
+  }
+
+  // ---- 순서 목록 (the first description's 노래 잇기 창) ------------------------------------
+  // "잠시 다른 창으로 넘어와서… 왼쪽부터 녹음했던 음들이 한 줄에 쭉… 순서를 내 마음대로 바꿀 수
+  // 있어… 순서의 이어짐을 저장할 수 있는… 1, 2, 3… 왔다 갔다 하면서 들어볼 수 있고". The order
+  // now as one row of the song cards (a drag puts one elsewhere: the lines follow, one undo step),
+  // heard, saved, sent to a song room; and every saved order with its name, heard without bringing
+  // it back, brought back, copied, sent.
+
+  function openOrderList() {
+    closeExtra?.();
+    openSheet(root, "순서 목록", (panel, close, onClose) => {
+      const strip = h("div", { class: "order-strip", id: "order-strip" });
+      const saved = h("div", { class: "order-saved", id: "order-saved" });
+      const can = !readOnly();
+      const lenOf = (card) => (card.data.dur / (card.speed || 1) / 1000).toFixed(1) + "초";
+      const paintStrip = () => {
+        const order = playOrder(board);
+        strip.replaceChildren(...(order.length ? order.map((card, i) => {
+          const chip = h("div", { class: "order-chip", data: { id: card.id }, style: { "--c": card.tint != null ? memberColor(card.tint, currentTheme()) : colorOf(card.by) } },
+            h("b", { class: "order-n", text: String(i + 1) }), h("span", { class: "order-name", text: cardTitle(card.data) }), h("span", { class: "order-len", text: lenOf(card) }));
+          if (can) dragToReorder(chip, card.id);
+          return chip;
+        }) : [h("p", { class: "help", text: "노래 카드가 아직 없어요." })]));
+      };
+      // A chip held and moved goes where the finger lets go; the cards then play in that order.
+      const dragToReorder = (chip, id) => {
+        chip.addEventListener("pointerdown", (e) => {
+          if (e.button > 0) return;
+          chip.setPointerCapture?.(e.pointerId);
+          const start = { x: e.clientX, y: e.clientY };
+          let moving = false;
+          const move = (ev) => {
+            if (!moving && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) {
+              moving = true;
+              chip.classList.add("lifted");
+              buzz();
+            }
+            if (moving) chip.style.transform = `translate(${ev.clientX - start.x}px, ${ev.clientY - start.y}px)`;
+          };
+          const up = (ev) => {
+            chip.removeEventListener("pointermove", move);
+            chip.removeEventListener("pointerup", up);
+            chip.removeEventListener("pointercancel", up);
+            chip.classList.remove("lifted");
+            chip.style.transform = "";
+            if (!moving || ev.type === "pointercancel") return;
+            const others = [...strip.querySelectorAll(".order-chip")].filter((c) => c !== chip);
+            const at = others.findIndex((c) => {
+              const r = c.getBoundingClientRect();
+              return ev.clientY < r.top || (ev.clientY < r.bottom && ev.clientX < r.left + r.width / 2);
+            });
+            const ids = others.map((c) => c.dataset.id);
+            ids.splice(at < 0 ? ids.length : at, 0, id);
+            apply(orderOps(session.clock, board, ids, session.memberId));
+          };
+          chip.addEventListener("pointermove", move);
+          chip.addEventListener("pointerup", up);
+          chip.addEventListener("pointercancel", up);
+        });
+      };
+      const paintSaved = () => {
+        const list = board.slots();
+        saved.replaceChildren(...(list.length ? list.map((s) => {
+          const order = slotOrder(board, s.n);
+          return h("div", { class: "order-row", data: { n: String(s.n) } },
+            h("span", { class: "slot-n", text: String(s.n) }),
+            h("span", { class: "order-row-name", text: s.name || `순서 ${s.n}` }),
+            h("span", { class: "order-len", text: `곡 ${order.length}개` }),
+            h("div", { class: "order-row-actions" },
+              h("button", { type: "button", class: "chip", id: "order-play-" + s.n, text: "▶", "aria-label": "이 순서로 듣기", onclick: () => playCards(order) }),
+              can && h("button", { type: "button", class: "chip", id: "order-use-" + s.n, text: "불러오기", onclick: () => { apply(useSlotOps(session.clock, board, s.n, session.memberId)); toast(root, `'${s.name || "순서 " + s.n}'을(를) 불러왔어요`); } }),
+              can && h("button", { type: "button", class: "chip", id: "order-rename-" + s.n, text: "이름", onclick: () => renameSlot(s) }),
+              can && h("button", { type: "button", class: "chip", id: "order-copy-" + s.n, text: "복제", onclick: () => copySlot(s) }),
+              can && order.length > 0 && h("button", { type: "button", class: "chip", id: "order-send-" + s.n, text: "보내기", onclick: () => sendToSongRoom(order) })));
+        }) : [h("p", { class: "help", text: "저장한 순서가 없어요. 지금 순서를 저장해 두면 왔다 갔다 하며 들어볼 수 있어요." })]));
+      };
+      const renameSlot = (s) => {
+        const row = saved.querySelector(`.order-row[data-n="${s.n}"]`);
+        const input = h("input", { class: "input", id: "order-name-input", value: s.name || "", maxlength: "30", placeholder: `순서 ${s.n}`, "aria-label": "순서 이름" });
+        let over = false;
+        const done = () => {
+          if (over) return;
+          over = true;
+          const name = input.value.trim();
+          if (name !== (s.name || "")) apply(nameSlotOps(session.clock, board, s.n, name, session.memberId));
+          paintSaved();
+        };
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") done(); });
+        input.addEventListener("blur", done);
+        row.querySelector(".order-row-name").replaceWith(input);
+        input.focus();
+      };
+      const freeSlot = () => {
+        const used = new Set(board.slots().map((s) => s.n));
+        for (let n = 1; n <= 9; n++) if (!used.has(n)) return n;
+        return null;
+      };
+      const copySlot = (s) => {
+        const n = freeSlot();
+        if (!n) return void toast(root, "순서는 9개까지 저장해요");
+        // The same lines into the next free slot, under the same name with "복사".
+        session.clock.atLeast(board.maxN);
+        session.commit("board", [{ t: "slot", id: session.clock.next(), n, pairs: s.pairs, by: session.memberId, name: ((s.name || `순서 ${s.n}`) + " 복사").slice(0, 30) }]);
+        draw();
+      };
+      panel.append(
+        h("p", { class: "help", text: can ? "지금 재생 순서예요. 꾹 눌러 끌면 순서가 바뀌어요." : "지금 재생 순서예요." }),
+        strip,
+        h("div", { class: "order-actions" },
+          h("button", { type: "button", class: "btn", id: "order-play", onclick: () => playCards(playOrder(board)) }, "▶ 이 순서로 듣기"),
+          can && h("button", { type: "button", class: "btn quiet", id: "order-save", onclick: () => {
+            const n = freeSlot();
+            if (!n) return void toast(root, "순서는 9개까지 저장해요");
+            apply(saveSlotOps(session.clock, board, n, session.memberId, `순서 ${n}`));
+            toast(root, `순서 ${n}에 저장했어요`);
+          } }, "지금 순서 저장"),
+          can && h("button", { type: "button", class: "btn quiet", id: "order-send", onclick: () => sendToSongRoom(playOrder(board)) }, "노래 방으로 보내기")),
+        h("div", { class: "section" }, h("p", { class: "section-title", text: "저장한 순서" }), saved));
+      paintStrip();
+      paintSaved();
+      onClose(session.on("change", ({ doc }) => {
+        if (doc !== "board") return;
+        paintStrip();
+        if (!saved.querySelector("#order-name-input")) paintSaved();
+      }));
+    });
+  }
+
+  /** A short buzz where the phone can (a card lifted, a place taken). */
+  const buzz = () => {
+    try {
+      if (settings().haptics !== false) navigator.vibrate?.(8);
+    } catch {
+      // Not every device can buzz.
+    }
+  };
+
+  /** Song cards played back to back (an order from the list), from the start; again stops. */
+  async function playCards(cards) {
+    if (player?.playing) return void stopPlaying();
+    if (!cards.length) return void toast(root, "재생할 노래 카드가 없어요");
+    const ctx = await audioContext();
+    if (!ctx) return;
+    const song = cardsSong(cards);
+    if (!(await makePlayer(song, await recordingsOf(song, ctx)))) return;
+    player.play(0);
+    const ends = [];
+    let at = 0;
+    for (const card of cards) ends.push([card.id, (at += Math.round(card.data.dur / (card.speed || 1)))]);
+    follow(ends);
+    draw();
+  }
+
+  /** 노래 방으로 보내기: these song cards, in this order, back to back on one row of a song room of mine. */
+  function sendToSongRoom(cards) {
+    if (!cards.length) return void toast(root, "보낼 노래 카드가 없어요");
+    openSheet(root, "어느 노래 방으로 보낼까요?", (panel, close) => {
+      const wait = h("p", { class: "help", text: "노래 방을 찾는 중…" });
+      panel.append(wait);
+      reachableRooms(app, ["creative-song"]).then(({ mine, others }) => {
+        wait.remove();
+        if (!mine.length && !others.length) return void panel.append(h("p", { class: "help", id: "no-song-rooms", text: "노래 방이 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
+        const pick = (r) => h("button", { class: "kind", type: "button", data: { songRoom: r.id }, onclick: async () => {
+          close();
+          showStatus("보내는 중…");
+          try {
+            const n = await putCardsIntoSong(app, r, cards, session.me);
+            toast(root, `'${r.name || "노래 방"}'에 ${n}곡을 순서대로 보냈어요`);
+          } catch (err) {
+            console.warn(err);
+            toast(root, "보내지 못했어요. 그 노래 방을 한 번 열었다가 다시 해 주세요.", 3600);
+          } finally {
+            showStatus(null);
+          }
+        } }, h("span", { class: "kind-name", text: r.name || "노래 방" }));
+        panel.append(h("div", { class: "kinds", id: "send-song-rooms" }, mine.map(pick)));
+        if (others.length) panel.append(h("p", { class: "group-label", text: "다른 기기에서 만든 방" }), h("div", { class: "kinds" }, others.map(pick)));
+      });
+    });
   }
 
   // ---- 내 노래: my song rooms' clips, from the right ----------------------------------
