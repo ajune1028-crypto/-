@@ -12,7 +12,10 @@ export const SPLIT_FRAMES = 6; // …for this many frames (60 ms) starts a new n
 export const MIN_NOTE_FRAMES = 8; // shorter than 80 ms is not a note of its own
 const MIN_CONF = 0.6;
 const GATE = 0.1; // quieter than this share of the take's loud parts is not singing
-const FLOOR_RMS = 0.003;
+// Quieter than this is never singing (about -66 dB). Everything else is measured against
+// the take itself, so a quiet take (the phone far away) is read like a loud one.
+const FLOOR_RMS = 5e-4;
+const QUIET_TAKE = 1e-3; // a take whose loud parts stay under this (-60 dB) has no singing in it
 // A loudness dip below this share of the loudness on both sides starts a new
 // note (the l of 라-라 sinks to about a third). Vibrato also swells and sinks,
 // but only to about 0.55, so the line sits between the two.
@@ -47,7 +50,7 @@ function percentile(values, q) {
 /** Which frames are sung, and their pitch in semitones (NaN where silent). */
 function voicedPitch(frames) {
   const loud = percentile(frames.filter((f) => f.hz > 0).map((f) => f.rms), 0.95);
-  const gate = Math.max(FLOOR_RMS, loud * GATE);
+  const gate = loud < QUIET_TAKE ? Infinity : Math.max(FLOOR_RMS, loud * GATE);
   const m = new Float64Array(frames.length).fill(NaN);
   frames.forEach((f, k) => {
     if (f.hz > 0 && f.conf >= MIN_CONF && f.rms >= gate) m[k] = hzToMidi(f.hz);

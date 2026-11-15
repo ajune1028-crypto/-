@@ -289,3 +289,51 @@ test("a clip may take a colour of its own (a people colour, 0-7); null is the re
     assert.equal(song.clip(id).tint, before, "refused: " + bad);
   }
 });
+
+test("each clip may have its own speed: at 2× it is half as long on the timeline, its notes come twice as fast, its sound is read twice as fast; split keeps the speed and cuts in the right place", async () => {
+  const { CLIP_SPEEDS, clipSpan } = await import("../src/core/song.js");
+  assert.deepEqual(CLIP_SPEEDS, [1, 1.5, 2, 3, 0.5]);
+  const { song, clock, commit, src } = setup();
+  commit(addClipOps(clock, song, { src, row: 0, start: 1000, length: 1600, by: "m1", at: 1 }).ops);
+  const id = song.layout()[0].id;
+  commit(setClipOps(clock, song, id, { speed: 2 }).ops);
+  const clip = song.layout()[0];
+  assert.equal(clip.speed, 2);
+  assert.equal(clipSpan(clip), 800, "half as long");
+  assert.equal(song.end(), 1800);
+  const notes = song.noteEvents(0, 10000);
+  assert.deepEqual(notes.map((n) => [n.at, n.d]), NOTES.map((n) => [1000 + Math.round(n.t * 1000) / 2, Math.round(n.d * 1000) / 2]), "notes twice as fast");
+  const [seg] = song.audioSegments(1200, 10000, { ongoing: true });
+  assert.deepEqual([seg.at, seg.d, seg.offset, seg.speed], [1200, 600, 400, 2], "200 ms of song time in is 400 ms of sound in");
+  // A clip after it on the same row fits where the faster clip now ends.
+  assert.equal(song.freeRow(1800, 500, 0), 0);
+  // Split at 1400 (400 ms of song time in = 800 ms of sound): both halves keep 2×.
+  const cut = splitClipOps(clock, song, id, 1400, "m1");
+  commit(cut.ops);
+  const [front, back] = song.layout();
+  assert.deepEqual([front.length, front.speed, back.start, back.offset, back.length, back.speed], [800, 2, 1400, 800, 800, 2]);
+  for (const bad of [0, 4, 1.2, "2"]) {
+    song.apply({ t: "cset", id: clock.next(), c: front.id, f: { speed: bad } });
+    assert.equal(song.clip(front.id).speed, 2, "refused: " + bad);
+  }
+});
+
+test("the nearest gap on a row where a clip of some length fits: against its neighbour, never over it", async () => {
+  const { SongDoc, sourceOp, addClipOps } = await import("../src/core/song.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const song = new SongDoc();
+  const clock = new Clock("a");
+  const src = sourceOp(clock, song, { duration: 10, notes: [], peaks: "", by: "m", at: 1 });
+  song.apply(src);
+  const add = (start, length, row = 0) => { const made = addClipOps(clock, song, { src: src.id, row, start, length, by: "m", at: 1 }); made.ops.forEach((op) => song.apply(op)); return made.id; };
+  add(1000, 2000); // 1-3 s
+  add(5000, 1000); // 5-6 s
+  assert.equal(song.nearestGap(3500, 1000, 0, null, 3000), 3500, "free where it is");
+  assert.equal(song.nearestGap(2500, 1000, 0, null, 3000), 3000, "slides right, against the end of the first");
+  assert.equal(song.nearestGap(800, 1000, 0, null, 3000), 0, "slides left, ending where the first starts");
+  assert.equal(song.nearestGap(4500, 1500, 0, null, 3000), 3500, "between the two, against the start of the second (the nearer side)");
+  assert.equal(song.nearestGap(4600, 2500, 0, null, 400), null, "nothing near enough: null");
+  assert.equal(song.nearestGap(1500, 1000, 1, null, 3000), 1500, "another row is free");
+  const moving = add(8000, 1000);
+  assert.equal(song.nearestGap(8200, 1000, 0, moving, 3000), 8200, "the moving clip itself is not in the way");
+});

@@ -34,6 +34,15 @@ mkdirSync(dirname(fixtures.doremi), { recursive: true });
     const made = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", fixtures.doremi, ...args, file]);
     fixtures[ext] = made.status === 0 ? file : null;
   }
+  // What an iPhone or iPad camera gives for "record a sound": a .mov with a picture and AAC sound.
+  {
+    const file = join(root, "out", "fixtures", "doremi.mov");
+    const made = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", fixtures.doremi, "-f", "lavfi", "-i", "testsrc=size=96x64:rate=10:duration=3", "-c:a", "aac", "-b:a", "96k", "-c:v", "mpeg4", "-shortest", file]);
+    fixtures.mov = made.status === 0 ? file : null;
+  }
+  // The same singing recorded far from the phone: 34 dB softer.
+  fixtures.quiet = join(root, "out", "fixtures", "doremi-quiet.wav");
+  writeFileSync(fixtures.quiet, encodeWav(sing(melody, { rate: 44100 }).samples.map((v) => v * 0.02), 44100));
 }
 
 const server = await serve(dist ? join(root, "dist") : root, PORT);

@@ -35,6 +35,12 @@ export class PeakCollector {
   }
 }
 
+/** The summary of the same sound made `gain` times louder (values are √level × 255). */
+export function scalePeaks(peaks, gain) {
+  const k = Math.sqrt(gain);
+  return Uint8Array.from(peaks, (v) => Math.min(255, Math.round(v * k)));
+}
+
 export function peaksOf(samples, rate, perSecond = PEAKS_PER_SECOND) {
   const c = new PeakCollector(rate, perSecond);
   c.push(samples);

@@ -14,9 +14,10 @@ import { toBase64, fromBase64 } from "../core/b64.js";
 import { encodeAdpcm, decodeAdpcm } from "../audio/adpcm.js";
 import { audioContext } from "../audio/engine.js";
 import { decodeAudioFile } from "../audio/decode.js";
-import { resample } from "../audio/dsp.js";
+import { resample, louder } from "../audio/dsp.js";
+import { keepRawTake, takeWhere } from "./keep-take.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
-import { soundPickers, waysIn, pickerHelp } from "./sound-in.js";
+import { soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { InkLayer, inkColor, drawInkTools as drawInkToolsInto } from "./ink.js";
@@ -454,7 +455,7 @@ export function mountTextRoom(body, app, session) {
     try {
       await recorder.start();
     } catch (err) {
-      return void toast(app.root, micProblem(err), 3600);
+      return void micRefused({ app, root: app.root, err, retry: () => recordInto(target, ways, close) });
     }
     const time = h("span", { class: "ref-rec-time", id: "text-rec-time", text: "0:00" });
     const row = h("div", { class: "ref-recording" }, h("span", { class: "dot-rec" }), time,
@@ -497,6 +498,9 @@ export function mountTextRoom(body, app, session) {
     const max = Math.round((rate * MAX_SOUND_MS) / 1000);
     if (samples.length > max) samples = samples.subarray(0, max);
     if (samples.length < rate * 0.3) return void toast(app.root, "녹음이 너무 짧아요");
+    samples = louder(samples).samples;
+    // Kept in 레퍼런스 녹음 too (in the background), like every take.
+    keepRawTake(app, samples, rate, { name: "숨긴 녹음", where: takeWhere(app, session.roomId) });
     const kept = rate === SOUND_RATE ? samples : resample(samples, rate, SOUND_RATE);
     const file = fileOps(session.clock, { type: "audio/adpcm", data: toBase64(encodeAdpcm(kept, SOUND_RATE)), by: session.memberId });
     session.commit("files", file.ops);

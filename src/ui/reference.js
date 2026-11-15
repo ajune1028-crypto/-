@@ -13,7 +13,7 @@ import { getSettings, setSetting } from "../identity.js";
 import { kindInfo } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
 import { timeText } from "./song-view.js";
-import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
+import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
 import { clipboardItem } from "../clipboard.js";
 import { MAX_TAKE_MS } from "../core/song.js";
@@ -22,7 +22,7 @@ import { analyzeSamples } from "../audio/analyze.js";
 import { decodeAudioFile } from "../audio/decode.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { encodeWav } from "../audio/wav.js";
-import { resample } from "../audio/dsp.js";
+import { resample, louder } from "../audio/dsp.js";
 import { toBase64 } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
 import { solfege } from "../audio/notes.js";
@@ -83,6 +83,8 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       const all = refSounds(app.store);
       sounds.replaceChildren(...(all.length ? all.map((s) => h("div", { class: "ref-sound", data: { id: s.id } },
         h("div", { class: "pick-head" }, h("span", { class: "pick-name", text: s.name }), h("span", { class: "pick-len", text: timeText(s.dur * 1000) })),
+        // Made in a room: which one (every take is kept here too).
+        s.from && h("p", { class: "ref-from", text: `${s.from.name ? "'" + s.from.name + "'" : "방"}에서` }),
         bars(s),
         h("div", { class: "ref-actions" },
           h("button", { class: "chip", type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
@@ -151,6 +153,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
 
     /** Notes found, the sound kept on this device, a line in the list. */
     async function keep(samples, rate, name) {
+      samples = louder(samples).samples;
       say("음을 찾는 중…");
       const result = await analyzeSamples(samples, rate, { onProgress: (p) => say(`음을 찾는 중… ${Math.round(p * 100)}%`) });
       const kept = rate === KEEP_RATE ? samples : resample(samples, rate, KEEP_RATE);
@@ -189,7 +192,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       try {
         await recorder.start();
       } catch (err) {
-        return void toast(app.root, micProblem(err), 3600);
+        return void micRefused({ app, root: app.root, err, retry: () => record() });
       }
       busy = true;
       const time = h("span", { class: "ref-rec-time", id: "ref-rec-time", text: "0:00.0" });

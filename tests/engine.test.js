@@ -164,3 +164,38 @@ test("at 3× a recording is stretched, not sped up like a chipmunk", () => {
   assert.ok(Math.abs(rec.started.offset - 0.1) < 1e-9, "the offset is in stretched time");
   assert.ok(Math.abs(rec.started.duration - (0.3 + 0.01)) < 1e-9);
 });
+
+test("in piano mode a recording with no notes found plays as it was recorded (it would be silent as piano)", () => {
+  const w = world({ audio: true });
+  const bare = sourceOp(w.clock, w.song, { duration: 1.5, notes: [], peaks: "", by: "m", at: 2 });
+  w.commit([bare]);
+  w.commit(addClipOps(w.clock, w.song, { src: bare.id, row: 0, start: 0, length: 1500, by: "m", at: 1 }).ops);
+  w.commit(addClipOps(w.clock, w.song, { src: w.src, row: 1, start: 0, length: 1500, by: "m", at: 1 }).ops);
+  w.player.play(0);
+  w.run(2.5);
+  assert.equal(w.ctx.started.filter((s) => s.buffer === w.recording).length, 1, "the bare one sounds as recorded");
+  assert.deepEqual(pianoKeys(w.player, w.ctx).map(([, k]) => k), [60, 64, 67], "the one with notes stays piano");
+});
+
+test("iPhone and iPad: waking the sound says the page plays music, so the silent switch does not mute it; a recording asks for the mic's kind and gives it back", async () => {
+  const { audioContext, useAudioContext, soundFor } = await import("../src/audio/engine.js");
+  const session = { type: "auto" };
+  Object.defineProperty(globalThis.navigator, "audioSession", { value: session, configurable: true });
+  try {
+    const ctx = new FakeAudioContext();
+    ctx.state = "interrupted"; // iOS after a call or another app's sound
+    let resumed = 0;
+    ctx.resume = async () => { resumed++; ctx.state = "running"; };
+    useAudioContext(ctx);
+    await audioContext();
+    assert.equal(session.type, "playback");
+    assert.equal(resumed, 1, "an interrupted context is woken too");
+    soundFor("recording");
+    assert.equal(session.type, "play-and-record");
+    soundFor("playing");
+    assert.equal(session.type, "playback");
+  } finally {
+    delete globalThis.navigator.audioSession;
+    useAudioContext(null);
+  }
+});

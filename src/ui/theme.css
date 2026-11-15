@@ -1236,3 +1236,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .board-loops path.drawing.near { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 11px var(--accent)); }
 .card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s; }
 .board-content.focus .card:not(.in-focus) { opacity: 0.3; }
+
+/* A recording's own speed, in its corner (only when it is not 1×). */
+.speed-badge { position: absolute; top: 0.2rem; right: 0.3rem; z-index: 1; padding: 0.04rem 0.32rem; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 0.62rem; font-style: normal; font-weight: 800; line-height: 1.35; font-variant-numeric: tabular-nums; pointer-events: none; }
+.card-head .speed-badge { position: static; flex: none; }
+.ref-from { margin: -0.15rem 0 0.2rem; color: var(--muted); font-size: 0.72rem; font-weight: 600; }

@@ -16,6 +16,8 @@ const TAU_MAX = Math.ceil(ANALYSIS_RATE / MIN_HZ);
 const SPAN = WINDOW + TAU_MAX + 1;
 const THRESHOLD = 0.15; // dips below this count as "repeats"
 const UNVOICED = 0.4; // a best dip above this is no pitch at all
+const NEAR_DEEPEST = 0.08; // a shorter delay this close to the deepest dip is the period
+const SAME_REPEAT = 1.15; // half the delay repeating within this of the whole: the period is the half
 const SILENT_RMS = 1e-4;
 
 /** Seconds at the middle of frame k's window. */
@@ -60,8 +62,32 @@ export function pitchAt(x, start, d = new Float64Array(TAU_MAX + 2), cmnd = new 
     }
   }
   if (tau < 0) {
-    tau = TAU_MIN;
-    for (let t = TAU_MIN + 1; t <= TAU_MAX; t++) if (cmnd[t] < cmnd[tau]) tau = t;
+    // No dip is that deep (noise, a far phone): the first dip nearly as deep as the deepest.
+    // The deepest alone is often twice the period, which reads an octave too low.
+    let low = TAU_MIN;
+    for (let t = TAU_MIN + 1; t <= TAU_MAX; t++) if (cmnd[t] < cmnd[low]) low = t;
+    tau = low;
+    for (let t = TAU_MIN + 1; t < low; t++) {
+      if (cmnd[t] < cmnd[t - 1] && cmnd[t] <= cmnd[t + 1] && cmnd[t] < cmnd[low] + NEAR_DEEPEST) {
+        tau = t;
+        break;
+      }
+    }
+  }
+  // Noise (or a hum) lowers the normalised dips the longer the delay, so a dip at twice
+  // (or several times) the period can pass first. The plain difference does not have that lean:
+  // when a half (a third…) of the delay repeats as well as the whole, that is the period.
+  // Compared between samples (the bottom of a parabola): a period that falls between two
+  // samples looks worse at both than its double, which may fall on one.
+  for (const k of [6, 5, 4, 3, 2]) {
+    const mid = Math.round(tau / k);
+    if (mid - 2 < TAU_MIN) continue;
+    let t2 = mid - 2;
+    for (let t = mid - 1; t <= mid + 2; t++) if (d[t] < d[t2]) t2 = t;
+    if (t2 > mid - 2 && t2 < mid + 2 && bottom(d, t2) <= bottom(d, tau) * SAME_REPEAT) {
+      tau = t2;
+      break;
+    }
   }
   const best = cmnd[tau];
   if (best > UNVOICED) return { hz: 0, conf: Math.max(0, 1 - best), rms, level: rms };
@@ -75,6 +101,16 @@ export function pitchAt(x, start, d = new Float64Array(TAU_MAX + 2), cmnd = new 
     if (curve > 0) exact = tau + (a - c) / (2 * curve);
   }
   return { hz: ANALYSIS_RATE / exact, conf: 1 - best, rms, level: periodLevel(x, start, exact) };
+}
+
+/** The lowest point of the parabola through d at t and its neighbours (d[t] where it bends the other way). */
+function bottom(d, t) {
+  const a = d[t - 1];
+  const b = d[t];
+  const c = d[t + 1];
+  const curve = a - 2 * b + c;
+  if (!(curve > 0) || a === undefined || c === undefined) return b;
+  return Math.max(0, b - ((a - c) * (a - c)) / (8 * curve));
 }
 
 /**

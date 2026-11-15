@@ -263,3 +263,53 @@ test("segmentNotes works on frames alone, without audio", () => {
   assert.deepEqual(notes.map((n) => n.p), [60, 64]);
   assert.ok(Math.abs(notes[1].t - 0.5) < 0.02);
 });
+
+// ---- real recordings: far away, noisy (the owner's iPad file found almost nothing) ----
+
+const MELODY = [60, 62, 64, 65, 67, 64, 60].map((midi, i) => ({ midi, dur: 0.45, gap: i === 3 ? 0.2 : 0, syllable: i && i !== 4 ? 0.35 : undefined, vibrato: i === 4 ? { rate: 5.5, depth: 0.35 } : undefined }));
+const scaled = (sig, g) => ({ ...sig, samples: sig.samples.map((v) => v * g) });
+function noisy(sig, level, seed = 3) {
+  const r = rng(seed);
+  return { ...sig, samples: sig.samples.map((v) => v + (r() * 2 - 1) * level) };
+}
+
+test("a quiet take (the phone far away: 30 and 40 dB down) gives every note", async () => {
+  const sig = sing(MELODY, { rate: 48000 });
+  for (const g of [0.03, 0.01]) assertNotes(await analyze(scaled(sig, g)), sig.truth);
+});
+
+test("loud noise (10 dB under the voice) does not put notes an octave down", async () => {
+  const sig = sing(MELODY, { rate: 48000 });
+  assertNotes(await analyze(noisy(sig, 0.1)), sig.truth);
+});
+
+test("a take with no singing louder than -60 dB has no notes (a pocket recording)", async () => {
+  const sig = sing(MELODY, { rate: 48000 });
+  assert.equal((await analyze(scaled(sig, 0.002))).notes.length, 0);
+});
+
+test("a quiet take is made louder to be heard (up to 24 dB, never past the top); a loud one stays", async () => {
+  const { louder } = await import("../src/audio/dsp.js");
+  const quiet = Float32Array.from({ length: 16000 }, (_, i) => 0.01 * Math.sin(i / 5));
+  const up = louder(quiet);
+  assert.ok(Math.abs(up.gain - 16) < 1e-9, "at most 16 times (24 dB): " + up.gain);
+  assert.ok(Math.abs(Math.max(...up.samples) - 0.16) < 0.001);
+  const half = Float32Array.from({ length: 16000 }, (_, i) => 0.2 * Math.sin(i / 5));
+  const lifted = louder(half);
+  assert.ok(Math.abs(Math.max(...lifted.samples.map(Math.abs)) - 0.89) < 0.002, "to just under the top");
+  const loud = Float32Array.from({ length: 16000 }, (_, i) => 0.7 * Math.sin(i / 5));
+  assert.equal(louder(loud).gain, 1, "loud enough already: untouched");
+  assert.equal(louder(loud).samples, loud);
+  assert.equal(louder(new Float32Array(100)).gain, 1, "silence stays silence");
+});
+
+test("the waveform summary follows a gain without measuring again", async () => {
+  const { louder } = await import("../src/audio/dsp.js");
+  const { peaksOf, scalePeaks } = await import("../src/audio/peaks.js");
+  const quiet = Float32Array.from({ length: 16000 }, (_, i) => 0.02 * Math.sin(i / 3) * (i / 16000));
+  const up = louder(quiet);
+  const want = peaksOf(up.samples, 16000);
+  const got = scalePeaks(peaksOf(quiet, 16000), up.gain);
+  assert.equal(got.length, want.length);
+  for (let i = 0; i < got.length; i++) assert.ok(Math.abs(got[i] - want[i]) <= 2, `peak ${i}: ${got[i]} vs ${want[i]}`);
+});

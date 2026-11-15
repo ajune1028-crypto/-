@@ -137,3 +137,25 @@ export function resample(samples, fromRate, toRate) {
   out.set(b, a.length);
   return out;
 }
+
+const LOUD_TOP = 0.89; // about -1 dB under the top
+const LOUD_MOST = 16; // never more than 24 dB louder (the room's hiss comes up too)
+const LOUD_ENOUGH = 0.5;
+
+/**
+ * A quiet take made loud enough to hear (a phone far away records very softly):
+ * scaled so its loudest sample stands just under the top, at most 16 times.
+ * A take loud enough already comes back as it is. Returns { samples, gain }.
+ */
+export function louder(samples) {
+  let top = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const a = Math.abs(samples[i]);
+    if (a > top) top = a;
+  }
+  if (top >= LOUD_ENOUGH || top < 1e-6) return { samples, gain: 1 };
+  const gain = Math.min(LOUD_MOST, LOUD_TOP / top);
+  const out = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) out[i] = samples[i] * gain;
+  return { samples: out, gain };
+}

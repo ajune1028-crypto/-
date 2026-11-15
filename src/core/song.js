@@ -48,8 +48,18 @@ const FIELD_OK = {
   lockBy: (v) => v === null || (typeof v === "string" && v.length > 0 && v.length <= 40),
   // A colour of its own (a people colour, 0-7); null: the colour of whoever recorded it.
   tint: (v) => v === null || isInt(v, 0, 7),
+  // Its own speed: it plays this many times as fast (pitch kept) and is that much shorter.
+  speed: (v) => CLIP_SPEEDS.includes(v),
 };
 export const CLIP_FIELDS = Object.keys(FIELD_OK);
+
+/** The speeds a clip (or a whiteboard card) may have, in the order 빠르기 steps through them. */
+export const CLIP_SPEEDS = [1, 1.5, 2, 3, 0.5];
+
+/** How long a clip lasts on the timeline: its stretch of sound, faster or slower by its own speed. */
+export function clipSpan(clip) {
+  return Math.round(clip.length / (clip.speed || 1));
+}
 
 const NOTE_FIELD_OK = {
   t: (v) => isInt(v, 0, MAX_SOURCE_MS),
@@ -286,8 +296,8 @@ export class SongDoc {
     const lanes = [];
     for (const clip of clips) {
       let lane = clip.row;
-      while (overlapsAny(lanes[lane], clip.start, clip.start + clip.length)) lane++;
-      (lanes[lane] ||= []).push([clip.start, clip.start + clip.length]);
+      while (overlapsAny(lanes[lane], clip.start, clip.start + clipSpan(clip))) lane++;
+      (lanes[lane] ||= []).push([clip.start, clip.start + clipSpan(clip)]);
       clip.lane = lane;
     }
     clips.sort((a, b) => a.lane - b.lane || a.start - b.start || cmpId(a.id, b.id));
@@ -302,7 +312,7 @@ export class SongDoc {
   /** Where the last clip ends. */
   end() {
     let end = 0;
-    for (const c of this.layout()) end = Math.max(end, c.start + c.length);
+    for (const c of this.layout()) end = Math.max(end, c.start + clipSpan(c));
     return end;
   }
 
@@ -320,9 +330,29 @@ export class SongDoc {
    */
   freeRow(start, length, row = 0, ignore = null) {
     const lanes = [];
-    for (const c of this.layout()) if (c.id !== ignore) (lanes[c.lane] ||= []).push([c.start, c.start + c.length]);
+    for (const c of this.layout()) if (c.id !== ignore) (lanes[c.lane] ||= []).push([c.start, c.start + clipSpan(c)]);
     for (let r = Math.max(0, row); r < MAX_ROWS; r++) if (!overlapsAny(lanes[r], start, start + length)) return r;
     return null;
+  }
+
+  /**
+   * Where on `row` a clip of this span may lie nearest to `at` without lying over
+   * another: `at` itself when free, else against a neighbour's end or start, as
+   * long as that is within `reach` ms; null when there is no such place.
+   */
+  nearestGap(at, span, row, ignore = null, reach = Infinity) {
+    const taken = [];
+    for (const c of this.layout()) if (c.id !== ignore && c.lane === row) taken.push([c.start, c.start + clipSpan(c)]);
+    const free = (x) => x >= 0 && !overlapsAny(taken, x, x + span);
+    if (free(at)) return at;
+    let best = null;
+    for (const [s, e] of taken) {
+      for (const x of [e, s - span]) {
+        if (!free(x) || Math.abs(x - at) > reach) continue;
+        if (best === null || Math.abs(x - at) < Math.abs(best - at)) best = x;
+      }
+    }
+    return best;
   }
 
   canAddClip() {
@@ -342,12 +372,13 @@ export class SongDoc {
       if (!src) continue;
       const lo = clip.offset;
       const hi = clip.offset + clip.length;
+      const sp = clip.speed || 1;
       for (const n of this.notesOf(clip.src)) {
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
         if (e - s < MIN_EVENT_MS) continue;
-        let at = clip.start + (s - lo);
-        let d = e - s;
+        let at = clip.start + (s - lo) / sp;
+        let d = (e - s) / sp;
         if (at < from) {
           if (!ongoing || at + d - from < MIN_EVENT_MS * 2) continue;
           d = at + d - from;
@@ -365,17 +396,19 @@ export class SongDoc {
     const out = [];
     for (const clip of this.layout()) {
       if (clip.muted) continue;
+      // at and d are in song time; offset is in the sound's own time, which a fast clip reads faster.
+      const sp = clip.speed || 1;
       let at = clip.start;
       let offset = clip.offset;
-      let d = clip.length;
+      let d = clipSpan(clip);
       if (at < from) {
         if (!ongoing || at + d - from < MIN_EVENT_MS) continue;
-        offset += from - at;
+        offset += (from - at) * sp;
         d -= from - at;
         at = from;
       }
       if (at >= to) continue;
-      out.push({ at, d, offset, src: clip.src, clip: clip.id });
+      out.push({ at, d, offset, src: clip.src, clip: clip.id, speed: sp });
     }
     return out.sort((a, b) => a.at - b.at);
   }
@@ -417,7 +450,7 @@ export function setClipOps(clock, song, clipId, fields) {
   if (!clip) return { ops: [], atoms: [] };
   clock.atLeast(song.maxN);
   const prev = {};
-  for (const k of Object.keys(fields)) prev[k] = k === "tint" ? clip.tint ?? null : clip[k];
+  for (const k of Object.keys(fields)) prev[k] = k === "tint" ? clip.tint ?? null : k === "speed" ? clip.speed ?? 1 : clip[k];
   return { ops: [{ t: "cset", id: clock.next(), c: clipId, f: { ...fields } }], atoms: [{ k: "set", clip: clipId, prev, next: { ...fields } }] };
 }
 
@@ -435,12 +468,19 @@ export function removeClipOps(clock, song, clipId) {
 export function splitClipOps(clock, song, clipId, at, by, now = Date.now()) {
   const clip = song.clip(clipId);
   if (!clip || clip.removed) return null;
-  const cut = Math.round(at) - clip.start;
+  // `at` is a time on the timeline; a clip with its own speed reads its sound that much faster.
+  const along = Math.round(at) - clip.start;
+  const cut = Math.round(along * (clip.speed || 1));
   if (cut < MIN_PIECE_MS || clip.length - cut < MIN_PIECE_MS) return null;
   const front = setClipOps(clock, song, clipId, { length: cut });
-  const back = addClipOps(clock, song, { src: clip.src, row: clip.row, start: clip.start + cut, offset: clip.offset + cut, length: clip.length - cut, by, at: now });
-  // The new clip takes over the old one's muting and locking.
-  const extra = clip.muted || clip.locked ? [{ t: "cset", id: clock.next(), c: back.id, f: { muted: clip.muted, locked: clip.locked } }] : [];
+  const back = addClipOps(clock, song, { src: clip.src, row: clip.row, start: clip.start + along, offset: clip.offset + cut, length: clip.length - cut, by, at: now });
+  // The new clip takes over the old one's muting, locking, colour and speed.
+  const keep = {};
+  if (clip.muted) keep.muted = true;
+  if (clip.locked) Object.assign(keep, { locked: true, lockBy: clip.lockBy ?? null });
+  if (clip.tint != null) keep.tint = clip.tint;
+  if ((clip.speed || 1) !== 1) keep.speed = clip.speed;
+  const extra = Object.keys(keep).length ? [{ t: "cset", id: clock.next(), c: back.id, f: keep }] : [];
   return { ops: [...front.ops, ...back.ops, ...extra], atoms: [...front.atoms, ...back.atoms], id: back.id };
 }
 
@@ -509,7 +549,9 @@ export function joinClipOps(clock, song, clipId, by, now = Date.now()) {
   const a = song.layout().find((c) => c.id === clipId);
   const b = a && song.nextOnRow(clipId);
   if (!a || !b) return null;
-  if (a.src === b.src && b.start === a.start + a.length && b.offset === a.offset + a.length && !a.locked && !b.locked) {
+  // Clips of different speeds are not joined into one.
+  if ((a.speed || 1) !== (b.speed || 1) || (a.src !== b.src && (a.speed || 1) !== 1)) return null;
+  if (a.src === b.src && b.start === a.start + clipSpan(a) && b.offset === a.offset + a.length && !a.locked && !b.locked) {
     const grow = setClipOps(clock, song, a.id, { length: a.length + b.length });
     const drop = removeClipOps(clock, song, b.id);
     return { ops: [...grow.ops, ...drop.ops], atoms: [...grow.atoms, ...drop.atoms], id: a.id };

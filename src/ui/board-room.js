@@ -20,16 +20,16 @@ import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
 import { timeText } from "./song-view.js";
 import { SPEEDS } from "./song-room.js";
-import { KEEP_RATE, soundPickers, waysIn, pickerHelp } from "./sound-in.js";
+import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { memberColor, INK, contrast, PALETTE } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
-import { SongDoc, MAX_TAKE_MS } from "../core/song.js";
+import { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
-  cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
+  cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
   tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
@@ -40,7 +40,8 @@ import { clipboardItem, copyItem } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { decodeWav, encodeWav } from "../audio/wav.js";
-import { toMono, resample } from "../audio/dsp.js";
+import { toMono, resample, louder } from "../audio/dsp.js";
+import { keepTake, takeWhere } from "./keep-take.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
@@ -313,7 +314,7 @@ export function mountBoardRoom(body, app, session, frame) {
         el.style.setProperty("--tc", item.tint != null ? memberColor(item.tint, currentTheme()) : inkColor(item.color || "black"));
         el.dataset.size = String(item.size || 2);
       }
-      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted;
+      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1);
       if (el.dataset.key !== key || el.shownData !== item.data) {
         el.dataset.key = key;
         el.shownData = item.data;
@@ -374,7 +375,9 @@ export function mountBoardRoom(body, app, session, frame) {
         place >= 0 && h("span", { class: "card-order", text: String(place + 1) }),
         item.muted && h("span", { class: "card-muted", "aria-label": "음소거" }, icon("muted")),
         h("span", { class: "card-name", text: d.name || "노래" }),
-        h("span", { class: "card-len", text: (d.dur / 1000).toFixed(1) + "초" })),
+        // Its own speed beside its length (the length as it sounds at that speed).
+        (item.speed || 1) !== 1 && h("b", { class: "speed-badge", text: item.speed + "×" }),
+        h("span", { class: "card-len", text: (d.dur / (item.speed || 1) / 1000).toFixed(1) + "초" })),
       noteBars(d, "card-notes"),
     ];
   }
@@ -816,7 +819,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const y0 = Math.min(...ys);
     copyItem(app.store, {
       kind: "board-items",
-      items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, color: i.color, size: i.size })),
+      items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) })),
       strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, b: l.b || "pen" })),
     });
     toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
@@ -848,7 +851,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const group = clipboardItem(app.store, "board-items");
     const clip = !group && clipboardItem(app.store, "song-clip");
     if (!group && !clip) return void toast(root, "복사한 것이 없어요");
-    const list = group ? group.items : [{ kind: "song", dx: 0, dy: 0, data: cardFromClip(clip) }];
+    const list = group ? group.items : [{ kind: "song", dx: 0, dy: 0, data: cardFromClip(clip), speed: clip.speed, tint: clip.tint }];
     const inside = itemsInLoop(board, id);
     const boxes = inside.map((c) => {
       const el = content.querySelector(`.card[data-id="${c.id}"]`);
@@ -1018,7 +1021,7 @@ export function mountBoardRoom(body, app, session, frame) {
       menu.forItem = item.id;
       menu.view = "main";
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, menu.view].join("|");
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, menu.view].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
@@ -1036,6 +1039,11 @@ export function mountBoardRoom(body, app, session, frame) {
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
+        // Its own 빠르기: the card plays that much faster (pitch kept) and is that much shorter.
+        can && one("card-speed", `빠르기 ${item.speed || 1}×`, () => {
+          const next = CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(item.speed || 1) + 1) % CLIP_SPEEDS.length];
+          apply(setItemOps(session.clock, board, item.id, { speed: next, w: songWidth(Math.round(item.data.dur / next)) }));
+        }),
         tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
@@ -1622,11 +1630,13 @@ export function mountBoardRoom(body, app, session, frame) {
     return { x: (right.x * sx + widthOf(right) + 60) / sx, y: right.y };
   }
 
-  function placeCard(data) {
+  function placeCard(data, keep = {}) {
     if (readOnly()) return null;
     const at = spotFor("song", data);
     const made = addItemOps(session.clock, board, { kind: "song", x: at.x, y: at.y, data, by: session.memberId });
     apply(made);
+    // A copied clip keeps its own speed and colour (one undo still takes the card away).
+    if (Object.keys(keep).length) session.commit("board", setItemOps(session.clock, board, made.id, keep).ops);
     selected = made.id;
     draw();
     if (!at.seen) reveal(made.id);
@@ -1808,7 +1818,8 @@ export function mountBoardRoom(body, app, session, frame) {
     if (group) return void pasteGroup(group.items, { strokes: group.strokes || [] });
     const item = clipboardItem(app.store, "song-clip");
     if (!item) return void toast(root, "노래 방에서 클립을 '복사'하면 여기에 붙일 수 있어요. '내 노래'에서 골라도 돼요.", 4200);
-    placeCard(cardFromClip(item));
+    const data = cardFromClip(item);
+    placeCard(data, keptFields("song", item, data));
   }
 
   /** 붙이기 of cards copied with a loop: they keep their places to each other, in view, as one undo step. */
@@ -1827,9 +1838,9 @@ export function mountBoardRoom(body, app, session, frame) {
       session.commit("board", made.ops);
       atoms.push(...made.atoms);
       items.push({ id: made.id, x: Math.round(at.x + it.dx), y: Math.round(at.y + it.dy) });
-      if (it.kind === "note" && (it.color || it.size)) {
-        session.commit("board", setItemOps(session.clock, board, made.id, { ...(it.color ? { color: it.color } : {}), ...(it.size ? { size: it.size } : {}) }).ops);
-      }
+      // Its looks come along: ink colour and size, own colour, speed, mute.
+      const keep = keptFields(it.kind, it, it.data);
+      if (Object.keys(keep).length) session.commit("board", setItemOps(session.clock, board, made.id, keep).ops);
     }
     for (const l of strokes) {
       const pts = l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v + at.x * INK_UNIT) : k % 3 === 1 ? Math.round(v + at.y * INK_UNIT) : v));
@@ -1874,7 +1885,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const d = board.item(id)?.data;
     if (!d) return;
     copyItem(app.store, {
-      kind: "song-clip", room: session.roomId, src: id, offset: 0, length: d.dur,
+      kind: "song-clip", room: session.roomId, src: id, offset: 0, length: d.dur, speed: board.item(id).speed || 1, tint: board.item(id).tint ?? null,
       source: { duration: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob, name: d.name },
     });
     toast(root, "복사했어요. 노래 방이나 다른 화이트보드에 붙일 수 있어요", 2600);
@@ -1983,7 +1994,7 @@ export function mountBoardRoom(body, app, session, frame) {
       return song.layout().map((clip, i) => {
         const src = song.source(clip.src);
         const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
-        return { data: cardFromClip({ source, offset: clip.offset, length: clip.length }), label: src.name || "녹음 " + (i + 1) };
+        return { data: cardFromClip({ source, offset: clip.offset, length: clip.length }), label: src.name || "녹음 " + (i + 1), keep: { speed: clip.speed, tint: clip.tint } };
       });
     } finally {
       other.close();
@@ -2012,11 +2023,11 @@ export function mountBoardRoom(body, app, session, frame) {
       if (closeExtra === close) closeExtra = null;
     }
     closeExtra = close;
-    const pick = (data, label) => h("button", { type: "button", class: "song-pick", onclick: () => { close(); placeCard(data); } },
+    const pick = (data, label, keep = null) => h("button", { type: "button", class: "song-pick", onclick: () => { close(); placeCard(data, keptFields("song", keep, data)); } },
       h("span", { class: "pick-head" }, h("span", { class: "pick-name", text: label }), h("span", { class: "pick-len", text: (data.dur / 1000).toFixed(1) + "초" })),
       noteBars(data, "pick-notes"));
     const copied = clipboardItem(app.store, "song-clip");
-    if (copied) list.append(h("div", { class: "drawer-section" }, h("p", { class: "drawer-group", text: "복사한 클립" }), pick(cardFromClip(copied), copied.source?.name || "복사한 클립")));
+    if (copied) list.append(h("div", { class: "drawer-section" }, h("p", { class: "drawer-group", text: "복사한 클립" }), pick(cardFromClip(copied), copied.source?.name || "복사한 클립", copied)));
     const rooms = app.store.get("rooms", []).filter((r) => r.kind === "creative-song").sort((a, b) => b.at - a.at);
     if (!rooms.length && !copied) list.append(h("p", { class: "help", text: "아직 노래 방이 없어요. 오른쪽 '소리 넣기'로 여기에 바로 넣어도 돼요." }));
     (async () => {
@@ -2027,7 +2038,7 @@ export function mountBoardRoom(body, app, session, frame) {
         const found = await songsOf(room).catch(() => null);
         if (!open) return;
         wait.replaceWith(found === null ? h("p", { class: "help", text: "이 방을 열지 못했어요" })
-          : found.length ? h("div", { class: "drawer-picks" }, found.map(({ data, label }) => pick(data, label)))
+          : found.length ? h("div", { class: "drawer-picks" }, found.map(({ data, label, keep }) => pick(data, label, keep)))
             : h("p", { class: "help", text: "아직 소리가 없어요" }));
       }
     })();
@@ -2078,7 +2089,7 @@ export function mountBoardRoom(body, app, session, frame) {
     try {
       await recorder.start();
     } catch (err) {
-      return void toast(root, micProblem(err), 3600);
+      return void micRefused({ app, root, err, retry: () => startRecording() });
     }
     busy = "record";
     let timer = 0;
@@ -2111,11 +2122,14 @@ export function mountBoardRoom(body, app, session, frame) {
 
   /** Notes from the sound; the recording kept on this device; a song card on the board. */
   async function analyzeAndPlace(samples, rate, name) {
+    // A soft take (the phone far away) is made loud enough to hear.
+    samples = louder(samples).samples;
     const result = await analyzeSamples(samples, rate, { onProgress: (p) => showStatus(`음을 찾는 중… ${Math.round(p * 100)}%`) });
     const kept = rate === KEEP_RATE ? samples : resample(samples, rate, KEEP_RATE);
     const blob = newBlobId();
     await app.blobs.put(blob, encodeWav(kept, KEEP_RATE), "audio/wav");
     placeCard(songCardData({ duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), name: name || undefined, blob }));
+    keepTake(app, { name, result, blob, where: takeWhere(app, session.roomId) });
     if (!result.notes.length) toast(root, "음을 찾지 못했어요. 원본으로 들을 수 있어요", 3600);
   }
 
@@ -2216,7 +2230,7 @@ export function mountBoardRoom(body, app, session, frame) {
     player.play(0);
     const ends = [];
     let at = 0;
-    for (const card of order) ends.push([card.id, (at += card.data.dur)]);
+    for (const card of order) ends.push([card.id, (at += Math.round(card.data.dur / (card.speed || 1)))]);
     follow(ends);
     draw();
   }
@@ -2235,9 +2249,10 @@ export function mountBoardRoom(body, app, session, frame) {
     const song = cardsSong([card]);
     if (!(await makePlayer(song, await recordingsOf(song, ctx)))) return;
     solo = id;
-    // From the position line when it stands on this card, else from the start.
-    player.play(cursor?.id === id ? Math.min(cursor.ms, card.data.dur - 1) : 0);
-    follow([[id, card.data.dur]]);
+    // From the position line when it stands on this card, else from the start (its own speed counted).
+    const sp = card.speed || 1;
+    player.play(cursor?.id === id ? Math.min(cursor.ms, card.data.dur - 1) / sp : 0);
+    follow([[id, Math.round(card.data.dur / sp)]]);
     draw();
   }
 
@@ -2263,7 +2278,8 @@ export function mountBoardRoom(body, app, session, frame) {
       if (!item || !notes) continue;
       const chosen = item.id === selected;
       notes.classList.toggle("ticks", chosen);
-      if (chosen) notes.style.setProperty("--sec", (100000 / Math.max(1, item.data.dur)) + "%");
+      // A tick each second as it sounds (at 2× a second of the card is two seconds of the take).
+      if (chosen) notes.style.setProperty("--sec", (100000 * (item.speed || 1) / Math.max(1, item.data.dur)) + "%");
       let line = notes.querySelector(".card-cursor");
       if (cursor?.id !== item.id) {
         line?.remove();
@@ -2271,7 +2287,7 @@ export function mountBoardRoom(body, app, session, frame) {
       }
       if (!line) notes.append(line = h("i", { class: "card-cursor", "aria-hidden": "true" }, h("b", { class: "card-cursor-time" })));
       line.style.left = (cursor.ms / item.data.dur) * 100 + "%";
-      line.firstChild.textContent = (Math.floor(cursor.ms / 100) / 10).toFixed(1) + "초";
+      line.firstChild.textContent = (Math.floor(cursor.ms / (item.speed || 1) / 100) / 10).toFixed(1) + "초";
     }
   }
 
@@ -2316,7 +2332,7 @@ export function mountBoardRoom(body, app, session, frame) {
     player.play(0);
     const ends = [];
     let at = 0;
-    for (const card of order) ends.push([card.id, (at += card.data.dur)]);
+    for (const card of order) ends.push([card.id, (at += Math.round(card.data.dur / (card.speed || 1)))]);
     follow(ends);
     draw();
   }

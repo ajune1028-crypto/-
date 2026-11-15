@@ -12,6 +12,7 @@ import { watchFingers } from "./fingers.js";
 import { solfege } from "../audio/notes.js";
 import { fromBase64, PEAKS_PER_SECOND } from "../audio/peaks.js";
 import { beatMs } from "../core/beat.js";
+import { clipSpan } from "../core/song.js";
 
 const LONG_PRESS_MS = 380;
 const SLOP_PX = 8;
@@ -108,7 +109,7 @@ export class Timeline {
 
   render(model) {
     this.model = model;
-    const rows = Math.max(model.rows, 1);
+    const rows = Math.max(model.rows, 1, this.drag?.lifted ? this.dragRows || 0 : 0);
     const seconds = Math.max(model.end / 1000 + 8, this.el.clientWidth / this.pps + 2, 12);
     const width = this.xOf(seconds * 1000);
     this.content.style.width = width + "px";
@@ -224,8 +225,16 @@ export class Timeline {
     if (this.drag?.id === clip.id && this.drag.lifted) return;
     el.style.left = this.xOf(clip.start) + "px";
     el.style.top = clip.lane * this.rowH + this.inset + "px";
-    el.style.width = Math.max(4, (clip.length / 1000) * this.pps) + "px";
+    el.style.width = Math.max(4, (clipSpan(clip) / 1000) * this.pps) + "px";
     el.style.height = this.rowH - 2 * this.inset + "px";
+    // Its own speed, beside its corner (only when it is not 1×).
+    let badge = el.querySelector(":scope > .speed-badge");
+    const sp = clip.speed || 1;
+    if (sp !== 1 && !badge) el.append(badge = h("b", { class: "speed-badge", "aria-hidden": "true" }));
+    if (badge) {
+      badge.hidden = sp === 1;
+      badge.textContent = sp + "×";
+    }
     el.style.setProperty("--c", model.color(clip));
     const peer = model.peers.get(clip.id);
     el.style.setProperty("--peer", peer || "transparent");
@@ -456,6 +465,8 @@ export class Timeline {
       this.drag = {
         id, pointer: e.pointerId, x: e.clientX, y: e.clientY, sl: this.el.scrollLeft, st: this.el.scrollTop, lifted: false, panning: false,
         grabX: e.clientX - box.left, grabY: e.clientY - box.top, lanesTop: lanes.top,
+        // A chosen clip follows the finger at once; any other is lifted by holding it.
+        chosen: this.model?.selected === id,
         timer: setTimeout(() => this.lift(el), LONG_PRESS_MS),
       };
     });
@@ -464,8 +475,11 @@ export class Timeline {
       if (!d || d.id !== id || d.pointer !== e.pointerId) return;
       const dx = e.clientX - d.x;
       const dy = e.clientY - d.y;
+      if (!d.lifted && !d.panning && d.chosen && Math.hypot(dx, dy) > SLOP_PX) this.lift(el);
       if (d.lifted) {
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        d.cx = e.clientX;
+        d.cy = e.clientY;
+        this.follow(el);
         return;
       }
       if (!d.panning && Math.hypot(dx, dy) > SLOP_PX) {
@@ -482,16 +496,23 @@ export class Timeline {
       const d = this.drag;
       if (!d || d.id !== id || d.pointer !== e.pointerId) return;
       clearTimeout(d.timer);
+      cancelAnimationFrame(d.run);
+      // Where it was let go, read before it is put down (putting it down may shorten the rows' scroll).
+      const box = this.lanes.getBoundingClientRect();
+      const left = e.clientX - d.grabX - box.left - this.pad;
+      const start = Math.max(0, Math.round((left / this.pps) * 1000 / 10) * 10);
+      const row = Math.max(0, Math.round((e.clientY - d.grabY - this.inset - box.top) / this.rowH));
+      const keep = { top: this.el.scrollTop, left: this.el.scrollLeft };
       this.drag = null;
+      this.dragRows = 0;
       el.classList.remove("lifted");
       el.style.transform = "";
       if (cancelled) return;
       if (d.lifted) {
-        const box = this.lanes.getBoundingClientRect();
-        const left = e.clientX - d.grabX - box.left - this.pad;
-        const start = Math.max(0, Math.round((left / this.pps) * 1000 / 10) * 10);
-        const row = Math.max(0, Math.round((e.clientY - d.grabY - this.inset - box.top) / this.rowH));
         this.on.move(id, start, row);
+        // The view stays where the clip was put down.
+        this.el.scrollTop = keep.top;
+        this.el.scrollLeft = keep.left;
       } else if (!d.panning) this.on.select(id, this.msAt(e.clientX));
       if (this.model) this.render(this.model);
     };
@@ -515,7 +536,9 @@ export class Timeline {
     const d = this.drag;
     if (!d) return;
     clearTimeout(d.timer);
+    cancelAnimationFrame(d.run);
     this.drag = null;
+    this.dragRows = 0;
     const el = this.clipEls.get(d.id)?.el;
     if (!el) return;
     el.classList.remove("lifted");
@@ -523,10 +546,40 @@ export class Timeline {
     if (this.model) this.render(this.model);
   }
 
+  /** A lifted clip under the finger; near an edge of the view, the view runs on (so it can go further down). */
+  follow(el) {
+    const d = this.drag;
+    if (!d?.lifted) return;
+    el.style.transform = `translate(${d.cx - d.x + this.el.scrollLeft - d.sl}px, ${d.cy - d.y + this.el.scrollTop - d.st}px)`;
+    const r = this.el.getBoundingClientRect();
+    const EDGE = 44;
+    const push = (at, lo, hi) => (at < lo + EDGE ? -(lo + EDGE - at) : at > hi - EDGE ? at - (hi - EDGE) : 0);
+    const vx = push(d.cx, r.left, r.right) * 0.35;
+    const vy = push(d.cy, r.top + 32, r.bottom) * 0.35;
+    cancelAnimationFrame(d.run);
+    if (!vx && !vy) return;
+    d.run = requestAnimationFrame(() => {
+      if (this.drag !== d) return;
+      const sl = this.el.scrollLeft;
+      const st = this.el.scrollTop;
+      this.el.scrollLeft += vx;
+      // Room below the last row to go on into (kept while the clip is held, whatever is drawn meanwhile).
+      if (vy > 0 && this.el.scrollTop + this.el.clientHeight >= this.el.scrollHeight - 2) {
+        this.dragRows = Math.round(this.lanes.offsetHeight / this.rowH) + 1;
+        this.lanes.style.height = this.dragRows * this.rowH + "px";
+      }
+      this.el.scrollTop += vy;
+      if (this.el.scrollLeft !== sl || this.el.scrollTop !== st) this.follow(el);
+    });
+  }
+
   lift(el) {
     const d = this.drag;
     if (!d || d.panning || !this.on.canMove?.(d.id)) return;
+    clearTimeout(d.timer);
     d.lifted = true;
+    d.cx = d.cx ?? d.x;
+    d.cy = d.cy ?? d.y;
     el.classList.add("lifted");
     try {
       navigator.vibrate?.(12);

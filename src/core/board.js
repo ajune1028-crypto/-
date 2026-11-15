@@ -19,7 +19,7 @@
 //   larm  { id, la, n }                         removes counter for a loop
 
 import { cmpId, validId, Clock } from "./crdt.js";
-import { SongDoc } from "./song.js";
+import { SongDoc, CLIP_SPEEDS } from "./song.js";
 import { fromBase64, toBase64 } from "./b64.js";
 import { INK_COLORS } from "./ink.js";
 
@@ -54,6 +54,8 @@ const FIELD_OK = {
   size: (v) => v === 1 || v === 2 || v === 3,
   // Any card's colour of its own: a people colour (0-7); null: the colour of whoever placed it.
   tint: (v) => v === null || isInt(v, 0, 7),
+  // A song card's own speed (as a clip's): it plays that many times as fast, pitch kept.
+  speed: (v) => CLIP_SPEEDS.includes(v),
   // A song card's notes after 음 편집 or the like; checked against the card's kind once it is known.
   data: (v) => !!v && typeof v === "object" && !Array.isArray(v),
 };
@@ -330,7 +332,9 @@ export function cardsSong(cards) {
     const clip = { t: "clip", id: clock.next(), src: src.id, row: 0, start: at, offset: 0, length: d.dur, by: card.by, at: 0 };
     song.apply(clip);
     if (card.muted) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { muted: true } });
-    at += d.dur;
+    const sp = card.speed || 1;
+    if (sp !== 1) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { speed: sp } });
+    at += Math.round(d.dur / sp);
   }
   return song;
 }
@@ -343,6 +347,37 @@ export function addItemOps(clock, board, { kind, x, y, data, by, at = Date.now()
   return { ops: [op], atoms: [{ k: "add", item: op.id }], id: op.id };
 }
 
+/** What a copy of a card keeps besides its data: its ink colour and size (words), own colour, speed and mute. */
+export function keepOf(item) {
+  const keep = {};
+  if (!item) return keep;
+  if (item.kind === "note") {
+    if (item.color) keep.color = item.color;
+    if (item.size) keep.size = item.size;
+  }
+  if (item.tint !== null && item.tint !== undefined) keep.tint = item.tint;
+  if (item.kind === "song") {
+    if ((item.speed || 1) !== 1) keep.speed = item.speed;
+    if (item.muted) keep.muted = true;
+  }
+  return keep;
+}
+
+/** The kept looks of a copy as fields to set again on the new card (wrong or unknown ones are left out). */
+export function keptFields(kind, from, data) {
+  const out = {};
+  if (!from) return out;
+  const allowed = kind === "note" ? ["color", "size", "tint"] : kind === "song" ? ["tint", "speed", "muted"] : ["tint"];
+  for (const k of allowed) {
+    const v = from[k];
+    if (v === undefined || v === null || !FIELD_OK[k](v)) continue;
+    if ((k === "speed" && v === 1) || (k === "muted" && !v)) continue;
+    out[k] = v;
+  }
+  if (out.speed && data?.dur) out.w = songWidth(Math.round(data.dur / out.speed));
+  return out;
+}
+
 export function setItemOps(clock, board, itemId, fields) {
   const item = board.item(itemId);
   if (!item) return { ops: [], atoms: [] };
@@ -351,8 +386,8 @@ export function setItemOps(clock, board, itemId, fields) {
   const prev = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!FIELD_OK[k]) continue;
-    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" ? v : k === "tint" ? (v === null ? null : Math.round(v)) : Math.round(v);
-    prev[k] = k === "tint" ? item.tint ?? null : item[k];
+    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" || k === "speed" ? v : k === "tint" ? (v === null ? null : Math.round(v)) : Math.round(v);
+    prev[k] = k === "tint" ? item.tint ?? null : k === "speed" ? item.speed ?? 1 : item[k];
   }
   return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
 }
@@ -449,9 +484,20 @@ export function splitCardOps(clock, board, itemId, at, by) {
   clock.atLeast(board.maxN);
   const gone = { t: "irm", id: clock.next(), i: itemId, n: item.rm + 1 };
   const leftData = partOf(item.data, 0, cut);
+  const rightData = partOf(item.data, cut, item.data.dur);
+  // Both halves keep the card's own speed, colour and mute, and are as wide as they sound.
+  const sp = item.speed || 1;
+  const wide = (d) => songWidth(Math.round(d.dur / sp));
   const left = { t: "item", id: clock.next(), kind: "song", x: item.x, y: item.y, data: leftData, by, at: Date.now() };
-  const right = { t: "item", id: clock.next(), kind: "song", x: item.x + songWidth(leftData.dur) + 24, y: item.y, data: partOf(item.data, cut, item.data.dur), by, at: Date.now() };
+  const right = { t: "item", id: clock.next(), kind: "song", x: item.x + wide(leftData) + 24, y: item.y, data: rightData, by, at: Date.now() };
   const ops = [gone, left, right];
+  const keep = {};
+  if (sp !== 1) keep.speed = sp;
+  if (item.tint !== null && item.tint !== undefined) keep.tint = item.tint;
+  if (item.muted) keep.muted = true;
+  if (Object.keys(keep).length) {
+    for (const [half, d] of [[left, leftData], [right, rightData]]) ops.push({ t: "iset", id: clock.next(), i: half.id, f: { ...keep, ...(sp !== 1 ? { w: wide(d) } : {}) } });
+  }
   const atoms = [{ k: "del", item: itemId }, { k: "add", item: left.id }, { k: "add", item: right.id }];
   const lines = board.links();
   const into = lines.find((l) => l.b === itemId);

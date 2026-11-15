@@ -26,7 +26,9 @@ export async function audioContext({ wake = true } = {}) {
     if (!Ctx) return null;
     shared = new Ctx({ latencyHint: "interactive" });
   }
-  if (wake && shared.state === "suspended") {
+  if (wake) soundFor(recordingNow ? "recording" : "playing");
+  // iOS also stops a context when a call or another app takes the sound ("interrupted").
+  if (wake && (shared.state === "suspended" || shared.state === "interrupted")) {
     try {
       await Promise.race([shared.resume(), new Promise((resolve) => setTimeout(resolve, 1500))]);
     } catch {
@@ -34,6 +36,52 @@ export async function audioContext({ wake = true } = {}) {
     }
   }
   return shared;
+}
+
+let recordingNow = false;
+let silentLoop = null;
+
+const isApple = () => {
+  const n = globalThis.navigator;
+  return !!n && (/iP(hone|ad|od)/.test(n.userAgent || "") || (n.platform === "MacIntel" && n.maxTouchPoints > 1));
+};
+
+/**
+ * iPhone and iPad play a page's sound through the silent switch (and the iPad's
+ * silent mode) as "ambient": muted. A page that plays music says so ("playback");
+ * while the mic records, "play-and-record". Older iOS without that switch learns it
+ * from a silent sound looping in an audio element, started from the same tap.
+ * Elsewhere this does nothing.
+ */
+export function soundFor(kind) {
+  recordingNow = kind === "recording";
+  try {
+    const session = globalThis.navigator?.audioSession;
+    if (session) {
+      const want = recordingNow ? "play-and-record" : "playback";
+      if (session.type !== want) session.type = want;
+      return;
+    }
+    if (!isApple() || typeof Audio === "undefined" || recordingNow) return;
+    if (!silentLoop) {
+      // 0.1 s of silence, as an 8 kHz 8-bit WAV.
+      const n = 800;
+      const bytes = new Uint8Array(44 + n);
+      const v = new DataView(bytes.buffer);
+      const text = (at, str) => { for (let i = 0; i < str.length; i++) bytes[at + i] = str.charCodeAt(i); };
+      text(0, "RIFF"); v.setUint32(4, 36 + n, true); text(8, "WAVEfmt "); v.setUint32(16, 16, true);
+      v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+      v.setUint16(32, 1, true); v.setUint16(34, 8, true); text(36, "data"); v.setUint32(40, n, true);
+      bytes.fill(128, 44);
+      silentLoop = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })));
+      silentLoop.loop = true;
+      silentLoop.setAttribute("playsinline", "");
+      document.addEventListener("visibilitychange", () => { if (document.hidden) silentLoop.pause(); });
+    }
+    if (silentLoop.paused) silentLoop.play().catch(() => {});
+  } catch {
+    // Never in the way of the sound itself.
+  }
 }
 
 /** For tests: use this context instead of making one. */
@@ -110,11 +158,13 @@ export class SongPlayer {
   }
 
   /** A recording at the current speed, made once per sound and speed. */
-  atSpeed(src, buf) {
-    if (this.speed === 1) return buf;
-    const key = src + ":" + this.speed;
+  /** The sound read `this.speed × clipSpeed` times as fast, pitch kept (kept for the next time). */
+  atSpeed(src, buf, clipSpeed = 1) {
+    const total = this.speed * clipSpeed;
+    if (total === 1) return buf;
+    const key = src + ":" + total;
     if (!this.stretched.has(key)) {
-      const samples = timeStretch(buf.getChannelData(0), buf.sampleRate, this.speed);
+      const samples = timeStretch(buf.getChannelData(0), buf.sampleRate, total);
       const out = this.ctx.createBuffer(1, Math.max(1, samples.length), buf.sampleRate);
       out.getChannelData(0).set(samples);
       this.stretched.set(key, out);
@@ -166,13 +216,19 @@ export class SongPlayer {
     if (this.mode === "original") {
       for (const seg of song.audioSegments(from, until, opts)) {
         const buf = this.audioFor(seg.src);
-        if (buf) this.playAudio(this.atSpeed(seg.src, buf), seg);
+        if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
         // A clip whose recording is not on this device plays as piano.
         else this.fallback.add(seg.clip);
       }
       if (this.fallback.size) for (const ev of song.noteEvents(from, until, opts)) if (this.fallback.has(ev.clip)) this.playNote(ev);
     } else {
       for (const ev of song.noteEvents(from, until, opts)) this.playNote(ev);
+      // A recording in which no notes were found would be silent as piano: it plays as recorded.
+      for (const seg of song.audioSegments(from, until, opts)) {
+        if (!this.bare(song, seg.clip)) continue;
+        const buf = this.audioFor(seg.src);
+        if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
+      }
     }
     if (this.metronome) for (const c of clicksIn(from, until, this.metronome)) this.click(c);
     this.booked = until;
@@ -180,6 +236,15 @@ export class SongPlayer {
       this.stop();
       this.onEnd();
     }
+  }
+
+  /** Whether a clip's stretch of its recording holds no notes at all. */
+  bare(song, clipId) {
+    const clip = song.clip(clipId);
+    if (!clip) return false;
+    const lo = clip.offset;
+    const hi = clip.offset + clip.length;
+    return !song.notesOf(clip.src).some((n) => n.t < hi && n.t + n.d > lo);
   }
 
   /** 박자: click on the beats while playing (null: no clicks). Takes effect from the next beat. */
@@ -225,7 +290,8 @@ export class SongPlayer {
     gain.gain.linearRampToValueAtTime(0, end);
     src.connect(gain);
     gain.connect(this.dry);
-    src.start(at, seg.offset / 1000 / this.speed, seg.d / 1000 / this.speed + 0.01);
+    // seg.d is song time; seg.offset is the sound's own time, read (speed × the clip's speed) times as fast.
+    src.start(at, seg.offset / 1000 / (this.speed * (seg.speed || 1)), seg.d / 1000 / this.speed + 0.01);
     src.onended = () => gain.disconnect();
     this.track(src);
   }

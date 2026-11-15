@@ -2,6 +2,7 @@
 // `dev` is a pretend device: its own storage for "who am I", shared room data.
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 export const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
@@ -1324,6 +1325,23 @@ const noteNames = (page, sel = ".clip[data-id]") => page.eval(`[...document.quer
 const songClips = (page) => page.eval(`window.__app.session.doc("song").layout().map((c) => ({ id: c.id, start: c.start, length: c.length, lane: c.lane, muted: c.muted, offset: c.offset }))`);
 
 /** Taps the time bar at a time (ms). */
+/** A tap on an empty spot of the rows (below the clips): nothing is chosen afterwards. */
+async function tapEmptyRow(page) {
+  const at = await page.eval(`(() => {
+    const tl = document.getElementById("timeline").getBoundingClientRect();
+    const lanes = document.querySelector(".lanes").getBoundingClientRect();
+    // Below the clips and below an open clip menu.
+    const rows = [...document.querySelectorAll(".clip[data-id], #clip-menu")].map((c) => c.getBoundingClientRect().bottom);
+    const y = Math.min(tl.bottom - 12, Math.max(lanes.top, ...rows) + 30);
+    return { x: tl.left + tl.width * 0.75, y };
+  })()`);
+  // With a clip's menu open, the first tap only puts the menu away.
+  for (let i = 0; i < 2 && (await page.eval(`!!document.querySelector(".clip.selected")`)); i++) {
+    await page.tap(at.x, at.y);
+    await pause(120);
+  }
+}
+
 async function tapTime(page, ms) {
   const at = await page.eval(`(() => {
     const tl = document.getElementById("timeline");
@@ -1503,7 +1521,9 @@ scenario("song: with a finger too, a held clip moves and a quick drag scrolls", 
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, rowH: 5.25 * rem, pps: Number(document.getElementById("timeline").dataset.pps), scroll: document.getElementById("timeline").scrollLeft };
   })()`);
-  // A quick finger drag: the timeline scrolls, the clip stays.
+  // A quick finger drag on a clip that is not chosen: the timeline scrolls, the clip stays.
+  await tapEmptyRow(page);
+  await page.waitFor(`!document.querySelector(".clip.selected")`);
   let at = await where();
   await page.touch("start", [[at.x, at.y]]);
   for (let i = 1; i <= 5; i++) await page.touch("move", [[at.x - 20 * i, at.y]]);
@@ -1533,7 +1553,9 @@ scenario("song: a clip held and dragged moves in time and to another row; a quic
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, rowH: 5.25 * rem, pps: Number(document.getElementById("timeline").dataset.pps), scroll: document.getElementById("timeline").scrollLeft };
   })()`);
-  // A quick drag: the timeline scrolls, the clip stays.
+  // A quick drag on a clip that is not chosen: the timeline scrolls, the clip stays.
+  await tapEmptyRow(page);
+  await page.waitFor(`!document.querySelector(".clip.selected")`);
   let at = await where();
   await page.press(at.x, at.y);
   for (let i = 1; i <= 5; i++) await page.moveTo(at.x - 20 * i, at.y);
@@ -1554,6 +1576,58 @@ scenario("song: a clip held and dragged moves in time and to another row; a quic
   await click(page, "#undo");
   await page.waitFor(`window.__app.session.doc("song").layout()[0].lane === 0`);
   assert.equal((await songClips(page))[0].start, before.start);
+});
+
+// The owner: "한 번 터치하고 다시 터치한 다음에… 옮기면 딱 그 위치로 가야", "가로에서는 겹칠 수 없지만",
+// "아래로… 스크롤이 걔를 이동시키는".
+scenario("song: a chosen clip follows the finger at once (no holding); over its neighbour it lies against it; at the bottom edge the rows run on below", async ({ open, fixtures }) => {
+  const page = await open({ width: 390, height: 640 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const song = `window.__app.session.doc("song")`;
+  // The next take goes where the playhead stands: just after the first.
+  await page.eval(`document.getElementById("timeline").scrollLeft = 0`);
+  const firstEnd = await page.eval(`(() => { const c = ${song}.layout()[0]; return c.start + c.length; })()`);
+  // A tap on the first row just right of the take: nothing chosen, that row picked.
+  const right = await page.eval(`(() => { const r = document.querySelector(".clip[data-id]").getBoundingClientRect(); return { x: r.right + 30, y: r.top + r.height / 2 }; })()`);
+  for (let i = 0; i < 2 && (await page.eval(`!!document.querySelector(".clip.selected")`)); i++) {
+    await page.tap(right.x, right.y);
+    await pause(120);
+  }
+  await page.waitFor(`!document.querySelector(".clip.selected")`);
+  await tapTime(page, firstEnd + 5);
+  await importSound(page, fixtures.doremi, 2);
+  const [a, b] = await page.eval(`${song}.layout().map((c) => ({ id: c.id, start: c.start, lane: c.lane, end: c.start + c.length }))`);
+  assert.ok(Math.abs(b.start - a.end) <= 40 && b.lane === 0, "the second take came right after the first, on the same row: " + JSON.stringify([a, b]));
+  const box = (id) => page.eval(`(() => { const r = document.querySelector('.clip[data-id="${id}"]').getBoundingClientRect(); return { x: r.left + Math.min(40, r.width / 2), y: r.top + r.height / 2 }; })()`);
+  const pps = await page.eval(`Number(document.getElementById("timeline").dataset.pps)`);
+  const drag = async (id, dx, dy, { hold = 0 } = {}) => {
+    const at = await box(id);
+    await page.touch("start", [[at.x, at.y]]);
+    for (let i = 1; i <= 8; i++) await page.touch("move", [[at.x + (dx * i) / 8, at.y + (dy * i) / 8]]);
+    if (hold) await pause(hold);
+    await page.touch("end");
+  };
+  const now = (id) => page.eval(`(() => { const c = ${song}.layout().find((c) => c.id === "${id}"); return { start: c.start, lane: c.lane }; })()`);
+  // The second take is the chosen one (it just came in): a plain drag moves it.
+  await page.waitFor(`document.querySelector('.clip.selected')?.dataset.id === "${b.id}"`);
+  await drag(b.id, pps, 0);
+  await page.waitFor(`${song}.layout().find((c) => c.id === "${b.id}").start !== ${b.start}`);
+  let got = await now(b.id);
+  assert.ok(Math.abs(got.start - (b.start + 1000)) <= 30 && got.lane === 0, "a second later on the same row: " + JSON.stringify(got));
+  // Over its neighbour: it stops against the end of the first one.
+  await drag(b.id, -2 * pps, 0);
+  await page.waitFor(`${song}.layout().find((c) => c.id === "${b.id}").start === ${a.end}`);
+  assert.equal((await now(b.id)).lane, 0, "still on its row");
+  // Down to the bottom edge and held there: the rows run on below and it lands lower than the screen showed.
+  await page.front(); // frames run only for the page in front
+  const tl = await page.eval(`(() => { const r = document.getElementById("timeline").getBoundingClientRect(); return { bottom: r.bottom }; })()`);
+  const at = await box(b.id);
+  await drag(b.id, 0, tl.bottom - 10 - at.y, { hold: 1200 });
+  await page.waitFor(`${song}.layout().find((c) => c.id === "${b.id}").lane >= 5`, 4000);
+  assert.ok((await page.eval(`document.getElementById("timeline").scrollTop`)) > 0, "the rows scrolled while it was held at the edge");
+  await click(page, "#undo");
+  await page.waitFor(`${song}.layout().find((c) => c.id === "${b.id}").lane === 0`);
 });
 
 scenario("song: playing moves the playhead and the play button turns into pause", async ({ open, fixtures }) => {
@@ -1666,6 +1740,93 @@ for (const ext of ["m4a", "mp3", "webm"]) {
     assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
   });
 }
+
+// The owner, on an iPad: "폰 녹음 앱으로 녹음하기 누르면 비디오가 나와서 녹음되는데 그거는 또 사용할 수 없다".
+scenario("song: a camera video (.mov, what an iPad gives for 'record a sound') brings its sound in, also where the browser reads no sound from a video (Safari)", async ({ open, fixtures }) => {
+  if (!fixtures.mov) return console.log("     (skipped: ffmpeg could not make a .mov here)");
+  const page = await open();
+  // Like Safari: a file that holds a picture track gives no sound.
+  await page.eval(`(() => {
+    const real = AudioContext.prototype.decodeAudioData;
+    window.__refusedVideos = 0;
+    AudioContext.prototype.decodeAudioData = function (bytes, ok, fail) {
+      const text = new TextDecoder("latin1").decode(new Uint8Array(bytes));
+      if (text.includes("vide")) {
+        window.__refusedVideos++;
+        const err = new DOMException("Decoding failed", "EncodingError");
+        if (fail) fail(err);
+        return Promise.reject(err);
+      }
+      return real.call(this, bytes, ok, fail);
+    };
+    return true;
+  })()`);
+  await createSongRoom(page);
+  await importSound(page, fixtures.mov);
+  assert.ok((await page.eval("window.__refusedVideos")) >= 1, "the whole video was refused first");
+  assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
+});
+
+scenario("song: a take recorded far from the phone (34 dB soft) still gives every note, and is made loud enough to hear", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.quiet);
+  assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔"]);
+  // The kept recording is louder than the file was (its loudest sample near the top).
+  const top = await page.eval(`(async () => {
+    const song = window.__app.session.doc("song");
+    const src = song.source(song.layout()[0].src);
+    const kept = await window.__app.blobs.get(src.blob);
+    const v = new DataView(kept.data);
+    let top = 0;
+    for (let i = 44; i + 1 < kept.data.byteLength; i += 2) top = Math.max(top, Math.abs(v.getInt16(i, true)));
+    return top / 32768;
+  })()`);
+  const file = readFileSync(fixtures.quiet);
+  let was = 0;
+  for (let i = 44; i + 1 < file.length; i += 2) was = Math.max(was, Math.abs(file.readInt16LE(i)));
+  assert.ok(top >= (was / 32768) * 12, `made louder: ${top} from ${was / 32768}`);
+});
+
+scenario("song: every take is also kept in 레퍼런스 녹음, with the room it went into", async ({ open, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page, { room: "흥얼 방" });
+  await importSound(page, fixtures.doremi);
+  await click(page, "#room-reference");
+  await page.waitFor(q("#ref-tab-sounds"));
+  await click(page, "#ref-tab-sounds");
+  await page.waitFor(`[...document.querySelectorAll(".ref-sound .ref-from")].some((p) => p.textContent === "'흥얼 방'에서")`);
+});
+
+// The owner: "마이크를 브라우저에서 허용해주세요 뜨는데… 바로 허용하시겠습니까? 그런 거 뜨게 해줘".
+scenario("song: when the mic is refused, a sheet's one button asks the browser again (from the tap) and recording starts once allowed; a blocked site gets the steps", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page);
+  // The browser says no until the sheet's button is pressed.
+  await page.eval(`(() => {
+    const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    window.__micAsks = 0;
+    window.__micAllowed = false;
+    navigator.mediaDevices.getUserMedia = (c) => {
+      window.__micAsks++;
+      return window.__micAllowed ? real(c) : Promise.reject(new DOMException("Permission denied", "NotAllowedError"));
+    };
+    return true;
+  })()`);
+  await click(page, "#record");
+  await page.waitFor(q("#mic-allow"));
+  // Blocked: the button's answer is an immediate no, so the steps show.
+  await click(page, "#mic-allow");
+  await page.waitFor(`!${q("#mic-steps")}.hidden`);
+  assert.match(await text(page, "#mic-steps"), /마이크/);
+  // Allowed now: the button asks again, the sheet goes, and the take starts.
+  await page.eval("window.__micAllowed = true");
+  await click(page, "#mic-allow");
+  await page.waitFor(`!${q("#mic-allow")} && document.querySelector(".clip.rec")`, 8000);
+  await page.waitFor("false", 1500).catch(() => {});
+  await click(page, "#record");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 15000);
+});
 
 scenario("song: a friend's device shows the same clips and plays them as piano", async ({ open, fixtures }) => {
   const a = await open({ dev: "a" });
@@ -3554,4 +3715,74 @@ scenario("레퍼런스: private notes from home and from a room; put into the ro
   await click(a, "#back");
   await a.waitFor(q("#home"));
   assert.equal(await a.eval(`!!document.getElementById("home-reference")`), false);
+});
+
+// The owner: "녹음 한것그 직사각형들 마다 옆에… 배속 다르게도 할수도 있으면".
+scenario("song: each recording has its own 빠르기: the menu steps 1× 1.5× 2× 3× 0.5×, the rectangle is as long as it sounds with its speed in the corner, a friend sees it, copy keeps it, undo", async ({ open, fixtures }) => {
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a);
+  await importSound(a, fixtures.doremi);
+  const b = await open({ dev: "b", hash: "r-" + id });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`window.__app.session.doc("song").layout().length === 1`);
+  const song = `window.__app.session.doc("song")`;
+  const width = () => a.eval(`document.querySelector(".clip[data-id]").getBoundingClientRect().width`);
+  const w1 = await width();
+  assert.ok(!(await a.eval(`document.querySelector(".clip[data-id] .speed-badge:not([hidden])")`)), "no badge at 1×");
+  await choose(a, ".clip[data-id]");
+  assert.equal(await text(a, "#clip-speed"), "빠르기 1×");
+  await click(a, "#clip-speed");
+  await a.waitFor(`${song}.layout()[0].speed === 1.5`);
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-speed");
+  await a.waitFor(`${song}.layout()[0].speed === 2`);
+  await a.waitFor(`document.querySelector(".clip[data-id] .speed-badge")?.textContent === "2×"`);
+  const w2 = await width();
+  assert.ok(Math.abs(w2 - w1 / 2) < 3, `half as long at 2×: ${w1} → ${w2}`);
+  await b.waitFor(`${song}.layout()[0].speed === 2 && document.querySelector(".clip[data-id] .speed-badge")?.textContent === "2×"`);
+  // Copy and paste: the copy is at 2× too.
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-copy");
+  await choose(a, ".clip[data-id]");
+  await click(a, "#clip-paste");
+  await a.waitFor(`${song}.layout().length === 2`);
+  assert.deepEqual(await a.eval(`${song}.layout().map((c) => c.speed || 1)`), [2, 2], "the copy keeps its speed");
+  await click(a, "#undo");
+  await a.waitFor(`${song}.layout().length === 1`);
+  await click(a, "#undo");
+  await a.waitFor(`${song}.layout()[0].speed === 1.5`);
+  await click(a, "#undo");
+  await a.waitFor(`(${song}.layout()[0].speed || 1) === 1 && !document.querySelector(".clip[data-id] .speed-badge:not([hidden])")`);
+});
+
+scenario("whiteboard: a song card has its own 빠르기 too: shorter as it plays faster, its length and speed in its head; 분할 keeps the speed in both halves", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await songThenBoard(page, fixtures);
+  await click(page, "#mode-song");
+  await click(page, "#my-songs");
+  await page.waitFor(`document.querySelector("#song-drawer .song-pick")`, 8000);
+  await click(page, "#song-drawer .song-pick");
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1 && !document.getElementById("song-drawer")`);
+  await click(page, "#mode-all");
+  const board = `window.__app.session.doc("board")`;
+  const dur = await page.eval(`${board}.items()[0].data.dur`);
+  const before = await page.eval(`${board}.items()[0].w`);
+  const card = await cardBox(page, 0);
+  await page.tap(card.x + 30, card.y + card.h - 14);
+  await page.waitFor(q("#card-menu #card-speed"));
+  assert.equal(await text(page, "#card-menu #card-speed"), "빠르기 1×");
+  await click(page, "#card-menu #card-speed");
+  await page.waitFor(`${board}.items()[0].speed === 1.5`);
+  await page.waitFor(`document.querySelector(".card.song .speed-badge")?.textContent === "1.5×"`);
+  const after = await page.eval(`${board}.items()[0].w`);
+  assert.ok(after < before, `shorter at 1.5×: ${before} → ${after}`);
+  assert.equal(await text(page, ".card.song .card-len"), (dur / 1.5 / 1000).toFixed(1) + "초", "its length as it sounds");
+  // A line in the middle, then 분할: both halves at 1.5×.
+  await page.waitFor(q("#card-menu"));
+  const notesBox = await page.eval(`(() => { const r = document.querySelector(".card.song .card-notes").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await page.tap(notesBox.x + notesBox.w * 0.5, notesBox.y + notesBox.h / 2);
+  await page.waitFor(q(".card.song .card-cursor"));
+  await click(page, "#card-menu #card-cut");
+  await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 2`);
+  assert.deepEqual(await page.eval(`${board}.items().map((i) => i.speed)`), [1.5, 1.5]);
 });

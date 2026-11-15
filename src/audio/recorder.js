@@ -37,6 +37,8 @@ class HamkkeTap extends AudioWorkletProcessor {
 registerProcessor("hamkke-tap", HamkkeTap);
 `;
 
+import { soundFor } from "./engine.js";
+
 const ready = new WeakSet();
 
 /** Whether this page can ask for the microphone at all, and if not, why. */
@@ -74,10 +76,25 @@ export class MicRecorder {
 
   /** Asks for the microphone and starts taking samples. Throws when refused. */
   async start(onChunk = () => {}) {
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    // iPhone and iPad: a page that records says so (and plays music again once done).
+    soundFor("recording");
+    try {
+      this.stream = await this.ask();
+    } catch (err) {
+      soundFor("playing");
+      throw err;
+    }
+    await this.begin(onChunk);
+  }
+
+  ask() {
+    return navigator.mediaDevices.getUserMedia({
       // Echo and noise cancelling and automatic level help calls but bend sung notes.
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
+  }
+
+  async begin(onChunk) {
     const ctx = this.ctx;
     this.source = ctx.createMediaStreamSource(this.stream);
     const take = (data) => {
@@ -145,6 +162,7 @@ export class MicRecorder {
       }
     }
     for (const track of this.stream?.getTracks?.() || []) track.stop();
+    soundFor("playing");
     const samples = new Float32Array(this.count);
     let at = 0;
     for (const c of this.chunks) {

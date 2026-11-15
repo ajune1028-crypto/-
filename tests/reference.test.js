@@ -7,7 +7,7 @@ const memoryStore = () => {
   return { get: (k, d) => (data.has(k) ? structuredClone(data.get(k)) : d), set: (k, v) => data.set(k, structuredClone(v)) };
 };
 
-test("레퍼런스 recordings: kept newest first on this device, at most 50, removable; notes stay apart", () => {
+test("레퍼런스 recordings: kept newest first on this device, at most 100 (every take is kept), removable; notes stay apart", () => {
   const store = memoryStore();
   addRefNote(store, "가사 한 줄");
   const first = addRefSound(store, { name: "흥얼 1", dur: 2.5, notes: [{ t: 0.1, d: 0.4, p: 60, v: 0.8 }], peaks: "AAA=", blob: "b1" }, 1000);
@@ -16,6 +16,13 @@ test("레퍼런스 recordings: kept newest first on this device, at most 50, rem
   assert.equal(refNotes(store).length, 1, "text notes are kept apart");
   removeRefSound(store, first.id);
   assert.deepEqual(refSounds(store).map((s) => s.blob), ["b2"]);
-  for (let i = 0; i < 60; i++) addRefSound(store, { name: "n" + i, dur: 1, notes: [], peaks: "", blob: "x" + i }, 3000 + i);
-  assert.equal(refSounds(store).length, 50);
+  for (let i = 0; i < 120; i++) addRefSound(store, { name: "n" + i, dur: 1, notes: [], peaks: "", blob: "x" + i }, 3000 + i);
+  assert.equal(refSounds(store).length, 100);
+});
+
+test("a take made in a room says which room (a bad 'from' is left out)", () => {
+  const store = memoryStore();
+  const s = addRefSound(store, { name: "흥얼", dur: 1, notes: [], peaks: "", blob: "b", from: { room: "r-abc", name: "우리 노래", kind: "creative-song" } });
+  assert.deepEqual(s.from, { room: "r-abc", name: "우리 노래", kind: "creative-song" });
+  assert.equal(addRefSound(store, { name: "x", dur: 1, notes: [], peaks: "", blob: "c", from: { room: 5 } }).from, undefined);
 });

@@ -347,3 +347,46 @@ test("올가미 holds drawings too: a stroke is inside when its middle is (strok
   const across = { id: "s3", pts: [350 * unit, 50 * unit, 50, 480 * unit, 60 * unit, 50] }; // its middle (415) is outside
   assert.deepEqual(strokesInLoop([inside, outside, across], loop, unit), ["s1"]);
 });
+
+test("a song card may have its own speed: the board plays it that much faster (and the next card starts sooner)", () => {
+  const { board, clock, commit, song } = setup();
+  const a = song(0);
+  const b = song(400);
+  commit(setItemOps(clock, board, a.id, { speed: 2 }));
+  assert.equal(board.item(a.id).speed, 2);
+  const s = boardSong(board);
+  const clips = s.layout();
+  assert.deepEqual(clips.map((c) => [c.start, c.speed || 1]), [[0, 2], [500, 1]], "the 1 s card at 2× takes 0.5 s; the next starts there");
+  assert.equal(s.end(), 1500);
+  board.apply({ t: "iset", id: clock.next(), i: a.id, f: { speed: 4 } });
+  assert.equal(board.item(a.id).speed, 2, "an unknown speed is refused");
+});
+
+test("cutting a card at its own speed: both halves keep the speed, colour and mute, and are as wide as they sound", () => {
+  const { board, clock, commit, song } = setup();
+  const a = song(0);
+  commit(setItemOps(clock, board, a.id, { speed: 2, tint: 3, muted: true }));
+  const made = splitCardOps(clock, board, a.id, 500, "m1");
+  commit(made);
+  const [l, r] = made.ids.map((id) => board.item(id));
+  assert.deepEqual([l.speed, r.speed, l.tint, r.tint, l.muted, r.muted], [2, 2, 3, 3, true, true]);
+  assert.equal(l.w, 120, "0.5 s of data at 2× sounds 0.25 s: the narrowest card");
+  assert.equal(r.x, l.x + l.w + 24, "the right half stands just after the left as it is drawn");
+  commit({ ops: invertBoardOps(board, clock, made.atoms, "undo") });
+  assert.deepEqual(board.items().map((i) => [i.id, i.speed]), [[a.id, 2]], "one undo brings the whole card back");
+});
+
+test("a copy keeps a card's looks: colour, size, own colour, speed and mute (and nothing it should not)", async () => {
+  const { keepOf, keptFields } = await import("../src/core/board.js");
+  const { board, clock, commit, song, note } = setup();
+  const s = song(0);
+  commit(setItemOps(clock, board, s.id, { speed: 2, tint: 5, muted: true }));
+  const n = note(0, 200, "가사");
+  commit(setItemOps(clock, board, n.id, { color: "blue", size: 3 }));
+  assert.deepEqual(keepOf(board.item(s.id)), { tint: 5, speed: 2, muted: true });
+  assert.deepEqual(keepOf(board.item(n.id)), { color: "blue", size: 3 });
+  const data = board.item(s.id).data;
+  assert.deepEqual(keptFields("song", { speed: 2, tint: 5, muted: true }, data), { tint: 5, speed: 2, muted: true, w: 120 });
+  assert.deepEqual(keptFields("song", { speed: 7, tint: 12, color: "blue" }, data), {}, "a wrong speed or colour is left out; a song has no ink colour");
+  assert.deepEqual(keptFields("note", { color: "blue", size: 3, speed: 2 }, { text: "가사" }), { color: "blue", size: 3 });
+});

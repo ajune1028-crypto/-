@@ -9,8 +9,16 @@
 
 import { h, openSheet, toast } from "./dom.js";
 import { watchPickers } from "./picker-watch.js";
+import { micProblem } from "../audio/recorder.js";
 
-export const AUDIO_TYPES = "audio/*,.m4a,.mp3,.wav,.aac,.ogg,.oga,.opus,.webm,.3gp,.amr,.flac";
+// Videos too: their sound is used (an iPhone or iPad answers "record a sound" with the camera).
+export const AUDIO_TYPES = "audio/*,video/*,.m4a,.mp3,.wav,.aac,.ogg,.oga,.opus,.webm,.3gp,.amr,.flac,.mov,.mp4";
+
+/** iPhone and iPad (an iPad says it is a Mac, with a touch screen). */
+export function isApple() {
+  const n = globalThis.navigator;
+  return !!n && (/iP(hone|ad|od)/.test(n.userAgent || "") || (n.platform === "MacIntel" && n.maxTouchPoints > 1));
+}
 export const KEEP_RATE = 24000; // recordings are kept at this rate: clear voice, a quarter of CD size
 
 /** Why this page cannot record in the app, in words a person can act on. */
@@ -78,11 +86,63 @@ export function waysIn({ app, roomId, root, name, prefix, mic, canRecord, onReco
     h("button", { type: "button", class: "btn rec-way", id: prefix + "record", disabled: !canRecord || !mic.ok, onclick: () => onRecord() }, h("span", { class: "dot-rec" }), "지금 이 앱에서 녹음"),
     !mic.ok && h("p", { class: "help warn", id: prefix + "mic-reason", text: micReason(mic.reason) }),
     mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root, prefix })),
-    h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, "폰 녹음 앱으로 녹음하기"),
-    h("p", { class: "help", text: "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
+    // iPhone and iPad have no recorder to open from a page: they open the camera, and its sound is used.
+    h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, isApple() ? "카메라로 녹음하기 (소리만 써요)" : "폰 녹음 앱으로 녹음하기"),
+    h("p", { class: "help", text: isApple() ? "아이폰·아이패드는 녹음 앱 대신 카메라가 열려요. 찍은 영상의 소리만 가져와요." : "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
     h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, "파일에서 가져오기"),
-    h("p", { class: "help", text: "녹음 앱에 저장된 파일(m4a), mp3, wav 모두 돼요." }),
+    h("p", { class: "help", text: isApple() ? "음성 메모의 녹음은 공유 → '파일에 저장'한 뒤 여기서 고르세요. m4a·mp3·wav, 영상(소리만)도 돼요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
   ];
+}
+
+/** Where this browser keeps a site's microphone permission, in steps a person can follow. */
+export function micSteps() {
+  const ua = globalThis.navigator?.userAgent || "";
+  if (isApple() && /CriOS/.test(ua)) return "설정 앱 → Chrome → 마이크를 켜 주세요. 그다음 '다시 불러오기'를 누르세요.";
+  if (isApple()) return "주소창 왼쪽의 '가가'(aA) → '웹 사이트 설정' → '마이크' → '허용'(또는 '확인')을 고르세요. 그다음 '다시 불러오기'를 누르세요. 그래도 안 되면 설정 앱 → Safari → 마이크 → '확인'.";
+  if (/SamsungBrowser/.test(ua)) return "주소창의 자물쇠 → '권한'(사이트 권한) → '마이크' → 허용. 그다음 '다시 불러오기'를 누르세요.";
+  if (/Android/.test(ua)) return "주소창 왼쪽의 아이콘(ⓘ 또는 조절 모양) → '권한' → '마이크' → 허용. 안 보이면 크롬 ⋮ → 설정 → 사이트 설정 → 마이크. 그다음 '다시 불러오기'를 누르세요.";
+  return "주소창 왼쪽의 자물쇠(또는 조절 모양) → '마이크' → 허용. 그다음 '다시 불러오기'를 누르세요.";
+}
+
+/**
+ * Recording was refused. Where the browser can still ask, one tap brings its own
+ * "허용하시겠습니까?" back (the question only comes from a tap); where the site is
+ * blocked, the steps for this browser and a reload. retry() records once allowed.
+ */
+export function micRefused({ app, root, err, retry }) {
+  const name = err?.name || "";
+  if (name !== "NotAllowedError" && name !== "SecurityError") return void toast(root, micProblem(err), 3600);
+  // Claude's own page has no microphone to give.
+  if (app.transport?.info?.().kind === "claude") return void toast(root, micReason("blocked"), 5200);
+  openSheet(root, "마이크를 허용해 주세요", (panel, close) => {
+    const steps = h("p", { class: "help warn", id: "mic-steps", hidden: true, text: micSteps() });
+    const allow = h("button", { type: "button", class: "btn", id: "mic-allow", onclick: () => {
+      // Asked straight from this tap, so the browser shows its own question.
+      const asked = performance.now();
+      let ask;
+      try {
+        ask = navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        ask = Promise.reject(e);
+      }
+      ask.then((stream) => {
+        for (const t of stream.getTracks()) t.stop();
+        close();
+        toast(root, "마이크가 켜졌어요", 1800);
+        retry?.();
+      }, () => {
+        // Refused at once, with no question: the site is blocked in the browser's settings.
+        steps.hidden = false;
+        allow.textContent = performance.now() - asked < 700 ? "다시 물어보기" : "마이크 허용하기";
+      });
+    } }, "마이크 허용하기");
+    panel.append(h("div", { class: "form", id: "mic-help" },
+      h("p", { class: "help", text: "녹음하려면 이 페이지에 마이크를 허용해야 해요. 아래 버튼을 누르면 브라우저가 허용할지 물어봐요." }),
+      allow, steps,
+      h("button", { type: "button", class: "btn quiet", id: "mic-reload", onclick: () => location.reload() }, "다시 불러오기")));
+    // Already blocked: the steps at once (the button may still bring the question back).
+    navigator.permissions?.query?.({ name: "microphone" }).then((p) => { if (p.state === "denied") steps.hidden = false; }, () => {});
+  });
 }
 
 /** A picker was tapped and no chooser came. */

@@ -4,7 +4,7 @@
 
 import { RoomSession } from "../sync/session.js";
 import { newRoomId } from "../core/room.js";
-import { addItemOps, cardFromClip, setItemOps, songCardData } from "../core/board.js";
+import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields } from "../core/board.js";
 import { sourceOp, addClipOps } from "../core/song.js";
 import { rememberRoom, roomEntry } from "../identity.js";
 
@@ -59,12 +59,12 @@ async function cardsOf(from, kind) {
     return song.layout().map((clip) => {
       const src = song.source(clip.src);
       const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
-      return { kind: "song", data: cardFromClip({ source, offset: clip.offset, length: clip.length }) };
+      return { kind: "song", data: cardFromClip({ source, offset: clip.offset, length: clip.length }), speed: clip.speed, tint: clip.tint, muted: clip.muted };
     });
   }
   if (kind === "creative-board") {
     const board = await from.load("board");
-    return board.items().map((i) => ({ kind: i.kind, data: i.kind === "note" ? { text: i.text || "" } : i.data, color: i.color, size: i.size }));
+    return board.items().map((i) => ({ kind: i.kind, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) }));
   }
   // A text room: the lines of its last three days, oldest first.
   const cards = [];
@@ -92,7 +92,8 @@ export async function putIntoBoard(app, entry, boardEntry) {
       cards.forEach((card, n) => {
         const made = addItemOps(to.clock, board, { kind: card.kind, x, y, data: card.data, by });
         to.commit("board", made.ops);
-        if (card.kind === "note" && (card.color || card.size)) to.commit("board", setItemOps(to.clock, board, made.id, { ...(card.color ? { color: card.color } : {}), ...(card.size ? { size: card.size } : {}) }).ops);
+        const keep = keptFields(card.kind, card, card.data);
+        if (Object.keys(keep).length) to.commit("board", setItemOps(to.clock, board, made.id, keep).ops);
         const item = board.item(made.id);
         y += (card.kind === "song" ? 110 : card.kind === "photo" ? Math.round((item.w * card.data.h) / card.data.w) + 30 : 56);
         if ((n + 1) % 8 === 0) {

@@ -17,7 +17,7 @@ import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
 import { memberColor, INK, PALETTE } from "../core/paint.js";
 import {
-  MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps,
+  MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan,
   joinClipOps, joinWithSourceOps, combinedSource,
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
@@ -28,12 +28,13 @@ import { Analyzer, analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { decodeAudioFile, bufferFromSamples } from "../audio/decode.js";
 import { encodeWav, decodeWav } from "../audio/wav.js";
-import { resample, toMono } from "../audio/dsp.js";
-import { toBase64 } from "../audio/peaks.js";
+import { resample, toMono, louder } from "../audio/dsp.js";
+import { toBase64, scalePeaks } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
-import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp } from "./sound-in.js";
+import { keepTake, takeWhere } from "./keep-take.js";
+import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
-import { addItemOps, cardFromClip } from "../core/board.js";
+import { addItemOps, cardFromClip, keptFields, setItemOps } from "../core/board.js";
 
 const MIN_TAKE_MS = 250;
 const PRESENCE_EVERY_MS = 120;
@@ -375,6 +376,7 @@ export function mountSongRoom(body, app, session, frame) {
     const one = new SongDoc();
     one.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map((n) => [Math.round(n.t), Math.max(1, Math.round(n.d)), n.p, Math.round(Math.min(1, Math.max(0, n.v)) * 100)]), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
     one.apply({ t: "clip", id: clip.id, src: src.id, row: 0, start: 0, offset: clip.offset, length: clip.length, by: clip.by, at: 0 });
+    if ((clip.speed || 1) !== 1) one.apply({ t: "cset", id: "2@solo", c: clip.id, f: { speed: clip.speed } });
     soloPlayer?.close();
     soloPlayer = new SongPlayer(ctx, { song: () => one, audioFor: (sid) => audio.get(sid) || null, onEnd: () => stopSolo() });
     soloPlayer.setMode(settings().songMode);
@@ -444,8 +446,10 @@ export function mountSongRoom(body, app, session, frame) {
     } catch (err) {
       busy = null;
       console.warn(err);
-      toast(root, micProblem(err) + " 폰 녹음 앱으로도 넣을 수 있어요.", 4200);
       drawButtons();
+      // Not allowed: one tap brings the browser's own question back; anything else, the other ways in.
+      if (err?.name === "NotAllowedError" || err?.name === "SecurityError") return void micRefused({ app, root, err, retry: () => toggleRecord() });
+      toast(root, micProblem(err) + " 폰 녹음 앱으로도 넣을 수 있어요.", 4200);
       return void openAddSheet();
     }
     busy = null;
@@ -482,7 +486,10 @@ export function mountSongRoom(body, app, session, frame) {
     // page late again: move the take back by that much.
     const shift = r.overdub ? r.recorder.latency() * 1000 + Number(settings().syncMs || 0) : 0;
     const begin = Math.max(0, Math.round(r.start - shift));
-    await addTake({ samples: take.samples, rate: take.rate, result, start: begin, row: r.row, name: null });
+    // A take sung softly (the phone far away) is made loud enough to hear; its waveform follows.
+    const up = louder(take.samples);
+    result.peaks = scalePeaks(result.peaks, up.gain);
+    await addTake({ samples: up.samples, rate: take.rate, result, start: begin, row: r.row, name: null });
     playhead = begin + Math.round(result.duration * 1000);
     draw();
   }
@@ -505,6 +512,7 @@ export function mountSongRoom(body, app, session, frame) {
         samples = samples.subarray(0, Math.round((rate * MAX_TAKE_MS) / 1000));
         toast(root, "앞의 3분만 가져왔어요", 3200);
       }
+      samples = louder(samples).samples;
       const result = await analyzeSamples(samples, rate, { onProgress: (p) => showStatus(`음을 찾는 중… ${Math.round(p * 100)}%`) });
       const row = song.freeRow(playhead, Math.max(1, Math.round(result.duration * 1000)), selectedRow);
       if (row === null) throw Object.assign(new Error("no room"), { reason: "rows" });
@@ -537,6 +545,7 @@ export function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = place;
     select(clip.id);
+    keepTake(app, { name, result, blob, where: takeWhere(app, session.roomId) });
   }
 
   // ---- clips ----------------------------------------------------------------------
@@ -578,7 +587,12 @@ export function mountSongRoom(body, app, session, frame) {
     const lane = Math.min(row, MAX_ROWS - 1);
     const step = gridStep();
     if (step) at = Math.max(0, Math.round(snapMs(at, step)));
-    const place = song.freeRow(at, clip.length, lane, id);
+    // On the row it was dropped on, it may not lie over another clip: it goes to the nearest
+    // gap where it fits on that row (against its neighbour); when none is near, the row below.
+    const span = clipSpan(clip);
+    const near = song.nearestGap(at, span, lane, id, Math.max(2000, span));
+    if (near !== null) at = near;
+    const place = near !== null ? lane : song.freeRow(at, span, lane, id);
     if (place === null) return void toast(root, "그 자리에는 놓을 수 없어요");
     if (place === clip.row && at === clip.start) return;
     apply(setClipOps(session.clock, song, id, { start: at, row: place }));
@@ -592,7 +606,7 @@ export function mountSongRoom(body, app, session, frame) {
     const src = clip && song.source(clip.src);
     if (!src) return;
     copyItem(app.store, {
-      kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length,
+      kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length, speed: clip.speed || 1, tint: clip.tint ?? null,
       source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name },
     });
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
@@ -603,7 +617,8 @@ export function mountSongRoom(body, app, session, frame) {
     const item = clipboardItem(app.store, "song-clip");
     if (!item || readOnly()) return;
     if (!song.canAddClip()) return void toast(root, "클립은 방 하나에 200개까지예요");
-    const row = song.freeRow(playhead, item.length, selectedRow);
+    const speed = CLIP_SPEEDS.includes(item.speed) ? item.speed : 1;
+    const row = song.freeRow(playhead, Math.round(item.length / speed), selectedRow);
     if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요");
     const ops = [];
     let srcId = item.room === session.roomId && song.source(item.src) ? item.src : null;
@@ -615,6 +630,9 @@ export function mountSongRoom(body, app, session, frame) {
     }
     const clip = addClipOps(session.clock, song, { src: srcId, row, start: playhead, offset: item.offset, length: item.length, by: session.memberId, at: Date.now() });
     session.commit("song", [...ops, ...clip.ops]);
+    // Its own speed and colour come along (one undo still takes the clip away).
+    const looks = { ...(speed !== 1 ? { speed } : {}), ...(Number.isInteger(item.tint) && item.tint >= 0 && item.tint <= 7 ? { tint: item.tint } : {}) };
+    if (Object.keys(looks).length) session.commit("song", setClipOps(session.clock, song, clip.id, looks).ops);
     record(clip.atoms);
     selectedRow = row;
     select(clip.id);
@@ -636,7 +654,11 @@ export function mountSongRoom(body, app, session, frame) {
   /** 잇기: this clip and the next one on its row become one. */
   async function joinClip(id) {
     const plan = joinClipOps(session.clock, song, id, session.memberId);
-    if (!plan) return void toast(root, "이 줄에서 뒤에 이을 클립이 없어요");
+    if (!plan) {
+      const c = song.clip(id);
+      const next = song.nextOnRow(id);
+      return void toast(root, next && (next.speed || 1) !== (c?.speed || 1) ? "빠르기가 다른 클립은 이을 수 없어요" : next && (c?.speed || 1) !== 1 ? "빠르기를 바꾼 클립은 같은 녹음끼리만 이을 수 있어요" : "이 줄에서 뒤에 이을 클립이 없어요");
+    }
     if (plan.ops) {
       apply(plan);
       return void draw();
@@ -694,7 +716,7 @@ export function mountSongRoom(body, app, session, frame) {
 
   function insideClip(id) {
     const c = song.layout().find((x) => x.id === id);
-    return !!c && playhead > c.start + 50 && playhead < c.start + c.length - 50;
+    return !!c && playhead > c.start + 50 && playhead < c.start + clipSpan(c) - 50;
   }
 
   // The small menu by a chosen clip.
@@ -738,6 +760,8 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-copy", "복사", () => copyClip(clip.id)),
       item("clip-paste", "붙여넣기", () => pasteClip(), !!clipboardItem(app.store, "song-clip") && !readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
+      item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),
       !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
         h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), "색"),
       item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
@@ -782,7 +806,10 @@ export function mountSongRoom(body, app, session, frame) {
       const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
       const data = cardFromClip({ source, offset: clip.offset, length: clip.length });
       const by = roomEntry(app.store, room.id)?.memberId || session.memberId;
-      other.commit("board", addItemOps(other.clock, target, { kind: "song", x: right ? right.x + right.w + 60 : 40, y: right ? right.y : 40, data, by }).ops);
+      const made = addItemOps(other.clock, target, { kind: "song", x: right ? right.x + right.w + 60 : 40, y: right ? right.y : 40, data, by });
+      other.commit("board", made.ops);
+      const keep = keptFields("song", { speed: clip.speed, tint: clip.tint }, data);
+      if (Object.keys(keep).length) other.commit("board", setItemOps(other.clock, target, made.id, keep).ops);
       for (let i = 0; i < 40 && other.pending; i++) await new Promise((r) => setTimeout(r, 100));
       toast(root, `'${room.name}' 화이트보드로 보냈어요`);
     } catch (err) {
