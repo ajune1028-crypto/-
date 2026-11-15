@@ -2340,6 +2340,58 @@ scenario("whiteboard: the board runs to every edge of the screen under the float
   await click(page, "#mode-all");
 });
 
+// 본질 5.5: "사진도 넣었다 뺄다 할 수 있고 브러쉬도 있고 필기도 가능하고" - 전체 draws with the text room's brushes.
+scenario("whiteboard 그리기: the pen (from any mode it brings 전체) draws on the board beneath the cards and a friend sees it; the stroke eraser takes it off and undo brings it back; two fingers zoom and draw nothing; pen off, a drag moves the board again", async ({ open, out }) => {
+  const a = await open({ dev: "a" });
+  const id = await createBoard(a);
+  const b = await open({ dev: "b", hash: "r-" + id });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(q("#board"));
+  await click(a, "#mode-link");
+  await click(a, "#board-pen");
+  await a.waitFor(`${q("#mode-all")}.getAttribute("aria-pressed") === "true" && !${q("#board-ink-tools")}.hidden && ${q("#board-pen")}.getAttribute("aria-pressed") === "true"`);
+  const v = await a.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return { x: r.left + 60, y: r.top + 150 }; })()`);
+  await a.press(v.x, v.y);
+  for (let i = 1; i <= 8; i++) await a.moveTo(v.x + i * 20, v.y + i * 6);
+  await a.release(v.x + 160, v.y + 48);
+  const strokes = (p) => p.eval(`window.__app.session.doc("k:board").strokes().length`);
+  await a.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  await b.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  await frames(a);
+  const inked = (x, y) => a.eval(`(() => { const c = document.querySelector("#board canvas.ink"); const r = c.getBoundingClientRect(); const k = c.width / r.width; const d = c.getContext("2d").getImageData(Math.round((${x} - r.left) * k) - 6, Math.round((${y} - r.top) * k) - 6, 12, 12).data; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true; return false; })()`);
+  assert.ok(await inked(v.x + 80, v.y + 24), "the line is on the board where it was drawn");
+  await a.front();
+  await a.shot(out("board-drawing.png"));
+  assert.equal(await a.eval(`document.querySelector("#board canvas.ink").nextElementSibling?.id`), "board-content", "drawings lie beneath the cards");
+  // The stroke eraser takes it off; undo brings it back.
+  await click(a, "#eraser");
+  await click(a, '[data-erase="eraser-stroke"]');
+  await a.press(v.x + 80, v.y - 30);
+  for (let i = 1; i <= 6; i++) await a.moveTo(v.x + 80, v.y - 30 + i * 18);
+  await a.release(v.x + 80, v.y + 78);
+  await a.waitFor(`window.__app.session.doc("k:board").strokes().length === 0`);
+  await b.waitFor(`window.__app.session.doc("k:board").strokes().length === 0`);
+  await click(a, "#board-undo");
+  await a.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  // Two fingers zoom while the pen is on; nothing is drawn.
+  await click(a, '[data-brush="pen"]');
+  const before = await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
+  await a.pinch([[v.x, v.y + 260], [v.x + 100, v.y + 260]], [[v.x - 40, v.y + 260], [v.x + 140, v.y + 260]]);
+  await frames(a);
+  assert.equal(await strokes(a), 1, "a pinch draws nothing");
+  assert.notEqual(await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`), before, "the pinch zoomed");
+  // Pen off: a drag moves the board, nothing is drawn.
+  await click(a, "#board-pen");
+  await a.waitFor(`${q("#board-ink-tools")}.hidden`);
+  const pan0 = await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
+  await a.touch("start", [[v.x + 40, v.y + 300]]);
+  for (let i = 1; i <= 6; i++) await a.touch("move", [[v.x + 40 - i * 15, v.y + 300]]);
+  await a.touch("end");
+  await frames(a);
+  assert.notEqual(await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`), pan0, "the board moved");
+  assert.equal(await strokes(a), 1);
+});
+
 // 본질 5.5: "노트처럼 글 쓰는 것도 진짜 잘 되고" - 글쓰기 writes where the finger is, in place.
 scenario("whiteboard 글쓰기: a tap writes right there and a friend sees the words come; a tap on words writes on in them; a tap outside only ends it; empty writing leaves nothing; undo takes it back step by step", async ({ open }) => {
   const a = await open({ dev: "a" });
@@ -2689,7 +2741,7 @@ scenario("toolbars say what each button does: captions under every icon in the t
     assert.ok(await fits("#song-tools"), "the song room's eight buttons fit " + width);
     await click(page, "#back");
     await createBoard(page);
-    assert.deepEqual(await caps("#board-tools"), ["전체 재생", "되돌리기", "다시하기", "지우기"]);
+    assert.deepEqual(await caps("#board-tools"), ["전체 재생", "그리기", "되돌리기", "다시하기", "지우기"]);
     assert.ok(await fits("#board-tools"));
     assert.match(await page.eval(`${q("#board-play")}.getAttribute("aria-label")`), /전체 재생/);
   }
@@ -2739,7 +2791,9 @@ scenario("menus: with a card's menu open, a tap on another card only puts the me
     await page.waitFor(`[...document.querySelectorAll(".card.memo .card-text")].some((t) => t.textContent === ${JSON.stringify(memo)})`);
   }
   const ids = await page.eval(`window.__app.session.doc("board").items().map((i) => i.id)`);
-  // The memo just written is chosen, with its menu.
+  // Written in place, nothing stays chosen; a tap chooses the second, with its menu.
+  assert.ok(!(await page.eval(`document.querySelector(".card.chosen")`)), "writing leaves nothing chosen");
+  await click(page, `.card[data-id="${ids[1]}"]`);
   await page.waitFor(`${q("#card-menu")} && document.querySelector('.card[data-id="${ids[1]}"]').classList.contains("chosen")`);
   // A tap on the other card: the menu goes, and the other card is not chosen.
   await click(page, `.card[data-id="${ids[0]}"]`);

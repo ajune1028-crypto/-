@@ -32,8 +32,8 @@ import {
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
 } from "../core/board.js";
-import { INK_COLORS } from "../core/ink.js";
-import { inkColor } from "./ink.js";
+import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
+import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
@@ -69,6 +69,8 @@ export function mountBoardRoom(body, app, session, frame) {
   let mode = "all";
   let selected = null;
   let writer = null; // words being written in place: { id, ta, el, fresh, before, made, timer, stop }
+  let boardInk = null; // 그리기: the drawings' layer (made once the board is in place)
+  let inkQueued = false;
   let linkFrom = null;
   let cutting = false; // 분할: the next tap on a song card cuts it there
   const lassoing = () => mode === "lasso"; // 올가미 (its own mode): one finger draws loops
@@ -125,8 +127,11 @@ export function mountBoardRoom(body, app, session, frame) {
   frame.top.append(h("div", { class: "board-top" }, modes));
 
   const playButton = iconButton("board-play", "play", "전체 재생 (왼쪽부터, 잇기 순서대로)", () => togglePlay(), "전체 재생");
+  const penButton = iconButton("board-pen", "pen", "그리기", () => setPen(pen.tool ? null : "pen"), "그리기");
+  penButton.setAttribute("aria-pressed", "false"); // off reads as off, as in the text room
   const toolbar = h("div", { class: "toolbar board-tools", id: "board-tools" },
     playButton,
+    penButton,
     iconButton("board-undo", "undo", "실행취소", () => step("undo"), "되돌리기"),
     iconButton("board-redo", "redo", "다시실행", () => step("redo"), "다시하기"),
     iconButton("board-delete", "eraser", "고른 카드 지우기", () => removeSelected(), "지우기"));
@@ -154,6 +159,64 @@ export function mountBoardRoom(body, app, session, frame) {
   insetWatch.observe(body);
   if (roomEl) insetWatch.observe(roomEl);
 
+  // ---- 그리기 (the owner: "브러쉬도 있고 필기도 가능하고"; 전체 is "다 할 수 있는" mode) ------
+  // The text room's brushes, drawn on the board itself in its own frame (they pan, zoom and
+  // stretch with it) on a screen-sized canvas beneath the cards: drawings never cover what is
+  // written or sung. While the pen is on, one finger draws and two fingers zoom.
+  const INK_DOC = "k:board";
+  const INK_UNIT = 100 / 16; // stroke units per board pixel (as on a sheet: hundredths of a 16 px rem)
+  const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
+  const inkTools = h("div", { class: "ink-tools", id: "board-ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
+  toolbar.before(inkTools);
+  boardInk = new InkLayer({
+    host: surface,
+    ink: () => session.doc(INK_DOC),
+    blocked: () => fingers.pinching,
+    view: {
+      point: (cx, cy) => { const p = toBoard(cx, cy); return [p.x * INK_UNIT, p.y * INK_UNIT]; },
+      matrix: () => [(zoom * sx) / INK_UNIT, 0, 0, zoom / INK_UNIT, panX, panY],
+    },
+    onStroke: ({ pts, color, width, brush }) => {
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, by: session.memberId });
+      session.commit(INK_DOC, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+    },
+    onErase: (id) => {
+      const made = eraseOps(session.clock, session.doc(INK_DOC), id);
+      session.commit(INK_DOC, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+    },
+  });
+  surface.prepend(boardInk.canvas);
+
+  /** 그리기 on or off (null). The pen belongs to 전체: turning it on there from any mode. */
+  function setPen(tool) {
+    if (tool && mode !== "all") setMode("all");
+    pen.tool = tool;
+    boardInk.setTool(tool);
+    boardInk.setStyle(pen);
+    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store });
+    penButton.setAttribute("aria-pressed", String(!!tool));
+    if (tool) {
+      finishWriting();
+      closeExtra?.();
+      if (selected) {
+        selected = null;
+        draw();
+      }
+    }
+    inkSoon();
+  }
+
+  function inkSoon() {
+    if (!boardInk || inkQueued) return;
+    inkQueued = true;
+    requestAnimationFrame(() => {
+      inkQueued = false;
+      if (alive) boardInk?.render();
+    });
+  }
+
   const readOnly = () => !!session.transport.readOnly;
   const colorOf = (by) => { const m = session.room.member(by); return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()]; };
   const settings = () => getSettings(app.store);
@@ -163,6 +226,7 @@ export function mountBoardRoom(body, app, session, frame) {
 
   function setMode(m) {
     finishWriting();
+    if (m !== "all" && pen.tool) setPen(null);
     mode = m;
     linkFrom = null;
     cutting = false;
@@ -181,6 +245,7 @@ export function mountBoardRoom(body, app, session, frame) {
     placeChips();
     if (menu) placeMenu(false);
     if (writer) placeWriter();
+    inkSoon();
   }
 
   // Continuous gestures (a pinch, the wheel) ask for a draw once per frame at most.
@@ -808,6 +873,7 @@ export function mountBoardRoom(body, app, session, frame) {
   const fingers = watchFingers(surface, () => {
     gesture?.();
     pan = null;
+    boardInk?.cancelTouch();
   });
 
   function wireCard(el, id) {
@@ -1059,7 +1125,7 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   surface.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoing()) return;
+    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoing() || pen.tool) return;
     pan = { id: e.pointerId, x: e.clientX, y: e.clientY, px: panX, py: panY, moved: false };
     surface.setPointerCapture?.(e.pointerId);
   });
@@ -1126,8 +1192,11 @@ export function mountBoardRoom(body, app, session, frame) {
 
   // ---- editing --------------------------------------------------------------------
 
+  /** One undo step; 되돌리기 and 다시하기 say at once whether they can (a stroke draws no cards). */
   function record(atoms) {
     if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false });
+    toolbar.querySelector("#board-undo").disabled = !undo.canUndo;
+    toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
   }
 
   function apply(made) {
@@ -1142,8 +1211,12 @@ export function mountBoardRoom(body, app, session, frame) {
     finishWriting();
     const atoms = dir === "undo" ? undo.undo() : undo.redo();
     if (!atoms) return;
-    session.commit("board", invertBoardOps(board, session.clock, atoms, dir));
+    const inked = atoms.filter((a) => a.doc === INK_DOC);
+    const rest = atoms.filter((a) => a.doc !== INK_DOC);
+    if (inked.length) session.commit(INK_DOC, invertInkOps(session.doc(INK_DOC), session.clock, inked, dir));
+    if (rest.length) session.commit("board", invertBoardOps(board, session.clock, rest, dir));
     draw();
+    inkSoon();
   }
 
   /**
@@ -1795,10 +1868,14 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   const offs = [
-    session.on("change", ({ doc }) => { if (doc === "board" || doc === "room") draw(); }),
+    session.on("change", ({ doc }) => {
+      if (doc === "board" || doc === "room") draw();
+      if (doc === INK_DOC) inkSoon();
+    }),
     onThemeChange(draw),
   ];
   session.load("board").then(draw);
+  session.load(INK_DOC).then(() => inkSoon());
   measureInsets();
   draw();
 
@@ -1816,6 +1893,8 @@ export function mountBoardRoom(body, app, session, frame) {
       finishWriting();
       alive = false;
       insetWatch.disconnect();
+      boardInk?.destroy();
+      inkTools.remove();
       roomEl?.style.removeProperty("--top-inset");
       roomEl?.style.removeProperty("--bottom-inset");
       cancelAnimationFrame(frameReq);

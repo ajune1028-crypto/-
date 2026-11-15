@@ -19,7 +19,7 @@ import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { soundPickers, waysIn, pickerHelp } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
-import { InkLayer, inkColor } from "./ink.js";
+import { InkLayer, inkColor, drawInkTools as drawInkToolsInto } from "./ink.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
 
 const FIRST_SHEETS = 7;
@@ -47,7 +47,6 @@ export function mountTextRoom(body, app, session) {
   // Drawing: the pen button turns every sheet into a drawing surface, with its own small tool row.
   // The brush and the kind of eraser are remembered on this device.
   const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
-  const eraserKind = () => (getSettings(app.store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"), "그리기");
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   // 사진: choose words, then a photo; it hides in them and they sparkle (2 s hold brings it out).
@@ -181,25 +180,7 @@ export function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    inkTools.hidden = !pen.tool;
-    if (!pen.tool) return;
-    const erasing = pen.tool !== "pen";
-    const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
-    const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
-    inkTools.replaceChildren(
-      h("div", { class: "ink-row" },
-        ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
-          onclick: () => { setSetting(app.store, "inkBrush", b); choose({ brush: b }); } })),
-        iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
-        erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
-          ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
-            onclick: () => { setSetting(app.store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
-      h("div", { class: "ink-row" },
-        ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-          style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-        ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-          onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
-    inkTools.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store });
   }
 
   function buttons() {

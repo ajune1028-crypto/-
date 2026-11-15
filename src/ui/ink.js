@@ -8,7 +8,9 @@
 // own that clears what lies under it), 획 지우개 removes whole strokes.
 // Used by the text room; the photo room and whiteboard can reuse it.
 
-import { h } from "./dom.js";
+import { h, iconButton } from "./dom.js";
+import { getSettings, setSetting } from "../identity.js";
+import { INK_COLORS } from "../core/ink.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
 
@@ -71,8 +73,14 @@ export class InkLayer {
    * Drawings may go past the paper's sides (to the screen's edges) and below it: the paper
    * grows to hold them.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0 }) {
+  /**
+   * view: a board's own frame instead of the host's (the whiteboard pans and zooms under a
+   * screen-sized canvas): point(clientX, clientY) → [x, y] in stroke units, matrix() → the
+   * canvas transform [a, b, c, d, e, f] from stroke units to CSS pixels of the host.
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null }) {
     this.host = host;
+    this.view = view;
     this.blocked = blocked;
     this.room = room;
     this.ink = ink;
@@ -110,6 +118,10 @@ export class InkLayer {
     const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
     const rem = remPx() * zoom;
     const pressure = e.pointerType === "pen" || (e.pressure > 0 && e.pressure !== 0.5) ? e.pressure : 0.5;
+    if (this.view) {
+      const [x, y] = this.view.point(e.clientX, e.clientY);
+      return [Math.round(x), Math.round(y), Math.round(pressure * 100)];
+    }
     return [Math.round(((e.clientX - r.left) / rem) * 100), Math.round(((e.clientY - r.top) / rem) * 100), Math.round(pressure * 100)];
   }
 
@@ -170,7 +182,7 @@ export class InkLayer {
 
   render() {
     const c = this.canvas;
-    this.grow();
+    if (!this.view) this.grow();
     const rect = c.getBoundingClientRect();
     const host = this.host.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
@@ -186,9 +198,14 @@ export class InkLayer {
     g.clearRect(0, 0, w, hgt);
     // Drawn at the zoomed size (sharp), in the page's own units, from the paper's corner
     // (the canvas reaches past the paper's sides).
-    const zoom = this.host.offsetWidth ? host.width / this.host.offsetWidth : 1;
-    const scale = (remPx() / 100) * ratio * zoom;
-    g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
+    if (this.view) {
+      const [a, b, cc, d, e, f] = this.view.matrix();
+      g.setTransform(a * ratio, b * ratio, cc * ratio, d * ratio, (e + host.left - rect.left) * ratio, (f + host.top - rect.top) * ratio);
+    } else {
+      const zoom = this.host.offsetWidth ? host.width / this.host.offsetWidth : 1;
+      const scale = (remPx() / 100) * ratio * zoom;
+      g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
+    }
     for (const s of this.ink().strokes()) this.paint(g, s.pts, s.c, s.w, s.b || "pen");
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
   }
@@ -248,4 +265,32 @@ export class InkLayer {
     this.resize.disconnect();
     this.canvas.remove();
   }
+}
+
+/**
+ * The drawing tools (펜·연필·마커·형광펜, 지우개 부분/획, eight colours, three widths), the same in
+ * the text room and on the whiteboard. pen: { tool, brush, color, width }; setTool(tool) applies a
+ * change. Hidden while no tool is on.
+ */
+export function drawInkTools(panel, { pen, setTool, store }) {
+  panel.hidden = !pen.tool;
+  if (!pen.tool) return;
+  const erasing = pen.tool !== "pen";
+  const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
+  const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
+  const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
+  panel.replaceChildren(
+    h("div", { class: "ink-row" },
+      ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
+        onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } })),
+      iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
+      erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
+        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
+          onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
+    h("div", { class: "ink-row" },
+      ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
+        style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
+      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
+        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
+  panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
 }

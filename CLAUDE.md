@@ -33,11 +33,17 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - 모든 아래 도구줄 버튼에 이름. 디자인: 덜 가리기(작고 비치는 메뉴·오른쪽 도구·힌트, 옅은 어두운 막).
   - 그리기 층이 다시 그릴 때마다 두 배로 커지던 버그와 보드 메모 글씨가 흰색이던 버그를 고쳤다(둘 다 화면 캡처로 찾음).
   - 원문 점검표: `docs/superpowers/specs/2026-11-15-original-idea-checklist.md`(첫 설명의 기능 58개, 됨/일부/아직).
+- **11월 15일 밤 (본질, 사용자: "바꾸는 게 메인이 아니라 생각하는 게 메인")**: `docs/superpowers/specs/2026-11-15-essence-design.md`에 앱의 한 줄 본질(친구와 링크 하나로 같은 자리에서 쓰고·부르고·놓는 것이 같이 만든 것이 된다), 본질 다섯(같이가 기본 · 하던 대로 · 쌓인다 · 흐른다 · 가리지 않는다), 판단 질문 다섯, 기능마다 왜·무엇을 위해·어긋남·판단을 적었다. **무엇을 만들든 그 문서의 질문 다섯으로 먼저 잰다.** 그 판단으로 바꾼 것:
+  - 노래 방: 멈춰 있을 때 클립을 누르면 재생선이 누른 곳으로 온다(그래서 분할은 누른 곳). 클립 메뉴에는 지금 할 수 있는 것만(회색 버튼 없음).
+  - 홈: 방 줄에 그 방 사람들의 색(둘 이상일 때).
+  - 텍스트 방: 오늘 장이 화면 아래 끝까지 이어지는 한 장, 아래 빈 곳을 누르면 끝에 이어 쓴다. 색 테두리 대신 가는 유리 윤곽.
+  - 화이트보드: 판이 화면 끝까지(위 막대·모드·도구줄은 그 위에 뜬 유리, 방 몸통이 '보이는 부분'). 모드 여섯: 전체·이동·**글쓰기**·잇기·노래·올가미. 글쓰기는 누른 곳에 바로 쓰고(시트 없음) 친구에게 바로 보인다. 전체 모드의 **그리기**: 텍스트 방과 같은 붓(`drawInkTools` 하나로 같이 씀), `k:board` 문서, 카드 아래에 그려짐. 확대 버튼은 이동 모드의 오른쪽 도구로.
+  - 가장 큰 막힘은 기능이 아니라 서버다: '같이'가 공개 주소에서 아직 안 된다(아래 '공개 주소와 서버').
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 판, 6번째). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
 - **GitHub**: 11월 15일부터 올리기가 된다(사용자가 GitHub를 연결함). 작업 브랜치를 올리고, 확인된 상태를 `main`에 합친다(허락받음).
-- **다음**: 점검표의 ⬜와 로드맵 3절: 사진 방(셀로그)과 통합 방, 글쓰기 방(A4·스크롤), 화이트보드 그리기·필기·글쓰기 모드·노래 잇기 창, 녹음 원본 파일 나누기(서버), 방 비밀번호, 실제 목소리 채점.
+- **다음 (본질 순, 본질 문서 8절)**: ① 서버 켜기(사용자)와 실제 두 기기 시험 ② 노래 원본을 방으로(친구가 내 목소리를 듣는다: 방의 `files`, ADPCM) ③ 홈에 "새로 온 것"(서버가 방마다 마지막 변경을 알려 줘야 함) ④ 사진 방(셀로그), 통합 방 ⑤ 노래 잇기 창, 그림 필압 ⑥ 글쓰기 방(A4·스크롤) ⑦ 방 비밀번호. 실제 목소리 채점도 남아 있다.
 - **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소), 작업 브랜치 `claude/voice-piano-conversion-scaffold-fnjrk8`. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
 
 ## 사용자와 일하는 법 (가장 중요)
@@ -53,9 +59,9 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 244개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 245개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 110개. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 116개. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
 ```
 
@@ -73,7 +79,7 @@ node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebaseda
 - `core/`: `crdt.js`(글자 목록 RGA와 시계; 글자 위의 사진·녹음 `att`, 표시 `mark`, 잠금 `lock`), `edit.js`(`rangeOps`, `lockedEdit`), **`files.js`**(방의 파일을 40,000자 조각 op로: 배경 사진, 숨긴 녹음), `paint.js`(사람 색, 섞기, 명암비, 글라스 색 계산 `accentColors`), `room.js`, `time.js`, `undo.js`, `b64.js`, **`beat.js`**(박자: 빠르기·박자표·격자·메트로놈 박·퀀타이즈·탭·빠르기 찾기), **`song.js`**(노래 문서: 소리 `src`, 클립 `clip`/`cset`/`crm`, 음 편집 `nfix`/`nadd`와 `notesOf`, 잇기, 겹침 해소, 재생할 음 계산, 되돌리기), **`ink.js`**(그림 획 `stroke`/`srm`, 붓 `b`, 부분 지우개 = `b:"erase"` 획), **`board.js`**(화이트보드: 카드 `item`/`iset`/`irm`, 순서 줄 `link`/`lrm`, `playOrder`, `boardSong`, `cardFromClip`)
 - **`audio/`**: `dsp.js`(모노, 16 kHz로 리샘플), `pitch.js`(YIN, 10ms마다 음높이), `notes.js`(음표로 묶기: 반음 0.6/60ms, 소리 크기 꺼짐(라-라), 비브라토 묶기, 80ms 미만 버림, 도레미 이름), `analyze.js`(실시간으로 먹이는 Analyzer와 파일 전체 분석), `peaks.js`(파형 요약, base64), `wav.js`, `piano.js`(직접 만드는 피아노 소리, 밝게/어둡게, 울림), `stretch.js`(WSOLA: 빠르기를 바꿔도 음높이 그대로), `engine.js`(재생 예약, 원본/피아노, 빠르기), `recorder.js`(마이크), `decode.js`(파일 읽기), **`adpcm.js`**(글자에 숨기는 녹음: 12 kHz, 4비트)
 - `sync/`: `transport.js`, `local.js`, `claude.js`(시험판), **`firebase.js`**(공개 주소의 방 서버: REST와 이벤트 스트림, 규칙은 `docs/firebase-rules.json`), `session.js`(방 하나. 문서 종류는 `DOC_TYPES` 표: `room`, `s:<날짜>` 장, `song`, `k:<날짜>` 그림, `board`), **`blobs.js`**(기기에 파일 보관, IndexedDB)
-- `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층: 붓·지우개), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치·확대), **`note-editor.js`**(음 편집 피아노 롤), **`board-room.js`**(화이트보드), **`reference.js`**(레퍼런스 시트), **`fingers.js`**(두 손가락은 늘 확대: 한 손가락 동작이 비켜 준다), **`sound-in.js`**(소리 넣는 세 길: 녹음·폰 녹음 앱·파일, 노래 방·화이트보드·레퍼런스가 같이 씀), **`picker-watch.js`**(선택 창이 안 열리면 알아챈다), **`photo.js`**(사진 줄이기), **`room-actions.js`**(홈의 방 복제·화이트보드에 넣기), `theme.css`, `theme.js`(가로/세로 크기, 글라스 색, 글자 크기)
+- `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층: 붓·지우개, 텍스트 방과 화이트보드가 같이 쓰는 도구 줄 `drawInkTools`, 보드는 `view`로 자기 좌표를 준다), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치·확대), **`note-editor.js`**(음 편집 피아노 롤), **`board-room.js`**(화이트보드), **`reference.js`**(레퍼런스 시트), **`fingers.js`**(두 손가락은 늘 확대: 한 손가락 동작이 비켜 준다), **`sound-in.js`**(소리 넣는 세 길: 녹음·폰 녹음 앱·파일, 노래 방·화이트보드·레퍼런스가 같이 씀), **`picker-watch.js`**(선택 창이 안 열리면 알아챈다), **`photo.js`**(사진 줄이기), **`room-actions.js`**(홈의 방 복제·화이트보드에 넣기), `theme.css`, `theme.js`(가로/세로 크기, 글라스 색, 글자 크기)
 - `identity.js`(기기 설정: 테마, 색, 노래 방 모드·음색·파형·싱크 보정·빠르기, 붓·지우개, 글라스 색, 글자 크기, 레퍼런스 켜기), **`clipboard.js`**(기기 클립보드: 방 사이 복사), **`reference.js`**(나만 보는 메모, 기기에만), `main.js`
 
 핵심 약속: 모든 변경은 op 하나이고, op는 어떤 순서로 몇 번 받아도 결과가 같다. 그래서 서버는 저장하고 전달만 하면 된다. 새 방 종류는 (1) `core/`에 문서, (2) `session.js`의 `DOC_TYPES`에 한 줄, (3) `ui/`에 화면, (4) `kinds.js`에 한 줄이다. 앱 본체는 `Transport` 약속만 알고, 실제 배포에서는 `sync/supabase.js` 하나를 더하면 된다(로드맵 4절).
@@ -107,6 +113,7 @@ node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebaseda
 
 ## 문서 (이 순서로 읽는다)
 
+0. `docs/superpowers/specs/2026-11-15-essence-design.md`: **본질**(왜 있나, 무엇을 위해, 어디서 어긋났나, 판단 질문 다섯). 가장 먼저 읽는다
 1. `docs/superpowers/specs/2026-11-14-roadmap.md`: 11월 14일 요청 정리, 미룬 것들의 설계 스케치, 다음 순서
 2. `docs/superpowers/specs/2026-11-10-app-overview-design.md`: 전체 결정, 공통 규칙, 8절 기능 체크리스트, 9절 가정
 3. `docs/superpowers/specs/2026-11-10-song-room-design.md`: 노래 방(12절에 이번에 만들며 달라진 것)
@@ -121,7 +128,7 @@ node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebaseda
 - 노래 방의 녹음 원본 파일은 다른 기기로 가지 않는다(친구는 피아노로 듣는다). 글자에 숨긴 녹음과 배경 사진은 방의 `files` 문서로 간다.
 - 실제 사람 목소리와 실제 폰의 마이크 지연으로는 확인하지 않았다.
 - Claude 앱 안(시험판)에서는 마이크와 파일 선택 창이 없다(사용자가 확인). 크롬에서는 폰 녹음 앱·파일·사진이 되고, 앱 안 녹음은 https 공개 주소에서 된다. 사람이 폰 크롬에서 확인하지는 않았다.
-- 화이트보드에는 아직 그리기·필기·글쓰기 모드·노래 잇기 창이 없다. 노래 카드가 녹음 일부분이면 피아노로만 들린다.
+- 화이트보드에는 아직 노래 잇기 창이 없다. 그림(`k:board`)은 올가미로 같이 옮겨지거나 복사되지 않는다. 노래 모드에서 판을 옆으로 늘이면 그림도 옆으로 늘어난다(선이 옆으로 조금 굵어짐). 화이트보드 판이 화면 끝까지 가서, 카드를 위 막대 밑으로 끌면 판을 움직일 때까지 가려진다. 노래 카드가 녹음 일부분이면 피아노로만 들린다.
 - 사진 방(셀로그), 통합 방, 글쓰기 방은 아직 없다(홈에 "준비 중").
 - 레퍼런스(메모·녹음)는 이 기기에만 있다. 녹음을 목록에서 지워도 소리 파일은 남는다. 녹음 전 카운트인은 아직 없다(메트로놈만).
 - 그림은 장(종이)의 좌표에 붙는다. 위에서 글이 늘어나 줄이 밀리면 그림은 따라가지 않는다(로드맵 6절). 11월 15일에 종이 왼쪽 여백을 줄여서 그 전에 그린 그림은 글보다 2rem 오른쪽에 있다.
