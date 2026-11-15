@@ -303,6 +303,9 @@ h1, h2, p { margin: 0; }
 .room-kind { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.08rem 0.45rem 0.08rem 0.3rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--tint) 16%, transparent); }
 .room-kind svg { width: 0.85rem; height: 0.85rem; flex: none; }
 .room-when { font-size: 0.7rem; color: var(--muted); }
+/* The people in a room, as overlapping colour dots (home: who is behind the door). */
+.room-people { display: inline-flex; align-items: center; padding-left: 0.2rem; }
+.room-people .dot { width: 0.62rem; height: 0.62rem; margin-left: -0.2rem; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--paper); }
 .group-label { margin: 1.4rem 0 0.1rem; padding: 0 0.25rem; font-size: 0.7rem; color: var(--muted); }
 .group-label + .rooms { margin-top: 0.4rem; }
 .empty { margin-top: 1.4rem; padding: 0 0.25rem; font-size: 0.8rem; color: var(--muted); }
@@ -601,7 +604,12 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 
 /* ---- text room ------------------------------------------------------------ */
 
-.sheets { display: flex; flex-direction: column; gap: 1.1rem; padding: 0.4rem 0.9rem 1.5rem; }
+.sheets { display: flex; flex-direction: column; gap: 1.1rem; padding: 0.4rem 0.9rem 1.5rem; min-height: 100%; }
+/* Today's sheet is the page itself, down to the bottom of the screen (the owner: "하나의 텍스트
+   적을 공간"), and its typing layer covers all of it: a tap low on the empty page writes at the end. */
+.sheet.today { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sheet.today > .paper { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sheet.today > .paper > .layers { flex: 1 0 auto; }
 .sheets > .pill { align-self: center; }
 .day { margin: 0 0 0.45rem 0.4rem; font-size: 0.72rem; font-weight: 600; color: var(--soft); }
 /* The writing sheet: bright and nearly solid, so all eight colours read. The thin
@@ -618,9 +626,10 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   content: "";
   position: absolute;
   inset: 0;
-  padding: 1.5px;
   border-radius: inherit;
-  background: linear-gradient(135deg, var(--frame-a), var(--frame-b));
+  /* A glass edge, light on top, rather than a coloured ring: the page should not look like a form field. */
+  padding: 1px;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--frame-a) 70%, transparent), color-mix(in srgb, var(--frame-b) 22%, transparent) 55%, color-mix(in srgb, var(--frame-b) 40%, transparent));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -1014,8 +1023,17 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .seg.ink-erase button { height: 1.7rem; padding: 0 0.6rem; font-size: 0.72rem; }
 
 /* ---- whiteboard ---------------------------------------------------------------- */
-.room-body.board-body { position: relative; overflow: hidden; }
-.board { position: absolute; inset: 0 0.6rem 0.25rem; overflow: hidden; border-radius: 1.3rem; background: var(--sheet); box-shadow: var(--glass-shine), 0 10px 26px rgb(38 72 140 / 0.12); touch-action: none; cursor: grab;
+/* The whiteboard runs under the bars to every edge of the screen (the owner: "엄청 크게…
+   무한적으로"); the bars float over it as glass. The room body stays the part in view. */
+.room-body.board-body { position: relative; overflow: visible; }
+.room[data-kind="creative-board"] > :is(.bar, .banner, .room-top, .toolbar, .ink-tools) { position: relative; z-index: 2; }
+/* 그리기 on the whiteboard: a screen-sized canvas beneath the cards, drawn in the board's own frame;
+   while the pen is on, the cards let every touch through to it. */
+.board > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.board > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.board > canvas.ink[data-tool^="eraser"] { cursor: cell; }
+.board.inking .board-content, .board.inking .board-content * { pointer-events: none !important; }
+.board { position: absolute; inset: calc(-1 * var(--top-inset, 0px)) 0 calc(-1 * var(--bottom-inset, 0px)); overflow: hidden; background: var(--sheet); touch-action: none; cursor: grab;
   background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1px, transparent 1px); background-size: 22px 22px; }
 .board-content { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .board-lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
@@ -1060,7 +1078,13 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .card-len { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .card-notes { position: relative; height: 3.4rem; margin-top: 0.35rem; border-radius: 0.5rem; background: color-mix(in srgb, var(--c) 8%, transparent); }
 .board-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.board-modes { width: 15rem; }
+.board-modes { width: 100%; max-width: 27rem; }
+.board-modes button { padding: 0 0.1rem; letter-spacing: -0.02em; }
+/* Words written in place on the board: over their own words, in their size and colour. */
+.board-typing { position: absolute; z-index: 3; margin: 0; padding: 0; border: 0; outline: none; resize: none; overflow: hidden; background: transparent; font-family: inherit; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; caret-color: var(--accent); }
+.card.memo.writing .card-text { visibility: hidden; }
+.card.memo.writing { outline: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 4px; }
+.write-colors { flex-wrap: nowrap; }
 /* The mode's own tools: small glass icons standing at the board's right edge. */
 /* A grid that fills downwards and, on a short screen (landscape), opens another column to the left. No scrolling. */
 .board-rail { position: absolute; top: 0.5rem; right: 1rem; bottom: 0.6rem; z-index: 3; display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 2.9rem); gap: 0.35rem; align-content: start; direction: rtl; pointer-events: none; }
@@ -1284,11 +1308,17 @@ function setSetting(store, key, value) {
  * Adds the room to this device's list, or updates it in place.
  * `local` marks a room that lives on this device only; once set it stays.
  */
-function rememberRoom(store, { id, kind, name, memberId, local }, now = Date.now()) {
+/**
+ * Puts a room on this device's list. `people` are the colours of who is in it (home shows
+ * them: the door says who is behind it); told without them, the entry keeps the ones it had.
+ */
+function rememberRoom(store, { id, kind, name, memberId, local, people }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
   if (local || (i >= 0 && rooms[i].local)) entry.local = true;
+  const known = Array.isArray(people) ? people : i >= 0 ? rooms[i].people : null;
+  if (known?.length) entry.people = known.slice(0, 6);
   if (i >= 0) rooms[i] = entry;
   else rooms.push(entry);
   store.set("rooms", rooms);
@@ -7764,7 +7794,9 @@ __m["src/ui/ink.js"] = (() => {
 // own that clears what lies under it), 획 지우개 removes whole strokes.
 // Used by the text room; the photo room and whiteboard can reuse it.
 
-const { h } = __m["src/ui/dom.js"];
+const { h, iconButton } = __m["src/ui/dom.js"];
+const { getSettings, setSetting } = __m["src/identity.js"];
+const { INK_COLORS } = __m["src/core/ink.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 const { INK } = __m["src/core/paint.js"];
 
@@ -7827,8 +7859,14 @@ class InkLayer {
    * Drawings may go past the paper's sides (to the screen's edges) and below it: the paper
    * grows to hold them.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0 }) {
+  /**
+   * view: a board's own frame instead of the host's (the whiteboard pans and zooms under a
+   * screen-sized canvas): point(clientX, clientY) → [x, y] in stroke units, matrix() → the
+   * canvas transform [a, b, c, d, e, f] from stroke units to CSS pixels of the host.
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null }) {
     this.host = host;
+    this.view = view;
     this.blocked = blocked;
     this.room = room;
     this.ink = ink;
@@ -7866,6 +7904,10 @@ class InkLayer {
     const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
     const rem = remPx() * zoom;
     const pressure = e.pointerType === "pen" || (e.pressure > 0 && e.pressure !== 0.5) ? e.pressure : 0.5;
+    if (this.view) {
+      const [x, y] = this.view.point(e.clientX, e.clientY);
+      return [Math.round(x), Math.round(y), Math.round(pressure * 100)];
+    }
     return [Math.round(((e.clientX - r.left) / rem) * 100), Math.round(((e.clientY - r.top) / rem) * 100), Math.round(pressure * 100)];
   }
 
@@ -7926,7 +7968,7 @@ class InkLayer {
 
   render() {
     const c = this.canvas;
-    this.grow();
+    if (!this.view) this.grow();
     const rect = c.getBoundingClientRect();
     const host = this.host.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
@@ -7942,9 +7984,14 @@ class InkLayer {
     g.clearRect(0, 0, w, hgt);
     // Drawn at the zoomed size (sharp), in the page's own units, from the paper's corner
     // (the canvas reaches past the paper's sides).
-    const zoom = this.host.offsetWidth ? host.width / this.host.offsetWidth : 1;
-    const scale = (remPx() / 100) * ratio * zoom;
-    g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
+    if (this.view) {
+      const [a, b, cc, d, e, f] = this.view.matrix();
+      g.setTransform(a * ratio, b * ratio, cc * ratio, d * ratio, (e + host.left - rect.left) * ratio, (f + host.top - rect.top) * ratio);
+    } else {
+      const zoom = this.host.offsetWidth ? host.width / this.host.offsetWidth : 1;
+      const scale = (remPx() / 100) * ratio * zoom;
+      g.setTransform(scale, 0, 0, scale, (host.left - rect.left) * ratio, (host.top - rect.top) * ratio);
+    }
     for (const s of this.ink().strokes()) this.paint(g, s.pts, s.c, s.w, s.b || "pen");
     if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
   }
@@ -8006,7 +8053,35 @@ class InkLayer {
   }
 }
 
-return { inkColor, InkLayer };
+/**
+ * The drawing tools (펜·연필·마커·형광펜, 지우개 부분/획, eight colours, three widths), the same in
+ * the text room and on the whiteboard. pen: { tool, brush, color, width }; setTool(tool) applies a
+ * change. Hidden while no tool is on.
+ */
+function drawInkTools(panel, { pen, setTool, store }) {
+  panel.hidden = !pen.tool;
+  if (!pen.tool) return;
+  const erasing = pen.tool !== "pen";
+  const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
+  const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
+  const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
+  panel.replaceChildren(
+    h("div", { class: "ink-row" },
+      ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
+        onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } })),
+      iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
+      erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
+        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
+          onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
+    h("div", { class: "ink-row" },
+      ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
+        style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
+      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
+        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
+  panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
+}
+
+return { inkColor, InkLayer, drawInkTools };
 })();
 __m["src/ui/text-room.js"] = (() => {
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
@@ -8030,7 +8105,7 @@ const { MicRecorder, micSupport, micProblem } = __m["src/audio/recorder.js"];
 const { soundPickers, waysIn, pickerHelp } = __m["src/ui/sound-in.js"];
 const { dayKey } = __m["src/core/time.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
-const { InkLayer, inkColor } = __m["src/ui/ink.js"];
+const { InkLayer, inkColor, drawInkTools: drawInkToolsInto } = __m["src/ui/ink.js"];
 const { INK_COLORS, strokeOps, eraseOps, invertInkOps } = __m["src/core/ink.js"];
 
 const FIRST_SHEETS = 7;
@@ -8058,7 +8133,6 @@ function mountTextRoom(body, app, session) {
   // Drawing: the pen button turns every sheet into a drawing surface, with its own small tool row.
   // The brush and the kind of eraser are remembered on this device.
   const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
-  const eraserKind = () => (getSettings(app.store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"), "그리기");
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   // 사진: choose words, then a photo; it hides in them and they sparkle (2 s hold brings it out).
@@ -8192,25 +8266,7 @@ function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    inkTools.hidden = !pen.tool;
-    if (!pen.tool) return;
-    const erasing = pen.tool !== "pen";
-    const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
-    const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
-    inkTools.replaceChildren(
-      h("div", { class: "ink-row" },
-        ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
-          onclick: () => { setSetting(app.store, "inkBrush", b); choose({ brush: b }); } })),
-        iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
-        erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
-          ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
-            onclick: () => { setSetting(app.store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
-      h("div", { class: "ink-row" },
-        ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-          style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-        ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-          onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
-    inkTools.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store });
   }
 
   function buttons() {
@@ -8283,8 +8339,9 @@ function mountTextRoom(body, app, session) {
       editor.ink = new InkLayer({
         host: editor.paper,
         blocked: () => fingers.pinching,
-        // While the pen is on, today's paper leaves room to draw below the words.
-        room: () => (day === today ? body.clientHeight * 0.6 : 0),
+        // While the pen is on, today's paper leaves room to draw below the words (a short page
+        // already reaches the bottom of the screen; a long one grows past its last line).
+        room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
         onStroke: ({ pts, color, width, brush }) => {
           const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
@@ -9651,7 +9708,7 @@ class Timeline {
         const start = Math.max(0, Math.round((left / this.pps) * 1000 / 10) * 10);
         const row = Math.max(0, Math.round((e.clientY - d.grabY - this.inset - box.top) / this.rowH));
         this.on.move(id, start, row);
-      } else if (!d.panning) this.on.select(id);
+      } else if (!d.panning) this.on.select(id, this.msAt(e.clientX));
       if (this.model) this.render(this.model);
     };
     el.addEventListener("pointerup", (e) => end(e, false));
@@ -10294,7 +10351,13 @@ function mountSongRoom(body, app, session, frame) {
       select(null);
       seek(ms);
     },
-    select: (id) => select(selected === id ? null : id),
+    // A tap is a place too (the owner: "15초에 거기 가가지고 그 한번 터치해서… 분할 누르면 거기 딱"):
+    // stopped, the playhead comes to where the clip was touched, unless it already stood
+    // inside that clip (put there on the time bar first). A tap on the chosen clip aims again.
+    select: (id, ms) => {
+      if (ms != null && !rec && !player?.playing && (selected === id || !insideClip(id))) seek(ms);
+      select(id);
+    },
     move: (id, start, row) => moveClip(id, start, row),
     canMove: (id) => !readOnly() && !song.clip(id)?.locked,
     zoomed: () => placeMenu(),
@@ -10934,18 +10997,20 @@ function mountSongRoom(body, app, session, frame) {
         (t) => menu?.contains(t) || !!document.querySelector(`.clip[data-id="${selected}"]`)?.contains(t) || !!t.closest?.("#ruler"),
         () => select(null), menu);
     }
-    const item = (id, text, onclick, disabled = false) => h("button", { type: "button", id, text, disabled, onclick: (e) => { e.stopPropagation(); onclick(); } });
-    menu.replaceChildren(
-      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !!rec),
+    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
+    const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
+    menu.replaceChildren(...[
+      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
+      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
       item("clip-copy", "복사", () => copyClip(clip.id)),
-      item("clip-paste", "붙여넣기", () => pasteClip(), !clipboardItem(app.store, "song-clip") || readOnly()),
-      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), readOnly()),
-      item("clip-split", "분할", () => splitClip(clip.id), locked || !insideClip(clip.id)),
-      item("clip-join", "잇기", () => joinClip(clip.id), locked || !next || next.locked || !!busy),
+      item("clip-paste", "붙여넣기", () => pasteClip(), !!clipboardItem(app.store, "song-clip") && !readOnly()),
+      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
       item("clip-notes", "음 편집", () => editNotes(clip.id)),
       item("clip-send", "보내기", () => sendClip(clip.id)),
-      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), readOnly()),
-      item("clip-delete", "삭제", () => deleteClip(clip.id), locked));
+      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly()),
+      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked),
+    ].filter(Boolean));
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
     let left = box.left - area.left + box.width / 2 - w / 2;
@@ -11285,8 +11350,8 @@ const { UndoStack } = __m["src/core/undo.js"];
 const { Clock } = __m["src/core/crdt.js"];
 const { SongDoc, MAX_TAKE_MS } = __m["src/core/song.js"];
 const { addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong, cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop } = __m["src/core/board.js"];
-const { INK_COLORS } = __m["src/core/ink.js"];
-const { inkColor } = __m["src/ui/ink.js"];
+const { INK_COLORS, strokeOps, eraseOps, invertInkOps } = __m["src/core/ink.js"];
+const { InkLayer, inkColor, drawInkTools } = __m["src/ui/ink.js"];
 const { addRefNote, addRefSound } = __m["src/reference.js"];
 const { clipboardItem, copyItem } = __m["src/clipboard.js"];
 const { solfege } = __m["src/audio/notes.js"];
@@ -11321,6 +11386,9 @@ function mountBoardRoom(body, app, session, frame) {
   let sx = 1; // 노래: song cards (and where cards stand) stretched sideways in time
   let mode = "all";
   let selected = null;
+  let writer = null; // words being written in place: { id, ta, el, fresh, before, made, timer, stop }
+  let boardInk = null; // 그리기: the drawings' layer (made once the board is in place)
+  let inkQueued = false;
   let linkFrom = null;
   let cutting = false; // 분할: the next tap on a song card cuts it there
   const lassoing = () => mode === "lasso"; // 올가미 (its own mode): one finger draws loops
@@ -11370,28 +11438,113 @@ function mountBoardRoom(body, app, session, frame) {
   });
   const stopPhotoWatch = watchPickers([photoInput], () => { if (alive) toast(root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200); });
 
-  const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"], ["lasso", "올가미", "mode-lasso"]], mode, (m) => setMode(m), "boardMode");
+  // The big modes on top: the owner's 전체·이동·글쓰기·잇기·노래, and 올가미 beside 노래. Each mode's
+  // small tools stand on the right. Zoom is two fingers or the wheel, and 이동's tools.
+  const modes = segmented([["all", "전체", "mode-all"], ["move", "이동", "mode-move"], ["write", "글쓰기", "mode-write"], ["link", "잇기", "mode-link"], ["song", "노래", "mode-song"], ["lasso", "올가미", "mode-lasso"]], mode, (m) => setMode(m), "boardMode");
   modes.classList.add("board-modes");
-  frame.top.append(h("div", { class: "board-top" }, modes,
-    h("div", { class: "song-top-left" },
-      iconButton("board-zoom-out", "zoomOut", "작게 보기", () => zoomAt(1 / 1.25)),
-      iconButton("board-zoom-in", "zoomIn", "크게 보기", () => zoomAt(1.25)))));
+  frame.top.append(h("div", { class: "board-top" }, modes));
 
   const playButton = iconButton("board-play", "play", "전체 재생 (왼쪽부터, 잇기 순서대로)", () => togglePlay(), "전체 재생");
+  const penButton = iconButton("board-pen", "pen", "그리기", () => setPen(pen.tool ? null : "pen"), "그리기");
+  penButton.setAttribute("aria-pressed", "false"); // off reads as off, as in the text room
   const toolbar = h("div", { class: "toolbar board-tools", id: "board-tools" },
     playButton,
+    penButton,
     iconButton("board-undo", "undo", "실행취소", () => step("undo"), "되돌리기"),
     iconButton("board-redo", "redo", "다시실행", () => step("redo"), "다시하기"),
     iconButton("board-delete", "eraser", "고른 카드 지우기", () => removeSelected(), "지우기"));
   body.after(toolbar);
 
+  // The board runs under the bars to every edge of the screen (the owner: "엄청 크게… 무한적으로");
+  // the bars float over it. The room body stays the part in view: new cards, 모두 보기, menus,
+  // loop chips and the tools keep to it. insets: how far the board reaches past it, up and down.
+  const roomEl = body.closest(".room");
+  let insets = { top: 0, bottom: 0 };
+  function measureInsets() {
+    if (!alive || !roomEl) return;
+    const room = roomEl.getBoundingClientRect();
+    const b = body.getBoundingClientRect();
+    const next = { top: Math.max(0, Math.round(b.top - room.top)), bottom: Math.max(0, Math.round(room.bottom - b.bottom)) };
+    if (next.top === insets.top && next.bottom === insets.bottom) return;
+    // What was in view stays where it was on screen.
+    panY += next.top - insets.top;
+    insets = next;
+    roomEl.style.setProperty("--top-inset", next.top + "px");
+    roomEl.style.setProperty("--bottom-inset", next.bottom + "px");
+    place();
+  }
+  const insetWatch = new ResizeObserver(() => measureInsets());
+  insetWatch.observe(body);
+  if (roomEl) insetWatch.observe(roomEl);
+
+  // ---- 그리기 (the owner: "브러쉬도 있고 필기도 가능하고"; 전체 is "다 할 수 있는" mode) ------
+  // The text room's brushes, drawn on the board itself in its own frame (they pan, zoom and
+  // stretch with it) on a screen-sized canvas beneath the cards: drawings never cover what is
+  // written or sung. While the pen is on, one finger draws and two fingers zoom.
+  const INK_DOC = "k:board";
+  const INK_UNIT = 100 / 16; // stroke units per board pixel (as on a sheet: hundredths of a 16 px rem)
+  const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
+  const inkTools = h("div", { class: "ink-tools", id: "board-ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
+  toolbar.before(inkTools);
+  boardInk = new InkLayer({
+    host: surface,
+    ink: () => session.doc(INK_DOC),
+    blocked: () => fingers.pinching,
+    view: {
+      point: (cx, cy) => { const p = toBoard(cx, cy); return [p.x * INK_UNIT, p.y * INK_UNIT]; },
+      matrix: () => [(zoom * sx) / INK_UNIT, 0, 0, zoom / INK_UNIT, panX, panY],
+    },
+    onStroke: ({ pts, color, width, brush }) => {
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, by: session.memberId });
+      session.commit(INK_DOC, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+    },
+    onErase: (id) => {
+      const made = eraseOps(session.clock, session.doc(INK_DOC), id);
+      session.commit(INK_DOC, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+    },
+  });
+  surface.prepend(boardInk.canvas);
+
+  /** 그리기 on or off (null). The pen belongs to 전체: turning it on there from any mode. */
+  function setPen(tool) {
+    if (tool && mode !== "all") setMode("all");
+    pen.tool = tool;
+    boardInk.setTool(tool);
+    boardInk.setStyle(pen);
+    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store });
+    penButton.setAttribute("aria-pressed", String(!!tool));
+    if (tool) {
+      finishWriting();
+      closeExtra?.();
+      if (selected) {
+        selected = null;
+        draw();
+      }
+    }
+    inkSoon();
+  }
+
+  function inkSoon() {
+    if (!boardInk || inkQueued) return;
+    inkQueued = true;
+    requestAnimationFrame(() => {
+      inkQueued = false;
+      if (alive) boardInk?.render();
+    });
+  }
+
   const readOnly = () => !!session.transport.readOnly;
   const colorOf = (by) => { const m = session.room.member(by); return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()]; };
   const settings = () => getSettings(app.store);
+  const writeStyle = () => ({ color: "black", size: 2, ...(settings().boardText || {}) });
   /** A card's width on the board: song cards stretch with sx. */
   const widthOf = (item) => (item.kind === "song" ? item.w * sx : item.w);
 
   function setMode(m) {
+    finishWriting();
+    if (m !== "all" && pen.tool) setPen(null);
     mode = m;
     linkFrom = null;
     cutting = false;
@@ -11409,6 +11562,8 @@ function mountBoardRoom(body, app, session, frame) {
     content.style.setProperty("--unzoom", String(1 / zoom)); // loop chips keep their size
     placeChips();
     if (menu) placeMenu(false);
+    if (writer) placeWriter();
+    inkSoon();
   }
 
   // Continuous gestures (a pinch, the wheel) ask for a draw once per frame at most.
@@ -11658,7 +11813,9 @@ function mountBoardRoom(body, app, session, frame) {
   function placeChips() {
     const box = surface.getBoundingClientRect();
     const W = rail.getBoundingClientRect().left - box.left - 6;
-    const H = box.height;
+    // The part in view, on the board (which reaches under the bars).
+    const T = insets.top;
+    const H = box.height - insets.bottom;
     for (const chip of content.querySelectorAll(".lasso-chip")) {
       const a = chip.anchors;
       if (!a || !chip.sizes) continue;
@@ -11666,7 +11823,7 @@ function mountBoardRoom(body, app, session, frame) {
       const [sw, stall] = chip.sizes.side;
       const X = (x) => panX + x * zoom;
       const Y = (y) => panY + y * zoom;
-      const middle = (y) => Math.max(4, Math.min(H - stall - 4, Y(y) - stall / 2));
+      const middle = (y) => Math.max(T + 4, Math.min(H - stall - 4, Y(y) - stall / 2));
       // [x, y, standing up]: over the top lying down; beside, standing up; under, lying down.
       const spots = [
         [X(a.tx) - w / 2, Y(a.ty) - tall - 6, false],
@@ -11674,12 +11831,12 @@ function mountBoardRoom(body, app, session, frame) {
         [X(a.x0) - sw - 6, middle(a.ly), true],
         [X(a.bx) - w / 2, Y(a.by) + 6, false],
       ];
-      const fits = ([x, y, side]) => x >= 4 && x + (side ? sw : w) <= W && y >= 4 && y + (side ? stall : tall) <= H - 4;
+      const fits = ([x, y, side]) => x >= 4 && x + (side ? sw : w) <= W && y >= T + 4 && y + (side ? stall : tall) <= H - 4;
       let [x, y, side] = spots[0];
-      if (X(a.x1) > 0 && X(a.x0) < W && Y(a.by) > 0 && Y(a.ty) < H) {
+      if (X(a.x1) > 0 && X(a.x0) < W && Y(a.by) > T && Y(a.ty) < H) {
         const spot = spots.find(fits);
         if (spot) [x, y, side] = spot;
-        else [x, y, side] = [Math.max(4, Math.min(W - w, X(a.tx) - w / 2)), Math.max(4, Math.min(H - tall - 4, Y(a.ty) + 6)), false];
+        else [x, y, side] = [Math.max(4, Math.min(W - w, X(a.tx) - w / 2)), Math.max(T + 4, Math.min(H - tall - 4, Y(a.ty) + 6)), false];
       }
       chip.classList.toggle("side", side);
       chip.style.left = (x - panX) / zoom + "px";
@@ -11843,7 +12000,7 @@ function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow"].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", JSON.stringify(writeStyle())].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -11855,7 +12012,16 @@ function mountBoardRoom(body, app, session, frame) {
         can && railLabel("add-photo", "photo", "사진", "board-photo-file"),
         can && railButton("my-songs", "library", "내 노래", () => openSongDrawer()),
       ],
-      move: [railButton("board-fit", "fit", "모두 보기", () => fitAll())],
+      move: [
+        railButton("board-fit", "fit", "모두 보기", () => fitAll()),
+        railButton("board-zoom-in", "zoomIn", "크게", () => zoomAt(1.25)),
+        railButton("board-zoom-out", "zoomOut", "작게", () => zoomAt(1 / 1.25)),
+      ],
+      // 글쓰기: a tap writes there; the colour and size of the words (the ones being written too).
+      write: [
+        can && writeColorButton(),
+        can && railButton("write-size", null, "글 크기", () => setWriteStyle({ size: (writeStyle().size % 3) + 1 }), { text: ["작게", "보통", "크게"][writeStyle().size - 1] }),
+      ],
       link: [
         railButton("order-slots", "slots", "순서 칸", () => openSlots()),
         railButton("line-colors", "palette", LINE_STYLES[s.lineColors || "rainbow"], () => nextLineColors()),
@@ -11878,6 +12044,8 @@ function mountBoardRoom(body, app, session, frame) {
       ],
     }[mode];
     rail.replaceChildren(...tools.filter(Boolean));
+    // Choosing a colour or size keeps the words being written in focus (and the keyboard up).
+    for (const b of rail.querySelectorAll("#write-color, #write-size")) b.addEventListener("pointerdown", (e) => e.preventDefault());
   }
 
   // ---- a card's menu: tap a card, act on it right there (as in the song room) ----------
@@ -11922,7 +12090,7 @@ function mountBoardRoom(body, app, session, frame) {
         ...INK_COLORS.map((c) => h("button", { type: "button", class: "menu-dot", data: { textColor: c }, "aria-label": "글자 색", "aria-pressed": String((item.color || "black") === c),
           style: { background: inkColor(c) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { color: c })); } })),
       ] : item.kind === "note" ? [
-        can && one("card-edit", "고치기", () => editNote(item.id)),
+        can && one("card-edit", "고치기", () => write(item.id)),
         can && h("button", { type: "button", id: "card-color", onclick: (e) => { e.stopPropagation(); menu.view = "colors"; placeMenu(true); } },
           h("span", { class: "menu-swatch", style: { background: inkColor(item.color || "black") } }), "색"),
         can && one("card-size", ["작게", "보통", "크게"][(item.size || 2) - 1], () => apply(setItemOps(session.clock, board, item.id, { size: ((item.size || 2) % 3) + 1 }))),
@@ -11961,7 +12129,7 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   function zoomAt(f, cx, cy) {
-    const r = surface.getBoundingClientRect();
+    const r = body.getBoundingClientRect();
     const ax = cx ?? r.left + r.width / 2;
     const ay = cy ?? r.top + r.height / 2;
     const at = toBoard(ax, ay);
@@ -11972,7 +12140,7 @@ function mountBoardRoom(body, app, session, frame) {
 
   /** 노래: song cards longer or shorter in time, around a point (the middle by default). */
   function stretchAt(f, cx, soon = false) {
-    const r = surface.getBoundingClientRect();
+    const r = body.getBoundingClientRect();
     const ax = cx ?? r.left + r.width / 2;
     const ay = r.top + r.height / 2;
     const at = toBoard(ax, ay);
@@ -11987,15 +12155,16 @@ function mountBoardRoom(body, app, session, frame) {
     const els = [...content.querySelectorAll(".card")];
     if (!els.length) return;
     const r = surface.getBoundingClientRect();
+    const v = body.getBoundingClientRect(); // the part in view
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const el of els) {
       const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
       x0 = Math.min(x0, x); y0 = Math.min(y0, y);
       x1 = Math.max(x1, x + el.offsetWidth); y1 = Math.max(y1, y + el.offsetHeight);
     }
-    zoom = clamp(Math.min((r.width - 48) / Math.max(1, x1 - x0), (r.height - 64) / Math.max(1, y1 - y0)), MIN_ZOOM, MAX_ZOOM);
-    panX = (r.width - (x1 - x0) * zoom) / 2 - x0 * zoom;
-    panY = 24 - y0 * zoom;
+    zoom = clamp(Math.min((v.width - 48) / Math.max(1, x1 - x0), (v.height - 64) / Math.max(1, y1 - y0)), MIN_ZOOM, MAX_ZOOM);
+    panX = v.left - r.left + (v.width - (x1 - x0) * zoom) / 2 - x0 * zoom;
+    panY = v.top - r.top + 24 - y0 * zoom;
     place();
   }
 
@@ -12003,7 +12172,7 @@ function mountBoardRoom(body, app, session, frame) {
   function reveal(id) {
     const el = content.querySelector(`.card[data-id="${id}"]`);
     if (!el) return;
-    const r = surface.getBoundingClientRect();
+    const r = body.getBoundingClientRect(); // the part in view
     const c = el.getBoundingClientRect();
     const right = r.right - rail.offsetWidth - 24;
     if (c.right > right) panX -= Math.min(c.right - right, c.left - r.left - 16);
@@ -12022,6 +12191,7 @@ function mountBoardRoom(body, app, session, frame) {
   const fingers = watchFingers(surface, () => {
     gesture?.();
     pan = null;
+    boardInk?.cancelTouch();
   });
 
   function wireCard(el, id) {
@@ -12085,7 +12255,7 @@ function mountBoardRoom(body, app, session, frame) {
         }
         if (start.moved && !readOnly()) return void apply(setItemOps(session.clock, board, id, at(ev)));
         if (cutting && item.kind === "song" && !readOnly()) return void cutAt(id, el, ev.clientX);
-        if (selected === id && mode === "all" && item.kind === "note") return void editNote(id);
+        if (item.kind === "note" && !readOnly() && (mode === "write" || (selected === id && mode === "all"))) return void write(id);
         selected = id;
         draw();
       };
@@ -12273,7 +12443,7 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   surface.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoing()) return;
+    if (e.target.closest(".card") || e.target.closest(".badge") || e.target.closest(".lasso-chip") || fingers.pinching || lassoing() || pen.tool) return;
     pan = { id: e.pointerId, x: e.clientX, y: e.clientY, px: panX, py: panY, moved: false };
     surface.setPointerCapture?.(e.pointerId);
   });
@@ -12291,6 +12461,8 @@ function mountBoardRoom(body, app, session, frame) {
       linkFrom = null;
       cutting = false;
       draw();
+      // 글쓰기: words start where the finger was.
+      if (mode === "write" && !readOnly()) writeAt(e.clientX, e.clientY);
     }
     pan = null;
   });
@@ -12338,8 +12510,11 @@ function mountBoardRoom(body, app, session, frame) {
 
   // ---- editing --------------------------------------------------------------------
 
+  /** One undo step; 되돌리기 and 다시하기 say at once whether they can (a stroke draws no cards). */
   function record(atoms) {
     if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false });
+    toolbar.querySelector("#board-undo").disabled = !undo.canUndo;
+    toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
   }
 
   function apply(made) {
@@ -12351,10 +12526,15 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   function step(dir) {
+    finishWriting();
     const atoms = dir === "undo" ? undo.undo() : undo.redo();
     if (!atoms) return;
-    session.commit("board", invertBoardOps(board, session.clock, atoms, dir));
+    const inked = atoms.filter((a) => a.doc === INK_DOC);
+    const rest = atoms.filter((a) => a.doc !== INK_DOC);
+    if (inked.length) session.commit(INK_DOC, invertInkOps(session.doc(INK_DOC), session.clock, inked, dir));
+    if (rest.length) session.commit("board", invertBoardOps(board, session.clock, rest, dir));
     draw();
+    inkSoon();
   }
 
   /**
@@ -12363,7 +12543,7 @@ function mountBoardRoom(body, app, session, frame) {
    * rightmost card.
    */
   function spotFor(kind, data) {
-    const r = surface.getBoundingClientRect();
+    const r = body.getBoundingClientRect(); // the part in view
     const from = toBoard(r.left + 16, r.top + 16);
     const to = toBoard(r.right - rail.offsetWidth - 28, r.bottom - 56);
     const w = kind === "song" ? songWidth(data.dur) : 200 / sx;
@@ -12384,7 +12564,7 @@ function mountBoardRoom(body, app, session, frame) {
   function freeSpot() {
     const items = board.items();
     if (!items.length) {
-      const r = surface.getBoundingClientRect();
+      const r = body.getBoundingClientRect();
       return toBoard(r.left + 30, r.top + 30);
     }
     const right = items.reduce((a, b) => (b.x * sx + widthOf(b) > a.x * sx + widthOf(a) ? b : a));
@@ -12413,24 +12593,163 @@ function mountBoardRoom(body, app, session, frame) {
     if (!at.seen) reveal(made.id);
   }
 
+  /** +글: words at a free spot in view, written in place. */
   function addNote() {
     if (readOnly()) return;
     const at = spotFor("note");
-    const made = addItemOps(session.clock, board, { kind: "note", x: at.x, y: at.y, data: { text: "" }, by: session.memberId });
-    apply(made);
-    selected = made.id;
-    editNote(made.id);
+    newWords(at.x, at.y);
   }
 
-  function editNote(id) {
+  // ---- writing in place (글쓰기; the owner: "노트처럼 글 쓰는 것도 진짜 잘 되고") ----------
+  // The words are written where they stand on the board, not in a sheet. A friend sees them
+  // as they come. A tap outside (or Escape) ends the writing and does nothing else; words
+  // left empty leave nothing behind. One undo step takes back what one writing did.
+
+  /** 글쓰기: a tap on the empty board starts words there. */
+  function writeAt(cx, cy) {
+    const at = toBoard(cx, cy);
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    newWords(at.x - 0.3 * rem / sx, at.y - 0.6 * rem);
+  }
+
+  function newWords(x, y) {
+    const style = writeStyle();
+    const made = addItemOps(session.clock, board, { kind: "note", x, y, data: { text: "" }, by: session.memberId });
+    session.commit("board", made.ops);
+    const look = setItemOps(session.clock, board, made.id, { color: style.color, size: style.size });
+    session.commit("board", look.ops);
+    draw();
+    write(made.id, { fresh: true, made: [...made.atoms, ...look.atoms] });
+  }
+
+  function write(id, { fresh = false, made = [] } = {}) {
+    finishWriting();
     const item = board.item(id);
-    if (!item || readOnly()) return;
-    openSheet(root, "메모", (panel, close) => {
-      const area = h("textarea", { class: "input note-area", id: "note-text", rows: 5, value: item.text || "" });
-      panel.append(h("div", { class: "form" }, area,
-        h("button", { class: "btn", id: "note-save", type: "button", text: "저장", onclick: () => { apply(setItemOps(session.clock, board, id, { text: area.value })); close(); } })));
-      setTimeout(() => area.focus(), 50);
+    if (!item || item.removed || readOnly()) return;
+    if (selected) {
+      selected = null;
+      draw();
+    }
+    const el = content.querySelector(`.card[data-id="${id}"]`);
+    if (!el) return;
+    const ta = h("textarea", { class: "board-typing", id: "board-typing", rows: 1, spellcheck: false, "aria-label": "보드에 쓰는 글" });
+    ta.value = item.text || "";
+    body.append(ta);
+    el.classList.add("writing");
+    const state = { id, ta, el, fresh, made, before: item.text || "", timer: 0, stop: null };
+    writer = state;
+    placeWriter();
+    ta.addEventListener("input", () => {
+      fitWriter();
+      clearTimeout(state.timer);
+      state.timer = setTimeout(() => sendWords(state), 250);
     });
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        finishWriting();
+      }
+    });
+    state.stop = closeOnOutside((t) => ta.contains(t) || !!t.closest?.("#write-colors"), () => finishWriting(), ta);
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  /** The words so far, to everyone (not an undo step of their own). */
+  function sendWords(state) {
+    const item = board.item(state.id);
+    if (!item || item.removed || (item.text || "") === state.ta.value) return;
+    session.commit("board", setItemOps(session.clock, board, state.id, { text: state.ta.value }).ops);
+  }
+
+  function finishWriting() {
+    const state = writer;
+    if (!state) return;
+    writer = null;
+    clearTimeout(state.timer);
+    state.stop?.();
+    const text = state.ta.value;
+    state.ta.remove();
+    state.el.classList.remove("writing");
+    const item = board.item(state.id);
+    if (!item || item.removed) return void draw();
+    if (!text.trim()) {
+      // Nothing written: no empty words stay on the board.
+      const gone = removeItemOps(session.clock, board, state.id);
+      if (state.fresh) session.commit("board", gone.ops);
+      else apply({ ops: [...setItemOps(session.clock, board, state.id, { text: "" }).ops, ...gone.ops], atoms: [{ k: "set", item: state.id, prev: { text: state.before }, next: { text: "" } }, ...gone.atoms] });
+      return void draw();
+    }
+    if ((item.text || "") !== text) session.commit("board", setItemOps(session.clock, board, state.id, { text }).ops);
+    if (state.fresh) record([...state.made, { k: "set", item: state.id, prev: { text: "" }, next: { text } }]);
+    else if (text !== state.before) record([{ k: "set", item: state.id, prev: { text: state.before }, next: { text } }]);
+    draw();
+  }
+
+  /** The writing lies over its words, in their size and colour, however the board is zoomed. */
+  function placeWriter() {
+    const state = writer;
+    if (!state) return;
+    const words = state.el.querySelector(".card-text") || state.el;
+    const area = body.getBoundingClientRect();
+    const r = words.getBoundingClientRect();
+    const css = getComputedStyle(words);
+    const ta = state.ta;
+    ta.style.left = r.left - area.left + "px";
+    ta.style.top = r.top - area.top + "px";
+    ta.style.width = Math.max(r.width, 120 * zoom) + 4 + "px";
+    ta.style.fontSize = parseFloat(css.fontSize) * zoom + "px";
+    ta.style.fontWeight = css.fontWeight;
+    ta.style.lineHeight = css.lineHeight === "normal" ? "1.45" : parseFloat(css.lineHeight) * zoom + "px";
+    ta.style.color = css.color;
+    fitWriter();
+  }
+
+  function fitWriter() {
+    const ta = writer?.ta;
+    if (!ta) return;
+    ta.style.height = "0px";
+    ta.style.height = ta.scrollHeight + "px";
+  }
+
+  function setWriteStyle(patch) {
+    setSetting(app.store, "boardText", { ...writeStyle(), ...patch });
+    if (writer) {
+      apply(setItemOps(session.clock, board, writer.id, patch));
+      placeWriter();
+    }
+    drawRail();
+  }
+
+  function writeColorButton() {
+    const b = railButton("write-color", null, "글 색", () => openWriteColors(b), { text: "가" });
+    b.querySelector(".rail-text").style.color = inkColor(writeStyle().color);
+    return b;
+  }
+
+  /** 글 색: eight dots beside the rail (small, so they cover little). */
+  function openWriteColors(anchor) {
+    closeExtra?.();
+    const now = writeStyle().color;
+    const box = h("div", { class: "clip-menu card-menu write-colors", id: "write-colors", role: "toolbar", "aria-label": "글 색" },
+      INK_COLORS.map((c) => h("button", { type: "button", class: "menu-dot", data: { writeColor: c }, "aria-label": "글 색", "aria-pressed": String(now === c), style: { background: inkColor(c) },
+        onpointerdown: (e) => e.preventDefault(),
+        onclick: (e) => { e.stopPropagation(); close(); setWriteStyle({ color: c }); } })));
+    body.append(box);
+    const area = body.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
+    box.style.left = Math.max(6, r.left - area.left - box.offsetWidth - 8) + "px";
+    box.style.top = Math.max(4, r.top - area.top) + "px";
+    let open = true;
+    const stopGuard = closeOnOutside((t) => box.contains(t) || anchor.contains(t), () => close(), box);
+    function close() {
+      if (!open) return;
+      open = false;
+      stopGuard();
+      box.remove();
+      if (closeExtra === close) closeExtra = null;
+    }
+    closeExtra = close;
   }
 
   function addSong() {
@@ -12867,10 +13186,15 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   const offs = [
-    session.on("change", ({ doc }) => { if (doc === "board" || doc === "room") draw(); }),
+    session.on("change", ({ doc }) => {
+      if (doc === "board" || doc === "room") draw();
+      if (doc === INK_DOC) inkSoon();
+    }),
     onThemeChange(draw),
   ];
   session.load("board").then(draw);
+  session.load(INK_DOC).then(() => inkSoon());
+  measureInsets();
   draw();
 
   return {
@@ -12884,7 +13208,13 @@ function mountBoardRoom(body, app, session, frame) {
       apply(addItemOps(session.clock, board, { kind: "note", x: at.x, y: at.y, data: { text }, by: session.memberId }));
     },
     close() {
+      finishWriting();
       alive = false;
+      insetWatch.disconnect();
+      boardInk?.destroy();
+      inkTools.remove();
+      roomEl?.style.removeProperty("--top-inset");
+      roomEl?.style.removeProperty("--bottom-inset");
       cancelAnimationFrame(frameReq);
       closeExtra?.();
       menu?.stopGuard?.();
@@ -13352,6 +13682,7 @@ function showRoom(app, roomId) {
     session.setMe(memberId);
     const remember = () => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
+      people: session.room.members().map((m) => m.color),
     });
     remember();
     session.setPresence({ m: memberId });
@@ -13604,6 +13935,8 @@ const { dayKey, dayLabel, hourLabel } = __m["src/core/time.js"];
 const { SIDES, kindsOf, sideOf, kindInfo } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
 const { getSettings } = __m["src/identity.js"];
+const { memberColor } = __m["src/core/paint.js"];
+const { currentTheme } = __m["src/ui/theme.js"];
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -13638,7 +13971,10 @@ function showHome(app) {
       h("span", { class: "room-name", text: room.name }),
       h("span", { class: "room-meta" },
         h("span", { class: "room-kind" }, icon(kind?.icon || "lines"), kind?.name || "새 버전의 방"),
-        when && h("span", { class: "room-when", text: when })));
+        when && h("span", { class: "room-when", text: when }),
+        // Who is behind the door: the colours of the people in it, once it is more than me.
+        room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
+          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))));
     if (!mine) return row;
     const hold = () => {
       held = true;
