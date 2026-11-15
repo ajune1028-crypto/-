@@ -63,6 +63,12 @@ export function mountSongRoom(body, app, session, frame) {
   let editor = null;
   let closeAdd = null;
   const peerRecs = new Map(); // peer key → { row, at, since, name, color }
+  // 올가미 in the song room (the owner: "노래 만들기에서도 올가미 기능도 있어야… 센스 있게"): the
+  // clips a drawn loop went round, worked on together until let go.
+  let group = new Set();
+  let groupMenu = null;
+  let groupView = "main";
+  let groupRepeat = false;
 
   body.classList.add("song-body");
   const timeline = new Timeline({
@@ -79,7 +85,14 @@ export function mountSongRoom(body, app, session, frame) {
       if (ms != null && !rec && !player?.playing && (selected === id || !insideClip(id))) seek(ms);
       select(id);
     },
-    move: (id, start, row) => moveClip(id, start, row),
+    move: (id, start, row) => (group.has(id) && group.size > 1 ? moveGroup(id, start, row) : moveClip(id, start, row)),
+    lasso: (ids) => {
+      setLasso(false);
+      group = new Set(ids.filter((id) => song.clip(id) && !song.clip(id).removed));
+      if (!group.size) toast(root, "둘러싼 클립이 없어요. 클립들을 크게 둘러 주세요", 2400);
+      select(null);
+      draw();
+    },
     canMove: (id) => !readOnly() && !song.clip(id)?.locked,
     zoomed: () => placeMenu(),
   });
@@ -94,12 +107,18 @@ export function mountSongRoom(body, app, session, frame) {
   const clock = h("button", { class: "song-clock", id: "beat", type: "button", "aria-label": "박자 (빠르기, 박자표, 메트로놈)", onclick: () => openBeatSheet(), data: { contrast: "" } }, clockTime, beatLabel);
   const zoomOut = iconButton("zoom-out", "zoomOut", "좁게 보기", () => timeline.setZoom(timeline.pps / 1.4, playhead));
   const zoomIn = iconButton("zoom-in", "zoomIn", "넓게 보기", () => timeline.setZoom(timeline.pps * 1.4, playhead));
+  const lassoButton = iconButton("song-lasso", "lasso", "올가미 (둘러서 여러 클립 고르기)", () => setLasso(!timeline.lassoOn));
+  function setLasso(on) {
+    timeline.setLasso(on);
+    lassoButton.setAttribute("aria-pressed", String(!!on));
+    if (on) toast(root, "클립들을 손가락으로 둘러 그리세요", 1800);
+  }
   const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"]], settings().songMode, (mode) => setMode(mode), "mode");
   // They lie straight on the room's background: they read it (white, black or a deeper black).
-  for (const el of [zoomOut, zoomIn, modeSwitch]) el.dataset.contrast = "";
+  for (const el of [zoomOut, zoomIn, lassoButton, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
   modeSwitch.setAttribute("aria-label", "듣는 방식");
-  frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn), modeSwitch));
+  frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn, lassoButton), modeSwitch));
 
   const startButton = iconButton("to-start", "start", "처음으로", () => seek(0), "처음");
   const playButton = iconButton("play", "play", "재생", () => togglePlay(), "재생");
@@ -203,7 +222,7 @@ export function mountSongRoom(body, app, session, frame) {
     let empty = null;
     if (!loaded) empty = "노래를 불러오는 중…";
     return {
-      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, mode: settings().songMode, showWave: settings().showWave,
+      clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, group, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
@@ -216,6 +235,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!alive) return;
     trackPeerRecordings();
     timeline.render(model());
+    placeGroupMenu();
     const showStart = loaded && !song.layout().length && !rec && !readOnly();
     if (showStart && !start.childNodes.length) start.append(h("p", { class: "start-title", text: "소리를 넣어 보세요" }), h("p", { class: "help", text: "흥얼거린 음과 길이 그대로 피아노 음이 돼요." }), ...waysIn("start-"));
     start.hidden = !showStart;
@@ -607,6 +627,146 @@ export function mountSongRoom(body, app, session, frame) {
     draw();
   }
 
+  // ---- 올가미: the gathered clips ------------------------------------------------------
+
+  /** The group's own bar over the rows: what can be done with the gathered clips together. */
+  function placeGroupMenu() {
+    for (const id of [...group]) if (!song.clip(id) || song.clip(id).removed) group.delete(id);
+    if (!group.size || rec) {
+      groupMenu?.remove();
+      groupMenu = null;
+      groupView = "main";
+      return;
+    }
+    if (!groupMenu) {
+      groupMenu = h("div", { class: "group-menu", id: "group-menu", role: "toolbar", "aria-label": "올가미로 고른 클립" });
+      body.append(groupMenu);
+    }
+    const clips = [...group].map((id) => song.clip(id));
+    const can = !readOnly() && clips.every((c) => !c.locked);
+    const one = (id, text, fn, show = true) => show && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); fn(); } });
+    if (groupView === "tints" && can) {
+      groupMenu.replaceChildren(...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": dotLabel(i), text: dotLetter(i),
+        style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); groupView = "main"; groupSet(() => ({ tint: i })); } })),
+      one("group-tint-none", "기본", () => { groupView = "main"; groupSet(() => ({ tint: null })); }),
+      one("group-tint-back", "←", () => { groupView = "main"; placeGroupMenu(); }));
+      return;
+    }
+    const muted = clips.every((c) => c.muted);
+    groupMenu.replaceChildren(...[
+      h("span", { class: "group-count", text: `클립 ${clips.length}개` }),
+      one("group-play", groupSolo ? "■ 멈춤" : "▶ 듣기", () => playGroup()),
+      one("group-repeat", groupRepeat ? "반복 끄기" : "반복", () => { groupRepeat = !groupRepeat; if (groupRepeat && !groupSolo) playGroup(); placeGroupMenu(); }),
+      one("group-mute", muted ? "소리 켜기" : "음소거", () => groupSet(() => ({ muted: !muted })), can),
+      one("group-speed", `빠르기 ${clips[0].speed || 1}×`, () => {
+        const next = CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clips[0].speed || 1) + 1) % CLIP_SPEEDS.length];
+        groupSet(() => ({ speed: next }));
+      }, can),
+      one("group-tint", "색", () => { groupView = "tints"; placeGroupMenu(); }, can),
+      one("group-copy", "복사", () => copyGroup()),
+      one("group-delete", "지우기", () => { const atoms = []; for (const c of clips) { const made = removeClipOps(session.clock, song, c.id); if (made?.ops?.length) { session.commit("song", made.ops); atoms.push(...made.atoms); } } record(atoms); group = new Set(); draw(); }, can),
+      one("group-close", "✕", () => { group = new Set(); stopGroup(); draw(); }),
+    ].filter(Boolean));
+  }
+
+  /** The same change to every gathered clip, as one undo step. */
+  function groupSet(fields) {
+    const atoms = [];
+    for (const id of group) {
+      const made = setClipOps(session.clock, song, id, fields(song.clip(id)));
+      if (!made?.ops?.length) continue;
+      session.commit("song", made.ops);
+      atoms.push(...made.atoms);
+    }
+    record(atoms);
+    draw();
+  }
+
+  /** Dragging one gathered clip takes them all by the same time and rows (if they all fit there). */
+  function moveGroup(id, at, row) {
+    const lead = song.layout().find((c) => c.id === id);
+    if (!lead || readOnly()) return;
+    const step = gridStep();
+    if (step) at = Math.max(0, Math.round(snapMs(at, step)));
+    const dt = at - lead.start;
+    const dr = Math.min(row, MAX_ROWS - 1) - lead.lane;
+    const moving = song.layout().filter((c) => group.has(c.id));
+    if (moving.some((c) => c.locked)) return void toast(root, "잠긴 클립이 있어서 옮길 수 없어요");
+    const place = moving.map((c) => ({ id: c.id, start: c.start + dt, row: c.lane + dr, span: clipSpan(c) }));
+    if (place.some((p) => p.start < 0 || p.row < 0 || p.row >= MAX_ROWS)) return void toast(root, "그 자리에는 놓을 수 없어요");
+    // Every one must lie clear of the clips that stay.
+    const stay = song.layout().filter((c) => !group.has(c.id));
+    const clash = place.some((p) => stay.some((c) => c.lane === p.row && p.start < c.start + clipSpan(c) && c.start < p.start + p.span));
+    if (clash) return void toast(root, "그 자리에는 다른 클립이 있어요");
+    const atoms = [];
+    for (const p of place) {
+      const made = setClipOps(session.clock, song, p.id, { start: p.start, row: p.row });
+      if (!made?.ops?.length) continue;
+      session.commit("song", made.ops);
+      atoms.push(...made.atoms);
+    }
+    record(atoms);
+    draw();
+  }
+
+  let groupSolo = null; // the player of the gathered clips alone
+  /** ▶ of the group: only the gathered clips, as they stand to each other; with 반복, again and again. */
+  async function playGroup() {
+    if (groupSolo?.playing) return void stopGroup();
+    if (player?.playing) await togglePlay();
+    if (soloPlayer?.playing) stopSolo();
+    const ctx = await ready();
+    if (!ctx || !group.size) return;
+    const clips = song.layout().filter((c) => group.has(c.id));
+    const from = Math.min(...clips.map((c) => c.start));
+    const part = new SongDoc();
+    let n = 0;
+    for (const c of clips) {
+      const src = song.source(c.src);
+      if (!src) continue;
+      if (!part.source(src.id)) part.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map((x) => [Math.round(x.t), Math.max(1, Math.round(x.d)), x.p, Math.round(Math.min(1, Math.max(0, x.v)) * 100)]), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
+      part.apply({ t: "clip", id: c.id, src: src.id, row: c.lane, start: c.start - from, offset: c.offset, length: c.length, by: c.by, at: 0 });
+      const f = {};
+      if ((c.speed || 1) !== 1) f.speed = c.speed;
+      if (c.muted) f.muted = true;
+      if (Object.keys(f).length) part.apply({ t: "cset", id: `${++n}@group`, c: c.id, f });
+    }
+    groupSolo?.close();
+    groupSolo = new SongPlayer(ctx, { song: () => part, audioFor: (sid) => audio.get(sid) || null, onEnd: () => {
+      if (groupRepeat && group.size && alive) return void groupSolo.play(0);
+      stopGroup();
+    } });
+    groupSolo.setMode(settings().songMode);
+    groupSolo.setTone(settings().pianoTone);
+    groupSolo.setSpeed(settings().songSpeed || 1);
+    groupSolo.play(0);
+    timeline.markPlaying(sounding = clips.map((c) => c.id));
+    placeGroupMenu();
+  }
+
+  function stopGroup() {
+    groupSolo?.stop();
+    groupSolo = null;
+    timeline.markPlaying(sounding = []);
+    if (alive) placeGroupMenu();
+  }
+
+  /** 복사 of the group: put down again at the playhead (here or in another song room), as they stood. */
+  function copyGroup() {
+    const clips = song.layout().filter((c) => group.has(c.id));
+    const from = Math.min(...clips.map((c) => c.start));
+    const top = Math.min(...clips.map((c) => c.lane));
+    copyItem(app.store, {
+      kind: "song-clips", room: session.roomId,
+      clips: clips.map((c) => {
+        const src = song.source(c.src);
+        return { dx: c.start - from, dy: c.lane - top, offset: c.offset, length: c.length, speed: c.speed || 1, tint: c.tint ?? null, muted: !!c.muted, src: c.src,
+          source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name } };
+      }),
+    });
+    toast(root, `클립 ${clips.length}개를 복사했어요. 클립을 눌러 '붙여넣기'로 넣어요`, 2600);
+  }
+
   function moveClip(id, at, row) {
     const clip = song.clip(id);
     if (!clip || clip.locked || readOnly()) return;
@@ -662,6 +822,50 @@ export function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = row;
     select(clip.id);
+  }
+
+  /** 붙여넣기 of copied clips (an 올가미's): at the playhead, as they stood to each other; one undo step. */
+  function pasteGroup() {
+    const item = clipboardItem(app.store, "song-clips");
+    if (!item || readOnly()) return;
+    const ops = [];
+    const atoms = [];
+    const made = new Map(); // a source from another room, once
+    const placed = [];
+    for (const c of item.clips) {
+      if (!song.canAddClip()) break;
+      let srcId = item.room === session.roomId && song.source(c.src) ? c.src : made.get(c.src);
+      if (!srcId) {
+        const src = sourceOp(session.clock, song, { ...c.source, by: session.memberId, at: Date.now() });
+        ops.push(src);
+        song.apply(src);
+        srcId = src.id;
+        made.set(c.src, srcId);
+      }
+      const span = Math.round(c.length / (CLIP_SPEEDS.includes(c.speed) ? c.speed : 1));
+      const start = playhead + c.dx;
+      const row = song.freeRow(start, span, selectedRow + c.dy) ?? null;
+      if (row === null) continue;
+      const clip = addClipOps(session.clock, song, { src: srcId, row, start, offset: c.offset, length: c.length, by: session.memberId, at: Date.now() });
+      for (const op of clip.ops) song.apply(op);
+      ops.push(...clip.ops);
+      atoms.push(...clip.atoms);
+      const looks = {};
+      if ((c.speed || 1) !== 1 && CLIP_SPEEDS.includes(c.speed)) looks.speed = c.speed;
+      if (Number.isInteger(c.tint)) looks.tint = c.tint;
+      if (c.muted) looks.muted = true;
+      if (Object.keys(looks).length) {
+        const set = setClipOps(session.clock, song, clip.id, looks);
+        for (const op of set.ops) song.apply(op);
+        ops.push(...set.ops);
+      }
+      placed.push(clip.id);
+    }
+    if (!ops.length) return void toast(root, "이 자리에는 줄이 더 없어요");
+    session.commit("song", ops);
+    record(atoms);
+    group = new Set(placed);
+    select(null);
   }
 
   function toggleMute(id) {
@@ -791,7 +995,7 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
       item("clip-copy", "복사", () => copyClip(clip.id)),
-      item("clip-paste", "붙여넣기", () => pasteClip(), !!clipboardItem(app.store, "song-clip") && !readOnly()),
+      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
       item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),

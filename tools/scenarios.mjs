@@ -4012,3 +4012,60 @@ scenario("home: a long press on a whiteboard → 보내기 says what goes and li
   await click(page, `#room-actions [data-send-to="${song}"]`);
   await page.waitFor(`document.querySelector(".toast")?.textContent.includes("2개를 보냈어요")`, 10000);
 });
+
+// The owner: "노래 만들기에서도 여기 그 올가미 기능도 있어야… 센스 있게".
+scenario("song 올가미: drawn round two clips it gathers them; together they mute, speed up, move by one drag (one undo each), play alone, copy and go", async ({ open, fixtures }) => {
+  const page = await open({ width: 420, height: 760 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  const song = `window.__app.session.doc("song")`;
+  const firstEnd = await page.eval(`(() => { const c = ${song}.layout()[0]; return c.start + c.length; })()`);
+  const right = await page.eval(`(() => { const r = document.querySelector(".clip[data-id]").getBoundingClientRect(); return { x: r.right + 30, y: r.top + r.height / 2 }; })()`);
+  for (let i = 0; i < 2 && (await page.eval(`!!document.querySelector(".clip.selected")`)); i++) { await page.tap(right.x, right.y); await pause(120); }
+  await tapTime(page, firstEnd + 5);
+  await importSound(page, fixtures.doremi, 2);
+  await page.eval(`document.getElementById("timeline").scrollLeft = 0`);
+  await click(page, "#song-lasso");
+  await page.waitFor(`document.getElementById("timeline").classList.contains("lassoing")`);
+  const box = await page.eval(`(() => { const rs = [...document.querySelectorAll(".clip[data-id]")].map((c) => c.getBoundingClientRect()); const tl = document.getElementById("timeline").getBoundingClientRect(); return { l: Math.max(tl.left + 4, Math.min(...rs.map((r) => r.left)) - 10), t: Math.min(...rs.map((r) => r.top)) - 10, r: Math.min(tl.right - 4, Math.max(...rs.map((r) => r.right)) + 10), b: Math.max(...rs.map((r) => r.bottom)) + 10 }; })()`);
+  const pts = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b], [box.l, box.t + 8]];
+  await page.front();
+  await page.touch("start", [pts[0]]);
+  for (let k = 1; k < pts.length; k++) for (let i = 1; i <= 6; i++) await page.touch("move", [[pts[k - 1][0] + ((pts[k][0] - pts[k - 1][0]) * i) / 6, pts[k - 1][1] + ((pts[k][1] - pts[k - 1][1]) * i) / 6]]);
+  await page.touch("end");
+  await page.waitFor(`document.querySelectorAll(".clip.grouped").length === 2 && ${q("#group-menu")}`);
+  assert.equal(await text(page, "#group-menu .group-count"), "클립 2개");
+  assert.ok(!(await page.eval(`document.getElementById("timeline").classList.contains("lassoing")`)), "the 올가미 puts itself away once it has gathered");
+  // Together: mute, then speed.
+  await click(page, "#group-mute");
+  await page.waitFor(`${song}.layout().every((c) => c.muted)`);
+  await click(page, "#group-speed");
+  await page.waitFor(`${song}.layout().every((c) => c.speed === 1.5)`);
+  await click(page, "#undo");
+  await page.waitFor(`${song}.layout().every((c) => (c.speed || 1) === 1)`);
+  // One held and dragged a second later: both go by a second.
+  const before = await page.eval(`${song}.layout().map((c) => c.start)`);
+  const pps = await page.eval(`Number(document.getElementById("timeline").dataset.pps)`);
+  const at = await page.eval(`(() => { const r = document.querySelector(".clip.grouped").getBoundingClientRect(); return [r.left + 30, r.top + r.height / 2]; })()`);
+  await page.touch("start", [at]);
+  await pause(600);
+  await page.waitFor(`document.querySelector(".clip.lifted")`);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[at[0] + (pps * i) / 8, at[1]]]);
+  await page.touch("end");
+  await page.waitFor(`${song}.layout().map((c) => c.start).join() !== ${JSON.stringify(before.join())}`);
+  const after = await page.eval(`${song}.layout().map((c) => c.start)`);
+  after.forEach((s, i) => assert.ok(Math.abs(s - before[i] - 1000) <= 30, `both moved a second: ${before} → ${after}`));
+  await click(page, "#undo");
+  await page.waitFor(`${song}.layout().map((c) => c.start).join() === ${JSON.stringify(before.join())}`);
+  // Alone: ▶ plays just them.
+  await click(page, "#group-play");
+  await page.waitFor(`${q("#group-play")}?.textContent === "■ 멈춤"`);
+  await click(page, "#group-play");
+  // Copy, then 지우기, then ✕.
+  await click(page, "#group-copy");
+  await page.waitFor(`window.__app.store.get("clipboard")?.kind === "song-clips" || JSON.stringify(window.__app.store.get("clipboard") || "").includes("song-clips")`);
+  await click(page, "#group-delete");
+  await page.waitFor(`${song}.layout().length === 0 && !document.getElementById("group-menu")`);
+  await click(page, "#undo");
+  await page.waitFor(`${song}.layout().length === 2`);
+});

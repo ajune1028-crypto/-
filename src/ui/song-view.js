@@ -69,9 +69,18 @@ export class Timeline {
     this.line = h("div", { class: "playline", "aria-hidden": "true" });
     this.empty = h("p", { class: "song-empty", id: "song-empty", hidden: true });
     this.content = h("div", { class: "song-content" }, this.ruler, this.lanes, this.line);
+    // 올가미: a loop drawn over the rows gathers the clips it goes round (see setLasso).
+    this.lassoOn = false;
+    this.loopSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    this.loopSvg.setAttribute("class", "song-loop");
+    this.loopSvg.setAttribute("aria-hidden", "true");
+    this.loopPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    this.loopSvg.append(this.loopPath);
+    this.lanes.append(this.loopSvg);
     this.ruler.append(this.head);
     this.el = h("div", { class: "timeline", id: "timeline" }, this.content, this.empty);
     this.wire();
+    this.wireLasso();
   }
 
   get rowH() {
@@ -239,6 +248,7 @@ export class Timeline {
     const peer = model.peers.get(clip.id);
     el.style.setProperty("--peer", peer || "transparent");
     el.classList.toggle("selected", clip.id === model.selected);
+    el.classList.toggle("grouped", !!model.group?.has(clip.id));
     el.classList.toggle("peer", !!peer);
     el.classList.toggle("muted", clip.muted);
     const notes = source ? model.notesOf(clip.src) : [];
@@ -459,10 +469,60 @@ export class Timeline {
     window.addEventListener("pointerup", () => { pan = null; });
   }
 
+  /** 올가미 on: one finger draws a loop instead of moving things; off: as before. */
+  setLasso(on) {
+    this.lassoOn = !!on;
+    this.el.classList.toggle("lassoing", this.lassoOn);
+    if (!on) this.loopPath.removeAttribute("d");
+  }
+
+  wireLasso() {
+    let loop = null;
+    // Anywhere on the timeline (the time bar too): while the 올가미 is on, a finger draws.
+    this.el.addEventListener("pointerdown", (e) => {
+      if (!this.lassoOn || this.fingers.pinching || (e.button !== undefined && e.button > 0)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.el.setPointerCapture?.(e.pointerId);
+      const r = this.lanes.getBoundingClientRect();
+      loop = { id: e.pointerId, pts: [e.clientX - r.left, e.clientY - r.top] };
+    }, true);
+    this.el.addEventListener("pointermove", (e) => {
+      if (!loop || e.pointerId !== loop.id) return;
+      if (this.fingers.pinching) {
+        loop = null;
+        this.loopPath.removeAttribute("d");
+        return;
+      }
+      const r = this.lanes.getBoundingClientRect();
+      loop.pts.push(e.clientX - r.left, e.clientY - r.top);
+      let d = "M" + loop.pts[0] + " " + loop.pts[1];
+      for (let i = 2; i < loop.pts.length; i += 2) d += "L" + loop.pts[i] + " " + loop.pts[i + 1];
+      this.loopPath.setAttribute("d", d + "Z");
+    });
+    const end = (e) => {
+      if (!loop || e.pointerId !== loop.id) return;
+      const pts = loop.pts;
+      loop = null;
+      this.loopPath.removeAttribute("d");
+      if (pts.length < 8) return void this.on.lasso?.([]);
+      // The clips whose middle lies inside the loop (closed the shortest way).
+      const lanes = this.lanes.getBoundingClientRect();
+      const ids = [];
+      for (const [id, entry] of this.clipEls) {
+        const b = entry.el.getBoundingClientRect();
+        if (inside(pts, b.left + b.width / 2 - lanes.left, b.top + b.height / 2 - lanes.top)) ids.push(id);
+      }
+      this.on.lasso?.(ids);
+    };
+    this.el.addEventListener("pointerup", end);
+    this.el.addEventListener("pointercancel", (e) => { if (loop && e.pointerId === loop.id) { loop = null; this.loopPath.removeAttribute("d"); } });
+  }
+
   wireClip(el, id) {
     el.addEventListener("pointerdown", (e) => {
       if (e.button !== undefined && e.button > 0) return;
-      if (this.fingers.pinching) return;
+      if (this.fingers.pinching || this.lassoOn) return;
       el.setPointerCapture?.(e.pointerId);
       const box = el.getBoundingClientRect();
       const lanes = this.lanes.getBoundingClientRect();
@@ -614,4 +674,14 @@ export function timeText(ms, whole = false) {
   const m = Math.floor(t / 60);
   const s = t - m * 60;
   return whole ? `${m}:${String(Math.floor(s + 1e-6)).padStart(2, "0")}` : `${m}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
+/** Whether (x, y) lies inside the polygon [x0, y0, x1, y1, …] (closed the shortest way). */
+function inside(pts, x, y) {
+  let hit = false;
+  for (let i = 0, j = pts.length - 2; i < pts.length; j = i, i += 2) {
+    const [xi, yi, xj, yj] = [pts[i], pts[i + 1], pts[j], pts[j + 1]];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
 }

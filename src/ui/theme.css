@@ -1369,3 +1369,14 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .order-row-name { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .order-row-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .order-row .input { min-width: 0; }
+
+/* 노래 방 올가미: while it is on, one finger draws (nothing scrolls or moves); clips gathered glow. */
+.song-loop { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: 7; pointer-events: none; }
+.song-loop path { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 6; stroke-linejoin: round; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent)); }
+.timeline.lassoing, .timeline.lassoing .lanes, .timeline.lassoing .ruler { touch-action: none; cursor: crosshair; }
+.timeline.lassoing .clip { pointer-events: none; }
+.clip.grouped { outline: 2.5px solid var(--accent); outline-offset: 1px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); }
+.group-menu { position: absolute; left: 50%; top: 0.4rem; z-index: 9; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.1rem; max-width: calc(100% - 1rem); padding: 0.2rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transform: translateX(-50%); animation: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.group-menu button { min-height: 2.2rem; padding: 0 0.7rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+.group-menu .group-count { align-self: center; padding: 0 0.5rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; }
+.icon-btn[aria-pressed="true"]#song-lasso { background: color-mix(in srgb, var(--accent) 22%, transparent); }
