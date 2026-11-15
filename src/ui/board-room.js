@@ -43,6 +43,7 @@ import { decodeWav, encodeWav } from "../audio/wav.js";
 import { toMono, resample, louder } from "../audio/dsp.js";
 import { keepTake, takeWhere } from "./keep-take.js";
 import { soundTitle } from "./names.js";
+import { buzz as buzzOnce } from "./chime.js";
 import { reachableRooms, putCardsIntoSong } from "./room-actions.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
@@ -2366,14 +2367,8 @@ export function mountBoardRoom(body, app, session, frame) {
     });
   }
 
-  /** A short buzz where the phone can (a card lifted, a place taken). */
-  const buzz = () => {
-    try {
-      if (settings().haptics !== false) navigator.vibrate?.(8);
-    } catch {
-      // Not every device can buzz.
-    }
-  };
+  /** A short buzz where the phone can (a card lifted, a place taken), unless 진동 is off. */
+  const buzz = (ms = 8) => buzzOnce(app, ms);
 
   /** Song cards played back to back (an order from the list), from the start; again stops. */
   async function playCards(cards) {

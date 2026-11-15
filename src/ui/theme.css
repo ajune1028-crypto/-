@@ -4,6 +4,10 @@
    frosted glass. Colour belongs to the people writing. */
 
 :root {
+  /* One motion for the whole app (the owner chose "움직임 하나로 통일"): things come in fast and
+     settle softly, like a sheet on a phone; a spring only where something pops (a revealed photo). */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring: cubic-bezier(0.2, 1.3, 0.4, 1);
   /* surfaces */
   --paper: #f8fafd;
   /* The glass's colour: the chosen accent (blue unless chosen), for every tint below. */
@@ -285,7 +289,7 @@ h1, h2, p { margin: 0; }
 .room-name { font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
 /* Pressed: a small sink instead of the browser's blue flash. */
 /* `scale` rather than `transform`, so it stacks on a transform the element already has (.add is centred by one). */
-.room-row, .btn, label.btn, .icon-btn, .chip, .add, .swatch, .seg button { transition: scale 0.09s ease-out; }
+.room-row, .btn, label.btn, .icon-btn, .chip, .add, .swatch, .seg button { transition: scale 0.09s var(--ease); }
 .room-row:active, .btn:active, label.btn:active, .icon-btn:active, .chip:active, .add:active, .swatch:active, .seg button:active { scale: 0.96; }
 @media (prefers-reduced-motion: reduce) {
   .room-row:active, .btn:active, label.btn:active, .icon-btn:active, .chip:active, .add:active, .swatch:active, .seg button:active { scale: none; opacity: 0.75; }
@@ -408,8 +412,8 @@ h1, h2, p { margin: 0; }
 
 .switch { position: relative; width: 2.9rem; height: 1.7rem; flex: none; }
 .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.switch span { position: absolute; inset: 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 20%, transparent); transition: background 0.15s; pointer-events: none; }
-.switch span::after { content: ""; position: absolute; top: 0.2rem; left: 0.2rem; width: 1.3rem; height: 1.3rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
+.switch span { position: absolute; inset: 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 20%, transparent); transition: background 0.15s var(--ease); pointer-events: none; }
+.switch span::after { content: ""; position: absolute; top: 0.2rem; left: 0.2rem; width: 1.3rem; height: 1.3rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); transition: transform 0.18s var(--ease); }
 .switch input:checked + span { background: var(--switch-on); }
 .switch input:checked + span::after { transform: translateX(1.2rem); }
 .switch input:focus-visible + span { outline: 2px solid var(--ring); outline-offset: 2px; }
@@ -444,8 +448,8 @@ h1, h2, p { margin: 0; }
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
   /* Slides up and settles the way an iPhone sheet does (and back down when it closes). */
-  animation: sheet-in 0.42s cubic-bezier(0.32, 0.72, 0, 1);
-  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: sheet-in 0.42s var(--ease);
+  transition: transform 0.32s var(--ease);
   overscroll-behavior: contain;
 }
 /* The small grip that says: this sheet slid up, and goes back down. */
@@ -585,7 +589,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   border-radius: 999px;
   font-size: 0.8rem;
   transform: translateX(-50%);
-  animation: rise 0.2s ease-out;
+  animation: rise 0.22s var(--ease);
   /* A notice never stands in the way of a tap. */
   pointer-events: none;
 }
@@ -668,7 +672,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   box-decoration-break: clone;
 }
 @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-.w.spin { animation: spin 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.w.spin { animation: spin 0.9s var(--ease); }
 @keyframes spin { from { --spin: -360deg; } to { --spin: 0deg; } }
 
 .carets { position: absolute; inset: 0; pointer-events: none; }
@@ -689,7 +693,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   white-space: nowrap;
   opacity: 0;
 }
-.caret.moved .caret-name { animation: name-tag 2s ease-out; }
+.caret.moved .caret-name { animation: name-tag 2s var(--ease); }
 @keyframes name-tag { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 
 /* (No hour labels in the margin since 14 November: a long press on a word tells who wrote it and when.) */
@@ -804,7 +808,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  transition: box-shadow 0.15s, opacity 0.15s;
+  transition: box-shadow 0.15s var(--ease), opacity 0.15s var(--ease);
 }
 .clip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .clip.selected { border-color: var(--c); box-shadow: 0 0 0 2px var(--ink), 0 6px 16px rgb(30 50 100 / 0.18); }
@@ -1114,7 +1118,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .slot-more { margin-top: 0.35rem; }
 /* 내 노래: a panel from the right. */
 .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / 0.28); }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; display: flex; flex-direction: column; width: min(21rem, 86vw); padding: max(0.8rem, env(safe-area-inset-top)) 0.8rem 0.8rem; background: var(--paper); box-shadow: -12px 0 32px rgb(0 0 0 / 0.22); animation: drawer-in 0.22s ease-out; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; display: flex; flex-direction: column; width: min(21rem, 86vw); padding: max(0.8rem, env(safe-area-inset-top)) 0.8rem 0.8rem; background: var(--paper); box-shadow: -12px 0 32px rgb(0 0 0 / 0.22); animation: drawer-in 0.32s var(--ease); }
 @keyframes drawer-in { from { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; }
@@ -1144,10 +1148,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .w.sparkle.charging::after { animation: sparkle-charge 2s linear forwards; }
 @keyframes sparkle-sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 @keyframes sparkle-charge { from { box-shadow: 0 0 0 0 rgb(255 196 70 / 0); background-color: rgb(255 236 170 / 0); } to { box-shadow: 0 0 26px 10px rgb(255 196 70 / 0.95); background-color: rgb(255 236 170 / 0.7); } }
-.reveal { position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 0.8rem; padding: 1.2rem; background: rgb(8 8 14 / 0.64); animation: reveal-fade 0.3s ease-out; }
+.reveal { position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 0.8rem; padding: 1.2rem; background: rgb(8 8 14 / 0.64); animation: reveal-fade 0.3s var(--ease); }
 .reveal-burst { position: fixed; left: 50%; top: 50%; width: 1px; height: 1px; pointer-events: none; }
-.reveal-burst::before { content: ""; position: absolute; left: -40vmin; top: -40vmin; width: 80vmin; height: 80vmin; border-radius: 50%; background: radial-gradient(circle, rgb(255 240 190 / 0.95), rgb(255 200 80 / 0.45) 32%, transparent 66%); animation: reveal-burst 0.9s ease-out forwards; }
-.reveal-img { position: relative; max-width: min(86vw, 30rem); max-height: 62vh; width: auto; height: auto; border-radius: 1.2rem; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 46px rgb(255 210 110 / 0.85); animation: reveal-pop 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.reveal-burst::before { content: ""; position: absolute; left: -40vmin; top: -40vmin; width: 80vmin; height: 80vmin; border-radius: 50%; background: radial-gradient(circle, rgb(255 240 190 / 0.95), rgb(255 200 80 / 0.45) 32%, transparent 66%); animation: reveal-burst 0.9s var(--ease) forwards; }
+.reveal-img { position: relative; max-width: min(86vw, 30rem); max-height: 62vh; width: auto; height: auto; border-radius: 1.2rem; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 46px rgb(255 210 110 / 0.85); animation: reveal-pop 0.7s var(--spring) both; }
 .reveal-who { position: relative; margin: 0; color: #fff; font-size: 0.85rem; font-weight: 700; text-shadow: 0 1px 3px rgb(0 0 0 / 0.6); }
 .reveal-actions { position: relative; display: flex; gap: 0.5rem; }
 .reveal-actions .btn { width: auto; padding: 0 1.2rem; }
@@ -1156,12 +1160,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @keyframes reveal-burst { from { transform: scale(0.1); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w.sparkle::after, .w.sparkle.charging::after, .reveal, .reveal-img, .reveal-burst::before, .sound-orb { animation: none; } }
 /* A photo comes out over a soft, wide glow of itself, so any photo sits well. */
-.reveal-glow { position: fixed; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(38px) saturate(1.3) brightness(0.8); opacity: 0.75; pointer-events: none; animation: reveal-fade-in 0.6s ease-out both; }
+.reveal-glow { position: fixed; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(38px) saturate(1.3) brightness(0.8); opacity: 0.75; pointer-events: none; animation: reveal-fade-in 0.6s var(--ease) both; }
 @keyframes reveal-fade-in { from { opacity: 0; } }
 /* A recording hidden in words sparkles blue; it comes out as a round player. */
 .w.sparkle.sound { text-shadow: 0 0 6px rgb(90 170 255 / 0.95); }
 .w.sparkle.sound::after { background-image: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.85) 47%, rgb(140 200 255 / 0.9) 53%, transparent 70%); }
-.sound-orb { position: relative; display: grid; place-items: center; width: min(46vmin, 13rem); height: min(46vmin, 13rem); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.95), rgb(190 220 255 / 0.85) 45%, rgb(110 160 255 / 0.75)); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 60px rgb(120 180 255 / 0.8); color: #13213f; animation: reveal-pop 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.sound-orb { position: relative; display: grid; place-items: center; width: min(46vmin, 13rem); height: min(46vmin, 13rem); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.95), rgb(190 220 255 / 0.85) 45%, rgb(110 160 255 / 0.75)); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 60px rgb(120 180 255 / 0.8); color: #13213f; animation: reveal-pop 0.7s var(--spring) both; }
 /* While it plays the orb breathes (on its own layer, so the fly-in is never started again). */
 .sound-orb::after { content: ""; position: absolute; inset: -6%; border-radius: 50%; box-shadow: 0 0 70px rgb(120 180 255 / 0.9); opacity: 0; pointer-events: none; }
 .sound-orb.on::after { animation: orb-breathe 1.6s ease-in-out infinite; }
@@ -1204,7 +1208,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-top { display: flex; gap: 0.3rem; }
 
 /* 레퍼런스 floats over the room (no dark around it) and moves by its head. */
-.float { position: fixed; z-index: 45; display: flex; flex-direction: column; width: min(92vw, 22rem); max-height: min(54vh, 34rem); border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), 0 16px 40px rgb(20 30 60 / 0.25); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: rise 0.18s ease-out; }
+.float { position: fixed; z-index: 45; display: flex; flex-direction: column; width: min(92vw, 22rem); max-height: min(54vh, 34rem); border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), 0 16px 40px rgb(20 30 60 / 0.25); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: rise 0.22s var(--ease); }
 .float-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.4rem 0.2rem 0.8rem; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .float-grip { width: 1.6rem; height: 0.3rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 25%, transparent); }
 .float-title { flex: 1; margin: 0; font-size: 0.95rem; font-weight: 800; }
@@ -1237,7 +1241,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .lasso-chip .lasso-kind { background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: 0.78rem; }
 #lasso-kinds button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .board-loops path.drawing.near { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 11px var(--accent)); }
-.card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s; }
+.card.lasso-glow { box-shadow: 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 65%, transparent); transition: box-shadow 0.3s var(--ease); }
 .board-content.focus .card:not(.in-focus) { opacity: 0.3; }
 
 /* A recording's own speed, in its corner (only when it is not 1×). */
@@ -1342,15 +1346,15 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .sheet-head h2 { flex: 1; margin: 0; }
 .sheet-close { flex: none; width: 2.2rem; height: 2.2rem; margin: -0.3rem -0.5rem -0.3rem 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .sheet-close svg { width: 1.1rem; height: 1.1rem; transform: rotate(-90deg); }
-.scrim { animation: scrim-in 0.3s ease; }
-.scrim.closing { animation: scrim-out 0.26s ease forwards; pointer-events: none; }
-.scrim.closing .panel { animation: sheet-out 0.26s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+.scrim { animation: scrim-in 0.3s var(--ease); }
+.scrim.closing { animation: scrim-out 0.26s var(--ease) forwards; pointer-events: none; }
+.scrim.closing .panel { animation: sheet-out 0.26s var(--ease) forwards; }
 @keyframes sheet-in { from { transform: translateY(100%); } }
 @keyframes sheet-out { to { transform: translateY(105%); } }
 @keyframes scrim-in { from { background-color: transparent; } }
 @keyframes scrim-out { to { background-color: transparent; } }
 /* Menus and floating panels open from where they are, a little smaller and clear at first. */
-.clip-menu, .float, .lasso-menu { animation: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.clip-menu, .float, .lasso-menu { animation: pop-in 0.22s var(--ease); }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.96); } }
 @media (prefers-reduced-motion: reduce) {
   .panel, .scrim, .scrim.closing, .scrim.closing .panel, .clip-menu, .float, .lasso-menu { animation: none; transition: none; }
@@ -1358,7 +1362,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 
 /* 순서 목록: the order now as a row of chips (held and moved to reorder), and the saved orders. */
 .order-strip { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.4rem 0 0.8rem; }
-.order-chip { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; padding: 0.4rem 0.7rem 0.4rem 0.4rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 999px; background: var(--gloss), color-mix(in srgb, var(--c) 14%, var(--paper)); touch-action: none; cursor: grab; transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.18s; }
+.order-chip { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; padding: 0.4rem 0.7rem 0.4rem 0.4rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 999px; background: var(--gloss), color-mix(in srgb, var(--c) 14%, var(--paper)); touch-action: none; cursor: grab; transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease); }
 .order-chip.lifted { z-index: 3; cursor: grabbing; box-shadow: 0 10px 24px color-mix(in srgb, var(--c) 30%, transparent); transition: none; }
 .order-n { display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--c); color: #fff; font-size: 0.72rem; font-weight: 800; }
 .order-name { overflow: hidden; font-size: 0.82rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
@@ -1376,13 +1380,13 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .timeline.lassoing, .timeline.lassoing .lanes, .timeline.lassoing .ruler { touch-action: none; cursor: crosshair; }
 .timeline.lassoing .clip { pointer-events: none; }
 .clip.grouped { outline: 2.5px solid var(--accent); outline-offset: 1px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); }
-.group-menu { position: absolute; left: 50%; top: 0.4rem; z-index: 9; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.1rem; max-width: calc(100% - 1rem); padding: 0.2rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transform: translateX(-50%); animation: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.group-menu { position: absolute; left: 50%; top: 0.4rem; z-index: 9; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.1rem; max-width: calc(100% - 1rem); padding: 0.2rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transform: translateX(-50%); animation: pop-in 0.22s var(--ease); }
 .group-menu button { min-height: 2.2rem; padding: 0 0.7rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
 .group-menu .group-count { align-self: center; padding: 0 0.5rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; }
 .icon-btn[aria-pressed="true"]#song-lasso { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
 /* 색 섞기: the colours swirl once through the word as they mix. */
-.w.swirl { animation: swirl 0.7s cubic-bezier(0.32, 0.72, 0, 1); }
+.w.swirl { animation: swirl 0.7s var(--ease); }
 @keyframes swirl {
   0% { filter: hue-rotate(0deg) saturate(1); transform: scale(1); }
   40% { filter: hue-rotate(160deg) saturate(1.6); transform: scale(1.08); }
@@ -1392,8 +1396,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 
 /* The whiteboard's mode bar on any edge, its size and look; the tools on the other side. */
 .room { position: relative; }
-.board-modes.lifting { position: relative; z-index: 20; transform-origin: center; box-shadow: 0 16px 36px color-mix(in srgb, var(--tint) 30%, transparent); scale: 1.04; transition: scale 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
-.board-rail.lifting { z-index: 20; scale: 1.04; transition: scale 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.board-modes.lifting { position: relative; z-index: 20; transform-origin: center; box-shadow: 0 16px 36px color-mix(in srgb, var(--tint) 30%, transparent); scale: 1.04; transition: scale 0.18s var(--ease); }
+.board-rail.lifting { z-index: 20; scale: 1.04; transition: scale 0.18s var(--ease); }
 .board-rail.lifting .rail-btn { box-shadow: var(--glass-shine), 0 14px 30px color-mix(in srgb, var(--tint) 30%, transparent); }
 .room[data-modes-at="bottom"] .board-top { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 5.4rem; z-index: 3; display: flex; justify-content: center; }
 .room[data-modes-at="left"] .board-top, .room[data-modes-at="right"] .board-top { position: absolute; top: 4.6rem; z-index: 3; }
@@ -1409,8 +1413,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .room[data-modes-icons="true"] .board-modes button svg { width: 1.2rem; height: 1.2rem; }
 .room[data-modes-icons="true"] .board-modes { width: auto; }
 /* While the pen is on the board, everything over it steps back. */
-.room.inking-now > .bar, .room.inking-now .board-top, .room.inking-now .board-rail, .room.inking-now > .toolbar, .room.inking-now .ink-tools { opacity: 0.12; transition: opacity 0.2s ease; }
-.room > .bar, .board-top, .board-rail, .room > .toolbar, .ink-tools { transition: opacity 0.35s ease; }
+.room.inking-now > .bar, .room.inking-now .board-top, .room.inking-now .board-rail, .room.inking-now > .toolbar, .room.inking-now .ink-tools { opacity: 0.12; transition: opacity 0.2s var(--ease); }
+.room > .bar, .board-top, .board-rail, .room > .toolbar, .ink-tools { transition: opacity 0.35s var(--ease); }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }

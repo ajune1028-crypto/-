@@ -33,6 +33,7 @@ import { toBase64, scalePeaks } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
 import { keepTake, takeWhere } from "./keep-take.js";
 import { soundTitle } from "./names.js";
+import { buzz } from "./chime.js";
 import { reachableRooms, meIn } from "./room-actions.js";
 import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
@@ -95,6 +96,7 @@ export function mountSongRoom(body, app, session, frame) {
     },
     canMove: (id) => !readOnly() && !song.clip(id)?.locked,
     zoomed: () => placeMenu(),
+    buzz: (ms) => buzz(app, ms),
   });
   body.append(timeline.el);
   timeline.el.addEventListener("scroll", () => placeMenu());
@@ -776,11 +778,14 @@ export function mountSongRoom(body, app, session, frame) {
     // On the row it was dropped on, it may not lie over another clip: it goes to the nearest
     // gap where it fits on that row (against its neighbour); when none is near, the row below.
     const span = clipSpan(clip);
+    const asked = at;
     const near = song.nearestGap(at, span, lane, id, Math.max(2000, span));
     if (near !== null) at = near;
     const place = near !== null ? lane : song.freeRow(at, span, lane, id);
     if (place === null) return void toast(root, "그 자리에는 놓을 수 없어요");
     if (place === clip.row && at === clip.start) return;
+    // Put against a neighbour (or a row down): a short buzz says it took its place.
+    if (at !== asked || place !== lane) buzz(app, 10);
     apply(setClipOps(session.clock, song, id, { start: at, row: place }));
     selected = id;
     selectedRow = place;

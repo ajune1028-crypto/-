@@ -645,11 +645,7 @@ export class Timeline {
     d.cx = d.cx ?? d.x;
     d.cy = d.cy ?? d.y;
     el.classList.add("lifted");
-    try {
-      navigator.vibrate?.(12);
-    } catch {
-      // Not every device can buzz.
-    }
+    this.on.buzz?.(12);
   }
 }
 
