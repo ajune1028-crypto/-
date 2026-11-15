@@ -1225,3 +1225,6 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .rail-text { font-size: 0.74rem; }
 .rail-cap { font-size: 0.5rem; }
 .board-status, .song-status { padding: 0.3rem 0.8rem; font-size: 0.72rem; }
+/* 녹음 on home: the takes are kept in 레퍼런스's 녹음, to send to a room when wanted. */
+.rec-pill { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 800; }
+.rec-count { min-width: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 12%, transparent); font-size: 0.72rem; text-align: center; }

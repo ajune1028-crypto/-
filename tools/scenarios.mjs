@@ -1615,6 +1615,19 @@ scenario("song: the phone's recorder app is asked for with an audio capture pick
   assert.match(file, /\.m4a/);
 });
 
+// The owner pressed 크롬에서 열기 inside Claude and got Claude's "페이지를 찾을 수 없습니다" (the page wants its owner's
+// login there, and has no microphone anyway): from inside Claude, Chrome gets the public build.
+scenario("song: inside Claude, 크롬에서 열기 opens the public build (no login, it records), and says its rooms stay on that device", async ({ open }) => {
+  // Claude's page: its runtime, and no microphone for the frame.
+  const page = await open({ sandbox: true, init: FAKE_RUNTIME + `Object.defineProperty(Document.prototype, "permissionsPolicy", { configurable: true, get() { return { allowsFeature: (f) => f !== "microphone" }; } });` });
+  await createSongRoom(page);
+  await page.waitFor(q("#start-open-browser"));
+  const link = await page.eval(`document.getElementById("start-open-browser").href`);
+  assert.equal(link, "https://raw.githack.com/ajune1028-crypto/-/main/site/index.html");
+  assert.match(await text(page, "#start-open-browser"), /녹음되는 공개 주소/);
+  assert.ok(await page.eval(q("#start-public-note")), "it says where rooms are kept there");
+});
+
 scenario("song: in an app view that opens no file chooser (the Claude app), a tap on 폰 녹음 앱 offers the same room in Chrome; a file that arrives needs no help", async ({ open, out, fixtures }) => {
   // Like the Claude app: the frame keeps the microphone, and a tap on a picker opens nothing.
   const page = await open({ init: `Object.defineProperty(Document.prototype, "permissionsPolicy", { configurable: true, get() { return { allowsFeature: (f) => f !== "microphone" }; } });` });
@@ -3260,16 +3273,18 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
   await page.waitFor(q("#ref-tab-sounds"));
   await click(page, "#ref-tab-sounds");
   await page.waitFor(q("#ref-ways"));
-  await page.setFiles("#ref-file", [fixtures.doremi]);
+  // The first look at an empty list puts the example take in (a sung 도레미파솔미도).
   await page.waitFor(`document.querySelectorAll(".ref-sound").length === 1`, 20000);
+  await page.setFiles("#ref-file", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".ref-sound").length === 2`, 20000);
   assert.equal(await text(page, ".ref-sound .pick-name"), "doremi.wav");
-  assert.equal(await page.eval(`document.querySelectorAll(".ref-sound .note").length`), 5, "its notes were found");
+  assert.equal(await page.eval(`document.querySelectorAll(".ref-sound")[0].querySelectorAll(".note").length`), 5, "its notes were found");
   // Recorded in the app (the test browser has a microphone).
   await click(page, "#ref-record");
   await page.waitFor(q("#ref-stop"));
   await pause(2500);
   await click(page, "#ref-stop");
-  await page.waitFor(`document.querySelectorAll(".ref-sound").length === 2`, 20000);
+  await page.waitFor(`document.querySelectorAll(".ref-sound").length === 3`, 20000);
   const id = await page.eval(`[...document.querySelectorAll(".ref-sound")].find((r) => r.querySelector(".pick-name").textContent === "doremi.wav").dataset.id`);
   await click(page, `#ref-play-${id}`);
   await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "■ 멈춤"`);
@@ -3294,6 +3309,50 @@ scenario("레퍼런스 녹음: a file and an in-app take are kept on this device
   await page.waitFor(q(`[data-put-sound="${id}"]`));
   await click(page, `[data-put-sound="${id}"]`);
   await page.waitFor(`document.querySelectorAll(".card.song").length === 1`);
+});
+
+// The owner: "처음에 홈화면 UI에 녹음 기능… 녹음하고서 어떤 방에 보낼 수 있게… 쌓아 두거나 모아 둘 수… 레퍼런스에서도 보기가 가능"
+// and "너가 예시로 한번 아티팩트에 녹음 있는 걸 넣어 볼래".
+scenario("home 녹음: the button opens the kept recordings with an example take to try (heard, seven notes); 보내기 puts a take into a song room as a clip and onto a whiteboard as a card; the book button opens and closes 레퍼런스", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page, { room: "보낼 노래 방" });
+  await click(page, "#back");
+  await createBoard(page, { room: "보낼 보드" });
+  await click(page, "#back");
+  await page.waitFor(q("#home-record"));
+  await click(page, "#home-record");
+  await page.waitFor(`document.getElementById("reference") && !document.getElementById("ref-sounds-part").hidden`);
+  await page.waitFor(`[...document.querySelectorAll(".ref-sound .pick-name")].some((n) => n.textContent.startsWith("예시 녹음"))`, 20000);
+  assert.equal(await page.eval(`document.querySelector(".ref-sound").querySelectorAll(".note").length`), 7, "the example sings seven notes");
+  const id = await page.eval(`document.querySelector(".ref-sound").dataset.id`);
+  await click(page, `#ref-play-${id}`);
+  await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "■ 멈춤"`);
+  await click(page, `#ref-play-${id}`);
+  await page.waitFor(`${q(`#ref-play-${id}`)}.textContent === "▶ 듣기"`);
+  const sendTo = async (name) => {
+    await click(page, `[data-send-sound="${id}"]`);
+    await page.waitFor(q("#send-rooms"));
+    const room = await page.eval(`[...document.querySelectorAll("#send-rooms [data-send-to]")].find((b) => b.textContent.includes(${JSON.stringify(name)})).dataset.sendTo`);
+    await click(page, `[data-send-to="${room}"]`);
+    await page.waitFor(`document.querySelector(".toast")?.textContent.includes("보냈어요")`, 8000);
+    return room;
+  };
+  const songRoom = await sendTo("보낼 노래 방");
+  const boardRoom = await sendTo("보낼 보드");
+  // The book button closes 레퍼런스, and opens it again.
+  await click(page, "#home-reference");
+  await page.waitFor(`!document.getElementById("reference")`);
+  await click(page, "#home-reference");
+  await page.waitFor(`!!document.getElementById("reference")`);
+  await click(page, "#home-reference");
+  await page.waitFor(`!document.getElementById("reference")`);
+  // The rooms hold what was sent.
+  await click(page, `.room-row[data-id="${songRoom}"]`);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+  assert.deepEqual(await noteNames(page), ["도", "레", "미", "파", "솔", "미", "도"]);
+  await click(page, "#back");
+  await click(page, `.room-row[data-id="${boardRoom}"]`);
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1`, 8000);
 });
 
 scenario("레퍼런스 floats over the room (no dark around it), moves by its head and opens there again; 내 방 shows my other rooms, and 가져오기 brings their words and clips into this room", async ({ open, fixtures }) => {

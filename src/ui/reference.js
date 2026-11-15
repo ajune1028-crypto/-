@@ -6,7 +6,9 @@
 // Removing a recording from the list keeps its sound on the device: a clip or
 // card made from it may still play it.
 
-import { h, openFloat, segmented, toast } from "./dom.js";
+import { h, openFloat, openSheet, segmented, toast } from "./dom.js";
+import { exampleTake } from "../audio/example.js";
+import { putSoundInto } from "./room-actions.js";
 import { getSettings, setSetting } from "../identity.js";
 import { kindInfo } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
@@ -29,7 +31,10 @@ import { solfege } from "../audio/notes.js";
  * insert(text): the room takes a note; insertSound(sound): the room takes a recording
  * (a song room as a clip, a whiteboard as a card). Either may be missing.
  */
-export function openReference(app, { insert = null, insertSound = null, roomId = null } = {}) {
+export function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null } = {}) {
+  // Its button opens it and, pressed again, closes it. Asked for a tab (home's 녹음), it opens there.
+  const open = document.getElementById("reference");
+  if (open && !tab) return void open.close?.();
   const mic = micSupport();
   // It floats over the room (top left at first, wherever it was moved since), so the room
   // stays in reach: look at one, work in the other.
@@ -82,8 +87,44 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
         h("div", { class: "ref-actions" },
           h("button", { class: "chip", type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
           insertSound && h("button", { class: "chip", type: "button", data: { putSound: s.id }, text: "이 방에 붙이기", onclick: () => { stopHearing(); insertSound(s); toast(app.root, "붙였어요"); } }),
+          h("button", { class: "chip", type: "button", data: { sendSound: s.id }, text: "보내기", onclick: () => sendSound(s) }),
           h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }))))
-        : [h("p", { class: "help", text: "녹음도 남길 수 있어요. 노래 방이나 화이트보드에 바로 붙일 수 있어요." })]));
+        : [h("p", { class: "help", text: "녹음도 남길 수 있어요. 노래 방이나 화이트보드에 바로 붙일 수 있어요." }),
+          h("button", { class: "chip", type: "button", id: "ref-example", text: "예시 녹음 넣어 보기", onclick: () => addExample() })]));
+    }
+
+    /**
+     * An example take (a sung 도레미파솔미도 made here), so a recording can be tried where nothing
+     * can be recorded (the Claude page). It goes in once by itself, the first time the list is empty.
+     */
+    async function addExample() {
+      if (busy) return;
+      busy = true;
+      try {
+        app.store.set("exampleTake", true);
+        await keep(exampleTake(KEEP_RATE), KEEP_RATE, "예시 녹음 · 도레미파솔미도");
+      } finally {
+        busy = false;
+      }
+    }
+
+    /** 보내기: a kept recording into one of my song rooms (a clip after what it holds) or whiteboards (a card). */
+    function sendSound(s) {
+      stopHearing();
+      const rooms = app.store.get("rooms", []).filter((r) => (r.kind === "creative-song" || r.kind === "creative-board") && r.id !== roomId).sort((a, b) => b.at - a.at);
+      openSheet(app.root, "어느 방으로 보낼까요?", (sheet, close) => {
+        if (!rooms.length) return void sheet.append(h("p", { class: "help", id: "send-none", text: "노래 방이나 화이트보드가 아직 없어요. 홈의 창작 +에서 만들 수 있어요." }));
+        sheet.append(h("div", { class: "kinds", id: "send-rooms" }, rooms.map((r) => h("button", { class: "kind", type: "button", data: { sendTo: r.id }, onclick: async () => {
+          close();
+          try {
+            await putSoundInto(app, r, s);
+            toast(app.root, `'${r.name}'에 보냈어요`);
+          } catch (err) {
+            console.warn(err);
+            toast(app.root, "보내지 못했어요. 그 방을 한 번 열었다가 다시 해 주세요", 3600);
+          }
+        } }, h("span", { class: "kind-name", text: r.name }), h("span", { class: "kind-note", text: kindInfo(r.kind)?.name || "" })))));
+      });
     }
 
     function stopHearing() {
@@ -194,11 +235,13 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     const show = (which) => {
       for (const [k, el] of Object.entries(parts)) el.hidden = k !== which;
       if (which === "rooms" && !roomsPart.childElementCount) drawRooms();
+      // The first time the recordings are looked at and there are none, the example goes in.
+      if (which === "sounds" && !refSounds(app.store).length && !app.store.get("exampleTake", false)) addExample();
     };
-    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], "notes", (v) => show(v), "refTab");
+    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], tab || "notes", (v) => show(v), "refTab");
     tabs.classList.add("ref-tabs");
     panel.append(tabs, notesPart, soundsPart, roomsPart);
-    show("notes");
+    show(tab || "notes");
     drawNotes();
     drawSounds();
 

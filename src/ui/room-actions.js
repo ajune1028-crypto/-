@@ -4,7 +4,8 @@
 
 import { RoomSession } from "../sync/session.js";
 import { newRoomId } from "../core/room.js";
-import { addItemOps, cardFromClip, setItemOps } from "../core/board.js";
+import { addItemOps, cardFromClip, setItemOps, songCardData } from "../core/board.js";
+import { sourceOp, addClipOps } from "../core/song.js";
 import { rememberRoom, roomEntry } from "../identity.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -106,5 +107,37 @@ export async function putIntoBoard(app, entry, boardEntry) {
     }
   } finally {
     from.close();
+  }
+}
+
+/**
+ * 보내기: a recording kept on this device into a room of mine: a song room takes it as a clip
+ * after everything it holds (on the first row with room there), a whiteboard as a song card to
+ * the right of its cards. Resolves when it has gone out.
+ */
+export async function putSoundInto(app, entry, sound) {
+  const to = await openRoom(app, entry.id);
+  try {
+    const by = roomEntry(app.store, entry.id)?.memberId || entry.memberId;
+    if (entry.kind === "creative-song") {
+      const song = await to.load("song");
+      if (!song.canAddClip()) throw new Error("the song is full");
+      const length = Math.max(1, Math.round(sound.dur * 1000));
+      const start = song.end();
+      const row = song.freeRow(start, length, 0) ?? 0;
+      const src = sourceOp(to.clock, song, { duration: sound.dur, notes: sound.notes, peaks: sound.peaks, by, at: Date.now(), blob: sound.blob, name: sound.name });
+      const clip = addClipOps(to.clock, song, { src: src.id, row, start, length, by, at: Date.now() });
+      to.commit("song", [src, ...clip.ops]);
+    } else if (entry.kind === "creative-board") {
+      const board = await to.load("board");
+      const items = board.items();
+      const x = items.length ? Math.max(...items.map((i) => i.x + i.w)) + 60 : 40;
+      const y = items.length ? Math.min(...items.map((i) => i.y)) : 40;
+      const data = songCardData({ duration: sound.dur, notes: sound.notes, peaks: sound.peaks, name: sound.name, blob: sound.blob });
+      to.commit("board", addItemOps(to.clock, board, { kind: "song", x, y, data, by }).ops);
+    } else throw new Error("not a room for sounds");
+    await sent(to);
+  } finally {
+    to.close();
   }
 }

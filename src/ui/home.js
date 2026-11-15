@@ -9,6 +9,7 @@ import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from ".
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
+import { refSounds } from "../reference.js";
 import { getSettings } from "../identity.js";
 import { memberColor } from "../core/paint.js";
 import { currentTheme, myPeopleColor } from "./theme.js";
@@ -154,6 +155,9 @@ export function showHome(app) {
           iconButton("home-settings", "more", "설정", openSettings)),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
+          // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
+          h("button", { class: "pill rec-pill", id: "home-record", type: "button", "aria-label": "녹음 (모아 두고 방으로 보내기)", onclick: () => openReference(app, { tab: "sounds" }) },
+            h("span", { class: "dot-rec", "aria-hidden": "true" }), "녹음", refSounds(app.store).length > 0 && h("span", { class: "rec-count", text: String(refSounds(app.store).length) })),
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
   }
 

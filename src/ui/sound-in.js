@@ -41,10 +41,18 @@ export function soundPickers(name, { onFile, onSilent }) {
   return { inputs, stop: watchPickers(inputs, onSilent) };
 }
 
-/** 크롬에서 열기 and 링크 복사 for the same room. */
+/**
+ * The public build: opens in any browser with no login and records there (its rooms stay on that
+ * device until the room server is set). Claude's own page needs its owner's Claude login in that
+ * browser and has no microphone anyway, so from inside Claude, Chrome is sent here.
+ */
+export const PUBLIC_APP = "https://raw.githack.com/ajune1028-crypto/-/main/site/index.html";
+
+/** 크롬에서 열기 and 링크 복사: the same room, or from inside Claude the public build. */
 export function elsewhere({ app, roomId, root, prefix }) {
+  const inClaude = app.transport?.info?.().kind === "claude";
   // Outside a room (레퍼런스 from home), the app's own address.
-  const link = roomId ? app.linkFor(roomId) : String(app.shareBase() || location.href).split("#")[0];
+  const link = inClaude ? PUBLIC_APP : roomId ? app.linkFor(roomId) : String(app.shareBase() || location.href).split("#")[0];
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -54,7 +62,8 @@ export function elsewhere({ app, roomId, root, prefix }) {
     }
   };
   return [
-    h("a", { class: "btn quiet small", id: prefix + "open-browser", href: link, target: "_blank", rel: "noopener" }, "크롬에서 열기"),
+    h("a", { class: "btn quiet small", id: prefix + "open-browser", href: link, target: "_blank", rel: "noopener" }, inClaude ? "크롬에서 열기 (녹음되는 공개 주소)" : "크롬에서 열기"),
+    inClaude && h("p", { class: "help", id: prefix + "public-note", text: "로그인 없이 열리고 녹음이 돼요. 다만 그곳의 방은 그 기기에만 생겨요(서버를 켜기 전까지)." }),
     h("button", { type: "button", class: "btn quiet small", id: prefix + "copy-link", onclick: copy }, "링크 복사"),
   ];
 }
