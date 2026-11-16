@@ -98,3 +98,35 @@ test("ADPCM keeps a voice at a quarter of its size and sounds close to it", () =
   const snr = 10 * Math.log10(sig / err);
   assert.ok(snr > 18, "signal to noise " + snr.toFixed(1) + " dB");
 });
+
+// ---- a recording's original, shared under the name it has on the device that made it ----------
+
+test("a file may carry a name (a recording's own key): found by it once whole, the same in any order; of two with one name the first made is it", () => {
+  const clock = new Clock("a");
+  const data = "QUJD".repeat(25000); // 100,000 characters: three parts
+  const made = fileOps(clock, { type: "audio/adpcm", data, by: "m1", name: "b:take1" });
+  assert.equal(made.ops.length, 3);
+  assert.equal(made.ops[0].name, "b:take1");
+  assert.ok(made.ops.slice(1).every((op) => op.name === undefined), "the name rides on the first part only");
+  for (const order of [[0, 1, 2], [2, 1, 0], [1, 2, 0]]) {
+    const doc = new FileDoc();
+    order.slice(0, 2).forEach((i) => doc.apply(made.ops[i]));
+    assert.equal(doc.named("b:take1"), null, "not whole yet");
+    assert.ok(doc.namedProgress("b:take1") > 0 || !order.slice(0, 2).includes(0), "its progress shows once the first part has come");
+    doc.apply(made.ops[order[2]]);
+    assert.equal(doc.named("b:take1").data, data);
+    assert.equal(doc.namedProgress("b:take1"), 1);
+  }
+  // Two devices sent the same recording at once: everyone takes the one whose id comes first.
+  const other = fileOps(new Clock("b"), { type: "audio/adpcm", data: "QUJD", by: "m2", name: "b:take1" });
+  const doc = new FileDoc();
+  for (const op of [...other.ops, ...made.ops]) doc.apply(op);
+  const doc2 = new FileDoc();
+  for (const op of [...made.ops, ...other.ops]) doc2.apply(op);
+  assert.equal(doc.named("b:take1").data, doc2.named("b:take1").data);
+  assert.equal(doc.named("nothing"), null);
+  // A name that is not a short text is not taken; the file itself still is.
+  const bad = { ...fileOps(new Clock("c"), { type: "audio/adpcm", data: "QUJD", by: "m1" }).ops[0], name: 7 };
+  const doc3 = new FileDoc();
+  assert.equal(doc3.apply(bad), "unknown");
+});

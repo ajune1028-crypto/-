@@ -4,8 +4,12 @@
 // are there, whatever order they came in.
 //
 //   fpart { id, f, i, n, type, data, by }   part i of n of file f (f = part 0's id)
+//
+// A file's first part may carry a `name`: a recording's own key, under which every device that
+// has the song can find its sound (ui/share-take.js). Of two files with one name (two devices
+// sent the same recording at once) the one whose id comes first is it, everywhere.
 
-import { validId } from "./crdt.js";
+import { validId, cmpId } from "./crdt.js";
 
 export const FILE_PART_CHARS = 40000;
 export const MAX_FILE_PARTS = 64; // 2.5 million characters, about 1.9 MB
@@ -17,6 +21,7 @@ export class FileDoc {
   constructor() {
     this.version = 0;
     this.files = new Map(); // f → { type, n, by, parts: Map(i → data) }
+    this.names = new Map(); // name → f (the first made)
     this.seen = new Set();
     this.unknown = [];
     this.maxN = 0;
@@ -27,12 +32,17 @@ export class FileDoc {
     if (this.seen.has(op.id)) return "dup";
     const ok = Number.isInteger(op.n) && op.n >= 1 && op.n <= MAX_FILE_PARTS && Number.isInteger(op.i) && op.i >= 0 && op.i < op.n &&
       FILE_TYPES.includes(op.type) && typeof op.data === "string" && op.data.length <= FILE_PART_CHARS && BASE64.test(op.data) &&
-      typeof op.by === "string" && op.by.length <= 40;
+      typeof op.by === "string" && op.by.length <= 40 &&
+      (op.name === undefined || (op.i === 0 && typeof op.name === "string" && op.name.length > 0 && op.name.length <= 80));
     if (!ok) return this.setAside(op);
     let file = this.files.get(op.f);
     if (!file) this.files.set(op.f, (file = { type: op.type, n: op.n, by: op.by, parts: new Map() }));
     if (file.type !== op.type || file.n !== op.n) return this.setAside(op);
     if (!file.parts.has(op.i)) file.parts.set(op.i, op.data);
+    if (op.name !== undefined) {
+      const has = this.names.get(op.name);
+      if (!has || cmpId(op.f, has) < 0) this.names.set(op.name, op.f);
+    }
     this.seen.add(op.id);
     this.version++;
     const n = Number(op.id.slice(0, op.id.indexOf("@")));
@@ -65,10 +75,22 @@ export class FileDoc {
     const file = this.files.get(f);
     return file ? file.parts.size / file.n : 0;
   }
+
+  /** The file sent under a name, once whole; null before (or when there is none). */
+  named(name) {
+    const f = this.names.get(name);
+    return f ? this.file(f) : null;
+  }
+
+  /** How much of the file sent under a name has come, 0 to 1. */
+  namedProgress(name) {
+    const f = this.names.get(name);
+    return f ? this.progress(f) : 0;
+  }
 }
 
 /** The ops that carry a file; its id is the first part's id. */
-export function fileOps(clock, { type, data, by }) {
+export function fileOps(clock, { type, data, by, name }) {
   const n = Math.max(1, Math.ceil(data.length / FILE_PART_CHARS));
   if (n > MAX_FILE_PARTS) throw new Error("file too big");
   const ops = [];
@@ -76,5 +98,6 @@ export function fileOps(clock, { type, data, by }) {
     const id = clock.next();
     ops.push({ t: "fpart", id, f: i === 0 ? id : ops[0].id, i, n, type, data: data.slice(i * FILE_PART_CHARS, (i + 1) * FILE_PART_CHARS), by });
   }
+  if (name) ops[0].name = String(name).slice(0, 80);
   return { ops, id: ops[0].id };
 }

@@ -316,7 +316,7 @@ export class Timeline {
     el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
     const named = model.name ? model.name(clip) : null;
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p).join(",")].join("|");
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, clip.chords !== false, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p + (n.h ? "h" : "")).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
@@ -343,13 +343,15 @@ export class Timeline {
       const bars = h("span", { class: "notes" });
       let any = false;
       for (const n of notes) {
+        // The harmony (화음) is drawn lighter under the tune; left out when the clip plays the tune alone.
+        if (n.h && clip.chords === false) continue;
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
         if (e - s < 20) continue;
         any = true;
         const widthPx = (e - s) * pxPerMs;
         const bar = h("i", {
-          class: "note",
+          class: n.h ? "note harmony" : "note",
           data: { p: String(n.p) },
           style: {
             left: ((s - lo) / clip.length) * 100 + "%",

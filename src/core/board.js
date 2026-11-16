@@ -427,7 +427,7 @@ export function keptFields(kind, from, data) {
     if ((k === "speed" && v === 1) || (k === "muted" && !v) || (k === "chords" && v)) continue;
     out[k] = v;
   }
-  if (out.speed && data?.dur) out.w = songWidth(Math.round(data.dur / out.speed));
+  void data;
   return out;
 }
 
@@ -538,9 +538,10 @@ export function splitCardOps(clock, board, itemId, at, by) {
   const gone = { t: "irm", id: clock.next(), i: itemId, n: item.rm + 1 };
   const leftData = partOf(item.data, 0, cut);
   const rightData = partOf(item.data, cut, item.data.dur);
-  // Both halves keep the card's own speed, colour and mute, and are as wide as they sound.
+  // Both halves keep the card's own speed, colour and mute. A card is as wide as its recording is
+  // long, at any speed (the owner: "빠르기를 설정하는데… 왜 크기까지 바뀌는지").
   const sp = item.speed || 1;
-  const wide = (d) => songWidth(Math.round(d.dur / sp));
+  const wide = (d) => songWidth(d.dur);
   const left = { t: "item", id: clock.next(), kind: "song", x: item.x, y: item.y, data: leftData, by, at: Date.now() };
   const right = { t: "item", id: clock.next(), kind: "song", x: item.x + wide(leftData) + 24, y: item.y, data: rightData, by, at: Date.now() };
   const ops = [gone, left, right];
@@ -550,7 +551,7 @@ export function splitCardOps(clock, board, itemId, at, by) {
   if (item.muted) keep.muted = true;
   if (item.chords === false) keep.chords = false;
   if (Object.keys(keep).length) {
-    for (const [half, d] of [[left, leftData], [right, rightData]]) ops.push({ t: "iset", id: clock.next(), i: half.id, f: { ...keep, ...(sp !== 1 ? { w: wide(d) } : {}) } });
+    for (const half of [left, right]) ops.push({ t: "iset", id: clock.next(), i: half.id, f: { ...keep } });
   }
   const atoms = [{ k: "del", item: itemId }, { k: "add", item: left.id }, { k: "add", item: right.id }];
   const lines = board.links();

@@ -1504,8 +1504,10 @@ scenario("song: a recording comes in my colour (the people colour nearest my gla
   await a.waitFor(q('#clip-menu [data-tint="6"]'));
   assert.ok(!(await a.eval(q("#clip-tint-none"))), "no 기본 while it is the recorder's colour");
   // Whose it is: the maker's name by their colour; a dot that is someone's here carries their first letter.
-  assert.match(await text(a, "#clip-owner"), /의 녹음 · 기본은 .+의 색/);
-  assert.ok((await a.eval(`[...document.querySelectorAll("#clip-menu .menu-dot")].filter((d) => d.textContent).length`)) >= 2, "the two people's colours are marked");
+  assert.match(await text(a, "#clip-owner"), /의 녹음$/);
+  // No letters on the dots (the owner took them for a bug); whose colour a dot is stays in its label.
+  assert.equal(await a.eval(`[...document.querySelectorAll("#clip-menu .menu-dot")].filter((d) => d.textContent).length`), 0, "the dots are plain colours");
+  assert.ok((await a.eval(`[...document.querySelectorAll("#clip-menu .menu-dot")].filter((d) => /의 색$/.test(d.getAttribute("aria-label") || "")).length`)) >= 2, "the two people's colours are named in the labels");
   assert.ok(!(await a.eval(`document.getElementById("clip-menu").textContent.includes("false")`)), "no stray words");
   await a.front();
   await a.shot(out("song-clip-colours.png"));
@@ -3863,7 +3865,8 @@ scenario("song: each recording has its own 빠르기: the menu steps 1× 1.5× 2
   await a.waitFor(`(${song}.layout()[0].speed || 1) === 1 && !document.querySelector(".clip[data-id] .speed-badge:not([hidden])")`);
 });
 
-scenario("whiteboard: a song card has its own 빠르기 too: shorter as it plays faster, its length and speed in its head; 분할 keeps the speed in both halves", async ({ open, fixtures }) => {
+// The owner: "빠르기를 설정하는데 화이트보드에서 왜 크기까지 녹음 직사각형이 바뀌는지" - the card keeps its size at any speed.
+scenario("whiteboard: a song card has its own 빠르기 too: it keeps its size at any speed, its length and speed in its head; 분할 keeps the speed in both halves", async ({ open, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -3883,7 +3886,8 @@ scenario("whiteboard: a song card has its own 빠르기 too: shorter as it plays
   await page.waitFor(`${board}.items()[0].speed === 1.5`);
   await page.waitFor(`document.querySelector(".card.song .speed-badge")?.textContent === "1.5×"`);
   const after = await page.eval(`${board}.items()[0].w`);
-  assert.ok(after < before, `shorter at 1.5×: ${before} → ${after}`);
+  assert.equal(after, before, `the card is as wide at 1.5× as it was: ${before} → ${after}`);
+  assert.ok(Math.abs((await cardBox(page, 0)).w - card.w) < 1, "and as wide on screen");
   assert.equal(await text(page, ".card.song .card-len"), (dur / 1.5 / 1000).toFixed(1) + "초", "its length as it sounds");
   // A line in the middle, then 분할: both halves at 1.5×.
   await page.waitFor(q("#card-menu"));
@@ -3893,6 +3897,33 @@ scenario("whiteboard: a song card has its own 빠르기 too: shorter as it plays
   await click(page, "#card-menu #card-cut");
   await page.waitFor(`${board}.items().filter((i) => i.kind === "song").length === 2`);
   assert.deepEqual(await page.eval(`${board}.items().map((i) => i.speed)`), [1.5, 1.5]);
+});
+
+scenario("whiteboard 화음: a voice over piano put straight onto the board is a card with the tune and, lighter, the chords' notes; 화음 끄기 leaves them out (seen and played), 화음 켜기 brings them back; the colour dots are plain colours", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await createBoard(page);
+  await click(page, "#mode-song");
+  await page.setFiles("#board-file", [fixtures.duet]);
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1`, 20000);
+  const board = `window.__app.session.doc("board")`;
+  const harmony = await page.eval(`${board}.items()[0].data.notes.filter((n) => n[4] === 1).length`);
+  assert.ok(harmony >= 2, "the card keeps which notes are harmony: " + harmony);
+  await page.waitFor(`document.querySelectorAll(".card.song .note.harmony").length === ${harmony}`);
+  assert.equal(await page.eval(`document.querySelectorAll(".card.song .note:not(.harmony)").length`), 4);
+  const card = await cardBox(page, 0);
+  await page.tap(card.x + 30, card.y + card.h - 14);
+  await page.waitFor(q("#card-menu #card-chords"));
+  assert.equal(await text(page, "#card-menu #card-chords"), "화음 끄기");
+  await click(page, "#card-menu #card-chords");
+  await page.waitFor(`${board}.items()[0].chords === false && document.querySelectorAll(".card.song .note.harmony").length === 0`);
+  await page.waitFor(`${q("#card-menu #card-chords")}?.textContent === "화음 켜기"`);
+  await click(page, "#card-menu #card-chords");
+  await page.waitFor(`document.querySelectorAll(".card.song .note.harmony").length === ${harmony}`);
+  // 색: plain dots, no letters on them (the owner took the letters for a bug).
+  await click(page, "#card-menu #card-tint");
+  await page.waitFor(q("#card-menu .menu-dot"));
+  assert.equal(await page.eval(`[...document.querySelectorAll("#card-menu .menu-dot")].filter((d) => d.textContent).length`), 0);
+  assert.match(await text(page, "#card-owner"), /넣었어요$/);
 });
 
 // The owner (two screenshots): scrolled down, what is inside 레퍼런스 stuck out of its rounded glass.
@@ -4118,6 +4149,49 @@ scenario("settings: 효과음 and 진동 can be turned off (and the chime then s
 });
 
 // Accepted from the UI review: "모드 막대 옮기기", "막대 꾸미기", "오른쪽 도구도 직접 옮기기", "그릴 때 막대 옅어지기".
+scenario("song 화음: a voice over piano chords comes in as the tune with the chords' notes under it, drawn lighter; 화음 끄기 leaves them out (seen and heard) for everyone and 화음 켜기 brings them back; in 음 편집 a harmony note is made tune, and 화음 모두 지우기 takes the rest out in one undo step", async ({ open, out, fixtures }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await importSound(page, fixtures.duet);
+  const song = `window.__app.session.doc("song")`;
+  const src = await page.eval(`${song}.layout()[0].src`);
+  const notes = await page.eval(`${song}.notesOf(${JSON.stringify(src)}).map((n) => [n.p, !!n.h])`);
+  const tune = notes.filter(([, h]) => !h).map(([p]) => p);
+  const harmony = notes.filter(([, h]) => h).map(([p]) => p);
+  assert.deepEqual(tune, [64, 67, 69, 67], "the voice is the tune: " + JSON.stringify(notes));
+  assert.ok(harmony.length >= 2 && harmony.every((p) => [0, 5, 7, 9].includes(p % 12)), "the chords' notes are the harmony: " + harmony);
+  // Drawn lighter under the tune.
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note.harmony").length === ${harmony.length}`);
+  assert.equal(await page.eval(`document.querySelectorAll(".clip[data-id] .note:not(.harmony)").length`), 4);
+  await page.shot(out("song-harmony.png"));
+  // 화음 끄기: gone from the clip and from what plays; 화음 켜기 brings them back.
+  await choose(page, ".clip[data-id]");
+  assert.equal(await text(page, "#clip-chords"), "화음 끄기");
+  await click(page, "#clip-chords");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note.harmony").length === 0 && ${song}.layout()[0].chords === false`);
+  assert.deepEqual(await page.eval(`${song}.noteEvents(0, 60000).map((e) => e.p)`), [64, 67, 69, 67], "only the tune plays");
+  await choose(page, ".clip[data-id]");
+  assert.equal(await text(page, "#clip-chords"), "화음 켜기");
+  await click(page, "#clip-chords");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note.harmony").length === ${harmony.length}`);
+  // 음 편집: a harmony note made part of the tune; the rest cleared at once; one undo brings them back.
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-notes");
+  await page.waitFor(q("#roll .rnote.harmony"));
+  assert.equal(await page.eval(`document.querySelectorAll("#roll .rnote.harmony").length`), harmony.length);
+  await click(page, "#roll .rnote.harmony");
+  await page.waitFor(`${q("#note-part")}.textContent === "멜로디로" && !${q("#note-part")}.hidden`);
+  await click(page, "#note-part");
+  await page.waitFor(`document.querySelectorAll("#roll .rnote.harmony").length === ${harmony.length - 1}`);
+  await click(page, "#harmony-clear");
+  await page.waitFor(`document.querySelectorAll("#roll .rnote.harmony").length === 0 && ${q("#harmony-clear")}.hidden`);
+  assert.equal(await page.eval(`${song}.notesOf(${JSON.stringify(src)}).length`), 5, "the tune and the one made tune stay");
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim")`, 2000);
+  await click(page, "#undo");
+  await page.waitFor(`${song}.notesOf(${JSON.stringify(src)}).length === ${notes.length}`);
+});
+
 scenario("song 줄 머리: each row has a head at the left edge - who sang on it (their colour), 음소거 for the whole row (one undo step) and 혼자 듣기 (only that row plays; the others step back); time starts right of the heads, so they cover nothing at the start", async ({ open, out, fixtures }) => {
   const page = await open();
   await createSongRoom(page);

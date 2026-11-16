@@ -187,7 +187,6 @@ export function mountSongRoom(body, app, session, frame) {
     const who = session.room.members().filter((m) => m.color === i).map((m) => m.name);
     return who.length ? `${who.join(", ")}의 색` : "색 " + (i + 1);
   }
-  const dotLetter = (i) => session.room.members().find((m) => m.color === i)?.name?.slice(0, 1) || "";
 
     function clipName(clip) {
     const src = song.source(clip.src);
@@ -493,6 +492,7 @@ export function mountSongRoom(body, app, session, frame) {
     one.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map(packMs), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
     one.apply({ t: "clip", id: clip.id, src: src.id, row: 0, start: 0, offset: clip.offset, length: clip.length, by: clip.by, at: 0 });
     if ((clip.speed || 1) !== 1) one.apply({ t: "cset", id: "2@solo", c: clip.id, f: { speed: clip.speed } });
+    if (clip.chords === false) one.apply({ t: "cset", id: "3@solo", c: clip.id, f: { chords: false } });
     soloPlayer?.close();
     soloPlayer = new SongPlayer(ctx, { song: () => one, audioFor: (sid) => audio.get(sid) || null, onEnd: () => stopSolo() });
     soloPlayer.setMode(settings().songMode);
@@ -592,8 +592,20 @@ export function mountSongRoom(body, app, session, frame) {
     player?.stop();
     stopFrames();
     const take = await r.recorder.stop();
-    const result = r.analyzer.finish();
     session.setPresence(presence());
+    // One voice is known already (it was followed while singing); the look for more voices or a
+    // guitar under it takes a moment more.
+    busy = "import";
+    drawButtons();
+    showStatus("음을 찾는 중…");
+    let result;
+    try {
+      result = await r.analyzer.finishAll({ onProgress: (p) => showStatus(`음을 찾는 중… ${Math.round(p * 100)}%`) });
+    } finally {
+      busy = null;
+      showStatus(null);
+    }
+    if (!alive) return;
     if (take.samples.length < (take.rate * MIN_TAKE_MS) / 1000) {
       toast(root, "녹음이 너무 짧아요");
       return void draw();
@@ -716,7 +728,7 @@ export function mountSongRoom(body, app, session, frame) {
     const can = !readOnly() && clips.every((c) => !c.locked);
     const one = (id, text, fn, show = true) => show && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); fn(); } });
     if (groupView === "tints" && can) {
-      groupMenu.replaceChildren(...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": dotLabel(i), text: dotLetter(i),
+      groupMenu.replaceChildren(...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": dotLabel(i),
         style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); groupView = "main"; groupSet(() => ({ tint: i })); } })),
       one("group-tint-none", "기본", () => { groupView = "main"; groupSet(() => ({ tint: null })); }),
       one("group-tint-back", "←", () => { groupView = "main"; placeGroupMenu(); }));
@@ -818,6 +830,7 @@ export function mountSongRoom(body, app, session, frame) {
       const f = {};
       if ((c.speed || 1) !== 1) f.speed = c.speed;
       if (c.muted) f.muted = true;
+      if (c.chords === false) f.chords = false;
       if (Object.keys(f).length) part.apply({ t: "cset", id: `${++n}@group`, c: c.id, f });
     }
     groupSolo?.close();
@@ -1079,9 +1092,9 @@ export function mountSongRoom(body, app, session, frame) {
       // 누구 건지도 알 수 있게끔"): the maker's name by their colour, and on each dot that is someone's here, their first letter.
       const owner = session.room.member(song.source(clip.src)?.by || clip.by);
       menu.replaceChildren(...[
-        h("p", { class: "menu-info", id: "clip-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(song.source(clip.src)?.by || clip.by) } }), `${owner?.name || "누군가"}의 녹음 · 기본은 ${owner?.name || "그 사람"}의 색`),
+        h("p", { class: "menu-info", id: "clip-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(song.source(clip.src)?.by || clip.by) } }), `${owner?.name || "누군가"}의 녹음`),
         ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": dotLabel(i), title: dotLabel(i), "aria-pressed": String(now === i),
-          text: dotLetter(i), style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
+          style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: i })); draw(); } })),
         item("clip-tint-none", "기본", () => { menuView = "main"; apply(setClipOps(session.clock, song, clip.id, { tint: null })); draw(); }, now !== null),
         item("clip-tint-back", "←", () => { menuView = "main"; placeMenu(); }),
       ].filter(Boolean));
@@ -1093,6 +1106,8 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-copy", "복사", () => copyClip(clip.id)),
       item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly()),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      // 화음: the harmony found under the tune, left out or brought back (only when there is some).
+      item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src)),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
       item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),
       !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },

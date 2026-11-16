@@ -12,6 +12,7 @@ import { scenarios } from "./scenarios.mjs";
 import { startFakeFirebase } from "../tests/mocks/fake-firebase.mjs";
 import { sing } from "../tests/fixtures/voice.js";
 import { encodeWav } from "../src/audio/wav.js";
+import { renderPianoNote } from "../src/audio/piano.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -43,6 +44,21 @@ mkdirSync(dirname(fixtures.doremi), { recursive: true });
   // The same singing recorded far from the phone: 34 dB softer.
   fixtures.quiet = join(root, "out", "fixtures", "doremi-quiet.wav");
   writeFileSync(fixtures.quiet, encodeWav(sing(melody, { rate: 44100 }).samples.map((v) => v * 0.02), 44100));
+  // A voice (wavering a little, as voices do) over piano chords: 미 솔 라 솔 over 도 and 파 chords.
+  {
+    const rate = 32000;
+    const voice = sing([64, 67, 69, 67].map((midi) => ({ midi, dur: 0.8, gap: 0.1, vibrato: { rate: 5.5, depth: 0.2 } })), { rate, seed: 4 });
+    const mix = Float32Array.from(voice.samples);
+    for (const { at, keys } of [{ at: 0.1, keys: [48, 55, 60] }, { at: 1.9, keys: [41, 53, 57] }]) {
+      for (const key of keys) {
+        const tone = renderPianoNote(key, { rate, seconds: 1.7, velocity: 0.7 });
+        const s0 = Math.round(at * rate);
+        for (let k = 0; k < tone.length && s0 + k < mix.length; k++) mix[s0 + k] += 0.3 * tone[k];
+      }
+    }
+    fixtures.duet = join(root, "out", "fixtures", "voice-and-piano.wav");
+    writeFileSync(fixtures.duet, encodeWav(mix, rate));
+  }
 }
 
 const server = await serve(dist ? join(root, "dist") : root, PORT);

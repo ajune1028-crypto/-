@@ -361,7 +361,7 @@ export function mountBoardRoom(body, app, session, frame) {
         el.style.setProperty("--tc", item.tint != null ? memberColor(item.tint, currentTheme()) : inkColor(item.color || "black"));
         el.dataset.size = String(item.size || 2);
       }
-      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1);
+      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1) + "|" + (item.chords !== false);
       if (el.dataset.key !== key || el.shownData !== item.data) {
         el.dataset.key = key;
         el.shownData = item.data;
@@ -434,18 +434,19 @@ export function mountBoardRoom(body, app, session, frame) {
         // Its own speed beside its length (the length as it sounds at that speed).
         (item.speed || 1) !== 1 && h("b", { class: "speed-badge", text: item.speed + "×" }),
         h("span", { class: "card-len", text: (d.dur / (item.speed || 1) / 1000).toFixed(1) + "초" })),
-      noteBars(d, "card-notes"),
+      noteBars(d, "card-notes", item.chords !== false),
     ];
   }
 
   /** Note bars by pitch inside a box, as in the song room (also for 내 노래's previews). */
-  function noteBars(d, cls) {
+  function noteBars(d, cls, chords = true) {
     const ps = d.notes.map((n) => n[2]);
     const lo = ps.length ? Math.min(...ps) : 60;
     const hi = ps.length ? Math.max(...ps) : 60;
     const span = Math.max(10, hi - lo + 2);
-    return h("div", { class: cls }, d.notes.map((n) => h("i", {
-      class: "note",
+    // The harmony (화음) is drawn lighter; a card that plays the tune alone does not show it.
+    return h("div", { class: cls }, d.notes.filter((n) => !(n[4] === 1 && chords === false)).map((n) => h("i", {
+      class: n[4] === 1 ? "note harmony" : "note",
       data: { p: String(n[2]) },
       style: { left: (n[0] / d.dur) * 100 + "%", width: `max(3px, ${(n[1] / d.dur) * 100}%)`, top: `calc(${((hi + (span - (hi - lo)) / 2 - n[2]) / span) * 100}% - 0.4rem)`, height: "0.8rem" },
     })));
@@ -1108,7 +1109,7 @@ export function mountBoardRoom(body, app, session, frame) {
       menu.forItem = item.id;
       menu.view = "main";
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, menu.view].join("|");
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, item.chords !== false, menu.view].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
@@ -1118,9 +1119,9 @@ export function mountBoardRoom(body, app, session, frame) {
       const owner = session.room.member(item.by)?.name || "누군가";
       const whose = (i) => session.room.members().filter((m) => m.color === i).map((m) => m.name);
       const tints = () => [
-        h("p", { class: "menu-info", id: "card-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(item.by) } }), `${owner}이(가) 넣음 · 기본은 ${owner}의 색`),
+        h("p", { class: "menu-info", id: "card-owner" }, h("span", { class: "menu-swatch", style: { background: colorOf(item.by) } }), `${owner}이(가) 넣었어요`),
         ...PALETTE.map((_, i) => h("button", { type: "button", class: "menu-dot", data: { tint: String(i) }, "aria-label": whose(i).length ? whose(i).join(", ") + "의 색" : "색 " + (i + 1), title: whose(i).join(", "),
-          "aria-pressed": String((item.tint ?? null) === i), text: whose(i)[0]?.slice(0, 1) || "",
+          "aria-pressed": String((item.tint ?? null) === i),
           style: { background: memberColor(i, currentTheme()) }, onclick: (e) => { e.stopPropagation(); menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: i })); } })),
         item.tint != null && one("card-tint-none", "기본", () => { menu.view = "main"; apply(setItemOps(session.clock, board, item.id, { tint: null })); }),
       ];
@@ -1131,11 +1132,14 @@ export function mountBoardRoom(body, app, session, frame) {
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
-        // Its own 빠르기: the card plays that much faster (pitch kept) and is that much shorter.
+        // Its own 빠르기: the card plays that much faster (pitch kept). Its size stays as it is
+        // (the owner: "빠르기를 설정하는데… 왜 크기까지 녹음 직사각형이 바뀌는지"): its head says the speed and the new length.
         can && one("card-speed", `빠르기 ${item.speed || 1}×`, () => {
           const next = CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(item.speed || 1) + 1) % CLIP_SPEEDS.length];
-          apply(setItemOps(session.clock, board, item.id, { speed: next, w: songWidth(Math.round(item.data.dur / next)) }));
+          apply(setItemOps(session.clock, board, item.id, { speed: next }));
         }),
+        // 화음: the harmony found under the tune, left out or brought back (only when there is some).
+        can && item.data.notes.some((n) => n[4] === 1) && one("card-chords", item.chords === false ? "화음 켜기" : "화음 끄기", () => apply(setItemOps(session.clock, board, item.id, { chords: item.chords === false }))),
         tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),

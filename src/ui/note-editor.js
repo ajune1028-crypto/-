@@ -40,6 +40,10 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
     const list = h("ol", { class: "note-list", id: "note-list" });
     const zoom = (dx, dy) => { pps = Math.min(900, Math.max(30, pps * dx)); rowRem = Math.min(3, Math.max(0.7, rowRem * dy)); draw(); };
     const del = h("button", { type: "button", class: "btn small quiet", id: "note-delete", text: "음 삭제", onclick: () => removeChosen() });
+    // 화음 (the notes found under the tune, drawn lighter): the chosen note is made harmony or tune;
+    // all of the harmony can be taken out at once (one step to undo).
+    const part = h("button", { type: "button", class: "chip", id: "note-part", hidden: true, onclick: () => togglePart() });
+    const noHarmony = h("button", { type: "button", class: "chip", id: "harmony-clear", text: "화음 모두 지우기", hidden: true, onclick: () => clearHarmony() });
     panel.append(
       h("p", { class: "help", text: "끌면 옮겨지고, 오른쪽 끝을 끌면 길이가 바뀌어요. 빈 곳을 두 번 누르면 음이 생겨요. 같은 녹음에서 나온 클립에 모두 적용돼요." }),
       h("div", { class: "roll-tools" },
@@ -48,6 +52,7 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
         h("button", { type: "button", class: "chip", id: "roll-row-out", text: "높이 −", onclick: () => zoom(1, 1 / 1.25) }),
         h("button", { type: "button", class: "chip", id: "roll-row-in", text: "높이 +", onclick: () => zoom(1, 1.25) }),
         h("button", { type: "button", class: "chip", id: "quantize", text: "박자 맞추기", onclick: () => quantize() }),
+        part, noHarmony,
         del),
       roll, info, list);
 
@@ -117,6 +122,7 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
       for (const n of notes) {
         const el = keep(noteEls, grid, n.key, () => wireNote(h("i", { class: "rnote", data: { key: n.key } })));
         el.classList.toggle("chosen", n.key === chosen);
+        el.classList.toggle("harmony", !!n.h);
         el.dataset.p = String(n.p);
         Object.assign(el.style, {
           left: ((n.s - c.offset) / 1000) * pps + "px",
@@ -135,8 +141,33 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
           h("span", { class: "note-at", text: timeText(c.start + n.s - c.offset) }),
           h("span", { class: "note-len", text: ((n.e - n.s) / 1000).toFixed(2) + "초" })))));
       const pick = notes.find((n) => n.key === chosen);
-      info.textContent = pick ? `${noteLabel(pick.p)} · ${((pick.e - pick.s) / 1000).toFixed(2)}초` : `음 ${notes.length}개`;
+      const harmony = notes.filter((n) => n.h).length;
+      info.textContent = pick ? `${noteLabel(pick.p)} · ${((pick.e - pick.s) / 1000).toFixed(2)}초${pick.h ? " · 화음" : ""}` : `음 ${notes.length}개${harmony ? ` (화음 ${harmony}개)` : ""}`;
       del.disabled = !pick || !canEdit();
+      part.hidden = !pick || !canEdit();
+      part.textContent = pick?.h ? "멜로디로" : "화음으로";
+      noHarmony.hidden = !harmony || !canEdit();
+    }
+
+    function togglePart() {
+      const pick = layout?.notes.find((n) => n.key === chosen);
+      if (!pick || !canEdit()) return;
+      commit(noteSetOps(...ctx(), chosen, { h: !pick.h }));
+      draw();
+    }
+
+    function clearHarmony() {
+      if (!layout || !canEdit()) return;
+      const made = { ops: [], atoms: [] };
+      for (const n of layout.notes) {
+        if (!n.h) continue;
+        const one = noteSetOps(...ctx(), n.key, { gone: true });
+        made.ops.push(...one.ops);
+        made.atoms.push(...one.atoms);
+      }
+      if (made.ops.length) commit(made);
+      if (layout.notes.find((n) => n.key === chosen)?.h) chosen = null;
+      draw();
     }
     refresh = draw;
 

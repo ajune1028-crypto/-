@@ -386,7 +386,8 @@ test("a copy keeps a card's looks: colour, size, own colour, speed and mute (and
   assert.deepEqual(keepOf(board.item(s.id)), { tint: 5, speed: 2, muted: true });
   assert.deepEqual(keepOf(board.item(n.id)), { color: "blue", size: 3 });
   const data = board.item(s.id).data;
-  assert.deepEqual(keptFields("song", { speed: 2, tint: 5, muted: true }, data), { tint: 5, speed: 2, muted: true, w: 120 });
+  // (The owner: "빠르기를 설정하는데… 왜 크기까지 녹음 직사각형이 바뀌는지": a card's speed never sets its width.)
+  assert.deepEqual(keptFields("song", { speed: 2, tint: 5, muted: true }, data), { tint: 5, speed: 2, muted: true });
   assert.deepEqual(keptFields("song", { speed: 7, tint: 12, color: "blue" }, data), {}, "a wrong speed or colour is left out; a song has no ink colour");
   assert.deepEqual(keptFields("note", { color: "blue", size: 3, speed: 2 }, { text: "가사" }), { color: "blue", size: 3 });
 });
@@ -436,4 +437,18 @@ test("a song card keeps its harmony notes and can leave them out when played", a
   // A card made from part of a clip keeps the marks of the notes inside it.
   const part = cardFromClip({ source: { duration: 1, notes, peaks: "" }, offset: 0, length: 500 });
   assert.deepEqual(part.notes, [[0, 500, 67, 80], [0, 500, 60, 50, 1]]);
+});
+
+test("a card's speed never changes its size: the halves of a cut card are as wide as their length, whatever the speed", () => {
+  const { board, clock, commit } = setup();
+  const data = songCardData({ duration: 6, notes: NOTES, peaks: "" });
+  const card = commit(addItemOps(clock, board, { kind: "song", x: 0, y: 0, data, by: "m1" }));
+  assert.equal(board.item(card.id).w, 360);
+  commit(setItemOps(clock, board, card.id, { speed: 2 }));
+  assert.equal(board.item(card.id).w, 360, "faster, not smaller");
+  const made = splitCardOps(clock, board, card.id, 3000, "m1");
+  commit(made);
+  const [l, r] = made.ids.map((id) => board.item(id));
+  assert.deepEqual([l.w, r.w, l.speed, r.speed], [180, 180, 2, 2], "each half 3 s wide, both at 2×");
+  assert.equal(r.x, l.x + 180 + 24);
 });
