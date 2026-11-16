@@ -204,3 +204,19 @@ The whole of the thinking is `docs/superpowers/specs/2026-11-15-essence-design.m
 - Ruling: sheets have a close button (one tap), close when pulled down from the top of their content (a pull that starts scrolled down scrolls first), slide in and out on the iPhone sheet curve; menus pop in; reduced motion turns it off — cost if wrong: a closing sheet stays 0.26 s.
 - Ruling (the owner: "피아노 소리가 좀 더 아름다워야"): 32 kHz, three strings from the middle up (two lower, one in the deep bass) a fraction of a cent apart, stretched tuning, stereo by key, soft and firm layers, a warmer body and air by tone, early reflections and a tail whose highs die first, a gentle damper — cost if wrong: about 50 ms to render a key the first time.
 - Ruling (UI review, all accepted by the owner on 15 November): build next, in this order: (1) the mode bar moves to any edge by a long press and can be customised (order, hidden modes, size, icons only), the right tools move too, bars fade while drawing; (2) 순서 목록 (named order slots, heard, duplicated, sent to a song room as one row — the first description's 노래 잇기 창), board → song room, home's long-press 보내기 chooser, 올가미 in the song room; (3) one motion curve everywhere, a "띠리링" and a swirl when colours mix (switchable), short vibration on lift and snap, a switch for sound effects; (4) previews on home, row heads in the song room (who, mute, solo), an iPad side panel, one type and icon scale. See `specs/2026-11-15-ui-review.md`.
+
+
+## 2026-11-16: 목소리 → 피아노 (사용자: "가장 중요… 사람들의 목소리로 테스트해봐", "아무 허락 없이 너가 하고 싶은 대로 다 해")
+
+- 실제 사람 노래로 잰다: Vocadito 독창 40곡(CC BY 4.0, Zenodo)과 그것으로 만든 섞은 녹음. 자료는 `out/voices/`에만(공개 저장소에 사람 목소리를 올리지 않는다). 채점 도구 `tools/voices.mjs`.
+- 독창 길(YIN)은 그대로 둔다: 맞는 건반 80%(사람끼리 87%), 다른 읽기 방법은 차이 없음.
+- 섞인 녹음은 새 길(Klapuri 배음 합 → 선 → 멜로디/화음). 외부 라이브러리 없이, 기기 안에서. Basic Pitch(신경망)는 순수 JS로는 폰에서 너무 느려서 제외.
+- 가짜 음 판별은 "자기만의 배음 봉우리 2개 이상". 옥타브·12도 위의 진짜 소리는 겹치는 배음이 2.2배 넘게 튈 때만 인정.
+- 멜로디는 '목소리다운'(음높이가 미세하게 흔들리는) 선을 먼저. 크기는 평탄화 전 크기로.
+- 화음이 멜로디 시간의 20% 미만이면 혼자 부른 것으로 본다(독창 40곡 중 39곡). YIN이 같은 멜로디를 따라갔으면 멜로디는 YIN 것.
+- 화음은 틀린 음을 넣지 않는 쪽으로(찾는 비율보다 맞는 비율). 한꺼번에 4음까지, 0.14초 미만은 버림, 일정한 낮은 소리(험)는 뺌.
+- 저장 형식: 음표 다섯째 자리에 1(화음). 옛 화면(새로고침 안 한 탭)은 그 소리를 모르는 것으로 두고 "새 버전" 안내가 뜬다.
+- 화음 끄기/켜기는 클립·카드마다(모두에게, 되돌리기 한 번). 음 편집: 화음으로/멜로디로, 화음 모두 지우기.
+- 색 메뉴의 점에서 글자를 뺐다(사용자가 버그로 봄). 누구 색인지는 점의 이름(접근성 라벨)과 위의 한 줄("○○이(가) 넣었어요")로.
+- 화이트보드 카드의 빠르기는 카드 크기를 바꾸지 않는다(사용자: "왜 크기까지"). 길이는 머리의 "N초"와 배지가 말한다. 노래 방 클립은 시간 축이라 그대로 짧아진다.
+- 네트워크: 실제 노래 자료를 받으려고 개인 환경 `hamkke`(zenodo.org 허용)를 만들었다(사용자 승인). 다른 공개 저장소를 세션에 붙이는 것은 안전 검사가 막아서 하지 않았고, 공개 시험 파일 몇 개만 받았다.
