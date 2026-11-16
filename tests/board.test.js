@@ -420,3 +420,20 @@ test("순서 목록: cards put in an order become one line of 잇기, and one un
   commit({ ops: invertBoardOps(board, clock, made.atoms, "undo") });
   assert.deepEqual(board.links().map((l) => [l.a, l.b]).sort(), [[a.id, b.id], [c.id, d.id]].sort());
 });
+
+test("a song card keeps its harmony notes and can leave them out when played", async () => {
+  const { cardFromClip } = await import("../src/core/board.js");
+  const { board, clock, commit } = setup();
+  const notes = [{ t: 0, d: 0.5, p: 67, v: 0.8 }, { t: 0, d: 0.5, p: 60, v: 0.5, h: true }, { t: 0.5, d: 0.5, p: 69, v: 0.8 }];
+  const data = songCardData({ duration: 1, notes, peaks: "", name: "노래" });
+  assert.deepEqual(data.notes, [[0, 500, 67, 80], [0, 500, 60, 50, 1], [500, 500, 69, 80]]);
+  const card = commit(addItemOps(clock, board, { kind: "song", x: 0, y: 0, data, by: "m1" }));
+  assert.equal(board.items().length, 1, "the card with a marked note is taken");
+  const keys = () => cardsSong(board.items()).noteEvents(0, 5000).map((e) => e.p).sort();
+  assert.deepEqual(keys(), [60, 67, 69]);
+  commit(setItemOps(clock, board, card.id, { chords: false }));
+  assert.deepEqual(keys(), [67, 69], "화음 끄기: only the tune plays");
+  // A card made from part of a clip keeps the marks of the notes inside it.
+  const part = cardFromClip({ source: { duration: 1, notes, peaks: "" }, offset: 0, length: 500 });
+  assert.deepEqual(part.notes, [[0, 500, 67, 80], [0, 500, 60, 50, 1]]);
+});

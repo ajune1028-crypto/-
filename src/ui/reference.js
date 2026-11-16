@@ -16,7 +16,7 @@ import { timeText } from "./song-view.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
 import { clipboardItem } from "../clipboard.js";
-import { MAX_TAKE_MS } from "../core/song.js";
+import { MAX_TAKE_MS, unpackNote } from "../core/song.js";
 import { audioContext } from "../audio/engine.js";
 import { analyzeSamples } from "../audio/analyze.js";
 import { decodeAudioFile } from "../audio/decode.js";
@@ -279,7 +279,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
             const src = song.source(clip.src);
             if (!src) return;
             const notes = song.notesOf(src.id).filter((n) => n.t + n.d > clip.offset && n.t < clip.offset + clip.length)
-              .map((n) => ({ t: Math.max(0, n.t - clip.offset) / 1000, d: n.d / 1000, p: n.p, v: n.v }));
+              .map((n) => ({ t: Math.max(0, n.t - clip.offset) / 1000, d: n.d / 1000, p: n.p, v: n.v, ...(n.h ? { h: true } : {}) }));
             found.push({ sound: { name: src.name || "녹음 " + (i + 1), dur: clip.length / 1000, notes, peaks: src.peaks, blob: clip.offset === 0 && clip.length >= src.dur - 5 ? src.blob : undefined } });
           });
         } else if (room.kind === "creative-board") {
@@ -288,7 +288,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
             if (item.kind === "note" && (item.text || "").trim()) found.push({ text: item.text });
             else if (item.kind === "song") {
               const d = item.data;
-              found.push({ sound: { name: d.name || "노래", dur: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob } });
+              found.push({ sound: { name: d.name || "노래", dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob } });
             }
           }
         } else {

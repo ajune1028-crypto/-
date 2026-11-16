@@ -337,3 +337,44 @@ test("the nearest gap on a row where a clip of some length fits: against its nei
   const moving = add(8000, 1000);
   assert.equal(song.nearestGap(8200, 1000, 0, moving, 3000), 8200, "the moving clip itself is not in the way");
 });
+
+// ---- 화음: notes of the harmony (the owner: "화음으로 쌓는 구조고 화음을 버릴 수도 있고 변경 가능하며") ----
+
+test("a sound keeps which of its notes are harmony; a clip can leave them out and take them back", async () => {
+  const { packNote, unpackNote, noteInSeconds } = await import("../src/core/song.js");
+  const song = new SongDoc();
+  const clock = new Clock("a");
+  const commit = (ops) => { for (const op of ops) song.apply(op); };
+  const notes = [{ t: 0, d: 1, p: 67, v: 0.8 }, { t: 0, d: 1, p: 60, v: 0.5, h: true }, { t: 1, d: 0.5, p: 69, v: 0.8 }];
+  const src = sourceOp(clock, song, { duration: 2, notes, peaks: "", by: "m1", at: 1 });
+  assert.deepEqual(src.notes, [[0, 1000, 67, 80], [0, 1000, 60, 50, 1], [1000, 500, 69, 80]], "a fifth 1 marks harmony");
+  commit([src]);
+  assert.deepEqual(song.notesOf(src.id).map((n) => [n.p, !!n.h]), [[60, true], [67, false], [69, false]]);
+  assert.equal(song.hasHarmony(src.id), true);
+  const clip = addClipOps(clock, song, { src: src.id, row: 0, start: 0, length: 2000, by: "m1", at: 2 });
+  commit(clip.ops);
+  assert.deepEqual(song.noteEvents(0, 2000).map((e) => e.p).sort(), [60, 67, 69], "harmony sounds with the tune");
+  const off = setClipOps(clock, song, clip.id, { chords: false });
+  commit(off.ops);
+  assert.deepEqual(song.noteEvents(0, 2000).map((e) => e.p).sort(), [67, 69], "left out: only the tune");
+  assert.equal(song.layout()[0].chords, false);
+  commit(invertSongOps(song, clock, off.atoms, "undo"));
+  assert.deepEqual(song.noteEvents(0, 2000).map((e) => e.p).sort(), [60, 67, 69], "undo brings the harmony back");
+  // A harmony note can be made part of the tune (and back) like any other change to a note.
+  const { noteSetOps } = await import("../src/core/song.js");
+  commit(noteSetOps(clock, song, src.id, "1", { h: false }).ops);
+  assert.equal(song.hasHarmony(src.id), false);
+  // Packing and unpacking keep the mark.
+  assert.deepEqual(packNote({ t: 0.5, d: 0.25, p: 60, v: 0.5, h: true }), [500, 250, 60, 50, 1]);
+  assert.deepEqual(unpackNote([500, 250, 60, 50, 1]), { t: 0.5, d: 0.25, p: 60, v: 0.5, h: true });
+  assert.deepEqual(unpackNote([500, 250, 60, 50]), { t: 0.5, d: 0.25, p: 60, v: 0.5 });
+  assert.deepEqual(noteInSeconds({ t: 500, d: 250, p: 60, v: 0.5, h: true, key: "0" }), { t: 0.5, d: 0.25, p: 60, v: 0.5, h: true });
+});
+
+test("a note marked with anything but 1 is not taken; older four-number notes still are", () => {
+  const song = new SongDoc();
+  const ok = { t: "src", id: "1@a", dur: 1000, notes: [[0, 500, 60, 80], [0, 500, 64, 80, 1]], peaks: "", by: "m1", at: 1 };
+  assert.equal(song.apply(ok), "applied");
+  const bad = { t: "src", id: "2@a", dur: 1000, notes: [[0, 500, 60, 80, 2]], peaks: "", by: "m1", at: 1 };
+  assert.notEqual(song.apply(bad), "applied");
+});

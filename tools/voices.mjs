@@ -1,6 +1,7 @@
 // Scores the singing → notes path on real recordings (the owner: "사람들의 목소리로 테스트해봐").
 //
-//   node tools/voices.mjs [name part…] [--roll] [--poly]
+//   node tools/voices.mjs [name part…] [--roll]       every take under out/voices/
+//   node tools/voices.mjs --mixes [name part…]        real takes sung together and over a piano
 //
 // Reads out/voices/<set>/<name>_m.wav (mono 16-bit, any rate) and, when it is there, the reference
 // notes beside it: <name>_notesA1.csv (start seconds, Hz, length seconds), as the Vocadito dataset
@@ -129,9 +130,112 @@ export function listTakes(words = []) {
   return takes.sort((a, b) => (a.set + a.name).localeCompare(b.set + b.name));
 }
 
+// ---- mixes: real solo takes sung together, or over a piano (the references are known) -------------
+
+const loudOf = (x) => {
+  const w = 1600;
+  const r = [];
+  for (let i = 0; i + w <= x.length; i += w) { let e = 0; for (let k = i; k < i + w; k++) e += x[k] * x[k]; r.push(Math.sqrt(e / w)); }
+  r.sort((a, b) => a - b);
+  return r[Math.floor(r.length * 0.8)] || 1e-9;
+};
+/** a + b, b's loud parts `db` below (above, when positive) a's. */
+export function mixOf(a, b, db = 0) {
+  const n = Math.min(a.length, b.length);
+  const g = (loudOf(a) / loudOf(b)) * 10 ** (db / 20);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = a[i] + g * b[i];
+  return out;
+}
+/** A piano under a take: four chords in turn, held or broken. Returns { x (at `rate`), notes: [{ t, d, m }] }. */
+export async function pianoUnder(seconds, rate, { beat = 1.6, broken = false, chords = [[48, 55, 60, 64], [43, 55, 59, 62], [45, 57, 60, 64], [41, 53, 57, 60]] } = {}) {
+  const { renderPianoNote } = await import("../src/audio/piano.js");
+  const { resample } = await import("../src/audio/dsp.js");
+  const out = new Float32Array(Math.round(seconds * rate));
+  const notes = [];
+  const cache = new Map();
+  for (let t = 0, c = 0; t < seconds; t += beat, c++) {
+    chords[c % chords.length].forEach((key, i, chord) => {
+      const at = t + (broken ? (i * beat) / chord.length : 0);
+      const dur = broken ? beat / chord.length : beat;
+      const id = key + ":" + dur.toFixed(2);
+      if (!cache.has(id)) cache.set(id, resample(renderPianoNote(key, { rate: 32000, seconds: dur, velocity: 0.7 }), 32000, rate));
+      const buf = cache.get(id);
+      const s0 = Math.round(at * rate);
+      for (let k = 0; k < buf.length && s0 + k < out.length; k++) out[s0 + k] += buf[k];
+      notes.push({ t: at, d: dur, m: key });
+    });
+  }
+  return { x: out, notes };
+}
+
+/** A piano that plays under every sung note, `below` semitones under it (12: an octave, 19: a twelfth): the hardest harmony to tell from the voice's own harmonics. */
+export async function pianoFollowing(refNotes, seconds, rate, below) {
+  const { renderPianoNote } = await import("../src/audio/piano.js");
+  const { resample } = await import("../src/audio/dsp.js");
+  const out = new Float32Array(Math.round(seconds * rate));
+  const notes = [];
+  for (const n of refNotes) {
+    const key = Math.round(n.m) - below;
+    const buf = resample(renderPianoNote(key, { rate: 32000, seconds: Math.max(0.2, n.d), velocity: 0.7 }), 32000, rate);
+    const s0 = Math.round(n.t * rate);
+    for (let k = 0; k < buf.length && s0 + k < out.length; k++) out[s0 + k] += buf[k];
+    notes.push({ t: n.t, d: Math.max(0.2, n.d), m: key });
+  }
+  return { x: out, notes };
+}
+
+/** The harmony found, by time: how much of it lies on a key really sounding (or its octave), and how much of the real harmony was found. */
+export function harmonyScore(est, refs, other = []) {
+  const harm = est.filter((n) => n.h);
+  let on = 0, total = 0, refOn = 0, refTotal = 0;
+  const end = Math.max(0, ...refs.map((n) => n.t + n.d), ...harm.map((n) => n.t + n.d));
+  for (let t = 0.005; t < end; t += 0.01) {
+    const r = refs.filter((n) => n.t <= t && t < n.t + n.d);
+    const any = [...r, ...other.filter((n) => n.t <= t && t < n.t + n.d)];
+    const e = harm.filter((n) => n.t <= t && t < n.t + n.d);
+    for (const x of e) { total++; if (any.some((y) => Math.abs(y.m - x.p) <= 0.5 || Math.abs(Math.abs(y.m - x.p) - 12) <= 0.5)) on++; }
+    for (const y of r) { refTotal++; if (e.some((x) => Math.abs(y.m - x.p) <= 0.5)) refOn++; }
+  }
+  return { notes: harm.length, right: total ? on / total : 0, found: refTotal ? refOn / refTotal : 0 };
+}
+
+async function runMixes(words) {
+  const dir = join(ROOT, "vocadito");
+  const take = (id) => ({ ...loadWav(join(dir, `vocadito_${id}_m.wav`)), notes: loadRefNotes(join(dir, `vocadito_${id}_notesA1.csv`)) });
+  if (!existsSync(join(dir, "vocadito_1_m.wav"))) return void console.log("the mixes need out/voices/vocadito (see the research document)");
+  const a = take(1), b = take(2), c = take(21);
+  const cases = [
+    ["duo: 1 leads, 2 at -6 dB", () => ({ x: mixOf(a.samples, b.samples, -6), tune: a.notes, harmony: b.notes })],
+    ["duo: 2 leads, 1 at -6 dB", () => ({ x: mixOf(b.samples, a.samples, -6), tune: b.notes, harmony: a.notes })],
+    ["duo: 21 leads, 2 at -6 dB", () => ({ x: mixOf(c.samples, b.samples, -6), tune: c.notes, harmony: b.notes })],
+    ["1 over piano chords -12 dB", async () => { const p = await pianoUnder(a.samples.length / a.rate, a.rate); return { x: mixOf(a.samples, p.x, -12), tune: a.notes, harmony: p.notes }; }],
+    ["1 over piano chords -6 dB", async () => { const p = await pianoUnder(a.samples.length / a.rate, a.rate); return { x: mixOf(a.samples, p.x, -6), tune: a.notes, harmony: p.notes }; }],
+    ["1 over piano chords 0 dB", async () => { const p = await pianoUnder(a.samples.length / a.rate, a.rate); return { x: mixOf(a.samples, p.x, 0), tune: a.notes, harmony: p.notes }; }],
+    ["1 over a piano an octave below -6 dB", async () => { const p = await pianoFollowing(a.notes, a.samples.length / a.rate, a.rate, 12); return { x: mixOf(a.samples, p.x, -6), tune: a.notes, harmony: p.notes }; }],
+    ["2 over a piano a twelfth below -6 dB", async () => { const p = await pianoFollowing(b.notes, b.samples.length / b.rate, b.rate, 19); return { x: mixOf(b.samples, p.x, -6), tune: b.notes, harmony: p.notes }; }],
+    ["2 over broken chords -6 dB", async () => { const p = await pianoUnder(b.samples.length / b.rate, b.rate, { broken: true }); return { x: mixOf(b.samples, p.x, -6), tune: b.notes, harmony: p.notes }; }],
+    ["21 over broken chords -6 dB", async () => { const p = await pianoUnder(c.samples.length / c.rate, c.rate, { broken: true }); return { x: mixOf(c.samples, p.x, -6), tune: c.notes, harmony: p.notes }; }],
+  ];
+  for (const [name, make] of cases) {
+    if (words.length && !words.some((w) => name.includes(w))) continue;
+    const { x, tune, harmony } = await make();
+    const t0 = performance.now();
+    const result = await analyzeSamples(x, 44100, { chunkSeconds: 30 });
+    const ms = performance.now() - t0;
+    const h = harmonyScore(result.notes, harmony, tune);
+    console.log(line(name, score(tune, result.notes.filter((n) => !n.h))) + `  [${(ms / 1000).toFixed(1)} s]`);
+    console.log(`    ${result.chords ? `several pitches (the pitch tracker agrees on ${(100 * result.agree).toFixed(0)}% of the tune)` : "ONE VOICE (no harmony looked for)"}: harmony notes ${h.notes}, on a sounding key (or its octave) ${(100 * h.right).toFixed(0)}% of their time; of the real harmony ${(100 * h.found).toFixed(0)}% found`);
+  }
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const words = args.filter((a) => !a.startsWith("--"));
+  if (args.includes("--mixes")) {
+    await runMixes(words);
+    process.exit(0);
+  }
   const takes = listTakes(words);
   if (!takes.length) console.log("no recordings under out/voices/ (see the research document for where they come from)");
   for (const take of takes) {
@@ -140,12 +244,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const result = await analyzeSamples(samples, rate, { chunkSeconds: 5 });
     const ms = performance.now() - t0;
     const est = result.notes;
+    const kind = result.chords ? `  several pitches (${est.filter((n) => n.h).length} harmony notes; agrees ${(100 * result.agree).toFixed(0)}%)` : "";
     if (take.ref) {
       const ref = loadRefNotes(take.ref);
-      console.log(line(take.set + "/" + take.name, score(ref, est)) + `  [${(ms / 1000).toFixed(1)} s for ${(samples.length / rate).toFixed(0)} s]`);
+      console.log(line(take.set + "/" + take.name, score(ref, est.filter((n) => !n.h))) + `  [${(ms / 1000).toFixed(1)} s for ${(samples.length / rate).toFixed(0)} s]` + kind);
       if (args.includes("--roll")) console.log(roll(ref, est));
     } else {
-      console.log(`${(take.set + "/" + take.name).padEnd(22)} notes ${est.length} (no reference)  [${(ms / 1000).toFixed(1)} s for ${(samples.length / rate).toFixed(0)} s]`);
+      console.log(`${(take.set + "/" + take.name).padEnd(22)} notes ${est.length} (no reference)  [${(ms / 1000).toFixed(1)} s for ${(samples.length / rate).toFixed(0)} s]` + kind);
       if (args.includes("--roll")) console.log(roll([], est));
     }
   }

@@ -5,6 +5,18 @@ import { StreamResampler } from "./dsp.js";
 import { ANALYSIS_RATE, PitchTracker } from "./pitch.js";
 import { segmentNotes } from "./notes.js";
 import { PeakCollector } from "./peaks.js";
+import { fillPitches, frameCount, polyState, POLY_WINDOW } from "./poly.js";
+import { chordNotes, agreement, tuneWithHarmony } from "./chords.js";
+
+// A take with harmony under less than this share of its tune is one voice alone: it is read by
+// the pitch tracker, which hears a single voice best (measured on 40 real solo takes: the
+// several-pitches path finds "harmony" in at most a tenth of a solo take's time, a mix has more).
+export const SOLO_LIMIT = 0.2;
+const SAME_TUNE = 0.75; // the pitch tracker's notes lie on this much of the tune found among several pitches: it followed the tune
+const WHOLE_FRAMES = 4000; // takes up to 40 s are looked through whole…
+const PROBE_FRAMES = 1000; // …longer ones first in three 10 s pieces
+const PROBES = [0.04, 0.45, 0.86];
+const STEP_FRAMES = 100; // frames worked out between two breaths of the page
 
 /**
  * Feed it samples at the recording's own rate, as they arrive. `notes()` is
@@ -20,12 +32,16 @@ export class Analyzer {
     this.frames = [];
     this.count = 0;
     this.cache = null;
+    this.kept = []; // the take at the analysis rate, for the look for several pitches at the end
+    this.done = null;
   }
 
   push(samples) {
     this.count += samples.length;
     this.peaks.push(samples);
-    for (const f of this.tracker.push(this.resampler.push(samples))) this.frames.push(f);
+    const low = this.resampler.push(samples);
+    if (low.length) this.kept.push(Float32Array.from(low));
+    for (const f of this.tracker.push(low)) this.frames.push(f);
   }
 
   get seconds() {
@@ -38,14 +54,91 @@ export class Analyzer {
     return this.cache.notes;
   }
 
+  /** One voice's notes (quick: the pitch tracker has been following all along). */
   finish() {
-    for (const f of this.tracker.push(this.resampler.flush())) this.frames.push(f);
+    if (this.done) return this.done;
+    const tail = this.resampler.flush();
+    if (tail.length) this.kept.push(Float32Array.from(tail));
+    for (const f of this.tracker.push(tail)) this.frames.push(f);
     for (const f of this.tracker.flush()) this.frames.push(f);
-    return { notes: segmentNotes(this.frames), frames: this.frames, peaks: this.peaks.finish(), duration: this.seconds };
+    this.done = { notes: segmentNotes(this.frames), frames: this.frames, peaks: this.peaks.finish(), duration: this.seconds };
+    return this.done;
+  }
+
+  /**
+   * The notes, looking for several pitches at once too (a voice over a guitar, two people, a
+   * song with its band): then the tune and, marked `h`, the harmony under it; `chords: true`.
+   * A voice alone comes out as `finish()` gives it. `onProgress` gets 0..1.
+   */
+  async finishAll({ onProgress = () => {} } = {}) {
+    const result = this.finish();
+    let total = 0;
+    for (const part of this.kept) total += part.length;
+    const low = new Float32Array(total);
+    let at = 0;
+    for (const part of this.kept) { low.set(part, at); at += part.length; }
+    const found = await chordsOf(low, { onProgress });
+    if (!found) return result;
+    // Where the tune is a voice the pitch tracker could follow (it hears the same line), its
+    // notes are the tune: it places and parts them more finely. The harmony comes from the look
+    // for several pitches. Where it could not follow (two voices, a loud band), that look gives both.
+    const agree = agreement(found.notes.filter((n) => !n.h), result.notes);
+    const notes = agree >= SAME_TUNE ? tuneWithHarmony(result.notes, found.notes) : found.notes;
+    return { ...result, notes, chords: true, agree };
   }
 }
 
+/**
+ * Looks through a 16 kHz take for several pitches at once. Null for a voice alone; else
+ * { notes (the tune, and the harmony marked `h`), harmony (its share beside the tune) }.
+ */
+export async function chordsOf(samples, { onProgress = () => {} } = {}) {
+  const n = frameCount(samples);
+  if (n < 20) return null;
+  // Windows quieter than a twentieth of the take's loud parts are not looked at.
+  const rms = [];
+  for (let start = 0; start + POLY_WINDOW <= samples.length; start += POLY_WINDOW) {
+    let e = 0;
+    for (let i = start; i < start + POLY_WINDOW; i++) e += samples[i] * samples[i];
+    rms.push(Math.sqrt(e / POLY_WINDOW));
+  }
+  rms.sort((a, b) => a - b);
+  const gate = rms.length ? 0.05 * rms[Math.floor(0.95 * (rms.length - 1))] : 0;
+  const frames = new Array(n);
+  const st = polyState();
+  let worked = 0;
+  let planned = n;
+  const fill = async (from, to) => {
+    for (let k = from; k < to; k += STEP_FRAMES) {
+      fillPitches(frames, samples, { from: k, to: Math.min(to, k + STEP_FRAMES), gate, st });
+      worked += Math.min(to, k + STEP_FRAMES) - k;
+      onProgress(Math.min(0.99, worked / planned));
+      await pause();
+    }
+  };
+  if (n > WHOLE_FRAMES) {
+    // A long take: three pieces first. A voice alone in all three is a voice alone.
+    planned = PROBES.length * PROBE_FRAMES;
+    let most = 0;
+    for (const at of PROBES) {
+      const from = Math.floor((at * n) / 2) * 2;
+      const to = Math.min(n, from + PROBE_FRAMES);
+      await fill(from, to);
+      most = Math.max(most, chordNotes(frames.slice(from, to)).harmony);
+    }
+    if (most < SOLO_LIMIT) return null;
+    worked = 0;
+    planned = n;
+  }
+  await fill(0, n);
+  const found = chordNotes(frames);
+  onProgress(1);
+  if (found.harmony < SOLO_LIMIT || !found.notes.some((note) => !note.h)) return null;
+  return { notes: found.notes, harmony: found.harmony };
+}
+
 const pause = () => new Promise((resolve) => setTimeout(resolve, 0));
+const MONO_SHARE = 0.3; // of the progress shown: the first pass (one voice); the rest is the look for more
 
 /**
  * Analyses a whole recording in pieces, letting the page breathe between them.
@@ -56,10 +149,10 @@ export async function analyzeSamples(samples, rate, { onProgress = () => {}, chu
   const step = Math.max(1, Math.round(chunkSeconds * rate));
   for (let i = 0; i < samples.length; i += step) {
     analyzer.push(samples.subarray(i, i + step));
-    onProgress(Math.min(0.99, (i + step) / samples.length));
+    onProgress(MONO_SHARE * Math.min(1, (i + step) / samples.length));
     await pause();
   }
-  const result = analyzer.finish();
+  const result = await analyzer.finishAll({ onProgress: (p) => onProgress(MONO_SHARE + (1 - MONO_SHARE) * p * 0.99) });
   onProgress(1);
   return result;
 }

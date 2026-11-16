@@ -188,7 +188,9 @@ export function pitchesAt(st, x, start, maxVoices = MAX_VOICES, stop = true) {
         fSum += (amp * (k + shift) * BIN_HZ) / (m + 1);
         wSum += amp;
       }
-      power += mag[k] * mag[k];
+      // Loudness from what is still there: harmonics already given to a stronger sound do not count twice.
+      const left = flat[k] > 0 ? (mag[k] * rest[k]) / flat[k] : 0;
+      power += left * left;
     }
     // Out of the spectrum they go. Where another sound's harmonic lies on one of these, that one
     // stands out above its neighbours: only as much as the neighbours have is this sound's
@@ -209,22 +211,83 @@ export function pitchesAt(st, x, start, maxVoices = MAX_VOICES, stop = true) {
     }
     const hz = wSum > 0 ? fSum / wSum : candHz[j];
     // A Hann window shows a sine of height A as A·N/4: back to the sound's own loudness.
-    found.push({ hz, s, a: Math.sqrt(power / 2) * (4 / POLY_WINDOW) });
+    found.push({ hz, s, a: Math.sqrt(power / 2) * (4 / POLY_WINDOW), tops: null });
+  }
+  // Each one's own lowest harmonics as they really stand in the spectrum (lines.js asks which
+  // candidates have harmonics of their own, and which only borrow another's).
+  let top = 0;
+  for (let k = LOW_BIN; k <= HIGH_BIN; k++) if (mag[k] > top) top = mag[k];
+  for (const c of found) {
+    const { tops, heights } = realTops(mag, c.hz, top * FAINT);
+    c.tops = tops;
+    c.heights = heights;
   }
   return { rms, found, peak };
+}
+
+export const OWN_HARMONICS = 5; // how many of a pitch's lowest harmonics must show it is a sound of its own
+const SEEN_HARMONICS = 10; // how many are measured (to see which stand out: another sound on top of them)
+const NEAR = 0.03; // a harmonic is looked for within 3% of where it should be
+const STANDS_OUT = 2; // a real harmonic rises this far (6 dB) above the dips on both sides
+const FAINT = 0.016; // and is no fainter than this (36 dB) beside the window's loudest
+const LOW_BIN = Math.round(60 / BIN_HZ);
+const HIGH_BIN = Math.round(5000 / BIN_HZ);
+
+/**
+ * hz's first harmonics as they stand in the spectrum: `tops`, the frequency of each where it is
+ * a real peak (0 where it is not), and `heights`, how high each stands.
+ */
+function realTops(mag, hz, floor) {
+  const out = new Float32Array(SEEN_HARMONICS);
+  const heights = new Float32Array(SEEN_HARMONICS);
+  const reach = Math.max(4, Math.round((0.5 * hz) / BIN_HZ));
+  for (let m = 1; m <= SEEN_HARMONICS && m * hz < TOP_HZ; m++) {
+    const k0 = (m * hz) / BIN_HZ;
+    const from = Math.max(2, Math.round(k0 * (1 - NEAR)) - 1);
+    const to = Math.min(HALF - 2, Math.round(k0 * (1 + NEAR)) + 1);
+    let k = from;
+    for (let q = from + 1; q <= to; q++) if (mag[q] > mag[k]) k = q;
+    heights[m - 1] = mag[k];
+    if (k <= from || k >= to || mag[k] < floor) continue; // the highest point is at the edge: a slope, not a peak
+    let left = mag[k];
+    for (let q = k - 1; q >= Math.max(1, k - reach); q--) if (mag[q] < left) left = mag[q];
+    let right = mag[k];
+    for (let q = k + 1; q <= Math.min(HALF, k + reach); q++) if (mag[q] < right) right = mag[q];
+    if (mag[k] < STANDS_OUT * Math.max(left, right)) continue;
+    const a = mag[k - 1], b = mag[k], c = mag[k + 1];
+    const curve = a - 2 * b + c;
+    out[m - 1] = (k + (curve < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / curve)) : 0)) * BIN_HZ;
+  }
+  return { tops: out, heights };
 }
 
 /** The sample where frame k's window starts: its middle is the middle of the pitch tracker's frame k. */
 export const polyStart = (k) => k * HOP + WINDOW / 2 - POLY_WINDOW / 2;
 
-/** Frames for a whole 16 kHz signal: [{ rms, found: [{ hz, s, a }] }] every 10 ms. */
-export function trackPitches(samples, { maxVoices = MAX_VOICES, onProgress = null, stop = true } = {}) {
-  const st = polyState();
-  const n = Math.max(0, Math.ceil(samples.length / HOP));
-  const frames = new Array(n);
-  for (let k = 0; k < n; k++) {
-    frames[k] = pitchesAt(st, samples, polyStart(k), maxVoices, stop);
-    if (onProgress && k % 200 === 0) onProgress(k / n);
+/** How many frames (10 ms each) a 16 kHz signal has. */
+export const frameCount = (samples) => Math.max(0, Math.ceil(samples.length / HOP));
+
+const NOTHING = Object.freeze({ rms: 0, found: Object.freeze([]), peak: 0 });
+
+/**
+ * Fills `frames[from..to)` for a 16 kHz signal: { rms, found: [{ hz, s, a, tops }], peak } every
+ * 10 ms. Only every `every`th window is worked out (they are 128 ms long: neighbours say the
+ * same); the ones between repeat it. Windows quieter than `gate` are left empty.
+ */
+export function fillPitches(frames, samples, { from = 0, to = frameCount(samples), every = 2, gate = 0, st = polyState(), stop = false } = {}) {
+  for (let k = from - (from % every); k < to; k += every) {
+    if (!frames[k]) {
+      let energy = 0;
+      const start = polyStart(k);
+      for (let i = Math.max(0, start); i < Math.min(samples.length, start + POLY_WINDOW); i++) energy += samples[i] * samples[i];
+      frames[k] = Math.sqrt(energy / POLY_WINDOW) < gate ? NOTHING : pitchesAt(st, samples, start, MAX_VOICES, stop);
+    }
+    for (let j = 1; j < every && k + j < frames.length; j++) if (!frames[k + j]) frames[k + j] = frames[k];
   }
   return frames;
+}
+
+/** Frames for a whole 16 kHz signal: [{ rms, found: [{ hz, s, a, tops }], peak }] every 10 ms. */
+export function trackPitches(samples, { every = 1, stop = false } = {}) {
+  return fillPitches(new Array(frameCount(samples)), samples, { every, stop });
 }

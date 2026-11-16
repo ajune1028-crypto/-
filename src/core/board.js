@@ -19,7 +19,7 @@
 //   larm  { id, la, n }                         removes counter for a loop
 
 import { cmpId, validId, Clock } from "./crdt.js";
-import { SongDoc, CLIP_SPEEDS } from "./song.js";
+import { SongDoc, CLIP_SPEEDS, isNoteTuple, packNote } from "./song.js";
 import { fromBase64, toBase64 } from "./b64.js";
 import { INK_COLORS } from "./ink.js";
 
@@ -56,6 +56,8 @@ const FIELD_OK = {
   tint: (v) => v === null || isInt(v, 0, 7),
   // A song card's own speed (as a clip's): it plays that many times as fast, pitch kept.
   speed: (v) => CLIP_SPEEDS.includes(v),
+  // false: a song card's harmony notes (화음) are left out; the tune alone plays.
+  chords: (v) => typeof v === "boolean",
   // A song card's notes after 음 편집 or the like; checked against the card's kind once it is known.
   data: (v) => !!v && typeof v === "object" && !Array.isArray(v),
 };
@@ -74,7 +76,7 @@ function validData(kind, d) {
   }
   return isInt(d.dur, 1, MAX_MS) && typeof d.peaks === "string" && d.peaks.length <= 40000 &&
     Array.isArray(d.notes) && d.notes.length <= 3000 &&
-    d.notes.every((n) => Array.isArray(n) && n.length === 4 && isInt(n[0], 0, MAX_MS) && isInt(n[1], 1, MAX_MS) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100)) &&
+    d.notes.every((n) => isNoteTuple(n, MAX_MS)) &&
     (d.name === undefined || isText(d.name, 60)) && (d.blob === undefined || isText(d.blob, 80));
 }
 
@@ -83,7 +85,7 @@ export function songCardData({ duration, notes, peaks, name, blob }) {
   const ms = (s) => Math.max(0, Math.round(s * 1000));
   const data = {
     dur: Math.max(1, ms(duration)), peaks: peaks || "",
-    notes: notes.slice(0, 3000).map((n) => [ms(n.t), Math.max(1, ms(n.d)), Math.round(n.p), Math.round(Math.min(1, Math.max(0, n.v)) * 100)]),
+    notes: notes.slice(0, 3000).map(packNote),
   };
   if (name) data.name = String(name).slice(0, 60);
   if (blob) data.blob = blob;
@@ -101,7 +103,7 @@ export function cardFromClip({ source, offset, length }) {
   const notes = source.notes
     .map((n) => ({ ...n, s: Math.max(n.t, lo), e: Math.min(n.t + n.d, hi) }))
     .filter((n) => n.e - n.s >= 0.02)
-    .map((n) => ({ t: n.s - lo, d: n.e - n.s, p: n.p, v: n.v }));
+    .map((n) => ({ t: n.s - lo, d: n.e - n.s, p: n.p, v: n.v, ...(n.h ? { h: true } : {}) }));
   const bytes = fromBase64(source.peaks || "");
   const peaks = toBase64(bytes.subarray(Math.floor(offset / 40), Math.ceil((offset + length) / 40)));
   const whole = offset === 0 && Math.abs(length - source.duration * 1000) < 50;
@@ -383,6 +385,7 @@ export function cardsSong(cards) {
     if (card.muted) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { muted: true } });
     const sp = card.speed || 1;
     if (sp !== 1) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { speed: sp } });
+    if (card.chords === false) song.apply({ t: "cset", id: clock.next(), c: clip.id, f: { chords: false } });
     at += Math.round(d.dur / sp);
   }
   return song;
@@ -408,6 +411,7 @@ export function keepOf(item) {
   if (item.kind === "song") {
     if ((item.speed || 1) !== 1) keep.speed = item.speed;
     if (item.muted) keep.muted = true;
+    if (item.chords === false) keep.chords = false;
   }
   return keep;
 }
@@ -416,11 +420,11 @@ export function keepOf(item) {
 export function keptFields(kind, from, data) {
   const out = {};
   if (!from) return out;
-  const allowed = kind === "note" ? ["color", "size", "tint"] : kind === "song" ? ["tint", "speed", "muted"] : ["tint"];
+  const allowed = kind === "note" ? ["color", "size", "tint"] : kind === "song" ? ["tint", "speed", "muted", "chords"] : ["tint"];
   for (const k of allowed) {
     const v = from[k];
     if (v === undefined || v === null || !FIELD_OK[k](v)) continue;
-    if ((k === "speed" && v === 1) || (k === "muted" && !v)) continue;
+    if ((k === "speed" && v === 1) || (k === "muted" && !v) || (k === "chords" && v)) continue;
     out[k] = v;
   }
   if (out.speed && data?.dur) out.w = songWidth(Math.round(data.dur / out.speed));
@@ -435,8 +439,8 @@ export function setItemOps(clock, board, itemId, fields) {
   const prev = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!FIELD_OK[k]) continue;
-    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" ? !!v : k === "data" || k === "color" || k === "speed" ? v : k === "tint" ? (v === null ? null : Math.round(v)) : Math.round(v);
-    prev[k] = k === "tint" ? item.tint ?? null : k === "speed" ? item.speed ?? 1 : item[k];
+    next[k] = k === "text" ? String(v).slice(0, 4000) : k === "muted" || k === "chords" ? !!v : k === "data" || k === "color" || k === "speed" ? v : k === "tint" ? (v === null ? null : Math.round(v)) : Math.round(v);
+    prev[k] = k === "tint" ? item.tint ?? null : k === "speed" ? item.speed ?? 1 : k === "chords" ? item.chords ?? true : item[k];
   }
   return { ops: [{ t: "iset", id: clock.next(), i: itemId, f: next }], atoms: [{ k: "set", item: itemId, prev, next }] };
 }
@@ -511,9 +515,9 @@ const MIN_PART_MS = 100;
 /** The part of a song card's data between from and to (ms), notes measured from from. */
 function partOf(d, from, to) {
   const notes = d.notes
-    .map(([t, len, p, v]) => [Math.max(t, from), Math.min(t + len, to), p, v])
+    .map(([t, len, p, v, h]) => [Math.max(t, from), Math.min(t + len, to), p, v, h])
     .filter(([s, e]) => e - s >= 20)
-    .map(([s, e, p, v]) => [s - from, e - s, p, v]);
+    .map(([s, e, p, v, h]) => (h ? [s - from, e - s, p, v, 1] : [s - from, e - s, p, v]));
   const bytes = fromBase64(d.peaks || "");
   const out = { dur: to - from, peaks: toBase64(bytes.subarray(Math.floor(from / 40), Math.ceil(to / 40))), notes };
   if (d.name) out.name = d.name;
@@ -544,6 +548,7 @@ export function splitCardOps(clock, board, itemId, at, by) {
   if (sp !== 1) keep.speed = sp;
   if (item.tint !== null && item.tint !== undefined) keep.tint = item.tint;
   if (item.muted) keep.muted = true;
+  if (item.chords === false) keep.chords = false;
   if (Object.keys(keep).length) {
     for (const [half, d] of [[left, leftData], [right, rightData]]) ops.push({ t: "iset", id: clock.next(), i: half.id, f: { ...keep, ...(sp !== 1 ? { w: wide(d) } : {}) } });
   }

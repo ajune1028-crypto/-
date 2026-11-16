@@ -26,7 +26,7 @@ import { watchPickers } from "./picker-watch.js";
 import { memberColor, INK, contrast, PALETTE } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
-import { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS } from "../core/song.js";
+import { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS, packMs, noteInSeconds, unpackNote } from "../core/song.js";
 import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps,
@@ -991,7 +991,7 @@ export function mountBoardRoom(body, app, session, frame) {
         n++;
       } else if (i.kind === "song") {
         const d = i.data;
-        addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob });
+        addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob });
         n++;
       }
     }
@@ -2008,7 +2008,7 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!d) return;
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: id, offset: 0, length: d.dur, speed: board.item(id).speed || 1, tint: board.item(id).tint ?? null,
-      source: { duration: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })), peaks: d.peaks, blob: d.blob, name: d.name },
+      source: { duration: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob, name: d.name },
     });
     toast(root, "복사했어요. 노래 방이나 다른 화이트보드에 붙일 수 있어요", 2600);
   }
@@ -2029,7 +2029,7 @@ export function mountBoardRoom(body, app, session, frame) {
       song: temp, clipId: clip.id, clock,
       commit: (made) => {
         for (const op of made.ops) temp.apply(op);
-        const notes = temp.notesOf(src.id).map((n) => [Math.round(n.t), Math.max(1, Math.round(n.d)), n.p, Math.round(Math.min(1, Math.max(0, n.v)) * 100)]);
+        const notes = temp.notesOf(src.id).map(packMs);
         const now = board.item(id);
         if (now) apply(setItemOps(session.clock, board, id, { data: { ...now.data, notes } }));
       },
@@ -2424,7 +2424,7 @@ export function mountBoardRoom(body, app, session, frame) {
       const song = await other.load("song");
       return song.layout().map((clip, i) => {
         const src = song.source(clip.src);
-        const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
+        const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name };
         return { data: cardFromClip({ source, offset: clip.offset, length: clip.length }), label: src.name || "녹음 " + (i + 1), keep: { speed: clip.speed, tint: clip.tint } };
       });
     } finally {

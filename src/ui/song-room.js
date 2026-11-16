@@ -19,6 +19,7 @@ import { memberColor, INK, PALETTE } from "../core/paint.js";
 import {
   MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan,
   joinClipOps, joinWithSourceOps, combinedSource,
+  packMs, noteInSeconds,
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
@@ -489,7 +490,7 @@ export function mountSongRoom(body, app, session, frame) {
     const ctx = src && (await ready());
     if (!ctx) return;
     const one = new SongDoc();
-    one.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map((n) => [Math.round(n.t), Math.max(1, Math.round(n.d)), n.p, Math.round(Math.min(1, Math.max(0, n.v)) * 100)]), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
+    one.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map(packMs), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
     one.apply({ t: "clip", id: clip.id, src: src.id, row: 0, start: 0, offset: clip.offset, length: clip.length, by: clip.by, at: 0 });
     if ((clip.speed || 1) !== 1) one.apply({ t: "cset", id: "2@solo", c: clip.id, f: { speed: clip.speed } });
     soloPlayer?.close();
@@ -812,7 +813,7 @@ export function mountSongRoom(body, app, session, frame) {
     for (const c of clips) {
       const src = song.source(c.src);
       if (!src) continue;
-      if (!part.source(src.id)) part.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map((x) => [Math.round(x.t), Math.max(1, Math.round(x.d)), x.p, Math.round(Math.min(1, Math.max(0, x.v)) * 100)]), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
+      if (!part.source(src.id)) part.apply({ t: "src", id: src.id, dur: src.dur, notes: song.notesOf(src.id).map(packMs), peaks: src.peaks || "", by: src.by, at: 0, ...(src.blob ? { blob: src.blob } : {}) });
       part.apply({ t: "clip", id: c.id, src: src.id, row: c.lane, start: c.start - from, offset: c.offset, length: c.length, by: c.by, at: 0 });
       const f = {};
       if ((c.speed || 1) !== 1) f.speed = c.speed;
@@ -849,7 +850,7 @@ export function mountSongRoom(body, app, session, frame) {
       clips: clips.map((c) => {
         const src = song.source(c.src);
         return { dx: c.start - from, dy: c.lane - top, offset: c.offset, length: c.length, speed: c.speed || 1, tint: c.tint ?? null, muted: !!c.muted, src: c.src,
-          source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name } };
+          source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name } };
       }),
     });
     toast(root, `클립 ${clips.length}개를 복사했어요. 클립을 눌러 '붙여넣기'로 넣어요`, 2600);
@@ -884,7 +885,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!src) return;
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length, speed: clip.speed || 1, tint: clip.tint ?? null,
-      source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name },
+      source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name },
     });
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
     draw();
@@ -1164,7 +1165,7 @@ export function mountSongRoom(body, app, session, frame) {
       const target = await other.load("board");
       const items = target.items();
       const right = items.reduce((a, b) => (!a || b.x + b.w > a.x + a.w ? b : a), null);
-      const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
+      const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name };
       const data = cardFromClip({ source, offset: clip.offset, length: clip.length });
       // In a whiteboard this device has not opened yet, I come in as myself (my name, colour and code).
       const by = roomEntry(app.store, room.id)?.memberId || meIn(app, other, room, session.me);

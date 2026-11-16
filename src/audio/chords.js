@@ -10,6 +10,9 @@ import { followLines, leadOf, worthKeeping } from "./lines.js";
 const MIN_HARMONY_SECONDS = 0.14; // a harmony note shorter than this is not worth a key
 const MAX_TOGETHER = 4; // the tune and at most three more at once
 const SAME_NOTE_OVERLAP = 0.5;
+const HUM_WIDTH = 0.8; // semitones round a hum's pitch
+const HUM_OF_HARMONY = 0.5; // a hum is at least this share of everything that is not the tune…
+const HUM_OF_TAKE = 0.15; // …and sounds for at least this share of the take
 
 /**
  * Notes from the frames of `trackPitches`: [{ t, d, p, v, h? }], by start time. `h` marks a note
@@ -19,8 +22,13 @@ const SAME_NOTE_OVERLAP = 0.5;
 export function chordNotes(frames) {
   const { lines, loud } = followLines(frames);
   const { lead, share } = leadOf(lines, frames.length);
+  const hum = humKey(lines, share, frames.length);
   const kept = [];
-  lines.forEach((line, i) => { if (worthKeeping(line, share[i])) kept.push({ line, i }); });
+  lines.forEach((line, i) => {
+    if (!worthKeeping(line, share[i])) return;
+    if (hum !== null && share[i] < 0.5 && Math.abs(meanOf(line.key) - hum) < HUM_WIDTH) return;
+    kept.push({ line, i });
+  });
   // Each line cut into notes as a sung line is: where its pitch moves and stays, where it dips.
   const parts = [];
   for (const { line, i } of kept) {
@@ -55,6 +63,55 @@ export function chordNotes(frames) {
     else tuneTime += n.d;
   }
   return { notes, lines, harmony: tuneTime > 0 ? harmonyTime / tuneTime : 0 };
+}
+
+/**
+ * How much of `tune`'s time (notes of one line) lies under a note of `other` on the same key
+ * (or the next: the two round a take's tuning each in their own way). 0..1.
+ */
+export function agreement(tune, other) {
+  let same = 0;
+  let total = 0;
+  for (const n of tune) {
+    total += n.d;
+    for (const m of other) {
+      if (Math.abs(m.p - n.p) > 1) continue;
+      same += overlap(n, m);
+    }
+  }
+  return total > 0 ? Math.min(1, same / total) : 0;
+}
+
+/**
+ * The tune as the pitch tracker heard it (`solo`: one voice, followed closely) with the harmony
+ * the several-pitches path found under it; harmony that is only the tune's own note again is left out.
+ */
+export function tuneWithHarmony(solo, found) {
+  const harmony = found.filter((n) => n.h && !solo.some((m) => Math.abs(m.p - n.p) <= 1 && overlap(m, n) >= SAME_NOTE_OVERLAP * n.d));
+  return [...solo, ...harmony].sort((a, b) => a.t - b.t || a.p - b.p);
+}
+
+const meanOf = (a) => { let t = 0; for (const v of a) t += v; return t / a.length; };
+
+/**
+ * A hum under the take (a fridge, a fan, the mains): one unchanging pitch that makes up most of
+ * what is not the tune and is there for much of the take. Its key, or null.
+ */
+function humKey(lines, share, nFrames) {
+  const time = new Map();
+  let total = 0;
+  lines.forEach((line, i) => {
+    if (share[i] >= 0.5) return;
+    const key = Math.round(meanOf(line.key) * 2) / 2;
+    time.set(key, (time.get(key) || 0) + line.key.length);
+    total += line.key.length;
+  });
+  let best = null;
+  for (const [key, n] of time) {
+    const around = n + (time.get(key - 0.5) || 0) + (time.get(key + 0.5) || 0);
+    if (!best || around > best.around) best = { key, around };
+  }
+  return best && best.around >= HUM_OF_HARMONY * total && best.around >= HUM_OF_TAKE * nFrames ? best.key : null;
 }
 
 const overlap = (a, b) => Math.max(0, Math.min(a.t + a.d, b.t + b.d) - Math.max(a.t, b.t));

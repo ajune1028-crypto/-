@@ -6,7 +6,7 @@ import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, joinOps } from "../core/room.js";
 import { myPeopleColor } from "./theme.js";
 import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields } from "../core/board.js";
-import { sourceOp, addClipOps, setClipOps } from "../core/song.js";
+import { sourceOp, addClipOps, setClipOps, noteInSeconds, unpackNote } from "../core/song.js";
 import { rememberRoom, roomEntry, getSettings } from "../identity.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -95,7 +95,7 @@ async function cardsOf(from, kind) {
     const song = await from.load("song");
     return song.layout().map((clip) => {
       const src = song.source(clip.src);
-      const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map((n) => ({ t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v })), peaks: src.peaks, blob: src.blob, name: src.name };
+      const source = { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name };
       return { kind: "song", data: cardFromClip({ source, offset: clip.offset, length: clip.length }), speed: clip.speed, tint: clip.tint, muted: clip.muted };
     });
   }
@@ -197,7 +197,7 @@ export async function putCardsIntoSong(app, entry, cards, me = null) {
       if (!song.canAddClip()) break;
       const d = card.data;
       const src = sourceOp(to.clock, song, {
-        duration: d.dur / 1000, notes: d.notes.map(([t, len, p, v]) => ({ t: t / 1000, d: len / 1000, p, v: v / 100 })),
+        duration: d.dur / 1000, notes: d.notes.map(unpackNote),
         peaks: d.peaks || "", by, at: Date.now(), blob: d.blob || undefined, name: d.name || undefined,
       });
       const clip = addClipOps(to.clock, song, { src: src.id, row, start: at, length: d.dur, by, at: Date.now() });

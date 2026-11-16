@@ -15,6 +15,8 @@
 //   nfix  changes a note of a sound (pitch, start, length, loudness, gone);
 //         per field, the op with the larger id wins
 //   nadd  adds a note to a sound: { note: { t, d, p, v } }
+// A stored note is [start ms, length ms, key, loudness 0-100], with a fifth 1 when it belongs to
+// the harmony (화음) and not to the tune: a clip may leave those out (`chords: false`).
 // A sound's own notes never change; edits lie over them, so every device
 // agrees and every edit can be undone. notesOf(src) gives the result.
 //
@@ -50,6 +52,8 @@ const FIELD_OK = {
   tint: (v) => v === null || isInt(v, 0, 7),
   // Its own speed: it plays this many times as fast (pitch kept) and is that much shorter.
   speed: (v) => CLIP_SPEEDS.includes(v),
+  // false: the sound's harmony notes (화음) are left out; the tune alone plays.
+  chords: (v) => typeof v === "boolean",
 };
 export const CLIP_FIELDS = Object.keys(FIELD_OK);
 
@@ -67,13 +71,46 @@ const NOTE_FIELD_OK = {
   p: (v) => isInt(v, 0, 127),
   v: (v) => isInt(v, 0, 100),
   gone: (v) => typeof v === "boolean",
+  h: (v) => typeof v === "boolean", // part of the harmony (true) or of the tune
 };
 const NOTE_KEY = /^\d{1,5}$/;
 const PEAK_MS = 40; // one waveform value per 40 ms (25 a second)
 
+/** A stored note: four whole numbers, and a fifth 1 for a note of the harmony. */
+export function isNoteTuple(n, maxMs = MAX_SOURCE_MS) {
+  return Array.isArray(n) && (n.length === 4 || (n.length === 5 && n[4] === 1)) &&
+    isInt(n[0], 0, maxMs) && isInt(n[1], 1, maxMs) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100);
+}
+
 function validNotes(notes) {
-  return Array.isArray(notes) && notes.length <= MAX_NOTES && notes.every((n) =>
-    Array.isArray(n) && n.length === 4 && isInt(n[0], 0, MAX_SOURCE_MS) && isInt(n[1], 1, MAX_SOURCE_MS) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100));
+  return Array.isArray(notes) && notes.length <= MAX_NOTES && notes.every((n) => isNoteTuple(n));
+}
+
+const toMs = (seconds) => Math.max(0, Math.round(seconds * 1000));
+const loudness = (v) => Math.round(Math.min(1, Math.max(0, v)) * 100);
+/** A note in seconds ({ t, d, p, v, h? }, as the analysis and the clipboard keep them) as it is stored. */
+export function packNote(n) {
+  const out = [toMs(n.t), Math.max(1, toMs(n.d)), Math.round(n.p), loudness(n.v)];
+  if (n.h) out.push(1);
+  return out;
+}
+/** A stored note in seconds. */
+export function unpackNote([t, d, p, v, h]) {
+  const out = { t: t / 1000, d: d / 1000, p, v: v / 100 };
+  if (h) out.h = true;
+  return out;
+}
+/** A song's note (milliseconds, as `notesOf` gives them) in seconds. */
+export function noteInSeconds(n) {
+  const out = { t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v };
+  if (n.h) out.h = true;
+  return out;
+}
+/** A song's note (milliseconds) as it is stored. */
+export function packMs(n) {
+  const out = [Math.round(n.t), Math.max(1, Math.round(n.d)), n.p, loudness(n.v)];
+  if (n.h) out.push(1);
+  return out;
 }
 
 function validFields(f) {
@@ -126,7 +163,7 @@ export class SongDoc {
         if (!ok) return this.setAside(op);
         this.sources.set(op.id, {
           id: op.id, dur: op.dur, peaks: op.peaks, by: op.by, at: op.at, blob: op.blob || null, name: op.name || null,
-          notes: op.notes.map(([t, d, p, v]) => ({ t, d, p, v: v / 100 })),
+          notes: op.notes.map(([t, d, p, v, h]) => (h ? { t, d, p, v: v / 100, h: true } : { t, d, p, v: v / 100 })),
         });
         return this.done(op);
       }
@@ -259,8 +296,8 @@ export class SongDoc {
     if (this.noteCache.by.has(key)) return this.noteCache.by.get(key);
     const src = this.sources.get(srcId);
     if (!src) return [];
-    const list = src.notes.map((n, i) => ({ key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false }));
-    for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false });
+    const list = src.notes.map((n, i) => ({ key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false, h: !!n.h }));
+    for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false, h: false });
     for (const n of list) {
       const fields = this.fixes.get(srcId + "|" + n.key);
       if (fields) for (const [k, { v }] of fields) n[k] = k === "v" ? v / 100 : v;
@@ -268,6 +305,11 @@ export class SongDoc {
     const out = list.filter((n) => withGone || !n.gone).sort((a, b) => a.t - b.t || a.p - b.p);
     this.noteCache.by.set(key, out);
     return out;
+  }
+
+  /** Whether a sound has notes of the harmony (화음) among its notes now. */
+  hasHarmony(srcId) {
+    return this.notesOf(srcId).some((n) => n.h);
   }
 
   /** The clip right after this one on the same drawn row, or null. */
@@ -374,6 +416,7 @@ export class SongDoc {
       const hi = clip.offset + clip.length;
       const sp = clip.speed || 1;
       for (const n of this.notesOf(clip.src)) {
+        if (n.h && clip.chords === false) continue;
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
         if (e - s < MIN_EVENT_MS) continue;
@@ -430,7 +473,7 @@ export function sourceOp(clock, song, { duration, notes, peaks, by, at, blob, na
   clock.atLeast(song.maxN);
   const op = {
     t: "src", id: clock.next(), dur: Math.max(1, ms(duration)), peaks, by, at,
-    notes: notes.slice(0, MAX_NOTES).map((n) => [ms(n.t), Math.max(1, ms(n.d)), Math.round(n.p), Math.round(Math.min(1, Math.max(0, n.v)) * 100)]),
+    notes: notes.slice(0, MAX_NOTES).map(packNote),
   };
   if (blob) op.blob = blob;
   if (name) op.name = String(name).slice(0, 60);
@@ -450,7 +493,7 @@ export function setClipOps(clock, song, clipId, fields) {
   if (!clip) return { ops: [], atoms: [] };
   clock.atLeast(song.maxN);
   const prev = {};
-  for (const k of Object.keys(fields)) prev[k] = k === "tint" ? clip.tint ?? null : k === "speed" ? clip.speed ?? 1 : clip[k];
+  for (const k of Object.keys(fields)) prev[k] = k === "tint" ? clip.tint ?? null : k === "speed" ? clip.speed ?? 1 : k === "chords" ? clip.chords ?? true : clip[k];
   return { ops: [{ t: "cset", id: clock.next(), c: clipId, f: { ...fields } }], atoms: [{ k: "set", clip: clipId, prev, next: { ...fields } }] };
 }
 
@@ -511,7 +554,7 @@ export function invertSongOps(song, clock, atoms, dir) {
 
 // ---- note edits -------------------------------------------------------------------
 
-const toStored = (k, v) => (k === "v" ? Math.round(Math.min(1, Math.max(0, v)) * 100) : k === "gone" ? !!v : Math.max(k === "d" ? 1 : 0, Math.round(v)));
+const toStored = (k, v) => (k === "v" ? Math.round(Math.min(1, Math.max(0, v)) * 100) : k === "gone" || k === "h" ? !!v : Math.max(k === "d" ? 1 : 0, Math.round(v)));
 
 /** Changes fields of one note (t, d, p in ms and key numbers, v 0..1, gone). */
 export function noteSetOps(clock, song, src, key, fields) {
@@ -567,7 +610,7 @@ export function combinedSource(song, a, b) {
   const part = (clip, shift) => song.notesOf(clip.src)
     .map((n) => ({ s: Math.max(n.t, clip.offset), e: Math.min(n.t + n.d, clip.offset + clip.length), n }))
     .filter((x) => x.e - x.s >= 20)
-    .map((x) => ({ t: (x.s - clip.offset + shift) / 1000, d: (x.e - x.s) / 1000, p: x.n.p, v: x.n.v }));
+    .map((x) => ({ t: (x.s - clip.offset + shift) / 1000, d: (x.e - x.s) / 1000, p: x.n.p, v: x.n.v, ...(x.n.h ? { h: true } : {}) }));
   const peaks = new Uint8Array(Math.ceil(total / PEAK_MS));
   const lay = (clip, shift) => {
     const bytes = fromBase64(song.source(clip.src)?.peaks || "");
