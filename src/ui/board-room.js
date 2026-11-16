@@ -44,6 +44,7 @@ import { toMono, resample, louder } from "../audio/dsp.js";
 import { keepTake, takeWhere } from "./keep-take.js";
 import { soundTitle } from "./names.js";
 import { buzz as buzzOnce } from "./chime.js";
+import { shareTake, takeSound } from "./share-take.js";
 import { reachableRooms, putCardsIntoSong } from "./room-actions.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
@@ -156,7 +157,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const list = look.order.filter((k) => !look.hidden.has(k)).map((k) => MODE_LIST.find(([m]) => m === k));
     modes = segmented(list.map(([m, name, id]) => [m, name, id]), mode, (m) => setMode(m), "boardMode");
     modes.classList.add("board-modes");
-    if (look.icons) for (const b of modes.children) {
+    if (look.icons) for (const b of modes.querySelectorAll("button")) {
       const [, name, , iconName] = MODE_LIST.find(([m]) => m === b.dataset.value);
       b.replaceChildren(icon(iconName));
       b.setAttribute("aria-label", name);
@@ -399,7 +400,7 @@ export function mountBoardRoom(body, app, session, frame) {
     toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
     toolbar.querySelector("#board-delete").disabled = !selected || readOnly();
     playButton.replaceChildren(icon(player?.playing ? "pause" : "play"));
-    if (modes) for (const b of modes.children) b.setAttribute("aria-pressed", String(b.dataset.value === mode));
+    if (modes) for (const b of modes.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.value === mode));
   }
 
   /** Where the mode's tools stand now, in words (they can be moved to the left). */
@@ -408,7 +409,7 @@ export function mountBoardRoom(body, app, session, frame) {
   function hintText(items) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
     if (lassoing()) return "카드들을 둘러 그리세요(끝이 안 닿아도 닫혀요). 테두리 안을 끌면 안의 카드와 함께 옮겨져요.";
-    if (!items.length) return mode === "song" ? `${toolSide()} '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요.` : `${toolSide()} 아이콘으로 글이나 노래 카드를 놓아 보세요. 노래 방에서 '보내기'로 보낼 수도 있어요.`;
+    if (!items.length) return mode === "song" ? `${toolSide()} '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요.` : `작은 우주들을 펼쳐 놓는 곳이에요. ${toolSide()} 아이콘으로 글·노래·사진을 놓아 보세요.`;
     if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나 줄을 그으세요. 한 카드에서 여러 줄도 돼요(나중 줄이 다음). 번호를 누르면 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
   }
@@ -2599,16 +2600,28 @@ export function mountBoardRoom(body, app, session, frame) {
     player?.preview(p, seconds);
   }
 
-  /** This device's recordings for the song's sounds, for 원본. */
+  /** The recordings for the song's sounds, for 원본: this device's own, else the copy the room carries. */
   async function recordingsOf(song, ctx) {
     const audio = new Map();
     for (const src of song.sources.values()) {
       if (!src.blob) continue;
-      const kept = await app.blobs.get(src.blob);
-      const wav = kept && decodeWav(kept.data);
-      if (wav) audio.set(src.id, bufferFromSamples(ctx, toMono(wav.channels), wav.rate));
+      const sound = await takeSound(app, roomFiles, src.blob);
+      if (sound) audio.set(src.id, bufferFromSamples(ctx, sound.samples, sound.rate));
     }
     return audio;
+  }
+
+  // A card's own sound travels with the board (share-take.js): whichever device has the original
+  // sends it once, so the others hear the voice itself.
+  let roomFiles = null;
+  const asked = new Set();
+  function shareMine() {
+    for (const item of board.items()) {
+      const blob = item.kind === "song" ? item.data?.blob : null;
+      if (!blob || asked.has(blob)) continue;
+      asked.add(blob);
+      app.blobs.get(blob).then((kept) => { if (kept && alive) shareTake(app, session, blob); }, () => {});
+    }
   }
 
   function stopPlaying() {
@@ -2779,11 +2792,19 @@ export function mountBoardRoom(body, app, session, frame) {
   const offs = [
     session.on("change", ({ doc }) => {
       if (doc === "board" || doc === "room") draw();
+      if (doc === "board") shareMine();
       if (doc === INK_DOC) inkSoon();
     }),
     onThemeChange(draw),
   ];
-  session.load("board").then(draw);
+  session.load("board").then(() => {
+    draw();
+    return session.load("files");
+  }).then((files) => {
+    if (!alive) return;
+    roomFiles = files;
+    shareMine();
+  });
   session.load(INK_DOC).then(() => inkSoon());
   buildModes();
   measureInsets();

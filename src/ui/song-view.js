@@ -316,7 +316,7 @@ export class Timeline {
     el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
     const named = model.name ? model.name(clip) : null;
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, clip.muted, clip.locked, clip.chords !== false, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p + (n.h ? "h" : "")).join(",")].join("|");
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, !hasAudio && !!model.arriving?.(clip.src), clip.muted, clip.locked, clip.chords !== false, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p + (n.h ? "h" : "")).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
@@ -367,7 +367,8 @@ export class Timeline {
       parts.push(bars);
       if (!any) parts.push(h("span", { class: "clip-note", text: "음을 찾지 못했어요" }));
     } else if (!hasAudio) {
-      parts.push(h("span", { class: "clip-note", text: "원본은 이 기기에 없어요" }));
+      // The take's own sound is on the device that made it; it comes here through the room.
+      parts.push(h("span", { class: "clip-note", text: model.arriving?.(clip.src) ? "원본을 받는 중이에요…" : "원본이 아직 오지 않았어요" }));
     }
     const flags = h("span", { class: "flags" });
     if (clip.muted) flags.append(iconSvg("muted"));

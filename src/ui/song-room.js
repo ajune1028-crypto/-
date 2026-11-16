@@ -35,6 +35,7 @@ import { newBlobId } from "../sync/blobs.js";
 import { keepTake, takeWhere } from "./keep-take.js";
 import { soundTitle } from "./names.js";
 import { buzz } from "./chime.js";
+import { shareTake, takeSound } from "./share-take.js";
 import { reachableRooms, meIn } from "./room-actions.js";
 import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
@@ -237,6 +238,7 @@ export function mountSongRoom(body, app, session, frame) {
       clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, group, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
+      arriving: (id) => { const blob = song.source(id)?.blob; return !!blob && (roomFiles?.namedProgress(blob) || 0) > 0; },
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
       others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
       playhead, empty, tempo: song.tempo(), heads: rowHeads(),
@@ -305,7 +307,7 @@ export function mountSongRoom(body, app, session, frame) {
     timeline.render(model());
     placeGroupMenu();
     const showStart = loaded && !song.layout().length && !rec && !readOnly();
-    if (showStart && !start.childNodes.length) start.append(h("p", { class: "start-title", text: "소리를 넣어 보세요" }), h("p", { class: "help", text: "흥얼거린 음과 길이 그대로 피아노 음이 돼요." }), ...waysIn("start-"));
+    if (showStart && !start.childNodes.length) start.append(h("p", { class: "start-title", text: "내 안의 소리를 꺼내 보자" }), h("p", { class: "help", text: "흥얼거린 음과 길이 그대로 피아노 음이 돼요. 같이 부른 것도, 반주가 있는 것도." }), ...waysIn("start-"));
     start.hidden = !showStart;
     drawButtons();
     placeMenu();
@@ -332,7 +334,7 @@ export function mountSongRoom(body, app, session, frame) {
     toneButton.replaceChildren(icon(dark ? "moon" : "sun"));
     toneButton.setAttribute("aria-label", "피아노 음색: " + (dark ? "어둡게" : "밝게"));
     toneButton.dataset.tone = dark ? "dark" : "bright";
-    for (const b of modeSwitch.children) b.setAttribute("aria-pressed", String(b.dataset.value === settings().songMode));
+    for (const b of modeSwitch.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.value === settings().songMode));
     clockTime.textContent = timeText(playhead);
     const tempo = song.tempo();
     if (tempo) {
@@ -350,6 +352,9 @@ export function mountSongRoom(body, app, session, frame) {
 
   // ---- the recordings on this device --------------------------------------------------
 
+  // A take's own sound is whole on the device that made it; a smaller copy travels in the room's
+  // files (share-take.js), so my other devices and my friends hear the voice itself too.
+  let roomFiles = null;
   const localBlobs = new Map(); // blob id → true/false once looked up
   function hasLocalBlob(srcId) {
     const src = song.source(srcId);
@@ -358,10 +363,18 @@ export function mountSongRoom(body, app, session, frame) {
       localBlobs.set(src.blob, false);
       app.blobs.get(src.blob).then((kept) => {
         localBlobs.set(src.blob, !!kept);
-        if (kept) draw();
+        if (kept) {
+          shareTake(app, session, src.blob);
+          draw();
+        }
       });
     }
-    return localBlobs.get(src.blob);
+    return localBlobs.get(src.blob) || !!roomFiles?.named(src.blob);
+  }
+
+  /** Every take this device made (or holds) goes to the room once; asked for each sound as it is seen. */
+  function shareMine() {
+    for (const src of song.sources.values()) if (src.blob) hasLocalBlob(src.id);
   }
 
   /** A sound's recording as samples at KEEP_RATE, or null when this device does not have it. */
@@ -375,13 +388,13 @@ export function mountSongRoom(body, app, session, frame) {
     return wav.rate === KEEP_RATE ? mono : resample(mono, wav.rate, KEEP_RATE);
   }
 
-  /** Decodes every recording this device holds, so 원본 can play them. */
+  /** Decodes every recording this device holds or the room carries, so 원본 can play them. */
   async function loadRecordings(ctx) {
     for (const src of song.sources.values()) {
-      if (audio.has(src.id) || !src.blob) continue;
-      const stored = await app.blobs.get(src.blob);
-      const wav = stored && decodeWav(stored.data);
-      audio.set(src.id, wav ? bufferFromSamples(ctx, toMono(wav.channels), wav.rate) : null);
+      if (audio.get(src.id) || !src.blob) continue;
+      const sound = await takeSound(app, roomFiles, src.blob);
+      // (Not there yet is not remembered: it may still be on its way from another device.)
+      if (sound) audio.set(src.id, bufferFromSamples(ctx, sound.samples, sound.rate));
     }
   }
 
@@ -663,6 +676,7 @@ export function mountSongRoom(body, app, session, frame) {
     const blob = newBlobId();
     await app.blobs.put(blob, encodeWav(kept, KEEP_RATE), "audio/wav");
     localBlobs.set(blob, true);
+    shareTake(app, session, blob);
     const by = session.memberId;
     const src = sourceOp(session.clock, song, { duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), by, at: Date.now(), blob, name });
     if (ctx) audio.set(src.id, bufferFromSamples(ctx, samples, rate));
@@ -1016,6 +1030,7 @@ export function mountSongRoom(body, app, session, frame) {
         blob = newBlobId();
         await app.blobs.put(blob, encodeWav(pcm, KEEP_RATE), "audio/wav");
         localBlobs.set(blob, true);
+        shareTake(app, session, blob);
       }
       const src = sourceOp(session.clock, song, { ...combined, by: session.memberId, at: Date.now(), blob, name: "이은 소리" });
       const made = joinWithSourceOps(session.clock, song, a, b, src, session.memberId);
@@ -1342,8 +1357,11 @@ export function mountSongRoom(body, app, session, frame) {
   const friendTimer = setInterval(() => { if (peerRecs.size) draw(); }, 250);
   const offs = [
     session.on("change", ({ doc }) => {
+      // A take's sound arriving from another device: the clip can play its original now.
+      if (doc === "files") return void draw();
       if (doc !== "song" && doc !== "room") return;
       if (selected && (!song.clip(selected) || song.clip(selected).removed)) selected = null;
+      if (doc === "song") shareMine();
       draw();
     }),
     session.on("peers", () => {
@@ -1368,6 +1386,12 @@ export function mountSongRoom(body, app, session, frame) {
   session.load("song").then(() => {
     loaded = true;
     draw();
+    return session.load("files");
+  }).then((files) => {
+    if (!alive) return;
+    roomFiles = files;
+    shareMine();
+    draw();
   });
   draw();
 
@@ -1381,6 +1405,7 @@ export function mountSongRoom(body, app, session, frame) {
       const by = session.memberId;
       const src = sourceOp(session.clock, song, { duration: memo.dur, notes: memo.notes, peaks: memo.peaks, by, at: Date.now(), blob: memo.blob, name: memo.name });
       localBlobs.set(memo.blob, true);
+      shareTake(app, session, memo.blob);
       const clip = addClipOps(session.clock, song, { src: src.id, row, start: playhead, length, by, at: Date.now() });
       session.commit("song", [src, ...clip.ops]);
       record(clip.atoms);

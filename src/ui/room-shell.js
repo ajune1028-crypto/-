@@ -289,7 +289,7 @@ export function showRoom(app, roomId) {
       const name = session.room.meta("name") || "방";
       // The system share sheet exists on phones outside the trial page, which refuses it.
       const canSend = !app.shareBase() && typeof navigator.share === "function";
-      const send = () => Promise.resolve().then(() => navigator.share({ title: name, text: name + " 방으로 들어와요", url: link }))
+      const send = () => Promise.resolve().then(() => navigator.share({ title: name, text: `내 작은 우주에 초대할게요: ${name}`, url: link }))
         .catch((err) => { if (err?.name !== "AbortError") copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요"); });
       panel.append(h("div", { class: "form" },
         h("p", { class: "help", text: "이 링크를 받은 사람은 바로 이 방으로 들어와요." }),

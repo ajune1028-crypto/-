@@ -7,6 +7,7 @@
 
 import { chime, buzz } from "./chime.js";
 import { h } from "./dom.js";
+import { MOTTO } from "./motto.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
 import { diffText, spliceOps, mixOps, lockedEdit } from "../core/edit.js";
@@ -50,7 +51,7 @@ export class SheetEditor {
     this.carets = h("div", { class: "carets", "aria-hidden": "true" });
     this.input = h("textarea", {
       class: "typing", id: "sheet-" + day, spellcheck: false, autocomplete: "off", autocapitalize: "off",
-      "aria-label": dayLabel(day) + "에 쓴 글", placeholder: isToday ? "오늘의 첫 글을 써 보세요" : "",
+      "aria-label": dayLabel(day) + "에 쓴 글", placeholder: isToday ? MOTTO : "",
     });
     this.input.setAttribute("autocorrect", "off");
     this.layers = h("div", { class: "layers" }, this.draw, this.carets, this.input);

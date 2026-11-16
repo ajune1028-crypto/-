@@ -45,7 +45,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
-    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 3, placeholder: "가사, 코드, 아이디어… 이 기기의 나만 봐요" });
+    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 3, placeholder: "나만 보는 작은 우주: 가사, 코드, 아이디어…" });
     let busy = false;
     let audio = null; // the recording being heard: { id, el, url }
 

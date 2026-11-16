@@ -168,7 +168,7 @@ export function formBox(onSubmit, ...children) {
 export function segmented(options, current, onPick, attr) {
   const el = h("div", { class: "seg", role: "group" });
   const paint = (value) => {
-    for (const b of el.children) b.setAttribute("aria-pressed", String(b.dataset.value === value));
+    for (const b of el.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.value === value));
   };
   for (const [value, label, id] of options) {
     const data = { value };
@@ -176,7 +176,58 @@ export function segmented(options, current, onPick, attr) {
     el.append(h("button", { type: "button", id, data, text: label, onclick: () => { paint(value); onPick(value); } }));
   }
   paint(current);
+  flowingPill(el);
   return el;
+}
+
+/**
+ * The mark of what is chosen moves like water (the owner: "그냥 단지 그 모드로 가는 게 아니라… 물처럼
+ * 작아졌다가 거기까지 가는"): it gathers into a drop where it was, runs to the new choice and
+ * spreads out there. Whoever sets aria-pressed (this control or its screen) moves it.
+ */
+function flowingPill(seg) {
+  const pill = h("span", { class: "seg-pill", "aria-hidden": "true" });
+  seg.prepend(pill);
+  let box = null;
+  let run = null;
+  const place = (animate) => {
+    const on = seg.querySelector('button[aria-pressed="true"]');
+    if (!on || !on.offsetWidth) {
+      seg.classList.remove("has-pill");
+      box = null;
+      return;
+    }
+    const to = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+    const from = box;
+    box = to;
+    Object.assign(pill.style, { left: to.x + "px", top: to.y + "px", width: to.w + "px", height: to.h + "px" });
+    seg.classList.add("has-pill");
+    if (!animate || !from || (from.x === to.x && from.y === to.y) || !pill.animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const dx = from.x + from.w / 2 - (to.x + to.w / 2);
+    const dy = from.y + from.h / 2 - (to.y + to.h / 2);
+    const sx = from.w / to.w;
+    const sy = from.h / to.h;
+    // Drawn out along the way it runs, as a drop is.
+    const along = Math.abs(dx) >= Math.abs(dy);
+    const drop = (k, wide, tall) => `translate(${dx * k}px, ${dy * k}px) scale(${(along ? wide : tall) * (1 + (sx - 1) * k)}, ${(along ? tall : wide) * (1 + (sy - 1) * k)})`;
+    run?.cancel();
+    run = pill.animate([
+      { transform: drop(1, 1, 1), offset: 0 },
+      { transform: drop(0.96, 0.62, 0.7), offset: 0.26, easing: "cubic-bezier(0.5, 0, 0.3, 1)" },
+      { transform: drop(0.12, 0.8, 0.66), offset: 0.7, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" },
+      { transform: "translate(0, 0) scale(1.05, 1.06)", offset: 0.88 },
+      { transform: "none", offset: 1 },
+    ], { duration: 460, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+  };
+  let queued = false;
+  const soon = (animate) => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; place(animate); });
+  };
+  new MutationObserver(() => soon(true)).observe(seg, { attributes: true, attributeFilter: ["aria-pressed"], subtree: true });
+  if (typeof ResizeObserver === "function") new ResizeObserver(() => { box = null; soon(false); }).observe(seg);
+  soon(false);
 }
 
 export function toggle(id, label, checked, onChange) {

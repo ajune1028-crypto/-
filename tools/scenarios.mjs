@@ -1875,7 +1875,8 @@ scenario("song: when the mic is refused, a sheet's one button asks the browser a
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 15000);
 });
 
-scenario("song: a friend's device shows the same clips and plays them as piano", async ({ open, fixtures }) => {
+// The owner: "다른 기기에서 올린 거는 다른 기기에서 못 보게 원본이 여기 없다고 뜨는데… 고쳐줘".
+scenario("song: a friend's device shows the same clips, plays them as piano, and gets the take's own sound through the room (원본 plays there too)", async ({ open, fixtures }) => {
   const a = await open({ dev: "a" });
   const id = await createSongRoom(a, { room: "같이 부르는 방" });
   await importSound(a, fixtures.doremi);
@@ -1885,8 +1886,20 @@ scenario("song: a friend's device shows the same clips and plays them as piano",
   await joinNew(b, { name: "나래" });
   await b.waitFor(`document.querySelectorAll(".clip[data-id] .note").length === 5`);
   assert.deepEqual(await noteNames(b), ["도", "레", "미", "파", "솔"]);
+  // The take's own sound came through the room's files under the take's key: 원본 has it here.
+  const blob = await a.eval(`[...window.__app.session.doc("song").sources.values()][0].blob`);
+  await b.waitFor(`!!window.__app.session.doc("files").named(${JSON.stringify(blob)})`, 15000);
+  assert.equal(await b.eval(`window.__app.blobs.get(${JSON.stringify(blob)}).then((k) => !!k)`), false, "the friend's device has no copy of its own");
   await click(b, "#mode-original");
-  await b.waitFor(`${q(".clip[data-id] .clip-note")}?.textContent === "원본은 이 기기에 없어요"`);
+  await b.waitFor(`!document.querySelector(".clip[data-id] .clip-note")`);
+  await click(b, "#play");
+  await b.waitFor(`window.__app.player?.playing && !!window.__app.player.audioFor([...window.__app.session.doc("song").sources.keys()][0])`, 8000);
+  const heard = await b.eval(`(() => { const buf = window.__app.player.audioFor([...window.__app.session.doc("song").sources.keys()][0]); const x = buf.getChannelData(0); let e = 0; for (const v of x) e += v * v; return { seconds: buf.duration, rms: Math.sqrt(e / x.length) }; })()`);
+  assert.ok(heard.seconds > 2 && heard.rms > 0.01, "the voice itself, whole: " + JSON.stringify(heard));
+  await click(b, "#play");
+  // Sent once: opening the room again on the maker's device does not send it again.
+  const parts = await a.eval(`window.__app.session.doc("files").files.size`);
+  assert.equal(parts, 1, "one file for the one take");
   // A change on one side shows on the other.
   await choose(a, ".clip[data-id]");
   await click(a, "#clip-mute");
@@ -4255,6 +4268,43 @@ scenario("song 옆 패널: on a wide screen lying down the chosen clip's name an
   assert.match(await text(page, "#side-summary"), /클립 2개/);
 });
 
+// The owner: "노래 모드랑 어디 모드로 갈 때 그냥 단지 그 모드로 가는 게 아니라… 물처럼 작아졌다가 거기까지 가는".
+scenario("motion: the chosen mark runs like a drop of water from one mode to the next - smaller on the way, the same size as the new choice where it settles; in the song room 원본/피아노 too", async ({ open, fixtures }) => {
+  const page = await open();
+  await createBoard(page);
+  const box = (sel) => page.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await page.waitFor(`document.querySelector(".board-modes").classList.contains("has-pill")`);
+  const start = await box(".board-modes .seg-pill");
+  const all = await box("#mode-all");
+  assert.ok(Math.abs(start.x - all.x) < 1 && Math.abs(start.w - all.w) < 1, "it stands on 전체: " + JSON.stringify([start, all]));
+  const clear = await page.eval(`(() => { const s = getComputedStyle(document.getElementById("mode-all")); return s.backgroundImage === "none" && s.backgroundColor === "rgba(0, 0, 0, 0)"; })()`);
+  assert.ok(clear, "the chosen button itself is clear: the mark is the drop");
+  await page.front();
+  await click(page, "#mode-song");
+  // On its way: smaller than either end (a drop), and moving.
+  let smallest = Infinity;
+  for (let i = 0; i < 12; i++) {
+    const w = await page.eval(`document.querySelector(".board-modes .seg-pill").getBoundingClientRect().width`);
+    smallest = Math.min(smallest, w);
+    await pause(25);
+  }
+  const song = await box("#mode-song");
+  assert.ok(smallest < Math.min(all.w, song.w) * 0.9, `it gathers into a drop on the way: ${smallest} < ${Math.min(all.w, song.w)}`);
+  await page.waitFor(`!document.querySelector(".board-modes .seg-pill").getAnimations().length`, 2000);
+  const end = await box(".board-modes .seg-pill");
+  assert.ok(Math.abs(end.x - song.x) < 1 && Math.abs(end.w - song.w) < 1, "it settles on 노래, its size: " + JSON.stringify([end, song]));
+  // The song room's 원본/피아노 flows the same way.
+  await click(page, "#back");
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await page.waitFor(`document.querySelector(".mode-switch").classList.contains("has-pill")`);
+  await click(page, "#mode-original");
+  await page.waitFor(`!document.querySelector(".mode-switch .seg-pill").getAnimations().length`, 2000);
+  const pill = await box(".mode-switch .seg-pill");
+  const orig = await box("#mode-original");
+  assert.ok(Math.abs(pill.x - orig.x) < 1 && Math.abs(pill.w - orig.w) < 1, "on 원본 now");
+});
+
 scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
   const page = await open({ width: 700, height: 900 });
   await createBoard(page);
@@ -4299,7 +4349,7 @@ scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mod
   assert.ok(side.left >= side.barRight - 1 && side.left < side.mid, "the tools stand on the left, past the bar: " + JSON.stringify(side));
   assert.equal(await page.eval(`document.querySelectorAll(".card").length`), cards, "the long press added no note");
   assert.ok(!(await page.eval(`!!document.querySelector(".scrim:not(.closing)")`)), "no sheet opened by the drop");
-  assert.match(await page.eval(`document.querySelector(".board-hint")?.textContent || ""`), /^왼쪽 아이콘으로/, "the hint names the side");
+  assert.match(await page.eval(`document.querySelector(".board-hint")?.textContent || ""`), /왼쪽 아이콘으로/, "the hint names the side");
   await page.front();
   await page.shot(out("board-bar-left.png"));
   // Drawing: the bars step back while the pen is down.
