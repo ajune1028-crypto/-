@@ -14,23 +14,8 @@ import { refSounds } from "../reference.js";
 import { getSettings } from "../identity.js";
 import { memberColor } from "../core/paint.js";
 import { currentTheme, myPeopleColor } from "./theme.js";
-import { MOTTO } from "./motto.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-
-/**
- * Once each time the app is opened, its words rise over home and melt away (they never stop a
- * touch: whatever is under them can be pressed at once).
- */
-function greet(app) {
-  if (app.greeted) return;
-  app.greeted = true;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  // On the page itself, not in home (home is drawn again as rooms arrive).
-  const el = h("div", { class: "greet", id: "greet", "aria-hidden": "true" }, h("p", { text: MOTTO }));
-  document.body.append(el);
-  setTimeout(() => el.remove(), 1900);
-}
 
 function whenLabel(ms) {
   const tz = localZone();
@@ -232,9 +217,7 @@ export function showHome(app) {
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
           h("button", { class: "pill rec-pill", id: "home-record", type: "button", "aria-label": "녹음 (모아 두고 방으로 보내기)", onclick: () => openReference(app, { tab: "sounds" }) },
             h("span", { class: "dot-rec", "aria-hidden": "true" }), "녹음", refSounds(app.store).length > 0 && h("span", { class: "rec-count", text: String(refSounds(app.store).length) })),
-          h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }),
-          // The app's own words (the owner: "본질 중심 문구"), quiet at the foot of the doors.
-          h("p", { class: "home-motto", id: "home-motto", text: MOTTO }))));
+          h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
   }
 
   function sheet(title, build) {
@@ -367,7 +350,6 @@ export function showHome(app) {
   }
 
   draw();
-  greet(app);
   const slowTimer = setTimeout(() => {
     if (!app.connecting) return;
     slow = true;
