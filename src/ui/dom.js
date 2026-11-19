@@ -35,6 +35,10 @@ const ICONS = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
   pen: '<path d="M4.5 19.5l1.2-4.4L15.6 5.2a2.1 2.1 0 013 3l-9.9 9.9z"/><path d="M13.8 7l3 3"/>',
   eraser: '<path d="M8.6 19.5h10.9"/><path d="M4.9 15.3l8.4-8.4a2 2 0 012.8 0l2.9 2.9a2 2 0 010 2.8l-6.6 6.6H8.5z"/>',
+  // 애니메이션: a strip of film.
+  film: '<rect x="4" y="4.5" width="16" height="15" rx="2.4"/><path d="M8.2 4.5v15M15.8 4.5v15M4 9.5h4.2M4 14.5h4.2M15.8 9.5H20M15.8 14.5H20"/>',
+  // 양파 껍질: frames behind frames.
+  onion: '<rect x="3.5" y="6.5" width="11" height="11" rx="2.2" opacity="0.45"/><rect x="6.5" y="5" width="11" height="11" rx="2.2" opacity="0.7"/><rect x="9.5" y="3.5" width="11" height="11" rx="2.2"/>',
   // 가리키기: a pen whose tip gives light.
   laser: '<path d="M4.6 19.4l7.6-7.6"/><path d="M10.9 13.1l2-2"/><circle cx="16.4" cy="7.6" r="1.9"/><path d="M16.4 2.9v1.3M21.1 7.6h-1.3M19.7 4.3l-.9.9M19.7 10.9l-.9-.9M13.1 4.3l.9.9"/>',
   // Room kinds.

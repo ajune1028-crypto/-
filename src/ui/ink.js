@@ -599,7 +599,8 @@ export class InkLayer {
     const shift = this.shift;
     const t = g.getTransform();
     const key = [this.ink().version, w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
-    if (!this.kept || this.kept.key !== key) {
+    // The picture belongs to one drawing (a layer can be pointed at another one: 애니메이션 방's frames).
+    if (!this.kept || this.kept.key !== key || this.kept.doc !== this.ink()) {
       const pic = this.kept?.canvas || document.createElement("canvas");
       pic.width = w;
       pic.height = hgt;
@@ -609,7 +610,7 @@ export class InkLayer {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
         this.paint(pg, pts, s.c, s.w, brushOf(s), !!s.q);
       }
-      this.kept = { key, canvas: pic };
+      this.kept = { key, canvas: pic, doc: this.ink() };
     }
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);

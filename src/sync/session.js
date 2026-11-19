@@ -17,6 +17,7 @@ import { InkDoc } from "../core/ink.js";
 import { BoardDoc } from "../core/board.js";
 import { FileDoc } from "../core/files.js";
 import { DrawDoc } from "../core/draw.js";
+import { AnimDoc } from "../core/anim.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -37,6 +38,7 @@ export const DOC_TYPES = [
   { test: (doc) => doc === "files", make: () => new FileDoc() },
   // 그림 방's layers (each layer's strokes are a "k:L<id>" drawing).
   { test: (doc) => doc === "draw", make: () => new DrawDoc() },
+  { test: (doc) => doc === "anim", make: () => new AnimDoc() },
 ];
 
 export class RoomSession extends Emitter {

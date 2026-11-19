@@ -58,6 +58,13 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **홈**: 별표(반쪽 맨 위), ⋮ **찾기와 집**(누르면 아래에서, 던지면 닿은 변이 내 색 네온으로 빛나고 그 변에서: `ui/edge-glow.js`, `ui/home-panel.js`), 검색(`core/search.js`: 초성, 치는 중인 글자, 앞에서 맞는 것 먼저, 내용 검색은 방을 나올 때 남긴 글 `roomWords`), 최근 검색(5·10·20), **집**(폴더 대신 진한 색 유리 집, 방을 꾹 들어 끌어다 넣기; `src/houses.js`, 이 기기만).
   - **모래 필름**: 모든 유리에 내 글라스 색의 고운 알갱이(`filmImage`, theme.js가 `--film-light/--film-dark`로 그림), 글 종이는 절반.
   - **레퍼런스 다시**(본질 문서 5.8): "나만 보는 주머니" 한 줄, 녹음·폰 녹음 앱·파일 한 줄 타일, 메모는 메시지처럼, 카드의 주 동작 '여기에 놓기', 방 종류에 맞는 탭으로 열림, 테마를 바꾸면 떠 있는 유리를 다시 그림.
+- **11월 20일 (사용자: "공개 코드를 보고서 먼저", "아트크래프트뿐 아니라 찾은 것 전부", "그 앱들의 편의성·쓰임·아이콘·넣는 법 먼저", "진짜 프로처럼, 몰입")**: rulings의 같은 날 절, `specs/2026-11-20-reference-study.md`(방마다 배울 것과 순서), `plans/2026-11-20-owner-requests.md`(시킨 것 전부).
+  - **그림 방**(`creative-draw`, `ui/draw-room.js`, `core/draw.js`): Klecks 레이어 16개(이름·보이기·불투명도·섞는 방식·순서), 레이어마다 그림 문서 `k:L<id>`.
+  - **실시간 선**(`ui/live-ink.js`, `core/live.js`): 친구가 긋는 중인 선과 펜 끝 이름이 presence의 '부분'(`setPresencePart`)으로 바로 보인다. **가리키기**(레이저, 사라지는 네온 꼬리). 텍스트 방·화이트보드·그림 방·애니메이션 방.
+  - **몸짓**(프로크리에이트): 두 손가락 톡 되돌리기, 세 손가락 톡 다시하기(`watchFingerTaps`), 손가락 꾹 스포이트(고리), 빠르게 오므리면 종이 맞춤(`ui/page-stage.js`).
+  - **붓**: 손떨림 보정(lazy-brush, '보정 약·중·강·끔'), 스케치(Klecks), 크레용(Easy-Brush 다이내믹스 + 분필 끝), 연필은 Klecks 분필 끝(`chalkAlpha`, 심플렉스 잡음 `core/noise.js`). 출처 전부 `THIRD_PARTY.md`.
+  - **⋮ 다시**: 레퍼런스와 자리 바꿈(위 줄 설정·레퍼런스, ⋮는 그 아래), 던진 길을 따라 실제로 닿는 변(`core/fling.js`: Flutter VelocityTracker), 놓기 전 떨어질 자리의 빛, 네온 빛(캔버스), 바·끝자락 던지기(vaul 기준), 마지막 변 기억.
+  - **애니메이션 방**(`creative-anim`, `ui/anim-room.js`, `core/anim.js`): 장 띠, 양파 껍질, 재생(장/초, 반복·왕복·한 번), 길게, 복제, 친구가 있는 장 표시. 장마다 `k:F<id>`.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 늦은 판, 10번째: 예시 녹음, 홈 녹음, 위치 선, 잇기 갈래, 올가미). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.

@@ -1740,3 +1740,70 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
 .home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
 .home-panel.held { transition: none; }
+.draw-page.fitting { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+
+/* 애니메이션 방: the onion skin and the frame playing lie over the page; the strip of frames below. */
+.anim-sheet { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.anim-onion { z-index: 0; }
+#anim-ink { z-index: 1; }
+.anim-show { z-index: 2; background: #fffdf8; border-radius: 0.4rem; }
+.anim-strip { display: flex; align-items: flex-end; gap: 0.35rem; width: min(100% - 1rem, 40rem); margin: 0 auto 0.3rem; padding: 0.35rem 0.45rem; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 62%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.anim-strip::-webkit-scrollbar { display: none; }
+.anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: #fffdf8; touch-action: manipulation; }
+.anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }
+.anim-frame.on { border-color: var(--tint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint) 35%, transparent); }
+.anim-frame.playing { border-color: color-mix(in srgb, var(--tint) 70%, #fff); box-shadow: 0 0 0.8rem color-mix(in srgb, var(--tint) 55%, transparent); }
+.anim-num { position: absolute; left: 0.2rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 700; color: color-mix(in srgb, #1b2030 60%, transparent); }
+.anim-hold { position: absolute; right: 0.22rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 800; color: var(--tint); }
+.anim-peers { position: absolute; top: -0.3rem; right: -0.2rem; display: flex; gap: 0.1rem; }
+.anim-peers i { width: 0.55rem; height: 0.55rem; border-radius: 50%; border: 1.5px solid #fff; }
+.anim-add { flex: none; display: grid; place-items: center; width: 2.2rem; height: 3.5rem; border: 1.5px dashed color-mix(in srgb, var(--ink) 25%, transparent); border-radius: 0.6rem; background: transparent; color: var(--ink); }
+.anim-add svg { width: 1.1rem; height: 1.1rem; }
+.anim-chip.chip { height: 1.9rem; padding: 0 0.6rem; font-size: 0.72rem; white-space: nowrap; align-self: center; }
+.anim-menu { position: fixed; z-index: 70; display: grid; gap: 0.35rem; padding: 0.5rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 80%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.anim-menu-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.anim-menu-label { font-size: 0.75rem; font-weight: 700; margin-right: 0.15rem; }
+
+/* 미니게임 (ui/game.js): the menu under the top bar, a small invitation card at the top, and the
+   game over a slightly dimmed room, counting 3·2·1 in the middle first. */
+.game-menu { position: fixed; z-index: 80; display: grid; gap: 0.4rem; width: min(16rem, calc(100vw - 1rem)); padding: 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.game-menu-title { margin: 0 0 0.1rem; font-size: 0.8rem; font-weight: 700; }
+.game-pick { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--glass-edge); border-radius: 0.9rem; background: color-mix(in srgb, var(--tint) 10%, var(--paper)); color: var(--ink); font-size: 0.95rem; font-weight: 700; text-align: left; }
+.game-pick:disabled { opacity: 0.45; }
+.game-faces { font-size: 1.2rem; }
+.game-tally { margin: 0.1rem 0 0; font-size: 0.75rem; opacity: 0.75; }
+.game-invite { position: fixed; z-index: 85; top: calc(env(safe-area-inset-top) + 4.4rem); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 0.5rem; max-width: calc(100vw - 1rem); padding: 0.45rem 0.5rem 0.45rem 0.8rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 86%, transparent); box-shadow: var(--glass-shine), 0 10px 26px color-mix(in srgb, var(--tint) 25%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: invite-in 0.42s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes invite-in { from { opacity: 0; translate: -50% -1.2rem; } to { opacity: 1; translate: -50% 0; } }
+.game-invite-dot { flex: none; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
+.game-invite-text { font-size: 0.85rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-layer { position: fixed; inset: 0; z-index: 88; display: grid; place-items: center; padding: 1rem; background: rgb(8 12 26 / 0.34); -webkit-backdrop-filter: blur(3px) saturate(1.1); backdrop-filter: blur(3px) saturate(1.1); animation: dim-in 0.35s ease-out; }
+@keyframes dim-in { from { background: rgb(8 12 26 / 0); } }
+.game-layer.counting { gap: 1.2rem; align-content: center; }
+.game-count { font-size: clamp(6rem, 30vw, 11rem); font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 1.4rem color-mix(in srgb, var(--tint) 85%, transparent), 0 0 3.6rem color-mix(in srgb, var(--tint) 55%, transparent); animation: count-pop 1s cubic-bezier(0.2, 0.9, 0.2, 1) infinite; }
+@keyframes count-pop { 0% { scale: 1.45; opacity: 0; } 18% { scale: 1; opacity: 1; } 80% { opacity: 1; } 100% { scale: 0.88; opacity: 0.2; } }
+.game-card { display: grid; gap: 0.7rem; width: min(26rem, 100%); padding: 0.9rem; border: 1px solid var(--glass-edge); border-radius: 1.4rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 90%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); animation: card-in 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes card-in { from { opacity: 0; scale: 0.9; } }
+.game-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.game-title { font-weight: 800; margin-right: auto; }
+.game-who { padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; color: #fff; background: var(--c); }
+.game-foot { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; flex-wrap: wrap; }
+.game-result { margin: 0 auto 0 0; font-weight: 800; }
+.game-hint, .game-turn { margin: 0; text-align: center; font-size: 0.85rem; font-weight: 700; }
+.game-layer.counting .game-hint { color: #fff; }
+.rps { display: grid; gap: 0.8rem; justify-items: center; }
+.rps-faces { display: flex; align-items: center; gap: 1rem; font-size: 3rem; }
+.rps-vs { font-size: 0.9rem; font-weight: 800; opacity: 0.6; }
+.game-layer.counting .rps-faces { color: #fff; }
+.rps-hands { display: flex; gap: 0.6rem; }
+.rps-hand { display: grid; justify-items: center; gap: 0.1rem; width: 4.6rem; padding: 0.55rem 0.3rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: color-mix(in srgb, var(--paper) 92%, transparent); color: var(--ink); font-size: 2rem; }
+.rps-hand small { font-size: 0.72rem; font-weight: 700; }
+.omok-wrap { display: grid; gap: 0.4rem; }
+.omok { display: grid; grid-template-columns: repeat(var(--n), 1fr); aspect-ratio: 1; width: 100%; border-radius: 0.6rem; background: #e7c88f; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); padding: 2%; }
+.omok-cell { position: relative; display: grid; place-items: center; border: 0; padding: 0; background: linear-gradient(rgb(70 50 20 / 0.55), rgb(70 50 20 / 0.55)) center / 1px 100% no-repeat, linear-gradient(rgb(70 50 20 / 0.55), rgb(70 50 20 / 0.55)) center / 100% 1px no-repeat; }
+.omok-cell:disabled { opacity: 1; }
+.omok-stone { width: 86%; aspect-ratio: 1; border-radius: 50%; box-shadow: 0 0 0 2px var(--c), 0 2px 4px rgb(0 0 0 / 0.35); }
+.omok-stone.dark { background: radial-gradient(circle at 35% 30%, #5a5f6b, #101216 70%); }
+.omok-stone.light { background: radial-gradient(circle at 35% 30%, #ffffff, #d9dce3 75%); }
+.omok-stone.last { outline: 2px solid color-mix(in srgb, var(--c) 80%, #fff); outline-offset: 1px; }
+.omok-stone.lit { box-shadow: 0 0 0 2px var(--c), 0 0 0.6rem 0.2rem color-mix(in srgb, var(--c) 80%, #fff), 0 0 1.4rem 0.4rem color-mix(in srgb, var(--c) 55%, transparent); }
+.game-btn { font-size: 1rem; }

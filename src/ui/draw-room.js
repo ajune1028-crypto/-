@@ -6,6 +6,7 @@
 
 import { h, icon, iconButton, toast, closeOnOutside, flashHint } from "./dom.js";
 import { watchFingerTaps } from "./fingers.js";
+import { pageStage } from "./page-stage.js";
 import { InkLayer, drawInkTools, paintStroke, pixelAt } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
@@ -27,20 +28,14 @@ export function mountDrawRoom(body, app, session, frame) {
   const readOnly = () => !!session.transport.readOnly;
   let alive = true;
   let active = null; // the layer I draw on
-  let zoom = 1;
-  let panX = 0;
-  let panY = 0;
-  let fitted = false;
-  let pinch = null;
   const pen = { tool: "pen", brush: getSettings(app.store).inkBrush || "pen", color: "black", width: 2 };
   const hosts = new Map(); // layer id → { el, ink }
   // Friends' lines while they draw them and their pointer's light, on whichever layer they draw.
   const liveInk = new LiveInk(session);
 
-  const page = h("div", { class: "draw-page", id: "draw-page", style: { width: PAGE_W / 100 + "rem", height: PAGE_H / 100 + "rem" } });
-  const stage = h("div", { class: "draw-stage", id: "draw-stage" }, page);
-  body.classList.add("draw-body");
-  body.append(stage);
+  // The page fitted to the screen; two fingers zoom and move it (ui/page-stage.js).
+  const view = pageStage(body, { id: "draw", width: PAGE_W, height: PAGE_H, onPinch: () => { for (const { ink } of hosts.values()) ink.cancelTouch(); } });
+  const { page, stage } = view;
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", role: "toolbar", "aria-label": "그리기 도구" });
   const panel = h("aside", { class: "layers-panel", id: "layers-panel", hidden: true, "aria-label": "레이어" });
   const undoButton = iconButton("draw-undo", "undo", "되돌리기", () => step("undo"), "되돌리기");
@@ -51,75 +46,11 @@ export function mountDrawRoom(body, app, session, frame) {
   body.append(panel);
   body.after(inkTools, toolbar);
 
-  // ---- the view: the page fitted to the screen; two fingers zoom and move it ---------------------
-
-  const place = () => { page.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`; };
-  const pagePx = () => [page.offsetWidth, page.offsetHeight];
-  function fit() {
-    const [w, hgt] = pagePx();
-    const sw = stage.clientWidth;
-    const sh = stage.clientHeight;
-    if (!w || !sw || !sh) return;
-    zoom = Math.min((sw - 24) / w, (sh - 24) / hgt);
-    panX = (sw - w * zoom) / 2;
-    panY = (sh - hgt * zoom) / 2;
-    fitted = true;
-    place();
-  }
-  const resize = new ResizeObserver(() => { if (!fitted || !pinch) fit(); });
-  resize.observe(stage);
-  const touches = new Map();
-  stage.addEventListener("pointerdown", (e) => {
-    if (e.pointerType !== "touch") return;
-    touches.set(e.pointerId, [e.clientX, e.clientY]);
-    if (touches.size === 2) {
-      // A second finger: no line from it; the page follows the fingers.
-      for (const { ink } of hosts.values()) ink.cancelTouch();
-      const [[ax, ay], [bx, by]] = [...touches.values()];
-      const s = stage.getBoundingClientRect();
-      const mx = (ax + bx) / 2 - s.left;
-      const my = (ay + by) / 2 - s.top;
-      pinch = { d: Math.hypot(bx - ax, by - ay) || 1, zoom, px: (mx - panX) / zoom, py: (my - panY) / zoom };
-    }
-  }, true);
-  stage.addEventListener("pointermove", (e) => {
-    if (!touches.has(e.pointerId)) return;
-    touches.set(e.pointerId, [e.clientX, e.clientY]);
-    if (!pinch || touches.size < 2) return;
-    const [[ax, ay], [bx, by]] = [...touches.values()];
-    const s = stage.getBoundingClientRect();
-    const mx = (ax + bx) / 2 - s.left;
-    const my = (ay + by) / 2 - s.top;
-    zoom = clamp(pinch.zoom * (Math.hypot(bx - ax, by - ay) / pinch.d), 0.3, 8);
-    panX = mx - pinch.px * zoom;
-    panY = my - pinch.py * zoom;
-    place();
-  }, true);
-  const lift = (e) => {
-    touches.delete(e.pointerId);
-    if (touches.size < 2) pinch = null;
-  };
-  window.addEventListener("pointerup", lift, true);
-  window.addEventListener("pointercancel", lift, true);
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
   });
-  // A mouse wheel zooms around the pointer.
-  stage.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const s = stage.getBoundingClientRect();
-    const mx = e.clientX - s.left;
-    const my = e.clientY - s.top;
-    const px = (mx - panX) / zoom;
-    const py = (my - panY) / zoom;
-    zoom = clamp(zoom * Math.exp(-e.deltaY * 0.0015), 0.3, 8);
-    panX = mx - px * zoom;
-    panY = my - py * zoom;
-    place();
-  }, { passive: false });
-
   // ---- layers on the page ---------------------------------------------------------------------
 
   function layerHost(layer) {
@@ -134,7 +65,7 @@ export function mountDrawRoom(body, app, session, frame) {
       steady: () => getSettings(app.store).inkSteady ?? 1,
       onPick: (color) => { pen.color = color; setTool(pen.tool); },
       pick: (x, y) => colorAt(x, y),
-      blocked: () => !!pinch,
+      blocked: () => view.pinching,
       grow: false,
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
@@ -401,7 +332,7 @@ export function mountDrawRoom(body, app, session, frame) {
       active = made.id;
     }
     drawLayers();
-    fit();
+    view.fit();
   });
   record([]);
   drawLayers();
@@ -411,9 +342,7 @@ export function mountDrawRoom(body, app, session, frame) {
       alive = false;
       stopOutside?.();
       for (const off of offs) off();
-      resize.disconnect();
-      window.removeEventListener("pointerup", lift, true);
-      window.removeEventListener("pointercancel", lift, true);
+      view.destroy();
       stopTaps();
       for (const { ink } of hosts.values()) ink.destroy();
       liveInk.close();

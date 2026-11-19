@@ -236,7 +236,7 @@ scenario("create: on the creative side 노래 만들기 and 화이트보드 are 
   const page = await open();
   await click(page, "#add-creative");
   const kinds = await page.eval(`[...document.querySelectorAll(".kind")].map((b) => [b.dataset.kind, b.disabled, b.querySelector(".soon")?.textContent ?? ""])`);
-  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", false, ""], ["creative-draw", false, ""]]);
+  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", false, ""], ["creative-draw", false, ""], ["creative-anim", false, ""]]);
 });
 
 scenario("second device: finds the room, joins as a new person with another colour", async ({ open }) => {
@@ -5088,4 +5088,79 @@ scenario("⋮ panel thrown by its grip: up it goes to the top edge, left to the 
   await page.waitFor(`!document.getElementById("home-panel")`, 2500);
   await click(page, "#home-more");
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "left"`, 2000);
+});
+
+// 애니메이션 방 (reference study §3, FlipaClip · Procreate · OpenToonz): a flipbook drawn together.
+// It starts with two empty frames and the onion skin on; a frame drawn on shows faintly (red) on the
+// next; a frame copied comes next with the same drawing; held longer (×3) it is wider in the strip
+// and shows longer as it plays; ▶ plays the frames in turn; the friend sees the same frames, and the
+// strip shows on which frame each friend is.
+scenario("애니메이션 방: two frames to start; the onion skin shows the frame before; 복제 copies a frame; ×3 holds it; ▶ plays the frames in turn; the friend sees the frames and where each one is", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 880 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "같이 플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && document.querySelectorAll("#anim-strip .anim-frame").length === 2`);
+  assert.equal(await a.eval(`${q("#anim-onion-btn")}.getAttribute("aria-pressed")`), "true", "the onion skin is on");
+  const frames = () => a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const [f1, f2] = await frames();
+  const box = await a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  // A ball on the first frame.
+  await a.press(box.x + box.w * 0.3, box.y + box.h * 0.5);
+  for (let i = 1; i <= 12; i++) await a.moveTo(box.x + box.w * (0.3 + 0.08 * Math.cos((i / 12) * Math.PI * 2) - 0.08), box.y + box.h * (0.5 + 0.06 * Math.sin((i / 12) * Math.PI * 2)));
+  await a.release(box.x + box.w * 0.3, box.y + box.h * 0.5);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes().length === 1`);
+  // On the second frame, the first shows faintly beneath (the onion skin has ink).
+  await click(a, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q(`.anim-frame[data-frame="${f2}"]`)}.classList.contains("on")`);
+  await a.front();
+  await pause(200);
+  const onionInk = await a.eval(`(() => { const c = document.querySelector(".anim-onion"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`);
+  assert.ok(onionInk > 50, "the frame before shows through: " + onionInk);
+  // Back to the first, and 복제: a third frame right after it, with the same ball.
+  await click(a, `.anim-frame[data-frame="${f1}"]`);
+  await click(a, "#anim-copy");
+  await a.waitFor(`window.__app.session.doc("anim").frames().length === 3`);
+  const after = await frames();
+  assert.equal(after[0], f1);
+  assert.equal(after[2], f2, "the copy comes right after the one copied");
+  await a.waitFor(`window.__app.session.doc("k:F${after[1]}").strokes().length === 1`);
+  // ×3: held longer, wider in the strip.
+  const narrow = await a.eval(`${q(`.anim-frame[data-frame="${f1}"]`)}.getBoundingClientRect().width`);
+  const cell = await a.eval(`(() => { const r = document.querySelector('.anim-frame[data-frame="${f1}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [cell]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q("#anim-menu"), 2000);
+  await click(a, '#anim-menu [data-hold="3"]');
+  await a.waitFor(`window.__app.session.doc("anim").frame("${f1}").hold === 3 && !document.getElementById("anim-menu")`);
+  const wide = await a.eval(`${q(`.anim-frame[data-frame="${f1}"]`)}.getBoundingClientRect().width`);
+  assert.ok(wide > narrow * 1.5, `held frames are wider: ${narrow} → ${wide}`);
+  // The friend joins and sees the three frames; the strip shows where the friend is.
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 880 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`document.querySelectorAll("#anim-strip .anim-frame").length === 3`);
+  await click(b, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q(`.anim-frame[data-frame="${f2}"] .anim-peers i`)}`, 4000);
+  // ▶: the frames show in turn (f1 three ticks, then its copy, then f2), and ⏸ stops.
+  await a.front();
+  await click(a, "#anim-play");
+  const seen = new Set();
+  const until = Date.now() + 2500;
+  while (Date.now() < until && seen.size < 3) {
+    const f = await a.eval(`document.getElementById("anim-show").dataset.frame || ""`);
+    if (f) seen.add(f);
+    await pause(30);
+  }
+  assert.equal(seen.size, 3, "every frame showed while playing: " + [...seen]);
+  await a.shot(out("anim-playing.png"));
+  await click(a, "#anim-play");
+  await a.waitFor(`document.getElementById("anim-show").hidden`);
+  await a.shot(out("anim-room.png"));
 });
