@@ -3,6 +3,10 @@
 const ICONS = {
   back: '<path d="M15 5l-7 7 7 7"/>',
   more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  layers: '<path d="M12 4.2l8.2 4.4L12 13 3.8 8.6z"/><path d="M3.8 12.4L12 16.8l8.2-4.4"/><path d="M3.8 16.2L12 20.6l8.2-4.4"/>',
+  save: '<path d="M12 4.5v10.3M7.8 10.6l4.2 4.2 4.2-4.2"/><path d="M5 14.4v4.1A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5v-4.1"/>',
+  eye: '<path d="M2.8 12s3.4-6.2 9.2-6.2S21.2 12 21.2 12s-3.4 6.2-9.2 6.2S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.6"/>',
+  eyeOff: '<path d="M2.8 12s3.4-6.2 9.2-6.2c1.7 0 3.2.5 4.4 1.2M21.2 12s-1.1 2-3.2 3.7M9.6 17.8c.8.3 1.6.4 2.4.4 5.8 0 9.2-6.2 9.2-6.2"/><path d="M4 20L20 4"/>',
   kebab: '<circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>',
   search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>',
   star: '<path d="M12 3.6l2.55 5.2 5.75.84-4.16 4.05.98 5.72L12 16.72l-5.12 2.69.98-5.72L3.7 9.64l5.75-.84z"/>',

@@ -12,6 +12,7 @@
 import { mountTextRoom } from "./text-room.js";
 import { mountSongRoom } from "./song-room.js";
 import { mountBoardRoom } from "./board-room.js";
+import { mountDrawRoom } from "./draw-room.js";
 
 /**
  * The halves of home. 레퍼런스 is not a half: it is a private sheet opened from
@@ -29,6 +30,7 @@ export const ROOM_KINDS = [
   { kind: "creative-song", side: "creative", name: "노래 만들기", icon: "note", note: "흥얼거리면 피아노 음이 돼요", mount: mountSongRoom },
   { kind: "creative-writing", side: "creative", name: "글쓰기", icon: "pen", note: "같이 쓰는 문서" },
   { kind: "creative-board", side: "creative", name: "화이트보드", icon: "board", note: "노래 카드를 놓고 재생 순서를 이어요", mount: mountBoardRoom },
+  { kind: "creative-draw", side: "creative", name: "그림", icon: "pen", note: "같이 그리는 종이, 레이어", mount: mountDrawRoom },
 ];
 
 export function kindsOf(side) {

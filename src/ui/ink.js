@@ -177,10 +177,16 @@ export class InkLayer {
    * canvas transform [a, b, c, d, e, f] from stroke units to CSS pixels of the host.
    */
   /** shapes(): whether a line held still becomes a shape (모양 잡기); onShape() when one does. */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {} }) {
+  /**
+   * grow: false keeps the host's size (a page of fixed size, as in 그림 방); maxPixels caps the
+   * canvas (many layers zoomed in must not take all the memory).
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity }) {
     this.host = host;
     this.shapes = shapes;
     this.onShape = onShape;
+    this.growing = grow;
+    this.maxPixels = maxPixels;
     this.view = view;
     this.blocked = blocked;
     this.room = room;
@@ -325,10 +331,13 @@ export class InkLayer {
 
   render() {
     const c = this.canvas;
-    if (!this.view) this.grow();
+    if (!this.view && this.growing) this.grow();
     const rect = c.getBoundingClientRect();
     const host = this.host.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
+    let ratio = window.devicePixelRatio || 1;
+    // Never more than maxPixels: a little soft when zoomed far in, but every layer fits in memory.
+    const pixels = rect.width * rect.height * ratio * ratio;
+    if (pixels > this.maxPixels) ratio *= Math.sqrt(this.maxPixels / pixels);
     const w = Math.max(1, Math.round(rect.width * ratio));
     const hgt = Math.max(1, Math.round(rect.height * ratio));
     if (c.width !== w || c.height !== hgt) {

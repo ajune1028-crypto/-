@@ -30,3 +30,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Klecks
+
+`src/core/draw.js`(그림 방의 레이어)는 Klecks의 레이어 모델을 따랐다: 이름, 보이기, 불투명도, 섞는 방식(캔버스의 합성 방식 이름 그대로), 순서, 최대 16개. 코드를 옮기지는 않았고 구조와 값의 이름을 따랐다.
+https://github.com/bitbof/klecks
+
+```
+MIT License
+
+Copyright (c) 2026 bitbof (bitbof.com)
+```

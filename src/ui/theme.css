@@ -1682,3 +1682,37 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .room[data-rail-at="bottom"] .board-rail { top: auto; bottom: 0.6rem; }
 .room[data-modes-at="bottom"][data-rail-at="bottom"] .board-rail { bottom: calc(var(--modes-h, 3.2rem) + 1.2rem); }
 .room[data-rail-at="top"] .board-rail > *, .room[data-rail-at="bottom"] .board-rail > * { flex: none; }
+
+/* ---- 그림 방 ------------------------------------------------------------------------------- */
+.draw-body { position: relative; overflow: hidden; }
+.draw-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
+.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: #fffdf8; box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
+.draw-layer { position: absolute; inset: 0; pointer-events: none; }
+.draw-layer.active { pointer-events: auto; }
+.draw-layer[hidden] { display: none; }
+.draw-layer > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.draw-layer > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.layers-panel { position: absolute; top: 0.6rem; right: 0.6rem; z-index: 5; width: min(17rem, calc(100% - 1.2rem)); max-height: calc(100% - 1.2rem); overflow-y: auto; padding: 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.layers-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
+.layers-title { font-size: 0.95rem; font-weight: 800; }
+.layers-head .chip { display: inline-flex; align-items: center; gap: 0.2rem; height: 1.9rem; }
+.layers-head .chip svg { width: 0.95rem; height: 0.95rem; }
+.layers-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.layer-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.3rem; padding: 0.3rem; border-radius: 0.9rem; }
+.layer-row.active { background: color-mix(in srgb, var(--tint) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 55%, transparent); }
+.layer-pick { display: flex; align-items: center; gap: 0.5rem; min-width: 0; text-align: left; }
+.layer-thumb { flex: none; width: 2.25rem; height: 3rem; border-radius: 0.35rem; background: #fffdf8; box-shadow: 0 0 0 1px var(--line); }
+.layer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-weight: 700; }
+.layer-mode { flex: none; font-size: 0.66rem; color: var(--muted); }
+.layer-eye svg { width: 1.1rem; height: 1.1rem; }
+.layer-eye[aria-pressed="false"] { opacity: 0.5; }
+.layer-controls { grid-column: 1 / -1; display: grid; gap: 0.4rem; padding: 0.3rem 0.2rem 0.1rem; }
+.layer-label { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.4rem; font-size: 0.74rem; font-weight: 700; color: var(--soft); }
+.layer-opacity { width: 100%; accent-color: var(--accent); }
+.layer-pct { font-variant-numeric: tabular-nums; }
+.layer-blend { height: 2.2rem; padding: 0 0.6rem; font-size: 0.8rem; }
+.layer-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.layer-actions .chip { height: 1.9rem; padding: 0 0.6rem; font-size: 0.72rem; }
+.layer-name-input { height: 2rem; font-size: 0.85rem; }
+#draw-layers[data-count]::before { content: attr(data-count); position: absolute; top: 0.1rem; right: 0.15rem; min-width: 1rem; height: 1rem; padding: 0 0.2rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 0.6rem; font-weight: 800; line-height: 1rem; text-align: center; }
+#draw-layers { position: relative; }

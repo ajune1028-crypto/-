@@ -16,6 +16,7 @@ import { SongDoc } from "../core/song.js";
 import { InkDoc } from "../core/ink.js";
 import { BoardDoc } from "../core/board.js";
 import { FileDoc } from "../core/files.js";
+import { DrawDoc } from "../core/draw.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -34,6 +35,8 @@ export const DOC_TYPES = [
   { test: (doc) => doc === "board", make: () => new BoardDoc() },
   // Files of the room in parts: a background photo, recordings hidden in words.
   { test: (doc) => doc === "files", make: () => new FileDoc() },
+  // 그림 방's layers (each layer's strokes are a "k:L<id>" drawing).
+  { test: (doc) => doc === "draw", make: () => new DrawDoc() },
 ];
 
 export class RoomSession extends Emitter {

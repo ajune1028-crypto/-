@@ -4815,3 +4815,70 @@ scenario("whiteboard bar and tools stay where they are let go: the bar low on th
   assert.ok(Math.abs(b2.cy - b.cy) < 4 && Math.abs(t2.l - t.l) < 4, "the same places after a reload: " + JSON.stringify([b, b2, t, t2]));
   assert.ok(await pressable());
 });
+
+// The owner: "그림 방도 만들고… 실시간으로 같이 그림 그리는 거", "레이어". One page drawn on together: what
+// one draws, the friend sees; layers are added, chosen, hidden, made see-through and blended, for both.
+scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden and made see-through shows the same for both; undo takes a layer away", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "같이 그림");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const pageBox = async (page) => page.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (page, y) => {
+    const p = await pageBox(page);
+    await page.press(p.x + p.w * 0.2, p.y + p.h * y);
+    for (let i = 1; i <= 8; i++) await page.moveTo(p.x + p.w * (0.2 + 0.07 * i), p.y + p.h * y + Math.sin(i) * 6);
+    await page.release(p.x + p.w * 0.76, p.y + p.h * y);
+  };
+  const strokesOn = (page, n) => page.eval(`(() => { const l = window.__app.session.doc("draw").layers()[${n}]; return l ? window.__app.session.doc("k:L" + l.id).strokes().length : -1; })()`);
+  await line(a, 0.3);
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 1; })()`);
+  await b.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return l && window.__app.session.doc("k:L" + l.id).strokes().length === 1; })()`, 4000);
+  // A second layer, drawn on.
+  await a.front();
+  await click(a, "#draw-layers");
+  await a.waitFor(q("#layer-add"));
+  await click(a, "#layer-add");
+  await a.waitFor(`window.__app.session.doc("draw").layers().length === 2`);
+  // The panel covers part of the page: a tap on the page only puts it away and draws nothing.
+  {
+    const p = await pageBox(a);
+    await a.tap(p.x + p.w * 0.12, p.y + p.h * 0.85);
+    await a.waitFor(`document.getElementById("layers-panel").hidden`);
+    await pause(150);
+    assert.equal(await strokesOn(a, 1), 0, "the tap that put the panel away drew nothing");
+  }
+  await line(a, 0.6);
+  await a.waitFor(`(() => { const ls = window.__app.session.doc("draw").layers(); return window.__app.session.doc("k:L" + ls[1].id).strokes().length === 1; })()`);
+  assert.equal(await strokesOn(a, 0), 1, "the first layer keeps its line");
+  // See-through, multiplied, hidden: the friend's page shows the same.
+  await click(a, "#draw-layers");
+  await a.waitFor(q("#layer-opacity"));
+  {
+    const r = await a.eval(`(() => { const b = document.getElementById("layer-opacity").getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2, w: b.width }; })()`);
+    await a.tap(r.x + r.w * 0.4, r.y);
+  }
+  await a.waitFor(`(() => { const top = window.__app.session.doc("draw").layers()[1]; return top.opacity > 0.3 && top.opacity < 0.5; })()`);
+  const seeThrough = await a.eval(`window.__app.session.doc("draw").layers()[1].opacity`);
+  await a.eval(`(() => { const s = document.getElementById("layer-blend"); s.value = "multiply"; s.dispatchEvent(new Event("change")); return true; })()`);
+  await b.waitFor(`(() => { const top = window.__app.session.doc("draw").layers()[1]; if (!top) return false; const el = document.querySelector('.draw-layer[data-layer="' + top.id + '"]'); return el && el.style.opacity === String(${seeThrough}) && el.style.mixBlendMode === "multiply"; })()`, 4000);
+  await a.shot(out("draw-room.png"));
+  const top = await a.eval(`window.__app.session.doc("draw").layers()[1].id`);
+  await click(a, `[data-eye="${top}"]`);
+  await b.waitFor(`document.querySelector('.draw-layer[data-layer="${top}"]')?.hidden === true`, 4000);
+  // Undo: the eye, the blend, the opacity, the line, then the layer itself; the first line stays.
+  for (let i = 0; i < 4; i++) await click(a, "#draw-undo");
+  await b.waitFor(`(() => { const ls = window.__app.session.doc("draw").layers(); return ls.length === 2 && ls[1].visible && ls[1].opacity === 1 && ls[1].mode === "source-over" && window.__app.session.doc("k:L" + ls[1].id).strokes().length === 0; })()`, 4000);
+  await click(a, "#draw-undo");
+  await b.waitFor(`window.__app.session.doc("draw").layers().length === 1`, 4000);
+  assert.equal(await strokesOn(b, 0), 1, "the first layer's line stays");
+});
