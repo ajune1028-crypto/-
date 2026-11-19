@@ -1665,3 +1665,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .pill, .add { background: var(--sand) left top / 80px 100% repeat-x, var(--glass-bg); }
 .float .btn:not(.quiet), .float .btn.small:not(.quiet) { background: var(--btn-bg); }
 .float .btn.quiet { background: var(--glass-bg); }
+
+/* Nothing in the app is picked up as text by a long press or a double tap (Safari's blue selection
+   and its copy bubble; the owner: "꾹 누르면 이 앱이 텍스트처럼 선택되고 파란색이 뜨는 거 없애줘"),
+   wherever it is drawn (also what floats outside a room or home: 찾기와 집, the dock, toasts) — except
+   where one writes, and the link and code that are there to be copied. */
+html, body, body * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body input, body textarea, body [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+body .link-box, body .code { -webkit-user-select: all; user-select: all; }
+body img, body a, body svg, body canvas { -webkit-user-drag: none; }

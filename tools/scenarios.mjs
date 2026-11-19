@@ -4727,3 +4727,42 @@ scenario("레퍼런스 follows 밝게/어둡게: switched while it is open, its 
   assert.ok(light.title < 0.3 && dark.title > 0.7, "the title's words turn light: " + JSON.stringify([light, dark]));
   assert.ok(light.name < 0.3 && dark.name > 0.7, "the cards' words turn light: " + JSON.stringify([light, dark]));
 });
+
+// The owner (19 November): "브라우저나 사파리에 들어가 있을 때 이 앱에서 꾹 누르면 이 앱이 텍스트처럼
+// 선택되고 파란색이 뜨는 거를 없애줘". Nothing but what one writes in is picked up as text: titles,
+// buttons, rows, 찾기와 집, toasts; the writing layer and form fields still select.
+scenario("no text selection: titles, buttons, rows, 찾기와 집 and the dock are never selected like text; what one writes in still is", async ({ open }) => {
+  const page = await open({ width: 390, height: 800 });
+  await createRoom(page, { room: "선택 없는 방" });
+  await focusEnd(page);
+  await page.type("안녕 하세요");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().includes("하세요")`);
+  // The writing layer still takes text and its selection (the room's own 선택 도구 reads it).
+  assert.equal(await page.eval(`(() => { const t = ${TODAY}.querySelector("textarea"); return getComputedStyle(t).webkitUserSelect || getComputedStyle(t).userSelect; })()`), "text");
+  await click(page, "#back");
+  await page.waitFor(q("#home"));
+  const nothing = async (what, sel) => {
+    await page.eval(`(getSelection().removeAllRanges(), true)`);
+    const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.dblTap(at[0], at[1]);
+    await pause(120);
+    const picked = await page.eval(`getSelection().toString()`);
+    assert.equal(picked, "", what + " is not selected like text");
+  };
+  // Words that are not buttons: a double tap picks nothing.
+  await nothing("home's title", '.half[data-side="daily"] .half-title');
+  await nothing("home's note", '.half[data-side="creative"] .half-note');
+  await click(page, "#home-more");
+  await page.waitFor(q("#home-panel .houses-title"));
+  await nothing("찾기와 집's 집", "#home-panel .houses-title");
+  await nothing("찾기와 집's help", "#home-panel .houses .help");
+  // Buttons and the rest of the page take no selection either (a long press in Safari picks them up otherwise).
+  const style = await page.eval(`(() => {
+    const s = (el) => getComputedStyle(el).webkitUserSelect || getComputedStyle(el).userSelect;
+    const out = {};
+    for (const [k, sel] of Object.entries({ body: "body", row: ".room-row", rec: "#home-record", code: "#by-code", more: "#home-more", panel: "#home-panel", tile: "#house-new", field: "#home-search" })) out[k] = s(document.querySelector(sel));
+    return out;
+  })()`);
+  assert.equal(style.field, "text", "the search field still takes text");
+  for (const k of ["body", "row", "rec", "code", "more", "panel", "tile"]) assert.equal(style[k], "none", k + " takes no selection: " + JSON.stringify(style));
+});
