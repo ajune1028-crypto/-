@@ -4692,3 +4692,29 @@ scenario("home top: 레퍼런스, 설정 and ⋮ stay clear of 창작's one-line
     assert.ok(box.h < box.lh * 1.5, width + ": one line: " + JSON.stringify(box));
   }
 });
+
+// The owner (17 November): "밝기를 어둡게 모드하고 밝게 모드를 해도 레퍼런스는 지금 안 바뀌거든".
+scenario("레퍼런스 follows 밝게/어둡게: switched while it is open, its glass, words and cards turn with the app", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 800 });
+  await page.waitFor(q("#home-record"));
+  await click(page, "#home-record");
+  await page.waitFor(`document.querySelectorAll("#reference .ref-sound").length >= 1`, 15000);
+  const colours = () => page.eval(`(() => {
+    const lum = (c) => { const m = c.match(/[\\d.]+/g).map(Number); return (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255; };
+    const panel = document.getElementById("reference");
+    const card = panel.querySelector(".ref-sound");
+    const title = panel.querySelector(".float-title");
+    // What the panel shows: the colour under its middle, read from a picture of the screen is not possible here;
+    // its words' colour and the cards' colour tell which way it turned.
+    return { title: lum(getComputedStyle(title).color), cardBg: getComputedStyle(card).backgroundColor, card: lum(getComputedStyle(card).backgroundColor.startsWith("rgba(0, 0, 0, 0)") ? "rgb(0,0,0)" : getComputedStyle(card).backgroundColor), name: lum(getComputedStyle(card.querySelector(".pick-name")).color) };
+  })()`);
+  await page.eval(`(document.documentElement.dataset.theme = "light", true)`);
+  const light = await colours();
+  await page.shot(out("ref-light.png"));
+  await page.eval(`(document.documentElement.dataset.theme = "dark", true)`);
+  await pause(200);
+  const dark = await colours();
+  await page.shot(out("ref-dark.png"));
+  assert.ok(light.title < 0.3 && dark.title > 0.7, "the title's words turn light: " + JSON.stringify([light, dark]));
+  assert.ok(light.name < 0.3 && dark.name > 0.7, "the cards' words turn light: " + JSON.stringify([light, dark]));
+});

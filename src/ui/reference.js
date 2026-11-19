@@ -6,14 +6,14 @@
 // Removing a recording from the list keeps its sound on the device: a clip or
 // card made from it may still play it.
 
-import { h, openFloat, openSheet, segmented, toast } from "./dom.js";
+import { h, icon, openFloat, openSheet, segmented, toast } from "./dom.js";
 import { exampleTake } from "../audio/example.js";
 import { putSoundInto, reachableRooms } from "./room-actions.js";
 import { getSettings, setSetting } from "../identity.js";
 import { kindInfo } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
 import { timeText } from "./song-view.js";
-import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
+import { KEEP_RATE, soundPickers, pickerHelp, micRefused, micReason, elsewhere, isApple } from "./sound-in.js";
 import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
 import { clipboardItem } from "../clipboard.js";
 import { MAX_TAKE_MS, unpackNote } from "../core/song.js";
@@ -41,11 +41,15 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
   const pos = { get: () => getSettings(app.store).refPos || null, set: (p) => setSetting(app.store, "refPos", p) };
   // On a wide screen lying down it can be pinned at the side (옆 패널), remembered on this device.
   const dock = { get: () => !!getSettings(app.store).refDock, set: (on) => setSetting(app.store, "refDock", !!on) };
-  openFloat(app.root, { id: "reference", title: "레퍼런스 (나만 보기)", pos, dock }, (panel, close, onClose) => {
+  // What it opens on: asked for, else what this room takes (a song room: recordings; a page of
+  // words: notes), else where I was last.
+  const here = insertSound && !insert ? "sounds" : insert && !insertSound ? "notes" : null;
+  const first = tab || here || getSettings(app.store).refTab || "notes";
+  openFloat(app.root, { id: "reference", title: "레퍼런스", pos, dock }, (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
-    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 3, placeholder: "나만 보는 작은 우주: 가사, 코드, 아이디어…" });
+    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 2, placeholder: "가사, 코드, 떠오른 말…" });
     let busy = false;
     let audio = null; // the recording being heard: { id, el, url }
 
@@ -62,10 +66,10 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
         ...(notes.length ? notes.map((n) => h("div", { class: "ref-note", data: { id: n.id } },
           h("p", { class: "ref-body", text: n.text }),
           h("div", { class: "ref-actions" },
-            h("button", { class: "chip", type: "button", text: "복사", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }),
-            insert && h("button", { class: "chip", type: "button", data: { put: n.id }, text: "이 방에 붙이기", onclick: () => { insert(n.text); toast(app.root, "붙였어요"); } }),
-            h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }))))
-          : [h("p", { class: "help", text: "아직 메모가 없어요. 여기 적은 것은 이 기기의 나만 볼 수 있어요." })]));
+            insert && h("button", { class: "chip primary", type: "button", data: { put: n.id }, onclick: () => { insert(n.text); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
+            h("button", { class: "chip", type: "button", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }, icon("copy"), "복사"),
+            h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }, "지우기"))))
+          : [h("p", { class: "help ref-empty", text: "떠오른 것을 적어 두면, 같이 하는 중에 꺼내 쓸 수 있어요." })]));
     }
 
     /** A recording's notes as small bars by pitch, named when there is room. */
@@ -89,11 +93,11 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
         s.from && h("p", { class: "ref-from", text: `${s.from.name ? "'" + s.from.name + "'" : "방"}에서` }),
         bars(s),
         h("div", { class: "ref-actions" },
-          h("button", { class: "chip", type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
-          insertSound && h("button", { class: "chip", type: "button", data: { putSound: s.id }, text: "이 방에 붙이기", onclick: () => { stopHearing(); insertSound(s); toast(app.root, "붙였어요"); } }),
+          h("button", { class: "chip play" + (audio?.id === s.id ? " on" : ""), type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
+          insertSound && h("button", { class: "chip primary", type: "button", data: { putSound: s.id }, onclick: () => { stopHearing(); insertSound(s); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
           h("button", { class: "chip", type: "button", data: { sendSound: s.id }, text: "보내기", onclick: () => sendSound(s) }),
-          h("button", { class: "chip danger", type: "button", text: "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }))))
-        : [h("p", { class: "help", text: "녹음도 남길 수 있어요. 노래 방이나 화이트보드에 바로 붙일 수 있어요." }),
+          h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }, "지우기"))))
+        : [h("p", { class: "help ref-empty", text: "흥얼거림을 모아 두면, 노래 방이나 화이트보드에 바로 놓을 수 있어요." }),
           h("button", { class: "chip", type: "button", id: "ref-example", text: "예시 녹음 넣어 보기", onclick: () => addExample() })]));
     }
 
@@ -227,28 +231,46 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       onFile: (file) => importFile(file),
       onSilent: () => pickerHelp({ app, roomId, root: app.root, mic }),
     });
-    const ways = h("div", { class: "form ref-ways", id: "ref-ways" },
-      ...waysIn({ app, roomId, root: app.root, name: "ref", prefix: "ref-", mic, canRecord: true, onRecord: () => record() }));
-    const notesPart = h("div", { class: "form ref-part", id: "ref-notes" }, area,
-      h("button", { class: "btn", id: "ref-add", type: "button", text: "메모 남기기", onclick: () => {
-        if (!area.value.trim()) return;
-        addRefNote(app.store, area.value.trim());
-        area.value = "";
-        drawNotes();
-      } }), list);
-    const soundsPart = h("div", { class: "ref-part", id: "ref-sounds-part" }, ...inputs, ways, status, sounds);
+    // Three ways in, side by side and plain to see: 녹음 (this app), the phone's own recorder (on
+    // iPhone and iPad the camera, its sound kept), a file. The owner: the old stacked buttons were
+    // "너무 조심스럽다… 촌스러워".
+    const apple = isApple();
+    const ways = h("div", { class: "ref-ways", id: "ref-ways" },
+      h("button", { type: "button", class: "ref-tile ref-tile-rec", id: "ref-record", disabled: !mic.ok, onclick: () => record() },
+        h("span", { class: "dot-rec", "aria-hidden": "true" }), h("span", { class: "ref-tile-label", text: "녹음" })),
+      h("label", { class: "ref-tile", id: "ref-capture-way", for: "ref-capture", title: apple ? "카메라가 열려요. 찍은 영상의 소리만 가져와요." : "삼성 녹음 같은 폰의 녹음 앱이 열려요. 마치면 바로 들어와요." },
+        icon(apple ? "photo" : "wave"), h("span", { class: "ref-tile-label", text: apple ? "카메라로" : "폰 녹음 앱" })),
+      h("label", { class: "ref-tile", id: "ref-file-way", for: "ref-file", title: "m4a·mp3·wav, 영상(소리만)도 돼요." },
+        icon("upload"), h("span", { class: "ref-tile-label", text: "파일" })));
+    const waysWhy = !mic.ok && h("div", { class: "ref-why" },
+      h("p", { class: "help warn", id: "ref-mic-reason", text: micReason(mic.reason) }),
+      mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root: app.root, prefix: "ref-" })));
+    // A note goes in like a message: write, then the round button beside it.
+    const notesPart = h("div", { class: "ref-part", id: "ref-notes" },
+      h("div", { class: "ref-compose" }, area,
+        h("button", { class: "ref-send", id: "ref-add", type: "button", "aria-label": "메모 남기기", onclick: () => {
+          if (!area.value.trim()) return;
+          addRefNote(app.store, area.value.trim());
+          area.value = "";
+          drawNotes();
+        } }, "남기기")),
+      list);
+    const soundsPart = h("div", { class: "ref-part", id: "ref-sounds-part" }, ...inputs, ways, waysWhy, status, sounds);
     const roomsPart = h("div", { class: "ref-part", id: "ref-rooms" });
     const parts = { notes: notesPart, sounds: soundsPart, rooms: roomsPart };
     const show = (which) => {
       for (const [k, el] of Object.entries(parts)) el.hidden = k !== which;
+      setSetting(app.store, "refTab", which);
       if (which === "rooms" && !roomsPart.childElementCount) drawRooms();
       // The first time the recordings are looked at and there are none, the example goes in.
       if (which === "sounds" && !refSounds(app.store).length && !app.store.get("exampleTake", false)) addExample();
     };
-    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], tab || "notes", (v) => show(v), "refTab");
+    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], first, (v) => show(v), "refTab");
     tabs.classList.add("ref-tabs");
-    panel.append(tabs, notesPart, soundsPart, roomsPart);
-    show(tab || "notes");
+    // What it is, in a line: mine alone, at hand while together (the owner: "나 혼자만 볼 수 있는 거…
+    // 같이 하면서도 도움되게… 비서 느낌").
+    panel.append(h("p", { class: "ref-sub", text: roomId ? "나만 보는 주머니 · 꺼내서 이 방에 놓아요" : "나만 보는 주머니 · 모아 두고 방으로 보내요" }), tabs, notesPart, soundsPart, roomsPart);
+    show(first);
     drawNotes();
     drawSounds();
 

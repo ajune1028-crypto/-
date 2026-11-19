@@ -10,6 +10,19 @@ export function applyTheme(choice) {
   if (choice === "light" || choice === "dark") root.dataset.theme = choice;
   else if (hostTheme) root.dataset.theme = hostTheme;
   else delete root.dataset.theme;
+  repaintFloating();
+}
+
+/**
+ * Glass that floats over the page (레퍼런스, sheets, 찾기와 집) is drawn on a layer of its own; some
+ * phones keep that layer's old colours after 밝게/어둡게 changes (the owner: "레퍼런스는 안 바뀌거든").
+ * Taking its frosting off for one frame makes them draw it again.
+ */
+function repaintFloating() {
+  if (typeof document === "undefined") return;
+  const layers = document.querySelectorAll(".float, .panel, .home-panel, .house-dock, .toolbar, .room > .bar");
+  for (const el of layers) el.classList.add("repaint");
+  requestAnimationFrame(() => requestAnimationFrame(() => { for (const el of layers) el.classList.remove("repaint"); }));
 }
 
 export function currentTheme() {
