@@ -1674,3 +1674,11 @@ html, body, body * { -webkit-user-select: none; user-select: none; -webkit-touch
 body input, body textarea, body [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 body .link-box, body .code { -webkit-user-select: all; user-select: all; }
 body img, body a, body svg, body canvas { -webkit-user-drag: none; }
+
+/* The bar and the tools where they were let go along their edges (board-room.js placeChrome). */
+.room[data-modes-at="left"] .board-top, .room[data-modes-at="right"] .board-top { translate: 0 var(--bar-shift, 0px); }
+.room[data-rail-at="top"] .board-rail, .room[data-rail-at="bottom"] .board-rail { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0.35rem; left: 0.6rem; right: auto; direction: ltr; max-width: calc(100% - 1.2rem); }
+.room[data-rail-at="top"] .board-rail { top: 0.5rem; bottom: auto; }
+.room[data-rail-at="bottom"] .board-rail { top: auto; bottom: 0.6rem; }
+.room[data-modes-at="bottom"][data-rail-at="bottom"] .board-rail { bottom: calc(var(--modes-h, 3.2rem) + 1.2rem); }
+.room[data-rail-at="top"] .board-rail > *, .room[data-rail-at="bottom"] .board-rail > * { flex: none; }

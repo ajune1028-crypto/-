@@ -4311,6 +4311,10 @@ scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mod
   await createBoard(page);
   const room = `document.querySelector(".room")`;
   const hold = async (sel, to = null) => {
+    // A page in the back gets its timers and frames late (a long press would end before it counts,
+    // and what is placed on the next frame would move after it was measured): to the front first.
+    await page.front();
+    await pause(80);
     const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
     await page.touch("start", [at]);
     await pause(650);
@@ -4765,4 +4769,49 @@ scenario("no text selection: titles, buttons, rows, 찾기와 집 and the dock a
   })()`);
   assert.equal(style.field, "text", "the search field still takes text");
   for (const k of ["body", "row", "rec", "code", "more", "panel", "tile"]) assert.equal(style[k], "none", k + " takes no selection: " + JSON.stringify(style));
+});
+
+// The owner (19 November): the bar stays where it is let go along its edge ("끝부분에서 그 끝부분 위치도…
+// 꾹 눌러서 옮기면 거기에"), and so do each mode's small tools, on any edge.
+scenario("whiteboard bar and tools stay where they are let go: the bar low on the left edge, the tools along the bottom near the left; after a reload too; everything still pressable", async ({ open, out }) => {
+  const page = await open({ width: 420, height: 860 });
+  await createBoard(page);
+  const room = `document.querySelector(".room")`;
+  const drag = async (sel, to) => {
+    const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.front();
+    await page.touch("start", [at]);
+    await pause(600);
+    for (let i = 1; i <= 12; i++) await page.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 12, at[1] + ((to[1] - at[1]) * i) / 12]]);
+    await page.touch("end");
+  };
+  const body = await page.eval(`(() => { const b = document.querySelector(".board-body, .room-body, #board-body")?.getBoundingClientRect() || document.querySelector(".room").getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height }; })()`);
+  // The bar, to the left edge, two thirds down.
+  const barTo = [8, body.t + body.h * 0.66];
+  await drag("#mode-all", barTo);
+  await page.waitFor(`${room}.dataset.modesAt === "left"`);
+  await pause(300);
+  const bar = async () => page.eval(`(() => { const b = document.querySelector(".board-modes").getBoundingClientRect(); return { cy: b.top + b.height / 2, l: b.left, w: b.width, h: b.height }; })()`);
+  let b = await bar();
+  assert.ok(Math.abs(b.cy - barTo[1]) < 60 || b.cy > body.t + body.h * 0.45, "the bar stands low on the left, where it was let go: " + JSON.stringify([b, barTo]));
+  // The tools, to the bottom edge near the left.
+  const toolsTo = [body.l + body.w * 0.25, body.t + body.h - 6];
+  await drag("#board-rail .rail-btn", toolsTo);
+  await page.waitFor(`${room}.dataset.railAt === "bottom"`);
+  await pause(300);
+  const rail = async () => page.eval(`(() => { const r = document.getElementById("board-rail").getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; })()`);
+  let t = await rail();
+  assert.ok(t.w > t.h, "the tools lie in a row along the bottom: " + JSON.stringify(t));
+  assert.ok(t.l < body.l + body.w * 0.5, "near the left, where they were let go: " + JSON.stringify([t, toolsTo]));
+  const pressable = async () => page.eval(`[...document.querySelectorAll("#board-rail .rail-btn, .board-modes button")].every((el) => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.width > 0 && !!hit && el.contains(hit); })`);
+  assert.ok(await pressable(), "every tool and mode can be pressed");
+  await page.shot(out("board-placed.png"));
+  // After a reload they are where they were.
+  await page.reload();
+  await page.waitFor(`${room} && ${room}.dataset.railAt === "bottom" && ${room}.dataset.modesAt === "left"`, 8000);
+  await pause(400);
+  const b2 = await bar();
+  const t2 = await rail();
+  assert.ok(Math.abs(b2.cy - b.cy) < 4 && Math.abs(t2.l - t.l) < 4, "the same places after a reload: " + JSON.stringify([b, b2, t, t2]));
+  assert.ok(await pressable());
 });

@@ -148,7 +148,12 @@ export function mountBoardRoom(body, app, session, frame) {
     const order = Array.isArray(s.boardModesOrder) ? s.boardModesOrder.filter((k) => MODE_LIST.some(([m]) => m === k)) : [];
     for (const [m] of MODE_LIST) if (!order.includes(m)) order.push(m);
     const hidden = new Set((Array.isArray(s.boardModesHidden) ? s.boardModesHidden : []).filter((k) => k !== "all"));
-    return { order, hidden, at: ["top", "bottom", "left", "right"].includes(s.boardModesAt) ? s.boardModesAt : "top", size: [1, 2, 3].includes(s.boardBarSize) ? s.boardBarSize : 2, icons: !!s.boardModesIcons, rail: ["auto", "left", "right"].includes(s.boardRailAt) ? s.boardRailAt : "auto" };
+    const frac = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : null);
+    return { order, hidden, at: ["top", "bottom", "left", "right"].includes(s.boardModesAt) ? s.boardModesAt : "top", size: [1, 2, 3].includes(s.boardBarSize) ? s.boardBarSize : 2, icons: !!s.boardModesIcons,
+      rail: ["auto", "left", "right", "top", "bottom"].includes(s.boardRailAt) ? s.boardRailAt : "auto",
+      // Where along its edge each stands (0 one end, 1 the other; null: the usual place). The owner:
+      // "끝부분에서 그 끝부분 위치도… 꾹 눌러서 옮기면 거기에".
+      along: frac(s.boardModesAlong), railAlong: frac(s.boardRailAlong) };
   };
   const boardTop = h("div", { class: "board-top" });
   let modes = null;
@@ -171,6 +176,63 @@ export function mountBoardRoom(body, app, session, frame) {
       room.dataset.barSize = String(look.size);
       room.dataset.modesIcons = String(look.icons);
       room.dataset.railAt = look.rail === "auto" ? (look.at === "right" ? "left" : "right") : look.rail;
+    }
+    requestAnimationFrame(() => placeChrome());
+  }
+
+  /** Where the finger is along an edge of the visible board, 0..1. */
+  function alongEdge(edge, x, y) {
+    const b = body.getBoundingClientRect();
+    return edge === "top" || edge === "bottom"
+      ? Math.max(0, Math.min(1, (x - b.left) / Math.max(1, b.width)))
+      : Math.max(0, Math.min(1, (y - b.top) / Math.max(1, b.height)));
+  }
+
+  /**
+   * The bar and the tools stand where they were let go along their edges: centred on that spot as far
+   * as they fit. With no spot chosen they keep their usual places (the bar centred on top, the tools
+   * from the top of their side).
+   */
+  function placeChrome() {
+    if (!alive) return;
+    const look = barLook();
+    const room = roomEl || body.closest(".room");
+    if (!room || !modes) return;
+    // The bar.
+    modes.style.marginLeft = "";
+    boardTop.style.removeProperty("--bar-shift");
+    if (look.along !== null) {
+      if (look.at === "top" || look.at === "bottom") {
+        const span = boardTop.clientWidth;
+        const w = modes.offsetWidth;
+        boardTop.style.justifyContent = "flex-start";
+        modes.style.marginLeft = Math.max(0, Math.min(span - w, look.along * span - w / 2)) + "px";
+      } else {
+        boardTop.style.justifyContent = "";
+        const b = body.getBoundingClientRect();
+        const h = modes.offsetHeight;
+        const span = b.height - 16;
+        boardTop.style.setProperty("--bar-shift", Math.max(0, Math.min(span - h, look.along * span - h / 2)) + "px");
+      }
+    } else boardTop.style.justifyContent = "";
+    // The tools.
+    for (const k of ["top", "bottom", "left", "right", "maxHeight", "maxWidth"]) rail.style[k] = "";
+    if (look.railAlong === null) return;
+    const side = room.dataset.railAt;
+    if (side === "left" || side === "right") {
+      const top = 8;
+      const span = body.clientHeight - top - 10;
+      rail.style.bottom = "auto";
+      rail.style.maxHeight = span + "px";
+      const h = rail.offsetHeight;
+      rail.style.top = top + Math.max(0, Math.min(span - h, look.railAlong * span - h / 2)) + "px";
+    } else {
+      const left = 10;
+      const span = body.clientWidth - left * 2;
+      rail.style.maxWidth = span + "px";
+      const w = rail.offsetWidth;
+      rail.style.left = left + Math.max(0, Math.min(span - w, look.railAlong * span - w / 2)) + "px";
+      rail.style.right = "auto";
     }
   }
   const roomShell = () => frame.top.closest?.(".room");
@@ -208,7 +270,7 @@ export function mountBoardRoom(body, app, session, frame) {
     roomEl.style.setProperty("--bottom-inset", next.bottom + "px");
     place();
   }
-  const insetWatch = new ResizeObserver(() => measureInsets());
+  const insetWatch = new ResizeObserver(() => { measureInsets(); placeChrome(); });
   insetWatch.observe(body);
   if (roomEl) insetWatch.observe(roomEl);
 
@@ -409,7 +471,7 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   /** Where the mode's tools stand now, in words (they can be moved to the left). */
-  const toolSide = () => (roomEl?.dataset.railAt === "left" ? "왼쪽" : "오른쪽");
+  const toolSide = () => ({ left: "왼쪽", top: "위", bottom: "아래" })[roomEl?.dataset.railAt] || "오른쪽";
 
   function hintText(items) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
@@ -2177,20 +2239,26 @@ export function mountBoardRoom(body, app, session, frame) {
       onDrop: (x, y) => {
         const room = body.closest(".room").getBoundingClientRect();
         const d = { top: y - room.top, bottom: room.bottom - y, left: x - room.left, right: room.right - x };
-        setSetting(app.store, "boardModesAt", Object.entries(d).sort((p, q) => p[1] - q[1])[0][0]);
+        const edge = Object.entries(d).sort((p, q) => p[1] - q[1])[0][0];
+        setSetting(app.store, "boardModesAt", edge);
+        setSetting(app.store, "boardModesAlong", alongEdge(edge, x, y));
         buildModes();
         measureInsets();
       },
     });
   }
 
-  // The tools on the right move too (the owner chose "오른쪽 도구도 직접 옮기기"): held and let go
-  // on the left half, they stand on the left.
+  // The tools move too (the owner: "오른쪽 도구도 직접 옮기기", then "모드 안에 있는 작은 UI들도 자기
+  // 원하는 곳에"): held and let go, they stand at the nearest edge of the board, at that spot along it
+  // (top and bottom: in a row).
   wireLift(rail, {
     onHold: () => openBarSettings(),
-    onDrop: (x) => {
-      const room = body.closest(".room").getBoundingClientRect();
-      setSetting(app.store, "boardRailAt", x < room.left + room.width / 2 ? "left" : "right");
+    onDrop: (x, y) => {
+      const b = body.getBoundingClientRect();
+      const d = { left: x - b.left, right: b.right - x, top: y - b.top, bottom: b.bottom - y };
+      const edge = Object.entries(d).sort((p, q) => p[1] - q[1])[0][0];
+      setSetting(app.store, "boardRailAt", edge);
+      setSetting(app.store, "boardRailAlong", alongEdge(edge, x, y));
       buildModes();
       measureInsets();
       draw();
@@ -2232,16 +2300,16 @@ export function mountBoardRoom(body, app, session, frame) {
       const look = barLook();
       panel.append(h("div", { class: "form", id: "bar-settings" },
         h("div", { class: "row" }, h("span", { class: "label", text: "자리 (막대를 꾹 눌러 끌어도 돼요)" }),
-          segmented([["top", "위", "bar-at-top"], ["bottom", "아래", "bar-at-bottom"], ["left", "왼쪽", "bar-at-left"], ["right", "오른쪽", "bar-at-right"]], look.at, (v) => set("boardModesAt", v), "barAt")),
+          segmented([["top", "위", "bar-at-top"], ["bottom", "아래", "bar-at-bottom"], ["left", "왼쪽", "bar-at-left"], ["right", "오른쪽", "bar-at-right"]], look.at, (v) => { setSetting(app.store, "boardModesAlong", undefined); set("boardModesAt", v); }, "barAt")),
         h("div", { class: "row" }, h("span", { class: "label", text: "크기" }),
           segmented([["1", "작게", "bar-size-1"], ["2", "보통", "bar-size-2"], ["3", "크게", "bar-size-3"]], String(look.size), (v) => set("boardBarSize", Number(v)), "barSize")),
         h("div", { class: "row" }, h("span", { class: "label", text: "보기" }),
           segmented([["words", "글자", "bar-words"], ["icons", "아이콘만", "bar-icons"]], look.icons ? "icons" : "words", (v) => set("boardModesIcons", v === "icons"), "barLook")),
         h("div", { class: "row" }, h("span", { class: "label", text: "모드 도구 자리 (꾹 눌러 끌어도 돼요)" }),
-          segmented([["auto", "자동", "rail-auto"], ["left", "왼쪽", "rail-left"], ["right", "오른쪽", "rail-right"]], look.rail, (v) => set("boardRailAt", v), "railAt")),
+          segmented([["auto", "자동", "rail-auto"], ["left", "왼쪽", "rail-left"], ["right", "오른쪽", "rail-right"], ["top", "위", "rail-top"], ["bottom", "아래", "rail-bottom"]], look.rail, (v) => { setSetting(app.store, "boardRailAlong", undefined); set("boardRailAt", v); }, "railAt")),
         h("div", { class: "row" }, h("span", { class: "label", text: "순서와 보이기" }), list),
         h("button", { type: "button", class: "btn quiet", id: "bar-reset", text: "처음대로", onclick: () => {
-          for (const key of ["boardModesAt", "boardBarSize", "boardModesIcons", "boardRailAt", "boardModesOrder", "boardModesHidden"]) setSetting(app.store, key, undefined);
+          for (const key of ["boardModesAt", "boardBarSize", "boardModesIcons", "boardRailAt", "boardModesOrder", "boardModesHidden", "boardModesAlong", "boardRailAlong"]) setSetting(app.store, key, undefined);
           buildModes();
           measureInsets();
           paint();

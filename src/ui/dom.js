@@ -91,9 +91,12 @@ export function swallowPress(e) {
     if (ev.cancelable) ev.preventDefault();
   };
   swallow(e);
-  const held = new Set([e.pointerId]);
+  // Called from the press itself, the pointer is still down; called from its lift (a held thing let
+  // go), it is already up — and the next touch is a new press to let through (it was eaten for 4 s).
+  const up = e.type === "pointerup" || e.type === "pointercancel";
+  const held = new Set(up ? [] : [e.pointerId]);
   const touch = e.pointerType === "touch";
-  let lifted = 0;
+  let lifted = up ? Date.now() : 0;
   const lift = (ev) => {
     if (!held.has(ev.pointerId)) return;
     swallow(ev);
