@@ -194,6 +194,9 @@ export function mountBoardRoom(body, app, session, frame) {
   let insets = { top: 0, bottom: 0 };
   function measureInsets() {
     if (!alive || !roomEl) return;
+    // A bar docked at the bottom stands over the board: what sits at the board's foot (the hint)
+    // goes above it.
+    roomEl.style.setProperty("--modes-h", (barLook().at === "bottom" ? boardTop.offsetHeight : 0) + "px");
     const room = roomEl.getBoundingClientRect();
     const b = body.getBoundingClientRect();
     const next = { top: Math.max(0, Math.round(b.top - room.top)), bottom: Math.max(0, Math.round(room.bottom - b.bottom)) };

@@ -4429,3 +4429,47 @@ scenario("whiteboard sound: ▶ on a card, ▶ 듣기 and 전체 재생 really s
   await click(page, ".card.song .card-play");
   await soundSoon("the card's ▶ with a file store that never answers (원본 → piano)");
 });
+
+// The owner (17 November): "노래 잇기 막 그런 UI를 옮기는데 아래로 옮기면 아예 사라지는… 그래서 안 떠". Held
+// and dragged down, the mode bar stands at the bottom in full view, over the tools and pressable;
+// after a reload too; on a phone-sized screen too.
+scenario("whiteboard bar at the bottom: dragged down it stays in view and pressable, above the tools, also after a reload and on a phone", async ({ open, out }) => {
+  for (const size of [{ width: 700, height: 900 }, { width: 390, height: 760 }]) {
+    const page = await open(size);
+    await createBoard(page);
+    const room = `document.querySelector(".room")`;
+    const at = await page.eval(`(() => { const r = ${q("#mode-all")}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    const to = await page.eval(`(() => { const b = ${room}.getBoundingClientRect(); return [b.left + b.width / 2, b.bottom - 6]; })()`);
+    await page.front();
+    await page.touch("start", [at]);
+    await pause(650);
+    for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 10, at[1] + ((to[1] - at[1]) * i) / 10]]);
+    await page.touch("end");
+    await page.waitFor(`${room}.dataset.modesAt === "bottom"`);
+    if (await page.eval(`!!document.querySelector(".scrim:not(.closing)")`)) {
+      await page.key("Escape");
+      await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
+    }
+    const seen = async (when) => {
+      const view = await page.eval(`(() => {
+        const bar = document.querySelector(".board-modes");
+        if (!bar) return { none: true };
+        const r = bar.getBoundingClientRect();
+        const s = getComputedStyle(bar);
+        const buttons = [...bar.querySelectorAll("button")].map((b) => { const k = b.getBoundingClientRect(); const hit = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2); return !!hit && b.contains(hit); });
+        return { top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight, hidden: bar.hidden, display: s.display, opacity: s.opacity, visibility: s.visibility, buttons };
+      })()`);
+      assert.ok(!view.none && !view.hidden && view.display !== "none" && view.visibility !== "hidden" && Number(view.opacity) > 0.5, when + ": the bar shows: " + JSON.stringify(view));
+      assert.ok(view.h > 20 && view.top >= 0 && view.bottom <= view.vh, when + ": the bar is inside the screen: " + JSON.stringify(view));
+      assert.ok(view.buttons.length >= 4 && view.buttons.every(Boolean), when + ": every mode can be pressed (nothing covers it): " + JSON.stringify(view));
+    };
+    await seen(`${size.width}: dropped at the bottom`);
+    await click(page, "#mode-song");
+    await page.waitFor(`${q("#mode-song")}.getAttribute("aria-pressed") === "true"`);
+    await seen(`${size.width}: in 노래`);
+    await page.reload();
+    await page.waitFor(`${room} && ${room}.dataset.modesAt === "bottom" && ${q(".board-modes")}`, 8000);
+    await seen(`${size.width}: after a reload`);
+    await page.shot(out(`board-bar-bottom-${size.width}.png`));
+  }
+});
