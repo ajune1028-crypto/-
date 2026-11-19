@@ -199,3 +199,33 @@ test("크레용 (Easy-Brush's dynamics): each mark's size, slant, roundness, pla
   const angles = one.map((m) => m.angle);
   assert.ok(Math.max(...angles) - Math.min(...angles) > 0.2, "slants vary");
 });
+
+test("연필's tip (Klecks' chalk): ragged, darker in the middle, clear at the corners, the same every time", async () => {
+  const { chalkAlpha, chalkTurn } = await import("../src/core/brush.js");
+  const { simplex2 } = await import("../src/core/noise.js");
+  const w = 64;
+  const a = chalkAlpha(w);
+  assert.deepEqual(a, chalkAlpha(w), "the same tip every time");
+  assert.equal(a[0] + a[w - 1] + a[(w - 1) * w] + a[w * w - 1], 0, "clear at the corners");
+  let middle = 0;
+  let edge = 0;
+  for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+    const d = Math.hypot(x - w / 2, y - w / 2);
+    if (d < w / 6) middle += a[y * w + x] / 1;
+    else if (d > w / 2.6 && d < w / 2.2) edge += a[y * w + x] / 1;
+  }
+  assert.ok(middle / (Math.PI * (w / 6) ** 2) > edge / (Math.PI * ((w / 2.2) ** 2 - (w / 2.6) ** 2)), "darker in the middle than at the edge");
+  // Darker in the very middle than in a ring well inside the edge (a factor of the distance).
+  let c = 0, cn = 0, r = 0, rn = 0, diff = 0, dn = 0;
+  for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+    const d = Math.hypot(x - w / 2, y - w / 2);
+    if (d < w / 8) { c += a[y * w + x]; cn++; }
+    if (d > w / 4 && d < w / 3) { r += a[y * w + x]; rn++; }
+    if (d < w / 4 && x + 1 < w) { diff += Math.abs(a[y * w + x] - a[y * w + x + 1]); dn++; }
+  }
+  assert.ok(c / cn / (r / rn) > 1.15, "the middle is darker than the ring: " + c / cn / (r / rn));
+  assert.ok(diff / dn > 45, "grainy from pixel to pixel (the fine noise): " + diff / dn);
+  assert.ok(Math.abs(simplex2(0.5, 0.25)) <= 1 && simplex2(1, 2) === simplex2(1, 2));
+  assert.notEqual(chalkTurn(10, 20), chalkTurn(11, 20));
+  assert.ok(chalkTurn(1234, 567) >= 0 && chalkTurn(1234, 567) < Math.PI * 2);
+});

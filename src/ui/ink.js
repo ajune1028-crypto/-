@@ -13,7 +13,7 @@
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
 import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
-import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks } from "../core/brush.js";
+import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
@@ -78,6 +78,34 @@ function grainFor(g, color) {
   t.putImageData(img, 0, 0);
   grains.set(color, tile);
   return g.createPattern(tile, "repeat");
+}
+
+// 연필's tip: Klecks' chalk in the colour (core/brush.js chalkAlpha), made once per colour.
+const tips = new Map();
+let chalkMask = null;
+function chalkFor(color) {
+  if (tips.has(color)) return tips.get(color);
+  const w = 128;
+  const tip = document.createElement("canvas");
+  tip.width = tip.height = w;
+  const t = tip.getContext("2d");
+  if (t) {
+    if (!chalkMask) {
+      chalkMask = document.createElement("canvas");
+      chalkMask.width = chalkMask.height = w;
+      const m = chalkMask.getContext("2d");
+      const img = m.createImageData(w, w);
+      const alpha = chalkAlpha(w);
+      for (let i = 0; i < alpha.length; i++) img.data[i * 4 + 3] = alpha[i];
+      m.putImageData(img, 0, 0);
+    }
+    t.fillStyle = color;
+    t.fillRect(0, 0, w, w);
+    t.globalCompositeOperation = "destination-in";
+    t.drawImage(chalkMask, 0, 0);
+  }
+  tips.set(color, tip);
+  return tip;
 }
 
 // An airbrush's mist: one soft round of the colour, drawn many times along the line.
@@ -164,15 +192,35 @@ export function paintStroke(g, pts, color, width, brush, shaped = false) {
   if (look.kind === "dabs") {
     const marks = dabs(points, { step: size * look.spacing });
     const seed = (pts[0] * 31 + pts[1]) | 0;
-    if (look.crayon) {
-      // 크레용: uneven waxy marks on the paper's grain.
-      g.fillStyle = grainFor(g, ink);
-      for (const m of crayonMarks(marks, { size, seed, pressure: real })) {
-        g.globalAlpha = look.alpha * m.alpha;
-        g.beginPath();
-        g.ellipse(m.x, m.y, m.rx, m.ry, m.angle, 0, Math.PI * 2);
-        g.fill();
+    if (look.chalk) {
+      // 연필: Klecks' chalk tip stamped along the line, each turned by where it lies (so the grain
+      // never repeats), harder pressure a bigger and stronger mark.
+      const tip = chalkFor(ink);
+      const base = g.getTransform();
+      for (const m of marks) {
+        const p = real ? m.p : 0.62;
+        const r = (size / 2) * (0.5 + 0.5 * p);
+        const turn = chalkTurn(m.x, m.y);
+        const cos = Math.cos(turn);
+        const sin = Math.sin(turn);
+        g.setTransform(base.a * cos + base.c * sin, base.b * cos + base.d * sin, -base.a * sin + base.c * cos, -base.b * sin + base.d * cos, base.a * m.x + base.c * m.y + base.e, base.b * m.x + base.d * m.y + base.f);
+        g.globalAlpha = look.alpha * (0.25 + 0.5 * p);
+        g.drawImage(tip, -r, -r, r * 2, r * 2);
       }
+      g.setTransform(base);
+    } else if (look.crayon) {
+      // 크레용: Easy-Brush's uneven marks pressed flat along the way the line goes, each one the
+      // chalk tip (the paper's tooth shows through the wax).
+      const tip = chalkFor(ink);
+      const base = g.getTransform();
+      for (const m of crayonMarks(marks, { size, seed, pressure: real })) {
+        const cos = Math.cos(m.angle);
+        const sin = Math.sin(m.angle);
+        g.setTransform((base.a * cos + base.c * sin) * m.rx, (base.b * cos + base.d * sin) * m.rx, (-base.a * sin + base.c * cos) * m.ry, (-base.b * sin + base.d * cos) * m.ry, base.a * m.x + base.c * m.y + base.e, base.b * m.x + base.d * m.y + base.f);
+        g.globalAlpha = look.alpha * m.alpha;
+        g.drawImage(tip, -1, -1, 2, 2);
+      }
+      g.setTransform(base);
     } else if (look.soft) {
       const mist = mistFor(ink);
       for (const m of marks) {
@@ -732,10 +780,18 @@ function brushPreview(brush, color, width) {
     const k = 0.16 * ratio;
     g.setTransform(k, 0, 0, k, 0, 0);
     const pts = [];
-    const n = 24;
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      pts.push(Math.round(24 + t * 164), Math.round(50 + Math.sin(t * Math.PI * 2) * 22), Math.round(25 + 70 * Math.sin(t * Math.PI)));
+    if (brush === "sketch") {
+      // 스케치 shows itself when rubbed back and forth (its web of faint strokes appears).
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40;
+        pts.push(Math.round(30 + t * 150 + Math.sin(i * 1.7) * 14), Math.round(50 + (i % 2 ? -26 : 26) * (0.6 + 0.4 * Math.sin(t * Math.PI))), 50);
+      }
+    } else {
+      const n = 24;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        pts.push(Math.round(24 + t * 164), Math.round(50 + Math.sin(t * Math.PI * 2) * 22), Math.round(25 + 70 * Math.sin(t * Math.PI)));
+      }
     }
     paintStroke(g, pts, color, Math.min(width, 2), brush);
   };

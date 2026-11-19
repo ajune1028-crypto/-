@@ -5011,3 +5011,36 @@ scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoe
   await pause(200);
   assert.equal(await count(), 2, "a pinch undoes nothing");
 });
+
+// Every brush on one page, as the owner will see them (a picture to look at), each kept with its
+// own brush: 펜, 만년필, 붓펜, 연필 (Klecks' chalk), 스케치 (Klecks), 크레용 (Easy-Brush), 마커, 에어브러시, 형광펜.
+scenario("brush sheet: all nine brushes drawn on one page, each kept as its own brush", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 430, height: 900 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "붓 모음");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const doc = await a.eval(`"k:L" + window.__app.session.doc("draw").layers()[0].id`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const brushes = ["pen", "fountain", "brushpen", "pencil", "sketch", "crayon", "marker", "airbrush", "highlighter"];
+  const colours = ["black", "blue", "indigo", "black", "violet", "orange", "green", "red", "yellow"];
+  await click(a, '[data-width="3"]');
+  for (let i = 0; i < brushes.length; i++) {
+    await click(a, `[data-brush="${brushes[i]}"]`);
+    await click(a, `[data-ink="${colours[i]}"]`);
+    const y = box.y + box.h * (0.07 + i * 0.1);
+    await a.press(box.x + box.w * 0.12, y);
+    for (let k = 1; k <= 16; k++) await a.moveTo(box.x + box.w * (0.12 + 0.048 * k), y + Math.sin(k / 2.2) * box.h * 0.025);
+    await a.release(box.x + box.w * 0.88, y);
+    await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === ${i + 1}`);
+  }
+  const kept = await a.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().map((s) => s.s || s.b || "pen")`);
+  assert.deepEqual(kept, brushes);
+  await a.front();
+  await pause(150);
+  await a.shot(out("brush-sheet.png"));
+});

@@ -13,6 +13,8 @@
 // Changed here: flat point lists, pressure from the hand's speed where a finger gives none, a
 // fountain pen's slanted nib, and shapes made straight when the hand rests (quickShape).
 //
+import { simplex2 } from "./noise.js";
+
 // Points: [x, y, p, x, y, p, …] with p the pen's pressure 0..100 (50 throughout from a finger
 // or a mouse). Units are the drawing's own (hundredths of a rem).
 
@@ -29,12 +31,12 @@ export const BRUSH_LOOKS = {
   pen: { kind: "outline", scale: 1, alpha: 1, thinning: 0.45, fingerThinning: 0.22, streamline: 0.45 },
   fountain: { kind: "outline", scale: 1.3, alpha: 1, thinning: 0.5, fingerThinning: 0.4, streamline: 0.5, taperEnd: 1.2, nib: true },
   brushpen: { kind: "outline", scale: 1.7, alpha: 1, thinning: 0.78, fingerThinning: 0.72, streamline: 0.55, taperStart: 2.2, taperEnd: 3 },
-  pencil: { kind: "dabs", scale: 0.9, alpha: 0.9, spacing: 0.28, grain: true },
+  pencil: { kind: "dabs", scale: 1.25, alpha: 0.9, spacing: 0.22, chalk: true },
   marker: { kind: "outline", scale: 1.6, alpha: 1, thinning: 0, streamline: 0.5 },
   airbrush: { kind: "dabs", scale: 4.2, alpha: 0.2, spacing: 0.16, soft: true },
   highlighter: { kind: "outline", scale: 3.4, alpha: 0.32, thinning: 0, streamline: 0.62, flat: true },
   sketch: { kind: "sketch", scale: 1, alpha: 0.85, streamline: 0.35 },
-  crayon: { kind: "dabs", scale: 1.7, alpha: 0.7, spacing: 0.24, crayon: true, streamline: 0.4 },
+  crayon: { kind: "dabs", scale: 1.7, alpha: 0.55, spacing: 0.12, crayon: true, streamline: 0.4 },
   erase: { kind: "outline", scale: 3.2, alpha: 1, thinning: 0, streamline: 0.3 },
 };
 
@@ -330,8 +332,8 @@ export function crayonMarks(marks, { size, seed = 0, pressure = false }) {
     const press = pressure ? 0.55 + 0.45 * m.p : 1;
     const rx = half * (1 - 0.4 * u(0)) * press;
     const ry = rx * (0.45 + 0.4 * u(1));
-    const across = half * 0.6 * (u(3) * 2 - 1);
-    const along = half * 0.3 * (u(4) * 2 - 1);
+    const across = half * 0.3 * (u(3) * 2 - 1);
+    const along = half * 0.2 * (u(4) * 2 - 1);
     return {
       x: m.x + Math.cos(way) * along - Math.sin(way) * across,
       y: m.y + Math.sin(way) * along + Math.cos(way) * across,
@@ -341,6 +343,33 @@ export function crayonMarks(marks, { size, seed = 0, pressure = false }) {
       alpha: (0.55 + 0.45 * u(5)) * (pressure ? 0.45 + 0.55 * m.p : 1),
     };
   });
+}
+
+/**
+ * 연필's tip: Klecks' chalk (bitbof, MIT License; brushes/alphas/brush-alphas.ts, genBrushAlpha01):
+ * a round of simplex noise, coarse and fine, with a ragged edge and a darker middle. Returns the
+ * alpha (0..255) of a w × w tip, row by row; the same on every device.
+ */
+export function chalkAlpha(w) {
+  const out = new Uint8ClampedArray(w * w);
+  const scale = w / 500;
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < w; y++) {
+      const s2 = scale + simplex2(x / 50 / scale, y / 50 / scale) * 0.04;
+      let v = 100 + ((simplex2(x / 50 / s2, y / 50 / s2) + 1) / 2) * 100;
+      v -= ((simplex2(x / 10 / scale, y / 10 / scale) + 1) / 2) * 100;
+      const centre = Math.hypot(w / 2 - x, w / 2 - y);
+      v *= Math.min(1, Math.max(0, 1 - ((centre - w / 2.5) / (w / 14) + simplex2(x / 22 / s2, y / 22 / s2))));
+      v *= Math.min(1, Math.max(0, 1 - centre / w)) * 2;
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+/** How a chalk mark turns: by where it is, as Klecks turns it (no two marks alike, every device the same). */
+export function chalkTurn(x, y) {
+  return ((x + y) * 53123) % (Math.PI * 2);
 }
 
 /** A small number in -1..1 that is always the same for the same mark (pencil grain). */

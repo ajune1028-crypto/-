@@ -127,3 +127,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## 심플렉스 잡음 (Klecks의 perlin.ts)
+
+`src/core/noise.js`의 `simplex2`는 Klecks가 쓰는 심플렉스 잡음을 옮겼다. 원래 Stefan Gustavson의 코드(Peter Eastman 최적화, Joseph Gentle의 JavaScript)로, 원저자가 공개 영역(public domain)에 두었다: "You may use it as you see fit, but attribution is appreciated." 연필 끝(Klecks의 분필 모양, `chalkAlpha`)을 만드는 데 쓴다.
