@@ -389,13 +389,21 @@ export function mountSongRoom(body, app, session, frame) {
   }
 
   /** Decodes every recording this device holds or the room carries, so 원본 can play them. */
+  /** In 원본 the recordings are read ahead (no tap needed to read), so ▶ finds them ready. */
+  function warmRecordings() {
+    audioContext({ wake: false }).then((ctx) => ctx && alive && loadRecordings(ctx)).then(() => alive && draw(), () => {});
+  }
+  const reading = new Map(); // source id → its read in progress
   async function loadRecordings(ctx) {
-    for (const src of song.sources.values()) {
-      if (audio.get(src.id) || !src.blob) continue;
-      const sound = await takeSound(app, roomFiles, src.blob);
-      // (Not there yet is not remembered: it may still be on its way from another device.)
-      if (sound) audio.set(src.id, bufferFromSamples(ctx, sound.samples, sound.rate));
-    }
+    await Promise.all([...song.sources.values()].filter((src) => src.blob && !audio.get(src.id)).map((src) => {
+      if (!reading.has(src.id)) {
+        reading.set(src.id, takeSound(app, roomFiles, src.blob).then((sound) => {
+          // (Not there yet is not remembered: it may still be on its way from another device.)
+          if (sound) audio.set(src.id, bufferFromSamples(ctx, sound.samples, sound.rate));
+        }, () => {}).finally(() => reading.delete(src.id)));
+      }
+      return reading.get(src.id);
+    }));
   }
 
   function makePlayer(ctx) {
@@ -416,7 +424,8 @@ export function mountSongRoom(body, app, session, frame) {
       return null;
     }
     makePlayer(ctx);
-    if (settings().songMode === "original") await loadRecordings(ctx);
+    // ▶ does not wait long for the recordings: one not read in a moment plays as piano this time.
+    if (settings().songMode === "original") await Promise.race([loadRecordings(ctx), new Promise((resolve) => setTimeout(resolve, 350))]);
     return ctx;
   }
 
@@ -527,7 +536,7 @@ export function mountSongRoom(body, app, session, frame) {
   function setMode(mode) {
     setSetting(app.store, "songMode", mode);
     player?.setMode(mode);
-    if (mode === "original" && player) ready().then(() => draw());
+    if (mode === "original") warmRecordings();
     app.events.emit("settings");
     draw();
   }
@@ -1391,6 +1400,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!alive) return;
     roomFiles = files;
     shareMine();
+    if (settings().songMode === "original") warmRecordings();
     draw();
   });
   draw();

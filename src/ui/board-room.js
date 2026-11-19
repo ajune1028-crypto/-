@@ -409,7 +409,7 @@ export function mountBoardRoom(body, app, session, frame) {
   function hintText(items) {
     if (cutting) return "자를 곳을 노래 카드 위에서 누르세요";
     if (lassoing()) return "카드들을 둘러 그리세요(끝이 안 닿아도 닫혀요). 테두리 안을 끌면 안의 카드와 함께 옮겨져요.";
-    if (!items.length) return mode === "song" ? `${toolSide()} '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요.` : `작은 우주들을 펼쳐 놓는 곳이에요. ${toolSide()} 아이콘으로 글·노래·사진을 놓아 보세요.`;
+    if (!items.length) return mode === "song" ? `${toolSide()} '내 노래'나 '소리 넣기'로 노래 카드를 놓아 보세요.` : `노래 방의 '보내기'나 ${toolSide()} 아이콘으로 글·노래·사진을 놓아 보세요.`;
     if (mode === "link") return linkFrom ? "다음에 올 카드를 누르거나 줄을 그으세요. 한 카드에서 여러 줄도 돼요(나중 줄이 다음). 번호를 누르면 지워져요." : "카드를 재생할 차례대로 누르거나, 카드에서 카드로 줄을 그어 이으세요.";
     return "";
   }
@@ -2600,15 +2600,34 @@ export function mountBoardRoom(body, app, session, frame) {
     player?.preview(p, seconds);
   }
 
-  /** The recordings for the song's sounds, for 원본: this device's own, else the copy the room carries. */
-  async function recordingsOf(song, ctx) {
-    const audio = new Map();
-    for (const src of song.sources.values()) {
-      if (!src.blob) continue;
-      const sound = await takeSound(app, roomFiles, src.blob);
-      if (sound) audio.set(src.id, bufferFromSamples(ctx, sound.samples, sound.rate));
+  /**
+   * The recordings for the song's sounds: this device's own, else the copy the room carries. Only
+   * what will sound is read (원본: every card; piano: a card with no notes, which plays as recorded),
+   * and ▶ never waits long for it: what is not ready in a moment plays as piano this time and is
+   * ready the next (the owner pressed ▶ and heard nothing while a file store kept it waiting).
+   */
+  const sounds = new Map(); // blob key → AudioBuffer, or null when there is none
+  const reading = new Map(); // blob key → promise of the above
+  function soundOf(key, ctx) {
+    if (sounds.has(key)) return Promise.resolve(sounds.get(key));
+    if (!reading.has(key)) {
+      reading.set(key, takeSound(app, roomFiles, key).then((sound) => {
+        const buf = sound ? bufferFromSamples(ctx, sound.samples, sound.rate) : null;
+        // A copy the room has not carried here yet may come later: only a found sound is kept.
+        if (buf) sounds.set(key, buf);
+        reading.delete(key);
+        return buf;
+      }, () => { reading.delete(key); return null; }));
     }
-    return audio;
+    return reading.get(key);
+  }
+  async function recordingsOf(song, ctx, waitMs = 350) {
+    const original = settings().songMode === "original";
+    const wanted = [...song.sources.values()].filter((src) => src.blob && (original || !src.notes?.length));
+    const audio = new Map();
+    const done = Promise.all(wanted.map((src) => soundOf(src.blob, ctx).then((buf) => { if (buf) audio.set(src.id, buf); })));
+    await Promise.race([done, new Promise((resolve) => setTimeout(resolve, waitMs))]);
+    return new Map(audio);
   }
 
   // A card's own sound travels with the board (share-take.js): whichever device has the original
@@ -2804,6 +2823,13 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!alive) return;
     roomFiles = files;
     shareMine();
+    // In 원본 the cards' recordings are read ahead (no tap needed to read), so ▶ finds them ready.
+    if (settings().songMode === "original") {
+      audioContext({ wake: false }).then((ctx) => {
+        if (!ctx || !alive) return;
+        for (const item of board.items()) if (item.kind === "song" && item.data?.blob) soundOf(item.data.blob, ctx);
+      }, () => {});
+    }
   });
   session.load(INK_DOC).then(() => inkSoon());
   buildModes();

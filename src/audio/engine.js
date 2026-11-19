@@ -29,6 +29,16 @@ export async function audioContext({ wake = true } = {}) {
   if (wake) soundFor(recordingNow ? "recording" : "playing");
   // iOS also stops a context when a call or another app takes the sound ("interrupted").
   if (wake && (shared.state === "suspended" || shared.state === "interrupted")) {
+    // Some phone app views begin making sound only once a sound has started inside the tap itself
+    // (resume alone is not enough there): a silent sample, started before anything is awaited.
+    try {
+      const blip = shared.createBufferSource();
+      blip.buffer = shared.createBuffer(1, 1, shared.sampleRate);
+      blip.connect(shared.destination);
+      blip.start(0);
+    } catch {
+      // Nothing to wake with: resume below still tries.
+    }
     try {
       await Promise.race([shared.resume(), new Promise((resolve) => setTimeout(resolve, 1500))]);
     } catch {

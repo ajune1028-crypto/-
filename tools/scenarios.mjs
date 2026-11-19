@@ -4299,10 +4299,11 @@ scenario("motion: the chosen mark runs like a drop of water from one mode to the
   await importSound(page, fixtures.doremi);
   await page.waitFor(`document.querySelector(".mode-switch").classList.contains("has-pill")`);
   await click(page, "#mode-original");
-  await page.waitFor(`!document.querySelector(".mode-switch .seg-pill").getAnimations().length`, 2000);
+  // The mark moves on the next frame after the choice, then runs: wait until it has settled there.
+  await page.waitFor(`(() => { const p = document.querySelector(".mode-switch .seg-pill"), b = document.getElementById("mode-original"); if (p.getAnimations().length) return false; const a = p.getBoundingClientRect(), c = b.getBoundingClientRect(); return Math.abs(a.left - c.left) < 1 && Math.abs(a.width - c.width) < 1; })()`, 2000);
   const pill = await box(".mode-switch .seg-pill");
   const orig = await box("#mode-original");
-  assert.ok(Math.abs(pill.x - orig.x) < 1 && Math.abs(pill.w - orig.w) < 1, "on 원본 now");
+  assert.ok(Math.abs(pill.x - orig.x) < 1 && Math.abs(pill.w - orig.w) < 1, "on 원본 now: " + JSON.stringify([pill, orig]));
 });
 
 scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
@@ -4366,4 +4367,65 @@ scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mod
   await page.waitFor(q("#bar-reset"));
   await click(page, "#bar-reset");
   await page.waitFor(`${room}.dataset.modesAt === "top" && !!document.getElementById("mode-link") && document.querySelector(".board-modes button").id === "mode-all"`);
+});
+
+// The owner (17 November): "화이트보드에서 재생 노래 눌렀을때 재생이 안 되고 그 노래가 안 나와". A card that
+// glows is not enough: the sound itself must be booked to start at once (a card's ▶, its menu's
+// ▶ 듣기 and the toolbar's 전체 재생), as piano and as 원본.
+scenario("whiteboard sound: ▶ on a card, ▶ 듣기 and 전체 재생 really start the sound within a moment, as piano and as 원본", async ({ open, fixtures }) => {
+  const page = await open({ width: 600, height: 800 });
+  await createBoard(page);
+  await click(page, "#mode-song");
+  await page.setFiles("#board-file", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".card.song").length === 1`, 20000);
+  await page.eval(`(() => {
+    window.__starts = [];
+    // A buffer source has its own start (an oscillator uses the shared one): watch both.
+    for (const proto of [AudioBufferSourceNode.prototype, AudioScheduledSourceNode.prototype]) {
+      const start = proto.start;
+      proto.start = function (when = 0, ...rest) {
+        window.__starts.push({ lead: when ? when - this.context.currentTime : 0, len: this.buffer ? this.buffer.duration : null, state: this.context.state });
+        return start.call(this, when, ...rest);
+      };
+    }
+    return true;
+  })()`);
+  const soundSoon = async (how) => {
+    await page.waitFor(`window.__starts.some((s) => s.lead < 0.8 && s.state === "running")`, 4000).catch(() => {});
+    const starts = await page.eval(`window.__starts`);
+    assert.ok(starts.some((s) => s.lead < 0.8 && s.state === "running"), how + ": sound starts at once: " + JSON.stringify(starts.slice(0, 6)));
+  };
+  const stop = async () => {
+    await page.eval(`(window.__starts = [], true)`);
+  };
+  await page.front();
+  // The card's own ▶.
+  await click(page, ".card.song .card-play");
+  await soundSoon("the card's ▶ (piano)");
+  await click(page, ".card.song .card-play");
+  await stop();
+  // 전체 재생.
+  await click(page, "#board-play");
+  await soundSoon("전체 재생 (piano)");
+  await click(page, "#board-play");
+  await stop();
+  // The same as 원본 (the recording itself).
+  await page.eval(`(() => { const s = window.__app.store; const v = s.get("settings", {}); s.set("settings", { ...v, songMode: "original" }); return true; })()`);
+  await click(page, ".card.song .card-play");
+  await soundSoon("the card's ▶ (원본)");
+  const long = await page.eval(`window.__starts.some((s) => s.len > 2)`);
+  assert.ok(long, "원본 plays the recording itself (a long buffer)");
+  await click(page, ".card.song .card-play");
+  await stop();
+  // Where the device's file store never answers (some app views), ▶ still sounds at once: as
+  // piano, and in 원본 too (a recording that is not ready yet plays as piano).
+  await page.eval(`(() => { window.__app.blobs.memory.clear(); window.__app.blobs.get = () => new Promise(() => {}); return true; })()`);
+  await page.eval(`(() => { const s = window.__app.store; const v = s.get("settings", {}); s.set("settings", { ...v, songMode: "piano" }); return true; })()`);
+  await click(page, "#board-play");
+  await soundSoon("전체 재생 with a file store that never answers (piano)");
+  await click(page, "#board-play");
+  await stop();
+  await page.eval(`(() => { const s = window.__app.store; const v = s.get("settings", {}); s.set("settings", { ...v, songMode: "original" }); return true; })()`);
+  await click(page, ".card.song .card-play");
+  await soundSoon("the card's ▶ with a file store that never answers (원본 → piano)");
 });
