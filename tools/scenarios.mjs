@@ -5044,3 +5044,48 @@ scenario("brush sheet: all nine brushes drawn on one page, each kept as its own 
   await pause(150);
   await a.shot(out("brush-sheet.png"));
 });
+
+// The owner (20 November): the panel's grip can be thrown to the left, right, top or bottom edge,
+// and the panel goes there; its end swiped back toward its own edge puts it away; a tap on ⋮ brings
+// it out where it last was. Judged as vaul judges a drawer's swipe (quick, or a quarter of its size).
+scenario("⋮ panel thrown by its grip: up it goes to the top edge, left to the left; its inner edge swiped home puts it away; a nudge leaves it; a tap on ⋮ opens it where it last was", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 820 });
+  await page.waitFor(q("#home-more"));
+  const centre = (sel) => page.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const flick = async (sel, dx, dy) => {
+    const [x, y] = await centre(sel);
+    await page.front();
+    await page.touch("start", [[x, y]]);
+    for (let i = 1; i <= 6; i++) await page.touch("move", [[x + (dx * i) / 6, y + (dy * i) / 6]]);
+    await page.touch("end");
+  };
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
+  await pause(600);
+  // Up: to the top edge, lit there.
+  await flick("#panel-grip", 0, -260);
+  await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='top']")`, 2000);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "top"`, 2000);
+  await pause(600);
+  await page.shot(out("panel-top.png"));
+  // Put away, and a tap brings it back at the top.
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "top"`, 2000);
+  await pause(600);
+  // A nudge: it stays as it is.
+  await flick("#panel-grip", 6, 4);
+  await pause(400);
+  assert.equal(await page.eval(`${q("#home-panel")}?.dataset.edge`), "top", "a nudge leaves it");
+  // Left: to the left edge.
+  await flick("#panel-grip", -230, 0);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "left"`, 2500);
+  await pause(600);
+  await page.shot(out("panel-left.png"));
+  // Its inner edge swiped back to the left: put away.
+  await flick("#panel-end", -160, 0);
+  await page.waitFor(`!document.getElementById("home-panel")`, 2500);
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "left"`, 2000);
+});

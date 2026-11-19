@@ -128,6 +128,13 @@ export function boot(root) {
     render();
   });
   window.addEventListener("pagehide", () => leave?.());
+  // Safari can still begin a text selection on a long press (a room held to go into a house turned
+  // blue): anything but a field to write in, or the link and code meant to be copied, takes none.
+  document.addEventListener("selectstart", (e) => {
+    const el = e.target?.nodeType === 1 ? e.target : e.target?.parentElement;
+    if (el?.closest?.("input, textarea, [contenteditable='true'], .link-box, .code")) return;
+    e.preventDefault();
+  });
   render();
   app.booted = true;
 }

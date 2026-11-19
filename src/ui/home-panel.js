@@ -2,9 +2,15 @@
 // of my rooms by their names (초성 too, core/search.js) or by what they hold; the last searches
 // under it. Then 집: houses that hold rooms, each one colour of deep glass with a ㅅ roof, a small
 // chimney and a white icon, its name beneath. It comes out of the edge it was thrown to (a tap
-// brings it up from the bottom). Leaving the app puts it away, and the search with it.
+// brings it out where it last was). Its grip (and a side panel's inner edge) can be held and thrown
+// on: back to its own edge it goes away, toward another edge it goes there (the owner, 20 November:
+// "끝자락을 스와이프하면 없어지게", "맨 위 가로 바로 어디에 발사해서 왼쪽 끝 오른쪽 끝 아래 위"), judged
+// as vaul (MIT) judges a drawer's swipe. Leaving the app puts it away, and the search with it.
 
 import { h, icon, toast } from "./dom.js";
+import { glowEdge, aimMarker } from "./edge-glow.js";
+import { buzz } from "./chime.js";
+import { VelocityTracker, gripThrow } from "../core/fling.js";
 import { segmented } from "./dom.js";
 import { kindInfo } from "./kinds.js";
 import { getSettings } from "../identity.js";
@@ -54,7 +60,8 @@ function marked(text, at, len) {
  * changed(): home draws itself again (a room went into a house, a house was built or taken down).
  * view: what it opens on ({ name: "main" }, { name: "house", id }, { name: "build", room }).
  */
-export function openHomePanel(app, { edge = "bottom", at = 0.5, rooms, changed, view = { name: "main" } }) {
+export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" } }) {
+  let edge = firstEdge;
   const root = app.root;
   const store = app.store;
   const max = () => getSettings(store).recentSearchMax || 5;
@@ -67,11 +74,12 @@ export function openHomePanel(app, { edge = "bottom", at = 0.5, rooms, changed, 
   const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true", onclick: () => { if (!entering) close(); } });
   // The grip stays the same element while the views change under it (a finger on it keeps its hold).
   const grip = h("div", { class: "panel-grip", id: "panel-grip", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  // A side panel's inner edge (its 끝자락) takes the same throw.
+  const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   const body = h("div", { class: "home-panel-body" });
-  panel.append(grip, body);
+  panel.append(grip, body, end);
   root.append(scrim, panel);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const away = () => ({ right: "translate(105%, 0px)", left: "translate(-105%, 0px)", top: "translate(0px, -105%)", bottom: "translate(0px, 105%)" })[edge];
   enter(at);
   if (!reduced && scrim.animate) scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
 
@@ -102,21 +110,107 @@ export function openHomePanel(app, { edge = "bottom", at = 0.5, rooms, changed, 
     anim.finished.then(done, done);
   }
   let open = true;
+
+  // ---- the grip: held, the panel follows; thrown, it goes away or to another edge ------------
+
+  const aim = aimMarker();
+  for (const handle of [grip, end]) {
+    let g = null;
+    handle.addEventListener("pointerdown", (e) => {
+      if (!open || g || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, track: new VelocityTracker() };
+      g.track.add(e.timeStamp, e.clientX, e.clientY);
+      try { handle.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      for (const a of panel.getAnimations()) a.cancel();
+      panel.classList.add("held");
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      for (const one of e.getCoalescedEvents?.() || [e]) g.track.add(one.timeStamp, one.clientX, one.clientY);
+      g.x = e.clientX;
+      g.y = e.clientY;
+      const dx = g.x - g.x0;
+      const dy = g.y - g.y0;
+      panel.style.transform = `translate(${dx}px, ${dy}px)`;
+      const now = judge(g, e.timeStamp);
+      // Toward its own edge it fades as it goes; toward another, a light shows where it will land.
+      panel.style.opacity = now.act === "close" ? "0.75" : "";
+      aim.show(now.act === "move" ? spotOn(now) : null);
+    });
+    const letGo = (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      g.track.add(e.timeStamp, e.clientX, e.clientY);
+      g.x = e.clientX;
+      g.y = e.clientY;
+      const now = e.type === "pointerup" ? judge(g, e.timeStamp) : { act: "stay" };
+      const from = [g.x - g.x0, g.y - g.y0];
+      g = null;
+      aim.hide();
+      panel.classList.remove("held");
+      panel.style.opacity = "";
+      if (now.act === "close") return close({ from });
+      if (now.act === "move") return relocate(now, from);
+      settle(from);
+    };
+    handle.addEventListener("pointerup", letGo);
+    handle.addEventListener("pointercancel", letGo);
+  }
+
+  function judge(g, time) {
+    const v = g.track.velocity(time);
+    const r = panel.getBoundingClientRect();
+    const side = edge === "left" || edge === "right";
+    return gripThrow({ x0: g.x0, y0: g.y0, x1: g.x, y1: g.y, vx: v.vx, vy: v.vy, w: innerWidth, h: innerHeight, home: edge, size: side ? r.width : r.height });
+  }
+
+  const spotOn = ({ edge: e, at: a }) => (e === "left" || e === "right" ? { edge: e, x: e === "left" ? 0 : innerWidth, y: a * innerHeight } : { edge: e, x: a * innerWidth, y: e === "top" ? 0 : innerHeight });
+
+  /** Not thrown far or fast enough: back where it was. */
+  function settle([dx, dy]) {
+    panel.style.transform = "";
+    if (reduced || !panel.animate) return;
+    panel.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0px, 0px)" }], { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+  }
+
+  /** Thrown toward another edge: it flies off that way, the edge lights where it lands, and it comes out there. */
+  async function relocate({ edge: to, at: spot, strength }, [dx, dy]) {
+    const d = Math.hypot(dx, dy) || 1;
+    rememberPanelEdge(store, { edge: to, at: spot });
+    const fly = reduced || !panel.animate ? null : panel.animate([
+      { transform: `translate(${dx}px, ${dy}px)`, opacity: 1 },
+      { transform: `translate(${dx + (dx / d) * 180}px, ${dy + (dy / d) * 180}px) scale(0.92)`, opacity: 0 },
+    ], { duration: 190, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" });
+    entering = true;
+    await Promise.all([fly?.finished.catch(() => {}), glowEdge({ edge: to, at: spot, strength, delay: 60, onImpact: () => buzz(app, 8) })]);
+    if (!open) return;
+    fly?.cancel();
+    panel.style.transform = "";
+    edge = to;
+    panel.dataset.edge = to;
+    enter(spot);
+  }
+
   const onKey = (e) => { if (e.key === "Escape") close(); };
   // Leaving the app and coming back finds home as it was: no search, no panel.
   const onHide = () => { if (document.visibilityState === "hidden") close({ now: true, forget: true }); };
   document.addEventListener("keydown", onKey);
   document.addEventListener("visibilitychange", onHide);
 
-  function close({ now = false, forget = false } = {}) {
+  function close({ now = false, forget = false, from = [0, 0] } = {}) {
     if (!open) return;
     open = false;
+    aim.hide();
     if (!forget && query.trim()) rememberSearch(store, query, max());
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("visibilitychange", onHide);
     const gone = () => { panel.remove(); scrim.remove(); };
     if (now || reduced || !panel.animate) return gone();
-    panel.animate([{ transform: "translate(0px, 0px)", opacity: 1 }, { transform: away(), opacity: 0.4 }], { duration: 260, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" }).finished.then(gone, gone);
+    // Out the way it came, from wherever the finger left it.
+    const [fx, fy] = from;
+    const out = { right: `translate(105%, ${fy}px)`, left: `translate(-105%, ${fy}px)`, top: `translate(${fx}px, -105%)`, bottom: `translate(${fx}px, 105%)` }[edge];
+    panel.style.transform = "";
+    panel.animate([{ transform: `translate(${fx}px, ${fy}px)`, opacity: 1 }, { transform: out, opacity: 0.4 }], { duration: 260, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" }).finished.then(gone, gone);
     scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" });
   }
 

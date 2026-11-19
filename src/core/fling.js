@@ -159,19 +159,25 @@ export function throwOf({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, tap = 14 }) {
 
 const OUTWARD = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
 const AWAY = Math.cos((40 * Math.PI) / 180);
+/** From vaul (Emil Kowalski, MIT License; THIRD_PARTY.md): a flick faster than this (px per ms) counts… */
+export const VELOCITY_THRESHOLD = 0.4;
+/** …and so does a drag of a quarter of the panel's size, however slow. */
+export const CLOSE_THRESHOLD = 0.25;
 
 /**
- * The grip of a panel that came out of edge `home`, let go: { act: "stay" } (a nudge, or slow and
- * short), { act: "close" } (back toward its own edge, within 40° of straight at it), or
- * { act: "move", edge, at, strength } (to the edge the ray meets; never its own: thrown aside, a
- * ray that still meets its own edge goes to the other edge the throw points at most).
+ * The grip of a panel that came out of edge `home`, let go. As vaul decides a drawer's swipe, the
+ * throw counts when it was quick (VELOCITY_THRESHOLD) or went a quarter of the panel's `size`
+ * (CLOSE_THRESHOLD); otherwise the panel goes back where it was: { act: "stay" }. Back toward its
+ * own edge (within 40° of straight at it): { act: "close" }. Toward another edge: { act: "move",
+ * edge, at, strength }, to the edge the ray meets, never its own (thrown aside, a ray that still
+ * meets its own edge goes to the other edge the throw points at most).
  */
-export function gripThrow({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, home }) {
+export function gripThrow({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, home, size = 300 }) {
   const dx = x1 - x0;
   const dy = y1 - y0;
   const d = Math.hypot(dx, dy);
   const speed = Math.hypot(vx, vy);
-  if (d < 10 || (d < 70 && speed < 0.35)) return { act: "stay" };
+  if (d < 10 || (speed <= VELOCITY_THRESHOLD && d < size * CLOSE_THRESHOLD)) return { act: "stay" };
   const [hx, hy] = OUTWARD[home] || OUTWARD.bottom;
   if ((dx * hx + dy * hy) / d >= AWAY) return { act: "close" };
   const strength = strengthOf(speed, d);

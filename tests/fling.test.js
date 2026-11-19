@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fitPolynomial, VelocityTracker, edgeHit, throwOf, gripThrow } from "../src/core/fling.js";
+import { fitPolynomial, VelocityTracker, edgeHit, throwOf, gripThrow, VELOCITY_THRESHOLD, CLOSE_THRESHOLD } from "../src/core/fling.js";
 
 const near = (a, b, eps, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg}: ${a} vs ${b}`);
 
@@ -89,6 +89,12 @@ test("the panel's grip: back toward its own edge puts it away; toward another ed
   assert.deepEqual(pick2(gripThrow({ ...grip, home: "bottom", x1: 195 - Math.sin(aside) * 150, y1: 140 + Math.cos(aside) * 150, vx: -1, vy: 0.7 })), ["move", "left"]);
   assert.equal(gripThrow({ ...grip, home: "bottom", x1: 200, y1: 146, vx: 0.05, vy: 0.05 }).act, "stay", "a nudge");
   assert.equal(gripThrow({ ...grip, home: "bottom", x1: 160, y1: 120, vx: 0, vy: 0 }).act, "stay", "slow and short: back where it was");
+  // vaul's rules: quick enough, or a quarter of the panel's size however slowly.
+  assert.deepEqual([VELOCITY_THRESHOLD, CLOSE_THRESHOLD], [0.4, 0.25]);
+  const slow = (d) => gripThrow({ ...grip, home: "bottom", x1: 195, y1: 140 + d, vx: 0, vy: 0.05, size: 600 }).act;
+  assert.equal(slow(140), "stay", "slow, under a quarter of 600");
+  assert.equal(slow(160), "close", "slow, past a quarter of 600");
+  assert.equal(gripThrow({ ...grip, home: "bottom", x1: 195, y1: 180, vx: 0, vy: 0.45, size: 600 }).act, "close", "short but quick");
   // A panel out of the right side: right puts it away, left sends it left.
   const side = { x0: 300, y0: 30, w: W, h: H, home: "right" };
   assert.equal(gripThrow({ ...side, x1: 380, y1: 34, vx: 1.4, vy: 0 }).act, "close");

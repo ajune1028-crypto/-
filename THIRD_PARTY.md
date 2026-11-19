@@ -131,3 +131,20 @@ SOFTWARE.
 ## 심플렉스 잡음 (Klecks의 perlin.ts)
 
 `src/core/noise.js`의 `simplex2`는 Klecks가 쓰는 심플렉스 잡음을 옮겼다. 원래 Stefan Gustavson의 코드(Peter Eastman 최적화, Joseph Gentle의 JavaScript)로, 원저자가 공개 영역(public domain)에 두었다: "You may use it as you see fit, but attribution is appreciated." 연필 끝(Klecks의 분필 모양, `chalkAlpha`)을 만드는 데 쓴다.
+
+## vaul
+
+`src/core/fling.js`의 `gripThrow`는 vaul(서랍 컴포넌트)의 끌어 닫기 기준을 따랐다: 놓을 때 빠르기가 0.4px/ms를 넘거나(`VELOCITY_THRESHOLD`) 패널 크기의 4분의 1 이상 끌면(`CLOSE_THRESHOLD`) 받아들이고, 아니면 제자리로. 열리고 닫히는 움직임 곡선 `cubic-bezier(0.32, 0.72, 0, 1)`도 vaul과 같다.
+https://github.com/emilkowalski/vaul
+
+```
+MIT License
+
+Copyright (c) 2023 Emil Kowalski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
