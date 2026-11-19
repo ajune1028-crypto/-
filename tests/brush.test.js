@@ -145,3 +145,57 @@ test("adjustShape: a line's end follows the hand; a circle grows as the hand mov
   const big = adjustShape(c, [600, 400], [800, 400]);
   assert.ok(Math.abs(Math.hypot(big.pts[0] - 400, big.pts[1] - 400) - 400) < 30);
 });
+
+// ---- ported from open code: lazy-brush (MIT), Klecks' sketchy brush (MIT), Easy-Brush dynamics (MIT)
+
+test("손떨림 보정 (lazy-brush): the brush waits while the hand moves within the string, then is pulled along it", async () => {
+  const { LazyBrush } = await import("../src/core/brush.js");
+  const lazy = new LazyBrush(30, 100, 100);
+  assert.equal(lazy.update(120, 100), false, "within the string: it stays");
+  assert.deepEqual([lazy.x, lazy.y], [100, 100]);
+  assert.equal(lazy.update(150, 100), true, "past it: pulled");
+  assert.deepEqual([lazy.x, lazy.y], [120, 100], "to the string's length behind the hand");
+  lazy.update(150, 160);
+  assert.ok(Math.abs(Math.hypot(150 - lazy.x, 160 - lazy.y) - 30) < 1e-9, "always the string's length behind once pulled");
+  const off = new LazyBrush(0, 0, 0);
+  off.update(7, 9);
+  assert.deepEqual([off.x, off.y], [7, 9], "no string: it follows the hand exactly");
+  const sticky = new LazyBrush(10, 0, 0);
+  sticky.update(50, 0, 0.5);
+  assert.ok(sticky.x > 0 && sticky.x < 40, "friction pulls it less than the whole way: " + sticky.x);
+});
+
+test("스케치 (Klecks' sketchy brush): near points of the line are joined by faint strokes, the same on every device, growing as the line grows", async () => {
+  const { strokePoints, sketchLines } = await import("../src/core/brush.js");
+  const pts = [];
+  for (let i = 0; i < 80; i++) pts.push(Math.round(i * 12), Math.round(Math.sin(i / 6) * 90), 50);
+  const points = strokePoints(pts, { streamline: 0 });
+  const a = sketchLines(points, { reach: 280, seed: 4242 });
+  const b = sketchLines(points, { reach: 280, seed: 4242 });
+  assert.deepEqual(a, b, "the same line draws the same strokes");
+  assert.ok(a.length > 40, "there are strokes: " + a.length / 4);
+  for (let i = 0; i < a.length; i += 4) assert.ok(Math.hypot(a[i + 2] - a[i], a[i + 3] - a[i + 1]) <= 0.4 * 280 * Math.SQRT2 + 1e-6, "each stroke is short");
+  const fewer = sketchLines(strokePoints(pts.slice(0, 120), { streamline: 0 }), { reach: 280, seed: 4242 });
+  assert.deepEqual(a.slice(0, fewer.length), fewer, "while drawing, what is drawn stays as the line grows");
+  assert.notDeepEqual(sketchLines(points, { reach: 280, seed: 7 }), a, "another line, other strokes");
+  assert.deepEqual(sketchLines(points.slice(0, 1), { reach: 280, seed: 1 }), [], "one point: nothing to join");
+});
+
+test("크레용 (Easy-Brush's dynamics): each mark's size, slant, roundness, place and strength vary within bounds, the same every time", async () => {
+  const { strokePoints, dabs, crayonMarks } = await import("../src/core/brush.js");
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push(i * 30, 200, 50);
+  const marks = dabs(strokePoints(pts, { streamline: 0 }), { step: 20 });
+  const one = crayonMarks(marks, { size: 60, seed: 11, pressure: false });
+  assert.deepEqual(one, crayonMarks(marks, { size: 60, seed: 11, pressure: false }), "the same marks every time");
+  const sizes = one.map((m) => m.rx);
+  assert.ok(Math.min(...sizes) >= 30 * 0.6 - 1e-9 && Math.max(...sizes) <= 30 + 1e-9, "sizes between 60% and full: " + [Math.min(...sizes), Math.max(...sizes)]);
+  assert.ok(new Set(sizes.map((s) => Math.round(s))).size > 4, "and they vary");
+  for (const m of one) {
+    assert.ok(m.ry <= m.rx && m.ry >= m.rx * 0.45, "flattened, not too thin");
+    assert.ok(Math.abs(m.y - 200) <= 30 * 0.6 + 1e-9, "scattered a little around the line: " + m.y);
+    assert.ok(m.alpha > 0 && m.alpha <= 1);
+  }
+  const angles = one.map((m) => m.angle);
+  assert.ok(Math.max(...angles) - Math.min(...angles) > 0.2, "slants vary");
+});

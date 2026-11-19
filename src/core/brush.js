@@ -33,6 +33,8 @@ export const BRUSH_LOOKS = {
   marker: { kind: "outline", scale: 1.6, alpha: 1, thinning: 0, streamline: 0.5 },
   airbrush: { kind: "dabs", scale: 4.2, alpha: 0.2, spacing: 0.16, soft: true },
   highlighter: { kind: "outline", scale: 3.4, alpha: 0.32, thinning: 0, streamline: 0.62, flat: true },
+  sketch: { kind: "sketch", scale: 1, alpha: 0.85, streamline: 0.35 },
+  crayon: { kind: "dabs", scale: 1.7, alpha: 0.7, spacing: 0.24, crayon: true, streamline: 0.4 },
   erase: { kind: "outline", scale: 3.2, alpha: 1, thinning: 0, streamline: 0.3 },
 };
 
@@ -240,6 +242,105 @@ export function dabs(points, { step }) {
     carry = len - (at - step);
   }
   return out;
+}
+
+// ---- ported brush parts --------------------------------------------------------------------
+
+/**
+ * 손떨림 보정: the brush on a string. It waits while the hand moves within `radius`, and is pulled
+ * along the line toward the hand when the hand goes further, so the line comes out smooth however
+ * the hand shakes. friction (0..1) makes it slower still. Adapted from lazy-brush (Copyright 2018
+ * Jan Hug, MIT License; THIRD_PARTY.md).
+ */
+export class LazyBrush {
+  constructor(radius = 0, x = 0, y = 0) {
+    this.radius = radius;
+    this.x = x;
+    this.y = y;
+  }
+
+  /** The hand is at (x, y): whether the brush moved (it is then at this.x, this.y). */
+  update(x, y, friction = 0) {
+    if (!(this.radius > 0)) {
+      const moved = x !== this.x || y !== this.y;
+      this.x = x;
+      this.y = y;
+      return moved;
+    }
+    const dx = x - this.x;
+    const dy = y - this.y;
+    const d = Math.hypot(dx, dy);
+    if (Math.round((d - this.radius) * 10) / 10 <= 0) return false;
+    let step = d - this.radius;
+    if (friction > 0 && friction < 1) step *= 1 - Math.sqrt(1 - (1 - friction) ** 2);
+    this.x += (dx / d) * step;
+    this.y += (dy / d) * step;
+    return true;
+  }
+}
+
+/**
+ * 스케치: besides the line itself, faint strokes join each point to the earlier points near it, the
+ * nearer the likelier, as Harmony's sketchy brush (Mr.doob) does in Klecks (bitbof, MIT License).
+ * The chance for each pair of points comes from the stroke's seed, so every device draws the same
+ * strokes, and those of a line still being drawn stay as it grows. Returns [x1, y1, x2, y2, …].
+ */
+export function sketchLines(points, { reach, seed = 0 }) {
+  const out = [];
+  if (points.length < 2 || !(reach > 0)) return out;
+  const r2 = reach * reach;
+  const grid = new Map();
+  for (let c = 0; c < points.length; c++) {
+    const p = points[c];
+    const cx = Math.floor(p.x / reach);
+    const cy = Math.floor(p.y / reach);
+    const near = [];
+    for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
+      const list = grid.get(gx + "," + gy);
+      if (list) near.push(...list);
+    }
+    near.sort((a, b) => a - b);
+    for (const e of near) {
+      const q = points[e];
+      const b = q.x - p.x;
+      const a = q.y - p.y;
+      const g = b * b + a * a;
+      if (g < r2 && (wobble(c * 3001 + e, seed) + 1) / 2 > g / r2) out.push(p.x + b * 0.3, p.y + a * 0.3, q.x - b * 0.3, q.y - a * 0.3);
+    }
+    const k = cx + "," + cy;
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(c);
+  }
+  return out;
+}
+
+/**
+ * 크레용: each mark along the line a little different, as in Easy-Brush's shape, scatter and
+ * transparency dynamics (DQLean, MIT License): size between 60% and full, flattened to 45–85% and
+ * slanted about the way the line goes, scattered a little around it, of uneven strength. With a
+ * pen's pressure, harder is bigger and stronger. The same marks every time (a friend's screen too).
+ */
+export function crayonMarks(marks, { size, seed = 0, pressure = false }) {
+  const half = size / 2;
+  return marks.map((m, i) => {
+    const u = (k) => (wobble(i * 7 + k, seed) + 1) / 2;
+    const prev = marks[Math.max(0, i - 1)];
+    const next = marks[Math.min(marks.length - 1, i + 1)];
+    const way = Math.atan2(next.y - prev.y, next.x - prev.x) || 0;
+    const press = pressure ? 0.55 + 0.45 * m.p : 1;
+    const rx = half * (1 - 0.4 * u(0)) * press;
+    const ry = rx * (0.45 + 0.4 * u(1));
+    const across = half * 0.6 * (u(3) * 2 - 1);
+    const along = half * 0.3 * (u(4) * 2 - 1);
+    return {
+      x: m.x + Math.cos(way) * along - Math.sin(way) * across,
+      y: m.y + Math.sin(way) * along + Math.cos(way) * across,
+      rx,
+      ry,
+      angle: way + (u(2) - 0.5) * 0.9,
+      alpha: (0.55 + 0.45 * u(5)) * (pressure ? 0.45 + 0.55 * m.p : 1),
+    };
+  });
 }
 
 /** A small number in -1..1 that is always the same for the same mark (pencil grain). */

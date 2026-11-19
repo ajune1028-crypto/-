@@ -74,3 +74,56 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## lazy-brush
+
+`src/core/brush.js`의 손떨림 보정(`LazyBrush`)은 lazy-brush를 옮겼다: 붓이 손에 매인 줄 끝에 있어서, 손이 줄 길이 안에서 움직이면 그대로 있고 더 가면 줄 길이만큼 뒤에서 끌려온다.
+https://github.com/dulnan/lazy-brush
+
+```
+Copyright 2018 Jan Hug <me@dulnan.net>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## Klecks의 스케치 붓 (Harmony)
+
+`src/core/brush.js`의 `sketchLines`는 Klecks의 `sketchy-brush.ts`(Mr.doob의 Harmony에서 온 붓)를 옮겼다: 새 점마다 가까운 앞 점들과 옅은 선으로 잇되, 가까울수록 자주. 무작위는 우리 해시로 바꿔서 모든 기기에서 같은 선이 나온다. 라이선스는 위 Klecks(MIT)와 같다.
+
+## Easy-Brush
+
+`src/core/brush.js`의 `crayonMarks`(크레용)는 Easy-Brush의 붓 다이내믹스(크기·기울기·둥글기 흔들기, 흩뿌림, 세기 흔들기)를 옮겼다.
+https://github.com/DQLean/Easy-Brush
+
+```
+Copyright (c) [2024] [dqlean]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
