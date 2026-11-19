@@ -13,8 +13,9 @@ import { openReference } from "./reference.js";
 import { refSounds } from "../reference.js";
 import { getSettings, setSetting } from "../identity.js";
 import { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } from "../houses.js";
-import { openHomePanel, houseShape } from "./home-panel.js";
-import { glowEdge, edgeOf } from "./edge-glow.js";
+import { openHomePanel, houseShape, lastPanelEdge, rememberPanelEdge } from "./home-panel.js";
+import { glowEdge, aimMarker } from "./edge-glow.js";
+import { VelocityTracker, throwOf } from "../core/fling.js";
 import { buzz } from "./chime.js";
 import { segmented } from "./dom.js";
 import { memberColor } from "../core/paint.js";
@@ -191,63 +192,65 @@ export function showHome(app) {
     const remembered = app.store.get("rooms", []);
     return [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))];
   };
-  async function openPanel({ edge = "bottom", at = 0.5, strength = 0.35, view } = {}) {
+  /** Opens 찾기와 집 out of an edge; with no edge given, out of the one it was last thrown to. */
+  async function openPanel({ edge, at, strength = 0.3, delay = 0, view } = {}) {
+    if (!edge) ({ edge, at } = lastPanelEdge(app.store));
     if (panelCtl?.isOpen()) panelCtl.close({ now: true });
-    buzz(app, 8);
-    await glowEdge({ edge, at, strength });
+    await glowEdge({ edge, at: at ?? 0.5, strength, delay, onImpact: () => buzz(app, 8) });
     if (!alive) return;
-    panelCtl = openHomePanel(app, { edge, view, rooms: allRooms, changed: () => draw() });
+    panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw() });
   }
 
   /**
-   * The ⋮ at the top right: a tap brings 찾기와 집 up from the bottom; held and thrown toward an edge
-   * of the screen, that edge lights up in my colour where it lands and the panel comes out of it.
+   * The ⋮ at the top right: a tap brings 찾기와 집 out of the edge it was last thrown to; held and
+   * thrown, it flies along the finger's path to the edge it really meets (a small light on that edge
+   * shows where while aiming), lights it in my colour and the panel comes out there.
    */
   function kebab() {
-    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르거나, 꾹 눌러 화면 끝으로 던져요)",
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 끝에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
       onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("kebab"));
     let g = null;
+    const aim = aimMarker();
     const reset = () => {
+      aim.hide();
       btn.classList.remove("charging");
       const was = btn.style.translate;
       btn.style.translate = "";
       if (was && btn.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) btn.animate([{ translate: was }, { translate: "0 0" }], { duration: 380, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
     };
+    const throwNow = (x, y, v = { vx: 0, vy: 0 }) => throwOf({ x0: g.x0, y0: g.y0, x1: x, y1: y, vx: v.vx, vy: v.vy, w: innerWidth, h: innerHeight });
     btn.addEventListener("pointerdown", (e) => {
-      g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, trail: [[e.clientX, e.clientY, performance.now()]] };
+      g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, track: new VelocityTracker() };
+      g.track.add(e.timeStamp, e.clientX, e.clientY);
       try { btn.setPointerCapture(e.pointerId); } catch { /* fine */ }
       btn.classList.add("charging");
     });
     btn.addEventListener("pointermove", (e) => {
       if (!g || e.pointerId !== g.id) return;
-      const now = performance.now();
-      g.trail.push([e.clientX, e.clientY, now]);
-      while (g.trail.length > 2 && now - g.trail[0][2] > 90) g.trail.shift();
+      for (const one of e.getCoalescedEvents?.() || [e]) g.track.add(one.timeStamp, one.clientX, one.clientY);
       // The dots lean after the finger, held back like a ball in a sling.
       const dx = e.clientX - g.x0;
       const dy = e.clientY - g.y0;
       const d = Math.hypot(dx, dy) || 1;
       const pull = Math.min(24, d * 0.3);
       btn.style.translate = `${(dx / d) * pull}px ${(dy / d) * pull}px`;
+      // Where it would land, shown on the edge before letting go.
+      aim.show(d >= 18 ? throwNow(e.clientX, e.clientY) : null);
     });
     btn.addEventListener("touchmove", (e) => { if (g) e.preventDefault(); }, { passive: false });
     btn.addEventListener("pointercancel", () => { g = null; reset(); });
     btn.addEventListener("pointerup", (e) => {
       if (!g || e.pointerId !== g.id) return;
-      const dx = e.clientX - g.x0;
-      const dy = e.clientY - g.y0;
-      const dist = Math.hypot(dx, dy);
-      const [ax, ay, at] = g.trail[0];
-      const dt = Math.max(16, performance.now() - at);
-      const vx = (e.clientX - ax) / dt;
-      const vy = (e.clientY - ay) / dt;
-      const speed = Math.hypot(vx, vy);
+      g.track.add(e.timeStamp, e.clientX, e.clientY);
+      const hit = throwNow(e.clientX, e.clientY, g.track.velocity(e.timeStamp));
       g = null;
       reset();
-      if (dist < 14) return void openPanel();
-      const dir = speed > 0.25 ? [vx, vy] : [dx, dy];
-      const hit = edgeOf(e.clientX, e.clientY, dir[0], dir[1], innerWidth, innerHeight);
-      openPanel({ edge: hit.edge, at: hit.at, strength: Math.max(0.12, Math.min(1, speed / 2.4 + dist / 900)) });
+      if (!hit) return void openPanel();
+      // The invisible ball takes a moment to fly from the finger to the edge: further and softer, longer.
+      const flight = Math.hypot(hit.x - e.clientX, hit.y - e.clientY);
+      const delay = Math.round(Math.max(40, Math.min(190, flight / Math.max(0.9, hit.speed * 1.3))));
+      rememberPanelEdge(app.store, hit);
+      openPanel({ edge: hit.edge, at: hit.at, strength: hit.strength, delay });
     });
     return btn;
   }
@@ -374,12 +377,12 @@ export function showHome(app) {
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
-        // 설정 and ⋮ side by side at the top right, 레퍼런스 under the ⋮ (the owner: "레퍼런스 아이콘을 점 3개
-        // 세로로 있는 거 아래에"), so nothing lies over 창작's title.
+        // 설정 and 레퍼런스 side by side at the top right, ⋮ under 레퍼런스 (the owner, 20 November: "점 3개
+        // 세로와 레퍼런스의 위치 바꾸고"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
-          kebab(),
-          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app))),
+          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
+          kebab()),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.

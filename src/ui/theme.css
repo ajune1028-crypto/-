@@ -1554,10 +1554,14 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="bottom"], .home-panel[data-edge="top"] { left: 0; right: 0; margin-inline: auto; max-width: 42rem; height: min(84vh, 46rem); }
 .home-panel[data-edge="bottom"] { bottom: 0; border-radius: 1.6rem 1.6rem 0 0; }
 .home-panel[data-edge="top"] { top: 0; border-radius: 0 0 1.6rem 1.6rem; }
-.panel-grip { flex: none; width: 2.4rem; height: 0.3rem; margin: 0.55rem auto 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
-.home-panel[data-edge="left"] .panel-grip, .home-panel[data-edge="right"] .panel-grip { display: none; }
+/* The grip: a bar across the panel's inner end (on a side panel, across its top). */
+.panel-grip { flex: none; display: grid; place-items: center; height: 1.7rem; touch-action: none; cursor: grab; }
+.grip-bar { width: 2.6rem; height: 0.32rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.home-panel[data-edge="top"] .panel-grip { order: 2; }
+.home-panel[data-edge="left"] .panel-grip, .home-panel[data-edge="right"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
-.home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: calc(1.2rem + env(safe-area-inset-top)); }
+.home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(0.9rem + env(safe-area-inset-top)); padding-bottom: 0.3rem; }
 .search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
 .search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
@@ -1603,29 +1607,26 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .house-icon-pick[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
 /* The light where the ⋮ was thrown: a burst, then a thin glassy neon bar along the edge. */
-.edge-glow { position: fixed; z-index: 95; pointer-events: none; --c: var(--tint); }
-.edge-glow[data-edge="right"], .edge-glow[data-edge="left"] { top: var(--from); height: var(--len); width: 2.4rem; -webkit-mask-image: linear-gradient(180deg, transparent, #000 26%, #000 74%, transparent); mask-image: linear-gradient(180deg, transparent, #000 26%, #000 74%, transparent); }
-.edge-glow[data-edge="top"], .edge-glow[data-edge="bottom"] { left: var(--from); width: var(--len); height: 2.4rem; -webkit-mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); }
-.edge-glow[data-edge="right"] { right: 0; background: linear-gradient(270deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
-.edge-glow[data-edge="left"] { left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
-.edge-glow[data-edge="bottom"] { bottom: 0; background: linear-gradient(0deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
-.edge-glow[data-edge="top"] { top: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
-.edge-glow::before { content: ""; position: absolute; inset: 0; -webkit-backdrop-filter: blur(3px) saturate(1.8); backdrop-filter: blur(3px) saturate(1.8); }
-.edge-glow[data-edge="right"]::before { left: auto; width: 6px; }
-.edge-glow[data-edge="left"]::before { right: auto; width: 6px; }
-.edge-glow[data-edge="bottom"]::before { top: auto; height: 6px; }
-.edge-glow[data-edge="top"]::before { bottom: auto; height: 6px; }
-.edge-burst { position: fixed; z-index: 96; width: 9rem; height: 9rem; border-radius: 50%; pointer-events: none; opacity: 0; background: radial-gradient(circle, color-mix(in srgb, var(--tint) 55%, #fff) 0, color-mix(in srgb, var(--tint) 50%, transparent) 26%, color-mix(in srgb, var(--tint) 14%, transparent) 48%, transparent 70%); }
-.edge-burst[data-edge="right"] { left: 100%; top: var(--at); }
-.edge-burst[data-edge="left"] { left: 0; top: var(--at); }
-.edge-burst[data-edge="bottom"] { top: 100%; left: var(--at); }
-.edge-burst[data-edge="top"] { top: 0; left: var(--at); }
+/* The light where something thrown lands: a strip of canvas along that edge (ui/edge-glow.js). */
+.edge-glow { position: fixed; z-index: 95; pointer-events: none; }
+.edge-glow[data-edge="left"] { left: 0; top: 0; }
+.edge-glow[data-edge="right"] { right: 0; top: 0; }
+.edge-glow[data-edge="top"] { left: 0; top: 0; }
+.edge-glow[data-edge="bottom"] { left: 0; bottom: 0; }
+/* While aiming: a small light on the edge where it would land. */
+.edge-aim { position: fixed; z-index: 95; pointer-events: none; width: 4.6rem; height: 0.8rem; animation: aim-breathe 0.9s var(--ease) infinite alternate; }
+.edge-aim[data-edge="left"], .edge-aim[data-edge="right"] { width: 0.8rem; height: 4.6rem; }
+.edge-aim[data-edge="left"] { translate: 0 -50%; background: radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--tint) 70%, #fff), color-mix(in srgb, var(--tint) 45%, transparent) 42%, transparent); }
+.edge-aim[data-edge="right"] { translate: -100% -50%; background: radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--tint) 70%, #fff), color-mix(in srgb, var(--tint) 45%, transparent) 42%, transparent); }
+.edge-aim[data-edge="top"] { translate: -50% 0; background: radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--tint) 70%, #fff), color-mix(in srgb, var(--tint) 45%, transparent) 42%, transparent); }
+.edge-aim[data-edge="bottom"] { translate: -50% -100%; background: radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--tint) 70%, #fff), color-mix(in srgb, var(--tint) 45%, transparent) 42%, transparent); }
+@keyframes aim-breathe { from { opacity: 0.55; } to { opacity: 0.95; } }
 
 /* Home's top right: 설정 and ⋮ side by side, 레퍼런스 under the ⋮; clear of 창작's title. */
 .home-top { display: grid; grid-template-columns: auto auto; gap: 0.3rem; right: 0.5rem; justify-items: center; }
 .home-top .icon-btn { width: 2.3rem; height: 2.3rem; }
 .home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
-.home-top #home-reference { grid-column: 2; }
+.home-top .home-kebab { grid-column: 2; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }

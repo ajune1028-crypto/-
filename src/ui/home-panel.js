@@ -11,6 +11,20 @@ import { getSettings } from "../identity.js";
 import { rankByName, snippet } from "../core/search.js";
 import { houses, addHouse, updateHouse, removeHouse, putInHouse, takeOutOfHouse, houseOf, recentSearches, rememberSearch, forgetSearches, roomWords, HOUSE_COLORS, HOUSE_ICONS } from "../houses.js";
 
+const PANEL_EDGE = "homePanelEdge";
+const EDGES = ["left", "right", "top", "bottom"];
+
+/** Where 찾기와 집 last came out (a tap on ⋮ brings it from there, the owner asked): { edge, at }. */
+export function lastPanelEdge(store) {
+  const v = store.get(PANEL_EDGE, null);
+  if (!v || !EDGES.includes(v.edge) || !Number.isFinite(v.at)) return { edge: "bottom", at: 0.5 };
+  return { edge: v.edge, at: Math.max(0, Math.min(1, v.at)) };
+}
+
+export function rememberPanelEdge(store, { edge, at }) {
+  if (EDGES.includes(edge)) store.set(PANEL_EDGE, { edge, at: Number.isFinite(at) ? Math.max(0, Math.min(1, at)) : 0.5 });
+}
+
 export function houseColor(key) {
   return (HOUSE_COLORS.find(([k]) => k === key) || HOUSE_COLORS[0])[1];
 }
@@ -40,20 +54,52 @@ function marked(text, at, len) {
  * changed(): home draws itself again (a room went into a house, a house was built or taken down).
  * view: what it opens on ({ name: "main" }, { name: "house", id }, { name: "build", room }).
  */
-export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { name: "main" } }) {
+export function openHomePanel(app, { edge = "bottom", at = 0.5, rooms, changed, view = { name: "main" } }) {
   const root = app.root;
   const store = app.store;
   const max = () => getSettings(store).recentSearchMax || 5;
   let mode = "name";
   let query = "";
   const panel = h("aside", { class: "home-panel", id: "home-panel", data: { edge }, role: "dialog", "aria-label": "찾기와 집" });
-  const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true", onclick: () => close() });
+  // While the panel is still coming out, a tap beside it does not put it away (it may be a tap on
+  // the part of the panel that is not shown yet).
+  let entering = false;
+  const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true", onclick: () => { if (!entering) close(); } });
+  // The grip stays the same element while the views change under it (a finger on it keeps its hold).
+  const grip = h("div", { class: "panel-grip", id: "panel-grip", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  const body = h("div", { class: "home-panel-body" });
+  panel.append(grip, body);
   root.append(scrim, panel);
-  const from = { right: "translateX(105%)", left: "translateX(-105%)", top: "translateY(-105%)", bottom: "translateY(105%)" }[edge];
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduced && panel.animate) {
-    panel.animate([{ transform: from, opacity: 0.6 }, { transform: "none", opacity: 1 }], { duration: 420, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
-    scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+  const away = () => ({ right: "translate(105%, 0px)", left: "translate(-105%, 0px)", top: "translate(0px, -105%)", bottom: "translate(0px, 105%)" })[edge];
+  enter(at);
+  if (!reduced && scrim.animate) scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+
+  /**
+   * Comes out of the light: a sliver of glass where the edge was lit, opening along the edge and
+   * into the screen as the panel slides out.
+   */
+  function enter(spot) {
+    if (reduced || !panel.animate) return;
+    const r = panel.getBoundingClientRect();
+    const side = edge === "left" || edge === "right";
+    const ox = side ? (edge === "right" ? r.width : 0) : Math.max(0, Math.min(r.width, spot * innerWidth - r.left));
+    const oy = side ? Math.max(0, Math.min(r.height, spot * innerHeight - r.top)) : (edge === "bottom" ? r.height : 0);
+    const band = 28;
+    const sliver = side
+      ? `inset(${Math.max(0, oy - band)}px ${edge === "left" ? r.width - 12 : 0}px ${Math.max(0, r.height - oy - band)}px ${edge === "right" ? r.width - 12 : 0}px round 14px)`
+      : `inset(${edge === "bottom" ? r.height - 12 : 0}px ${Math.max(0, r.width - ox - band)}px ${edge === "top" ? r.height - 12 : 0}px ${Math.max(0, ox - band)}px round 14px)`;
+    const slid = { right: "translate(16%, 0px)", left: "translate(-16%, 0px)", top: "translate(0px, -16%)", bottom: "translate(0px, 16%)" }[edge];
+    panel.style.transformOrigin = `${ox}px ${oy}px`;
+    const open = "inset(-48px -48px -48px -48px round 14px)";
+    entering = true;
+    const anim = panel.animate([
+      { clipPath: sliver, transform: `${slid} scale(0.94)`, opacity: 0.55, offset: 0 },
+      { clipPath: open, offset: 0.55 },
+      { clipPath: open, transform: "translate(0px, 0px) scale(1)", opacity: 1, offset: 1 },
+    ], { duration: 480, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+    const done = () => { entering = false; };
+    anim.finished.then(done, done);
   }
   let open = true;
   const onKey = (e) => { if (e.key === "Escape") close(); };
@@ -70,7 +116,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
     document.removeEventListener("visibilitychange", onHide);
     const gone = () => { panel.remove(); scrim.remove(); };
     if (now || reduced || !panel.animate) return gone();
-    panel.animate([{ transform: "none", opacity: 1 }, { transform: from, opacity: 0.4 }], { duration: 260, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" }).finished.then(gone, gone);
+    panel.animate([{ transform: "translate(0px, 0px)", opacity: 1 }, { transform: away(), opacity: 0.4 }], { duration: 260, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" }).finished.then(gone, gone);
     scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" });
   }
 
@@ -142,9 +188,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
         extra);
     }
     const list = houses(store);
-    panel.replaceChildren(
-      h("div", { class: "panel-grip", "aria-hidden": "true" }),
-      h("div", { class: "home-panel-body" },
+    body.replaceChildren(
         h("div", { class: "search-row" }, h("span", { class: "search-icon", "aria-hidden": "true" }, icon("search")), field, modes),
         results,
         h("section", { class: "houses", id: "houses" },
@@ -158,7 +202,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
               house.rooms.length > 0 && h("span", { class: "house-count", text: String(house.rooms.length) }))),
             h("button", { class: "house-tile house-new", id: "house-new", type: "button", "aria-label": "집 짓기", onclick: () => { view = { name: "build" }; draw(); } },
               h("span", { class: "house-shape house-plan", "aria-hidden": "true" }, icon("plus")),
-              h("span", { class: "house-name", text: "집 짓기" }))))));
+              h("span", { class: "house-name", text: "집 짓기" })))));
     fill();
   }
 
@@ -181,9 +225,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
       : [h("button", { class: "chip", id: "house-edit", type: "button", text: "꾸미기", onclick: () => { view = { name: "build", id: house.id }; draw(); } }),
         h("button", { class: "chip", id: "house-remove", type: "button", text: "허물기", onclick: () => { asking = true; paintActions(); } })]));
     paintActions();
-    panel.replaceChildren(
-      h("div", { class: "panel-grip", "aria-hidden": "true" }),
-      h("div", { class: "home-panel-body" },
+    body.replaceChildren(
         h("div", { class: "house-head" },
           h("button", { class: "icon-btn", id: "house-back", type: "button", "aria-label": "뒤로", onclick: () => { view = { name: "main" }; draw(); } }, icon("back")),
           h("span", { class: "house-head-shape" }, houseShape(house)),
@@ -198,7 +240,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
               h("button", { class: "chip", type: "button", data: { takeOut: r.id }, text: "꺼내기", onclick: () => { takeOutOfHouse(store, r.id); changed(); draw(); toast(root, `'${r.name || "방"}'을(를) 홈으로 꺼냈어요`); } }));
           }))
           : h("p", { class: "help", id: "house-empty", text: "아직 빈 집이에요. 홈에서 방을 꾹 눌러 끌어다 넣어요." }),
-        actions));
+        actions);
   }
 
   // ---- 집 짓기 / 꾸미기 ------------------------------------------------------------------------
@@ -232,9 +274,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
       }
       draw();
     };
-    panel.replaceChildren(
-      h("div", { class: "panel-grip", "aria-hidden": "true" }),
-      h("div", { class: "home-panel-body" },
+    body.replaceChildren(
         h("div", { class: "house-head" },
           h("button", { class: "icon-btn", id: "build-back", type: "button", "aria-label": "뒤로", onclick: () => { view = old ? { name: "house", id: old.id } : { name: "main" }; draw(); } }, icon("back")),
           h("h2", { class: "house-head-name", text: old ? "집 꾸미기" : "집 짓기" })),
@@ -243,7 +283,7 @@ export function openHomePanel(app, { edge = "bottom", rooms, changed, view = { n
             name,
             h("span", { class: "label", text: "색" }), colors,
             h("span", { class: "label", text: "아이콘" }), icons,
-            h("button", { class: "btn", id: "house-save", type: "button", text: old ? "저장" : "짓기", onclick: save })))));
+            h("button", { class: "btn", id: "house-save", type: "button", text: old ? "저장" : "짓기", onclick: save }))));
     if (!old) setTimeout(() => name.focus({ preventScroll: true }), 80);
   }
 

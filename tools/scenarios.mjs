@@ -4679,9 +4679,9 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
 });
 
-// Three round buttons at home's top right (레퍼런스, 설정, ⋮) never lie over 창작's title, which
-// stays on one line, on a 390 and a 360 wide phone.
-scenario("home top: 설정 and ⋮ side by side and 레퍼런스 under the ⋮, clear of 창작's one-line title, at 390 and 360 wide", async ({ open, out }) => {
+// Three round buttons at home's top right (설정, 레퍼런스, ⋮) never lie over 창작's title, which
+// stays on one line, on a 390 and a 360 wide phone. The owner (20 November): ⋮ and 레퍼런스 swap.
+scenario("home top: 설정 and 레퍼런스 side by side and ⋮ under 레퍼런스, clear of 창작's one-line title, at 390 and 360 wide", async ({ open, out }) => {
   for (const width of [390, 360]) {
     const page = await open({ width, height: 760 });
     await page.waitFor(q("#home-more"));
@@ -4699,8 +4699,8 @@ scenario("home top: 설정 and ⋮ side by side and 레퍼런스 under the ⋮, 
       const r = (id) => { const b = document.getElementById(id).getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { l: b.left, r: b.right, t: b.top, b: b.bottom, cx: b.left + b.width / 2, ok: !!hit && document.getElementById(id).contains(hit) }; };
       return { set: r("home-settings"), more: r("home-more"), ref: r("home-reference") };
     })()`);
-    assert.ok(Math.abs(at.set.t - at.more.t) < 1 && at.set.r <= at.more.l + 0.5, width + ": 설정 then ⋮ in a row: " + JSON.stringify(at));
-    assert.ok(at.ref.t >= at.more.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1, width + ": 레퍼런스 right under the ⋮: " + JSON.stringify(at));
+    assert.ok(Math.abs(at.set.t - at.ref.t) < 1 && at.set.r <= at.ref.l + 0.5, width + ": 설정 then 레퍼런스 in a row: " + JSON.stringify(at));
+    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1, width + ": ⋮ right under 레퍼런스: " + JSON.stringify(at));
     assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }
