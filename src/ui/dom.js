@@ -359,7 +359,15 @@ export function openFloat(root, { id, title, pos, dock = null }, build) {
     if (!on) {
       panel.style.right = "";
       const at = pos?.get();
-      place(at?.x ?? 10, at?.y ?? 64);
+      const p = place(at?.x ?? 10, at?.y ?? 64);
+      // It never lies over the buttons at home's top right (레퍼런스 is under the ⋮ there): pressed
+      // again, its own button closes it.
+      const keep = document.querySelector(".home-top")?.getBoundingClientRect();
+      if (keep && keep.height) {
+        const w = panel.offsetWidth || 320;
+        const overlaps = p.x < keep.right && p.x + w > keep.left && p.y < keep.bottom;
+        if (overlaps) place(p.x, keep.bottom + 8);
+      }
     }
   }
   wide.addEventListener?.("change", fit);

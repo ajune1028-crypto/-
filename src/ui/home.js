@@ -374,10 +374,12 @@ export function showHome(app) {
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
+        // 설정 and ⋮ side by side at the top right, 레퍼런스 under the ⋮ (the owner: "레퍼런스 아이콘을 점 3개
+        // 세로로 있는 거 아래에"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
-          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
           iconButton("home-settings", "more", "설정", openSettings),
-          kebab()),
+          kebab(),
+          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app))),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.

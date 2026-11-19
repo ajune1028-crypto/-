@@ -1626,12 +1626,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .edge-burst[data-edge="bottom"] { top: 100%; left: var(--at); }
 .edge-burst[data-edge="top"] { top: 0; left: var(--at); }
 
-/* Three round buttons at home's top right (레퍼런스, 설정, ⋮) stay clear of 창작's title. */
-.home-top { gap: 0.1rem; right: 0.4rem; }
-.home-top .icon-btn { width: 2rem; height: 2rem; }
-.home-top .icon-btn svg { width: 1.05rem; height: 1.05rem; }
-@media (max-width: 370px) { .half-title { font-size: 1.55rem; } }
-@media (max-width: 340px) { #home-reference { display: none; } }
+/* Home's top right: 설정 and ⋮ side by side, 레퍼런스 under the ⋮; clear of 창작's title. */
+.home-top { display: grid; grid-template-columns: auto auto; gap: 0.3rem; right: 0.5rem; justify-items: center; }
+.home-top .icon-btn { width: 2.3rem; height: 2.3rem; }
+.home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
+.home-top #home-reference { grid-column: 2; }
+@media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
 
