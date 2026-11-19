@@ -50,7 +50,16 @@
   --sky: color-mix(in srgb, var(--tint) 38%, #ffffff);
   --field-strength: 0.85;
   /* glass */
-  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 24%, #ffffff) 50%, transparent) 100%);
+  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 24%, #ffffff) 50%, transparent) 100%);
+  /* 모래 필름 over every glass (theme.js draws it in my colour; this grey one until then). */
+  --film-light: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><filter id='f' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.52 0 0 0 0 0.58 8 0 0 0 -4.8'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.35'/></svg>");
+  --film-dark: var(--film-light);
+  --film: var(--film-light);
+  --film-paper-light: none;
+  --film-paper-dark: none;
+  --film-paper: var(--film-paper-light);
+  --glass-bg: var(--film), var(--glass-grad);
+  --card-bg: var(--film), var(--card-grad);
   --glass-edge: rgb(255 255 255 / 0.85);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.35);
   --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) 18%, transparent), 0 1px 3px rgb(38 72 140 / 0.12);
@@ -59,7 +68,7 @@
   /* Glass on coloured things (clips, cards): light from above and a bright top edge. */
   --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 55%);
   --gloss-edge: inset 0 1px 0 rgb(255 255 255 / 0.65);
-  --card-bg: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 18%, #ffffff) 42%, transparent) 100%);
+  --card-grad: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 18%, #ffffff) 42%, transparent) 100%);
   --well: rgb(255 255 255 / 0.66);
   --split: -1px 0 0 0 rgb(255 255 255 / 0.6), -2px 0 0 0 rgb(46 78 140 / 0.1);
   --scrim: rgb(22 34 66 / 0.16);
@@ -71,6 +80,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --film: var(--film-dark);
+    --film-paper: var(--film-paper-dark);
     --paper: #0b0b0e;
     --base: #020204;
     --sheet: rgb(17 17 21 / 0.92);
@@ -86,13 +97,13 @@
     /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
     --sky: color-mix(in srgb, var(--tint) 60%, #000000);
     --field-strength: 0.45;
-    --glass-bg: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+    --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
     --glass-edge: rgb(255 255 255 / 0.13);
     --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
     --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
     --glass-blur: blur(22px) saturate(140%);
     --panel-bg: linear-gradient(180deg, rgb(30 30 36 / 0.94) 0%, rgb(12 12 15 / 0.94) 100%);
-    --card-bg: linear-gradient(180deg, rgb(22 22 28 / 0.62) 0%, rgb(10 10 14 / 0.74) 100%);
+    --card-grad: linear-gradient(180deg, rgb(22 22 28 / 0.62) 0%, rgb(10 10 14 / 0.74) 100%);
     --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.09) 0%, rgb(255 255 255 / 0) 55%);
     --gloss-edge: inset 0 1px 0 rgb(255 255 255 / 0.12);
     --well: rgb(255 255 255 / 0.05);
@@ -113,6 +124,8 @@
 }
 
 :root[data-theme="dark"] {
+  --film: var(--film-dark);
+  --film-paper: var(--film-paper-dark);
   --paper: #0b0b0e;
   --base: #020204;
   --sheet: rgb(17 17 21 / 0.92);
@@ -128,13 +141,13 @@
   /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
   --sky: color-mix(in srgb, var(--tint) 60%, #000000);
   --field-strength: 0.45;
-  --glass-bg: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+  --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
   --glass-edge: rgb(255 255 255 / 0.13);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
   --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
   --glass-blur: blur(22px) saturate(140%);
   --panel-bg: linear-gradient(180deg, rgb(30 30 36 / 0.94) 0%, rgb(12 12 15 / 0.94) 100%);
-  --card-bg: linear-gradient(180deg, rgb(22 22 28 / 0.62) 0%, rgb(10 10 14 / 0.74) 100%);
+  --card-grad: linear-gradient(180deg, rgb(22 22 28 / 0.62) 0%, rgb(10 10 14 / 0.74) 100%);
     --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.09) 0%, rgb(255 255 255 / 0) 55%);
     --gloss-edge: inset 0 1px 0 rgb(255 255 255 / 0.12);
   --well: rgb(255 255 255 / 0.05);
@@ -231,7 +244,7 @@ h1, h2, p { margin: 0; }
   pointer-events: none;
 }
 .field::after {
-  background-image: var(--grain);
+  background-image: var(--film), var(--grain);
   background-size: 11.25rem 11.25rem;
   opacity: var(--grain-opacity);
   mix-blend-mode: soft-light;
@@ -460,7 +473,7 @@ h1, h2, p { margin: 0; }
   border: 1px solid var(--glass-edge);
   border-bottom: 0;
   border-radius: 1.8rem 1.8rem 0 0;
-  background: var(--panel-bg);
+  background: var(--film), var(--panel-bg);
   box-shadow: var(--glass-shine), 0 -14px 40px rgb(20 40 90 / 0.2);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
@@ -634,7 +647,8 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   /* (The wide left margin held hour labels until 14 November; the words take the width now.) */
   padding: 1rem 1rem 1.1rem 1.15rem;
   border-radius: 1.5rem;
-  background: var(--sheet);
+  /* A diary's paper: the faintest sand of my colour over the sheet. */
+  background: var(--film-paper), var(--sheet);
   box-shadow: var(--glass-shine), 0 10px 26px rgb(38 72 140 / 0.12), 0 1px 2px rgb(38 72 140 / 0.08);
 }
 .paper::before {
@@ -820,7 +834,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   overflow: hidden;
   border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent);
   border-radius: 0.75rem;
-  background: var(--gloss), color-mix(in srgb, var(--c) 16%, var(--paper));
+  background: var(--film), var(--gloss), color-mix(in srgb, var(--c) 16%, var(--paper));
   box-shadow: var(--gloss-edge), 0 4px 12px color-mix(in srgb, var(--c) 16%, transparent);
   cursor: grab;
   touch-action: none;
@@ -958,7 +972,7 @@ label.btn { display: grid; place-items: center; cursor: pointer; text-align: cen
   padding: 1rem;
   border: 1px solid var(--glass-edge);
   border-radius: 1.4rem;
-  background: var(--panel-bg);
+  background: var(--film), var(--panel-bg);
   box-shadow: var(--glass-shine), var(--glass-shadow);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -1087,7 +1101,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .lasso-chip .lasso-play { background: var(--accent); color: var(--on-accent, #fff); }
 .lasso-chip.side { flex-direction: column; }
 .lasso-chip.side button { padding: 0 0.45rem; }
-.card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--film), var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 /* Text on the board is plain text (no box), in its own colour and size. */
 .card.memo { padding: 0.15rem 0.3rem; border-color: transparent; background: none; box-shadow: none; }
 .card.memo .card-text { color: var(--tc, var(--ink)); font-size: 1rem; font-weight: 600; line-height: 1.45; }
@@ -1358,16 +1372,16 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* Clear glass (투명): no colour of its own; frosted, so words on it still read. */
 :root[data-glass="clear"] {
   --tint: #8c919c;
-  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.42) 0%, rgb(255 255 255 / 0.22) 100%);
+  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.42) 0%, rgb(255 255 255 / 0.22) 100%);
   --glass-edge: rgb(255 255 255 / 0.6);
 }
 :root[data-glass="clear"][data-theme="dark"] {
-  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
+  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
   --glass-edge: rgb(255 255 255 / 0.16);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-glass="clear"]:not([data-theme="light"]) {
-    --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
+    --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.03) 100%);
     --glass-edge: rgb(255 255 255 / 0.16);
   }
 }

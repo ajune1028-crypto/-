@@ -188,3 +188,17 @@ test("my people colour is the one nearest my glass colour, among those nobody ha
   assert.equal(nearestPeopleColor("#3a3d46"), null, "흑백: no preference");
   assert.equal(nearestPeopleColor(null), null);
 });
+
+test("모래 필름: grains in my colour and its neighbour, with pale (light) or bright (dark) sand; a picture the browser can tile", async () => {
+  const { filmImage } = await import("../src/core/paint.js");
+  const light = filmImage("#e0559a", "#e07a55", false);
+  const dark = filmImage("#e0559a", "#e07a55", true);
+  assert.match(light, /^url\("data:image\/svg\+xml;utf8,<svg /);
+  assert.ok(light.endsWith('</svg>")'));
+  // My colour (0.878 0.333 0.604) and its neighbour are in it.
+  assert.ok(light.includes("0.878") && light.includes("0.333") && light.includes("0.604"), "my colour's grains");
+  assert.ok(light.includes("0.878 ") && light.includes("0.478"), "the neighbour's grains");
+  assert.notEqual(light, dark, "the dark film has bright sand");
+  assert.ok(!/[#"]/.test(light.slice(5, -2)), "nothing that would end the picture early (# as %23, no double quotes)");
+  assert.equal(filmImage("nonsense", "#000000", false), filmImage("#8c919c", "#000000", false), "a colour it cannot read is grey");
+});

@@ -1,6 +1,6 @@
 // Light and dark, and the scale that keeps the layout at a 360-wide column.
 
-import { accentColors, nearestPeopleColor } from "../core/paint.js";
+import { accentColors, nearestPeopleColor, filmImage } from "../core/paint.js";
 
 const root = document.documentElement;
 const hostTheme = root.dataset.theme || null;
@@ -84,14 +84,25 @@ export const TEXT_SIZES = [[0.9, "작게"], [1, "보통"], [1.15, "크게"], [1.
 
 const ACCENT_VARS = ["--accent", "--accent-top", "--accent-bottom", "--accent-2", "--accent-ink", "--ring", "--on-accent"];
 
+/** The app's own colour, when none is chosen (theme.css --accent). */
+const APP_ACCENT = "#2466dc";
+
 /** null puts the app's own colours back. */
 export function applyAccent(hex) {
   for (const name of ACCENT_VARS) root.style.removeProperty(name);
   if (hex === "clear") root.dataset.glass = "clear";
   else delete root.dataset.glass;
   if (hex === "clear") hex = CLEAR_ACCENT;
-  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return;
-  for (const [name, value] of Object.entries(accentColors(hex.toLowerCase()))) root.style.setProperty(name, value);
+  const own = !!hex && /^#[0-9a-f]{6}$/i.test(hex);
+  const colors = accentColors((own ? hex : APP_ACCENT).toLowerCase());
+  // 모래 필름: the sand in every glass is grains of my colour (and its neighbour).
+  root.style.setProperty("--film-light", filmImage(colors["--accent"], colors["--accent-2"], false));
+  root.style.setProperty("--film-dark", filmImage(colors["--accent"], colors["--accent-2"], true));
+  // On the writing paper, half as much: the words come first.
+  root.style.setProperty("--film-paper-light", filmImage(colors["--accent"], colors["--accent-2"], false, 0.5));
+  root.style.setProperty("--film-paper-dark", filmImage(colors["--accent"], colors["--accent-2"], true, 0.5));
+  if (!own) return;
+  for (const [name, value] of Object.entries(colors)) root.style.setProperty(name, value);
 }
 
 export function applyTextScale(scale) {

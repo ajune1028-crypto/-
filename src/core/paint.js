@@ -286,3 +286,30 @@ export function accentColors(hex) {
   const onAccent = white >= 4.5 || white >= contrast("#111216", hex) ? "#ffffff" : "#111216";
   return { "--accent": hex, "--accent-top": top, "--accent-bottom": bottom, "--accent-2": second, "--accent-ink": ink, "--ring": ink, "--on-accent": onAccent };
 }
+
+/**
+ * 모래 필름 (the owner, 17 November: "색 모래 노이즈 필름으로 바꿔줘. 모든 UI. 아날로그 느낌 나면서 …
+ * 일기장 그런 느낌"): a small tile of sand over the glass — grains in my colour, fewer in its
+ * neighbour, and pale sand (bright sand on dark). Three noises, each kept only where it is strong,
+ * so the grains are sparse and fine, as on film.
+ */
+export function filmImage(tint, second, dark = false, strength = 1) {
+  const ok = (hex) => /^#[0-9a-f]{6}$/i.test(hex || "");
+  const rgb = (hex) => [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3));
+  const [r1, g1, b1] = rgb(ok(tint) ? tint : "#8c919c");
+  const [r2, g2, b2] = rgb(ok(second) ? second : ok(tint) ? tint : "#8c919c");
+  const sand = dark ? ["1", "1", "1"] : ["0.106", "0.125", "0.188"];
+  // Soft grains (a gentle slope above the cut), drawn at twice the detail and shown at half size,
+  // so on a phone they are as fine as film grain, not specks.
+  const layer = (seed, freq, [r, g, b], cut, opacity) =>
+    `<filter id='f${seed}' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='2' seed='${seed}' stitchTiles='stitch'/>` +
+    `<feColorMatrix values='0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} 4 0 0 0 ${(-4 * cut).toFixed(2)}'/></filter>` +
+    `<rect width='100%' height='100%' filter='url(%23f${seed})' opacity='${opacity}'/>`;
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 160 160'>" +
+    layer(3, 0.85, [r1, g1, b1], 0.52, ((dark ? 0.3 : 0.22) * strength).toFixed(3)) +
+    layer(11, 0.95, [r2, g2, b2], 0.56, ((dark ? 0.2 : 0.14) * strength).toFixed(3)) +
+    layer(7, 0.75, sand, 0.55, ((dark ? 0.12 : 0.1) * strength).toFixed(3)) +
+    "</svg>";
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+}
