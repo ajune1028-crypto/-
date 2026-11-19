@@ -108,12 +108,9 @@ export function applyAccent(hex) {
   if (hex === "clear") hex = CLEAR_ACCENT;
   const own = !!hex && /^#[0-9a-f]{6}$/i.test(hex);
   const colors = accentColors((own ? hex : APP_ACCENT).toLowerCase());
-  // 모래 필름: the sand in every glass is grains of my colour (and its neighbour).
-  root.style.setProperty("--film-light", filmImage(colors["--accent"], colors["--accent-2"], false));
-  root.style.setProperty("--film-dark", filmImage(colors["--accent"], colors["--accent-2"], true));
-  // On the writing paper, half as much: the words come first.
-  root.style.setProperty("--film-paper-light", filmImage(colors["--accent"], colors["--accent-2"], false, 0.5));
-  root.style.setProperty("--film-paper-dark", filmImage(colors["--accent"], colors["--accent-2"], true, 0.5));
+  // 모래: a little sand of my colour in the coloured glass buttons (theme.css says which).
+  root.style.setProperty("--sand-light", filmImage(colors["--accent"], colors["--accent-2"], false));
+  root.style.setProperty("--sand-dark", filmImage(colors["--accent"], colors["--accent-2"], true));
   if (!own) return;
   for (const [name, value] of Object.entries(colors)) root.style.setProperty(name, value);
 }

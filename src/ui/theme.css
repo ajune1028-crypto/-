@@ -51,15 +51,13 @@
   --field-strength: 0.85;
   /* glass */
   --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 24%, #ffffff) 50%, transparent) 100%);
-  /* 모래 필름 over every glass (theme.js draws it in my colour; this grey one until then). */
-  --film-light: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><filter id='f' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.52 0 0 0 0 0.58 8 0 0 0 -4.8'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.35'/></svg>");
-  --film-dark: var(--film-light);
-  --film: var(--film-light);
-  --film-paper-light: none;
-  --film-paper-dark: none;
-  --film-paper: var(--film-paper-light);
-  --glass-bg: var(--film), var(--glass-grad);
-  --card-bg: var(--film), var(--card-grad);
+  /* 모래: only on the glass buttons with colour in them, and only in their colour (theme.js draws it
+     in my colour; none until then). */
+  --sand-light: none;
+  --sand-dark: none;
+  --sand: var(--sand-light);
+  --glass-bg: var(--glass-grad);
+  --card-bg: var(--card-grad);
   --glass-edge: rgb(255 255 255 / 0.85);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.35);
   --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) 18%, transparent), 0 1px 3px rgb(38 72 140 / 0.12);
@@ -80,8 +78,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --film: var(--film-dark);
-    --film-paper: var(--film-paper-dark);
+    --sand: var(--sand-dark);
     --paper: #0b0b0e;
     --base: #020204;
     --sheet: rgb(17 17 21 / 0.92);
@@ -124,8 +121,7 @@
 }
 
 :root[data-theme="dark"] {
-  --film: var(--film-dark);
-  --film-paper: var(--film-paper-dark);
+  --sand: var(--sand-dark);
   --paper: #0b0b0e;
   --base: #020204;
   --sheet: rgb(17 17 21 / 0.92);
@@ -244,7 +240,7 @@ h1, h2, p { margin: 0; }
   pointer-events: none;
 }
 .field::after {
-  background-image: var(--film), var(--grain);
+  background-image: var(--grain);
   background-size: 11.25rem 11.25rem;
   opacity: var(--grain-opacity);
   mix-blend-mode: soft-light;
@@ -473,7 +469,7 @@ h1, h2, p { margin: 0; }
   border: 1px solid var(--glass-edge);
   border-bottom: 0;
   border-radius: 1.8rem 1.8rem 0 0;
-  background: var(--film), var(--panel-bg);
+  background: var(--panel-bg);
   box-shadow: var(--glass-shine), 0 -14px 40px rgb(20 40 90 / 0.2);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
@@ -647,8 +643,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   /* (The wide left margin held hour labels until 14 November; the words take the width now.) */
   padding: 1rem 1rem 1.1rem 1.15rem;
   border-radius: 1.5rem;
-  /* A diary's paper: the faintest sand of my colour over the sheet. */
-  background: var(--film-paper), var(--sheet);
+  background: var(--sheet);
   box-shadow: var(--glass-shine), 0 10px 26px rgb(38 72 140 / 0.12), 0 1px 2px rgb(38 72 140 / 0.08);
 }
 .paper::before {
@@ -834,7 +829,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   overflow: hidden;
   border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent);
   border-radius: 0.75rem;
-  background: var(--film), var(--gloss), color-mix(in srgb, var(--c) 16%, var(--paper));
+  background: var(--gloss), color-mix(in srgb, var(--c) 16%, var(--paper));
   box-shadow: var(--gloss-edge), 0 4px 12px color-mix(in srgb, var(--c) 16%, transparent);
   cursor: grab;
   touch-action: none;
@@ -972,7 +967,7 @@ label.btn { display: grid; place-items: center; cursor: pointer; text-align: cen
   padding: 1rem;
   border: 1px solid var(--glass-edge);
   border-radius: 1.4rem;
-  background: var(--film), var(--panel-bg);
+  background: var(--panel-bg);
   box-shadow: var(--glass-shine), var(--glass-shadow);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -1101,7 +1096,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .lasso-chip .lasso-play { background: var(--accent); color: var(--on-accent, #fff); }
 .lasso-chip.side { flex-direction: column; }
 .lasso-chip.side button { padding: 0 0.45rem; }
-.card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--film), var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.card { position: absolute; padding: 0.55rem 0.65rem; border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 1rem; background: var(--gloss), color-mix(in srgb, var(--c) 12%, var(--paper)); box-shadow: var(--gloss-edge), 0 6px 18px color-mix(in srgb, var(--c) 18%, transparent); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 /* Text on the board is plain text (no box), in its own colour and size. */
 .card.memo { padding: 0.15rem 0.3rem; border-color: transparent; background: none; box-shadow: none; }
 .card.memo .card-text { color: var(--tc, var(--ink)); font-size: 1rem; font-weight: 600; line-height: 1.45; }
@@ -1642,21 +1637,31 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .ref-tile { display: grid; justify-items: center; align-content: center; gap: 0.3rem; height: 4.3rem; border: 1px solid var(--glass-edge); border-radius: 1.15rem; background: var(--glass-bg); box-shadow: var(--glass-shine), 0 4px 14px color-mix(in srgb, var(--tint) 14%, transparent); color: var(--ink); font-size: 0.8rem; font-weight: 800; cursor: pointer; transition: scale 0.1s var(--ease); }
 .ref-tile:active { scale: 0.95; }
 .ref-tile svg { width: 1.4rem; height: 1.4rem; }
-.ref-tile-rec { border-color: transparent; background: var(--film), linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 8px 22px color-mix(in srgb, var(--accent) 36%, transparent); }
+.ref-tile-rec { border-color: transparent; background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 8px 22px color-mix(in srgb, var(--accent) 36%, transparent); }
 .ref-tile-rec .dot-rec { width: 1.2rem; height: 1.2rem; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
 .ref-tile:disabled { opacity: 0.4; }
 .ref-why .help { margin: 0.2rem 0 0.4rem; }
 .ref-compose { display: flex; align-items: flex-end; gap: 0.45rem; margin-bottom: 0.7rem; }
 .ref-compose .note-area { flex: 1; min-width: 0; min-height: 2.9rem; border-radius: 1.2rem; resize: none; }
-.ref-send { flex: none; height: 2.9rem; padding: 0 1.05rem; border-radius: 999px; background: var(--film), linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); font-size: 0.85rem; font-weight: 800; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent); transition: scale 0.1s var(--ease); }
+.ref-send { flex: none; height: 2.9rem; padding: 0 1.05rem; border-radius: 999px; background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); font-size: 0.85rem; font-weight: 800; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent); transition: scale 0.1s var(--ease); }
 .ref-send:active { scale: 0.94; }
 .ref-note, .ref-sound { padding: 0.7rem 0.8rem 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1.15rem; background: var(--card-bg); box-shadow: var(--glass-shine), 0 4px 14px color-mix(in srgb, var(--tint) 12%, transparent); }
 .ref-sound .pick-notes .note { background: var(--accent); }
 .ref-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.55rem; }
 .ref-actions .chip { display: inline-flex; align-items: center; gap: 0.25rem; height: 2rem; padding: 0 0.75rem; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); font-weight: 800; }
 .ref-actions .chip svg { width: 0.95rem; height: 0.95rem; }
-.ref-actions .chip.primary, .ref-actions .chip.play.on { background: var(--film), linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3); }
+.ref-actions .chip.primary, .ref-actions .chip.play.on { background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom)); color: var(--on-accent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3); }
 .ref-actions .chip.danger { margin-left: auto; padding: 0 0.5rem; background: none; color: var(--muted); font-weight: 700; }
 .ref-empty { margin: 0.3rem 0.1rem 0.5rem; }
 /* After a change of 밝게/어둡게, glass that floats repaints (some phones keep the old look otherwise). */
 .repaint { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* 모래 (the owner: "색 그라데이션 된 부분의 유리 버튼에다가 좀 모래 느낌 나게 색 부분에"; "설정 같은
+   아이콘, 레퍼런스 창의 버튼은 모래 느낌 안 나게"): a little sand of my colour in the coloured part of
+   the glass buttons, fading out toward their top. The picture stretches to each button's height. */
+.btn { background: var(--sand) left top / 80px 100% repeat-x, var(--btn-bg); }
+.btn.small:not(.quiet) { background: var(--sand) left top / 80px 100% repeat-x, var(--btn2-bg); }
+.btn.quiet { background: var(--sand) left top / 80px 100% repeat-x, var(--glass-bg); }
+.pill, .add { background: var(--sand) left top / 80px 100% repeat-x, var(--glass-bg); }
+.float .btn:not(.quiet), .float .btn.small:not(.quiet) { background: var(--btn-bg); }
+.float .btn.quiet { background: var(--glass-bg); }

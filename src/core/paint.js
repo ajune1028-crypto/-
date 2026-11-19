@@ -288,28 +288,28 @@ export function accentColors(hex) {
 }
 
 /**
- * 모래 필름 (the owner, 17 November: "색 모래 노이즈 필름으로 바꿔줘. 모든 UI. 아날로그 느낌 나면서 …
- * 일기장 그런 느낌"): a small tile of sand over the glass — grains in my colour, fewer in its
- * neighbour, and pale sand (bright sand on dark). Three noises, each kept only where it is strong,
- * so the grains are sparse and fine, as on film.
+ * 모래 (the owner, 17 November: "색 모래 노이즈 필름", then: "너무 지저분하다… 색유리에 색깔을 모래 같은
+ * 느낌으로 조금만", "색 그라데이션 된 부분의 유리 버튼에 색 부분에"): a little sand of my colour for the
+ * coloured part of a glass button — fine grains of my colour, fewer of its neighbour, a few bright ones,
+ * fading out toward the top (a button's colour sits low in its glass). Drawn to be stretched to a
+ * button's height (80 px wide, repeated sideways).
  */
 export function filmImage(tint, second, dark = false, strength = 1) {
   const ok = (hex) => /^#[0-9a-f]{6}$/i.test(hex || "");
   const rgb = (hex) => [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3));
   const [r1, g1, b1] = rgb(ok(tint) ? tint : "#8c919c");
   const [r2, g2, b2] = rgb(ok(second) ? second : ok(tint) ? tint : "#8c919c");
-  const sand = dark ? ["1", "1", "1"] : ["0.106", "0.125", "0.188"];
-  // Soft grains (a gentle slope above the cut), drawn at twice the detail and shown at half size,
-  // so on a phone they are as fine as film grain, not specks.
   const layer = (seed, freq, [r, g, b], cut, opacity) =>
     `<filter id='f${seed}' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
     `<feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='2' seed='${seed}' stitchTiles='stitch'/>` +
     `<feColorMatrix values='0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} 4 0 0 0 ${(-4 * cut).toFixed(2)}'/></filter>` +
-    `<rect width='100%' height='100%' filter='url(%23f${seed})' opacity='${opacity}'/>`;
-  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 160 160'>" +
-    layer(3, 0.85, [r1, g1, b1], 0.52, ((dark ? 0.3 : 0.22) * strength).toFixed(3)) +
-    layer(11, 0.95, [r2, g2, b2], 0.56, ((dark ? 0.2 : 0.14) * strength).toFixed(3)) +
-    layer(7, 0.75, sand, 0.55, ((dark ? 0.12 : 0.1) * strength).toFixed(3)) +
-    "</svg>";
+    `<rect width='160' height='120' filter='url(%23f${seed})' opacity='${(opacity * strength).toFixed(3)}'/>`;
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='80' height='60' viewBox='0 0 160 120' preserveAspectRatio='none'>" +
+    "<linearGradient id='v' x1='0' y1='0' x2='0' y2='1'><stop offset='0.3' stop-color='white' stop-opacity='0'/><stop offset='1' stop-color='white' stop-opacity='1'/></linearGradient>" +
+    "<mask id='m'><rect width='160' height='120' fill='url(%23v)'/></mask><g mask='url(%23m)'>" +
+    layer(3, 0.85, [r1, g1, b1], 0.55, dark ? 0.32 : 0.24) +
+    layer(11, 0.95, [r2, g2, b2], 0.6, dark ? 0.18 : 0.12) +
+    layer(7, 0.9, ["1", "1", "1"], 0.66, dark ? 0.16 : 0.2) +
+    "</g></svg>";
   return `url("data:image/svg+xml;utf8,${svg}")`;
 }
