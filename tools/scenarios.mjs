@@ -4554,3 +4554,141 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
   await a.front();
   await a.shot(out("brushes.png"));
 });
+
+// Every brush is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
+// tapped); on 320 the row slides sideways and fades at its end to say so.
+scenario("brushes fit: all seven brushes, the eraser, the colours, the widths and 모양 잡기 are in view on a 360-wide phone", async ({ open }) => {
+  const page = await open({ width: 360, height: 760 });
+  await createRoom(page, { name: "가람" });
+  await page.waitFor(TODAY);
+  await click(page, "#pen");
+  await page.waitFor(`!${q("#ink-tools")}.hidden`);
+  const seen = await page.eval(`(() => {
+    const out = [];
+    for (const el of document.querySelectorAll("#ink-tools .ink-brush, #ink-tools #eraser, #ink-tools .ink-color, #ink-tools .ink-width, #ink-tools #ink-shapes")) {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      out.push([el.dataset.brush || el.dataset.ink || el.dataset.width || el.id, r.left >= 0 && r.right <= innerWidth && !!hit && el.contains(hit)]);
+    }
+    return out;
+  })()`);
+  assert.ok(seen.length === 7 + 1 + 8 + 3 + 1 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
+  await click(page, '[data-brush="highlighter"]');
+  assert.equal(await page.eval(`${q('[data-brush="highlighter"]')}.getAttribute("aria-pressed")`), "true");
+});
+
+// The owner (17 November): 별표 rooms at the top; ⋮ at the top right — a tap brings 찾기와 집 up, a
+// throw toward an edge lights that edge in my colour and the panel comes out of it; search by
+// 초성 and half-typed syllables (names that begin with it first, the rest hidden), and by what
+// rooms hold; the last searches; 집 made with a colour, an icon and a name; a room held and
+// dropped on a house goes in (and leaves home's list), and comes out again; leaving the app puts
+// it all away.
+scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that edge, lit); 초성 search ranks and hides; 내용 search; recent searches; a house built; a room dropped into it and taken out; leaving the app puts it away", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 800 });
+  const roomNames = ["쇼타로 일기", "산책 노트", "우리 쇼핑"];
+  for (const room of roomNames) {
+    await createRoom(page, { room });
+    if (room === "쇼타로 일기") {
+      await focusEnd(page);
+      await page.type("오늘은 바다에 갔다");
+      await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().includes("바다")`);
+    }
+    await click(page, "#back");
+    await page.waitFor(q("#home"));
+  }
+  const dailyNames = () => page.eval(`[...document.querySelectorAll('.half[data-side="daily"] .rooms .room-name')].map((e) => e.textContent)`);
+  assert.deepEqual(await dailyNames(), ["우리 쇼핑", "산책 노트", "쇼타로 일기"], "newest first");
+  // 별표: the oldest goes to the top, and stays there.
+  const id = await page.eval(`window.__app.store.get("rooms", []).find((r) => r.name === "쇼타로 일기").id`);
+  await click(page, `[data-star="${id}"]`);
+  await page.waitFor(`document.querySelector('.half[data-side="daily"] .rooms .room-name')?.textContent === "쇼타로 일기"`);
+  assert.equal(await page.eval(`${q(`[data-star="${id}"]`)}.getAttribute("aria-pressed")`), "true");
+  // ⋮ tapped: from the bottom, the bottom edge lit.
+  await click(page, "#home-more");
+  await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='bottom']")`, 1500);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`);
+  const hits = () => page.eval(`[...document.querySelectorAll("#search-results .search-hit .hit-name")].map((e) => e.textContent)`);
+  await fill(page, "#home-search", "ㅅ");
+  await page.waitFor(`document.querySelectorAll("#search-results .search-hit").length === 3`);
+  const first = await hits();
+  assert.deepEqual(first.slice(0, 2).sort(), ["산책 노트", "쇼타로 일기"].sort(), "those that begin with ㅅ first: " + first);
+  assert.equal(first[2], "우리 쇼핑", "then where it comes later");
+  await fill(page, "#home-search", "쇼");
+  await page.waitFor(`document.querySelectorAll("#search-results .search-hit").length === 2`);
+  assert.deepEqual(await hits(), ["쇼타로 일기", "우리 쇼핑"]);
+  assert.equal(await page.eval(`${q("#search-results mark")}.textContent`), "쇼");
+  // 내용: what the room holds.
+  await click(page, "#search-by-words");
+  await fill(page, "#home-search", "바다");
+  await page.waitFor(`document.querySelectorAll("#search-results .search-hit").length === 1`);
+  assert.equal(await page.eval(`${q("#search-results .hit-words mark")}.textContent`), "바다");
+  await page.shot(out("home-search.png"));
+  // Closed with a search in it, it is remembered; open again, it is there to tap.
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  await click(page, "#home-more");
+  await page.waitFor(q("#recent-searches"));
+  assert.ok((await text(page, "#recent-searches")).includes("바다"));
+  // 집 짓기.
+  await click(page, "#house-new");
+  await fill(page, "#house-name", "우리 가족");
+  await click(page, '[data-color="green"]');
+  await click(page, '[data-icon="heart"]');
+  await click(page, "#house-save");
+  await page.waitFor(`${q(".house-head-name")}?.textContent === "우리 가족" && ${q("#house-empty")}`);
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // A room held and dropped on the house.
+  const at = await page.eval(`(() => { const row = [...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === "산책 노트"); const b = row.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.front();
+  await page.touch("start", [at]);
+  await pause(700);
+  await page.waitFor(q("#house-dock .dock-house:not(.dock-new)"));
+  const target = await page.eval(`(() => { const b = document.querySelector("#house-dock .dock-house:not(.dock-new)").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  for (let i = 1; i <= 12; i++) await page.touch("move", [[at[0] + ((target[0] - at[0]) * i) / 12, at[1] + ((target[1] - at[1]) * i) / 12]]);
+  await page.waitFor(q("#house-dock .dock-house.over"));
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("house-dock") && ${q("#in-houses-daily")}`, 3000);
+  assert.ok(!(await dailyNames()).includes("산책 노트"), "it left home's list");
+  assert.match(await text(page, "#in-houses-daily"), /집에 둔 방 1개/);
+  // In the house, and out again.
+  await click(page, "#in-houses-daily");
+  await page.waitFor(q(".house-tile[data-house]"));
+  await click(page, ".house-tile[data-house]");
+  await page.waitFor(`${q("#house-rooms")}?.textContent.includes("산책 노트")`);
+  await page.shot(out("home-house.png"));
+  await click(page, "#house-rooms [data-take-out]");
+  await page.waitFor(q("#house-empty"));
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  assert.ok((await dailyNames()).includes("산책 노트"), "back on home");
+  // Thrown to the left: the left edge lights, the panel comes from the left.
+  const k = await page.eval(`(() => { const b = document.getElementById("home-more").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.touch("start", [k]);
+  for (let i = 1; i <= 4; i++) await page.touch("move", [[k[0] - i * 40, k[1] + i * 6]]);
+  await page.touch("end");
+  await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='left']")`, 1500);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "left"`);
+  await page.shot(out("home-thrown-left.png"));
+  // Leaving the app and coming back: put away.
+  await page.eval(`(() => { Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); delete document.visibilityState; return true; })()`);
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+});
+
+// Three round buttons at home's top right (레퍼런스, 설정, ⋮) never lie over 창작's title, which
+// stays on one line, on a 390 and a 360 wide phone.
+scenario("home top: 레퍼런스, 설정 and ⋮ stay clear of 창작's one-line title at 390 and 360 wide", async ({ open }) => {
+  for (const width of [390, 360]) {
+    const page = await open({ width, height: 760 });
+    await page.waitFor(q("#home-more"));
+    const box = await page.eval(`(() => {
+      const t = document.querySelector('.half[data-side="creative"] .half-title');
+      const r = document.createRange(); r.selectNodeContents(t);
+      const words = r.getBoundingClientRect();
+      const top = document.querySelector(".home-top").getBoundingClientRect();
+      return { right: words.right, lines: r.getClientRects().length, buttons: top.left, h: words.height, lh: parseFloat(getComputedStyle(t).lineHeight) };
+    })()`);
+    assert.ok(box.right <= box.buttons, width + ": the title ends before the buttons: " + JSON.stringify(box));
+    assert.ok(box.h < box.lh * 1.5, width + ": one line: " + JSON.stringify(box));
+  }
+});

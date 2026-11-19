@@ -1037,12 +1037,14 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* The first row stays one row: the brushes slide sideways, the eraser and 모양 잡기 stay in view. */
 .ink-row-brushes { flex-wrap: nowrap; width: 100%; }
 .ink-tools:has(.ink-row-brushes) { width: min(100% - 1rem, 34rem); }
-.ink-brushes { display: flex; gap: 0.1rem; flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 0.6rem, #000 calc(100% - 0.6rem), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 0.6rem, #000 calc(100% - 0.6rem), transparent 100%); padding: 0 0.4rem; }
+.ink-brushes { display: flex; gap: 0.05rem; flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+/* Only when it truly runs past (a very narrow screen), its end fades to say there is more. */
+.ink-brushes.more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 1rem), transparent 100%); mask-image: linear-gradient(90deg, #000 calc(100% - 1rem), transparent 100%); }
 .ink-brushes::-webkit-scrollbar { display: none; }
-.ink-brush { flex: none; display: grid; justify-items: center; gap: 0.05rem; padding: 0.2rem 0.3rem 0.15rem; border-radius: 0.8rem; color: var(--muted); transition: background 0.2s var(--ease), color 0.2s var(--ease); }
+.ink-brush { flex: none; display: grid; justify-items: center; gap: 0.05rem; min-width: 2.35rem; padding: 0.2rem 0.18rem 0.15rem; border-radius: 0.8rem; color: var(--muted); transition: background 0.2s var(--ease), color 0.2s var(--ease); }
 .ink-brush[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
-.ink-preview { display: block; width: 46px; height: 18px; }
-.ink-brush-name { font-size: 0.6rem; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.ink-preview { display: block; width: 34px; height: 16px; }
+.ink-brush-name { font-size: 0.56rem; font-weight: 700; line-height: 1.1; white-space: nowrap; letter-spacing: -0.02em; }
 .ink-shapes.chip { flex: none; height: 1.55rem; padding: 0 0.5rem; font-size: 0.62rem; white-space: nowrap; }
 .ink-row-brushes > .icon-btn { flex: none; }
 .ink-shapes[aria-pressed="false"] { opacity: 0.6; }
@@ -1498,3 +1500,123 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 화음: the notes of the harmony stand lighter under the tune (the owner: "화음으로 쌓는 구조"). */
 .note.harmony { background: color-mix(in srgb, var(--c) 34%, var(--paper)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 70%, transparent); color: var(--ink); }
 .rnote.harmony { opacity: 0.55; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 55%, transparent); }
+
+/* ---- home: 별표, 집, ⋮ 찾기와 집 (17 November) -------------------------------------------- */
+
+.room-cell { position: relative; }
+.room-cell .room-name { padding-right: 1.7rem; }
+.room-star { position: absolute; top: 0.3rem; right: 0.3rem; display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; color: var(--muted); opacity: 0.42; transition: opacity 0.2s var(--ease), color 0.2s var(--ease), scale 0.12s var(--ease); }
+.room-star svg { width: 1.05rem; height: 1.05rem; }
+.room-star:active { scale: 0.86; }
+.room-star[aria-pressed="true"] { opacity: 1; color: var(--tint); }
+.room-star[aria-pressed="true"] svg { fill: currentColor; }
+.room-row.lifted { scale: 1.035; box-shadow: var(--glass-shine), 0 18px 38px color-mix(in srgb, var(--tint) 34%, transparent); transition: scale 0.18s var(--ease), box-shadow 0.18s var(--ease); }
+.room-ghost { position: fixed; left: 0; top: 0; z-index: 85; pointer-events: none; transform: translate(-50%, -135%); display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.5rem 0.85rem; border-radius: 999px; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 80%, transparent); box-shadow: var(--glass-shine), 0 14px 30px rgb(20 30 60 / 0.22); font-size: 0.86rem; font-weight: 700; white-space: nowrap; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.room-ghost svg { width: 1rem; height: 1rem; }
+.in-houses { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.8rem; padding: 0.45rem 0.8rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: var(--soft); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.in-houses svg { width: 1rem; height: 1rem; }
+.home-kebab { touch-action: none; transition: scale 0.15s var(--ease), background 0.2s var(--ease); }
+.home-kebab.charging { scale: 1.14; background: color-mix(in srgb, var(--tint) 24%, transparent); }
+
+/* A house: one deep colour of glass, a ㅅ roof, a small chimney, a white icon inside. */
+.house-shape { position: relative; display: block; width: 100%; aspect-ratio: 1; filter: drop-shadow(0 7px 10px color-mix(in srgb, var(--house, #888) 36%, transparent)); }
+.house-shape svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.house-body { fill: var(--house); fill-opacity: 0.9; stroke: color-mix(in srgb, var(--house) 40%, white); stroke-width: 1.6; }
+.house-chimney { fill: color-mix(in srgb, var(--house) 70%, black); }
+.house-roof { fill: none; stroke: color-mix(in srgb, var(--house) 66%, black); stroke-width: 8.5; stroke-linecap: round; stroke-linejoin: round; }
+.house-shine { fill: #fff; opacity: 0.22; }
+.house-shape > .house-mark { position: absolute; left: 50%; top: 67%; width: 32%; height: 32%; translate: -50% -50%; color: #fff; stroke-width: 2.2; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.28)); }
+.house-plan { display: grid; place-items: center; border: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 1.1rem; color: var(--muted); filter: none; }
+.house-plan svg { width: 38%; height: 38%; }
+
+.house-dock { position: fixed; left: 0.6rem; right: 0.6rem; bottom: calc(0.8rem + env(safe-area-inset-bottom)); z-index: 80; max-width: 36rem; margin-inline: auto; padding: 0.55rem 0.8rem 0.7rem; border-radius: 1.4rem; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 74%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; }
+.dock-hint { margin-bottom: 0.35rem; font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
+.dock-row { display: flex; justify-content: center; gap: 0.8rem; overflow: hidden; }
+.dock-house { flex: none; display: grid; justify-items: center; gap: 0.15rem; width: 4rem; pointer-events: auto; transition: transform 0.2s var(--ease); }
+.dock-house.over { transform: translateY(-6px) scale(1.16); }
+.dock-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; font-weight: 700; }
+
+/* ⋮ 찾기와 집: out of the edge it was thrown to. */
+.home-panel-scrim { position: fixed; inset: 0; z-index: 60; background: rgb(10 16 34 / 0.16); }
+.home-panel { position: fixed; z-index: 61; display: flex; flex-direction: column; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); overflow: hidden; }
+.home-panel[data-edge="right"], .home-panel[data-edge="left"] { top: 0; bottom: 0; width: min(92vw, max(52vw, 21rem)); max-width: 30rem; }
+.home-panel[data-edge="right"] { right: 0; border-radius: 1.6rem 0 0 1.6rem; }
+.home-panel[data-edge="left"] { left: 0; border-radius: 0 1.6rem 1.6rem 0; }
+.home-panel[data-edge="bottom"], .home-panel[data-edge="top"] { left: 0; right: 0; margin-inline: auto; max-width: 42rem; height: min(84vh, 46rem); }
+.home-panel[data-edge="bottom"] { bottom: 0; border-radius: 1.6rem 1.6rem 0 0; }
+.home-panel[data-edge="top"] { top: 0; border-radius: 0 0 1.6rem 1.6rem; }
+.panel-grip { flex: none; width: 2.4rem; height: 0.3rem; margin: 0.55rem auto 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.home-panel[data-edge="left"] .panel-grip, .home-panel[data-edge="right"] .panel-grip { display: none; }
+.home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
+.home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: calc(1.2rem + env(safe-area-inset-top)); }
+.search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
+.search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
+.search-icon svg { width: 1.1rem; height: 1.1rem; }
+.search-row .search-input { flex: 1; min-width: 0; height: 2.7rem; padding-left: 2.4rem; border-radius: 999px; }
+.search-row .search-modes { flex: none; width: auto; }
+.search-modes button { padding: 0 0.75rem; }
+.search-results { display: flex; flex-direction: column; gap: 0.35rem; }
+.search-results:empty { display: none; }
+.search-hit { display: grid; gap: 0.12rem; width: 100%; padding: 0.6rem 0.8rem; text-align: left; border-radius: 0.95rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.hit-name { font-size: 0.93rem; font-weight: 700; overflow-wrap: anywhere; }
+.hit-name mark, .hit-words mark { padding: 0 0.06rem; border-radius: 0.25rem; color: inherit; background: color-mix(in srgb, var(--tint) 34%, transparent); }
+.hit-meta { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: var(--muted); }
+.hit-meta svg { width: 0.85rem; height: 0.85rem; }
+.hit-words { font-size: 0.78rem; color: var(--soft); overflow-wrap: anywhere; }
+.recent { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.recent .group-label { width: 100%; margin: 0; }
+.recent-chips { display: contents; }
+.recent-chip { height: 1.9rem; }
+.link-btn { padding: 0.2rem 0.3rem; font-size: 0.74rem; color: var(--muted); text-decoration: underline; text-underline-offset: 0.15em; }
+.houses { display: flex; flex-direction: column; gap: 0.6rem; }
+.houses-title { display: flex; align-items: baseline; gap: 0.4rem; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+.houses-count { font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.house-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.4rem, 1fr)); gap: 1rem 0.7rem; }
+.house-tile { position: relative; display: grid; justify-items: center; gap: 0.3rem; padding: 0.35rem 0.25rem; border-radius: 1.1rem; }
+.house-tile .house-shape { width: 82%; }
+.house-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; font-weight: 700; }
+.house-count { position: absolute; top: 0.1rem; right: 0.35rem; display: grid; place-items: center; min-width: 1.25rem; height: 1.25rem; padding: 0 0.3rem; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 0.66rem; font-weight: 800; }
+.house-head { display: flex; align-items: center; gap: 0.6rem; }
+.house-head-shape { flex: none; width: 3rem; }
+.house-head-name { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+.house-rooms { display: flex; flex-direction: column; gap: 0.4rem; }
+.house-room { display: flex; align-items: center; gap: 0.45rem; }
+.house-room .search-hit { flex: 1; }
+.house-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.build { display: grid; gap: 0.9rem; }
+.build-preview { justify-self: center; width: 7rem; }
+.house-colors { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.house-color { width: 2rem; height: 2rem; border-radius: 50%; box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px transparent; transition: box-shadow 0.15s var(--ease); }
+.house-color[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4.5px var(--ink); }
+.house-icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.35rem; }
+.house-icon-pick { display: grid; place-items: center; aspect-ratio: 1; border-radius: 0.85rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.house-icon-pick svg { width: 1.3rem; height: 1.3rem; }
+.house-icon-pick[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* The light where the ⋮ was thrown: a burst, then a thin glassy neon bar along the edge. */
+.edge-glow { position: fixed; z-index: 95; pointer-events: none; --c: var(--tint); }
+.edge-glow[data-edge="right"], .edge-glow[data-edge="left"] { top: var(--from); height: var(--len); width: 2.4rem; -webkit-mask-image: linear-gradient(180deg, transparent, #000 26%, #000 74%, transparent); mask-image: linear-gradient(180deg, transparent, #000 26%, #000 74%, transparent); }
+.edge-glow[data-edge="top"], .edge-glow[data-edge="bottom"] { left: var(--from); width: var(--len); height: 2.4rem; -webkit-mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); }
+.edge-glow[data-edge="right"] { right: 0; background: linear-gradient(270deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
+.edge-glow[data-edge="left"] { left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
+.edge-glow[data-edge="bottom"] { bottom: 0; background: linear-gradient(0deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
+.edge-glow[data-edge="top"] { top: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 40%, #fff) 0, color-mix(in srgb, var(--c) 92%, #fff) 2px, color-mix(in srgb, var(--c) 62%, transparent) 4px, color-mix(in srgb, var(--c) 26%, transparent) 12px, transparent 100%); }
+.edge-glow::before { content: ""; position: absolute; inset: 0; -webkit-backdrop-filter: blur(3px) saturate(1.8); backdrop-filter: blur(3px) saturate(1.8); }
+.edge-glow[data-edge="right"]::before { left: auto; width: 6px; }
+.edge-glow[data-edge="left"]::before { right: auto; width: 6px; }
+.edge-glow[data-edge="bottom"]::before { top: auto; height: 6px; }
+.edge-glow[data-edge="top"]::before { bottom: auto; height: 6px; }
+.edge-burst { position: fixed; z-index: 96; width: 9rem; height: 9rem; border-radius: 50%; pointer-events: none; opacity: 0; background: radial-gradient(circle, color-mix(in srgb, var(--tint) 55%, #fff) 0, color-mix(in srgb, var(--tint) 50%, transparent) 26%, color-mix(in srgb, var(--tint) 14%, transparent) 48%, transparent 70%); }
+.edge-burst[data-edge="right"] { left: 100%; top: var(--at); }
+.edge-burst[data-edge="left"] { left: 0; top: var(--at); }
+.edge-burst[data-edge="bottom"] { top: 100%; left: var(--at); }
+.edge-burst[data-edge="top"] { top: 0; left: var(--at); }
+
+/* Three round buttons at home's top right (레퍼런스, 설정, ⋮) stay clear of 창작's title. */
+.home-top { gap: 0.1rem; right: 0.4rem; }
+.home-top .icon-btn { width: 2rem; height: 2rem; }
+.home-top .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+@media (max-width: 370px) { .half-title { font-size: 1.55rem; } }
+@media (max-width: 340px) { #home-reference { display: none; } }
+.house-actions .chip { height: 2.1rem; }
+.house-actions .help { width: 100%; }

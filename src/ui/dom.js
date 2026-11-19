@@ -3,6 +3,13 @@
 const ICONS = {
   back: '<path d="M15 5l-7 7 7 7"/>',
   more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  kebab: '<circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>',
+  star: '<path d="M12 3.6l2.55 5.2 5.75.84-4.16 4.05.98 5.72L12 16.72l-5.12 2.69.98-5.72L3.7 9.64l5.75-.84z"/>',
+  heart: '<path d="M12 19.6s-7.2-4.5-7.2-10.1A4 4 0 0112 7.1a4 4 0 017.2 2.4c0 5.6-7.2 10.1-7.2 10.1z"/>',
+  home: '<path d="M4 11.2l8-6.7 8 6.7"/><path d="M6.4 9.6V19.2h11.2V9.6"/><path d="M10.2 19.2v-4.8h3.6v4.8"/>',
+  leaf: '<path d="M5.2 18.8C5 10.6 10 5.6 19.2 4.8 19.4 13.6 14.4 18.8 5.2 18.8z"/><path d="M5.2 18.8c3-4.2 6.2-7 10-9"/>',
+  people: '<circle cx="9" cy="8.4" r="3"/><path d="M3.4 19a5.6 5.6 0 0111.2 0"/><circle cx="16.6" cy="9.4" r="2.4"/><path d="M15.4 14.1A4.6 4.6 0 0120.6 19"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
   redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',

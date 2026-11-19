@@ -11,7 +11,12 @@ import { dayKey, dayLabel, hourLabel } from "../core/time.js";
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { refSounds } from "../reference.js";
-import { getSettings } from "../identity.js";
+import { getSettings, setSetting } from "../identity.js";
+import { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } from "../houses.js";
+import { openHomePanel, houseShape } from "./home-panel.js";
+import { glowEdge, edgeOf } from "./edge-glow.js";
+import { buzz } from "./chime.js";
+import { segmented } from "./dom.js";
 import { memberColor } from "../core/paint.js";
 import { currentTheme, myPeopleColor } from "./theme.js";
 
@@ -62,10 +67,11 @@ export function showHome(app) {
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
   function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
+    const isStarred = mine && starred(app.store).has(room.id);
     let held = false;
     let timer = null;
     let start = null;
-    const row = h("button", { class: "room-row", type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: (e) => {
+    const row = h("button", { class: "room-row" + (isStarred ? " starred" : ""), type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: (e) => {
       if (held) {
         held = false;
         e.preventDefault();
@@ -82,24 +88,168 @@ export function showHome(app) {
           room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))),
       previewOf(room));
     if (!mine) return row;
+    // 별표 (the owner: "별표 표시한 방은 맨 위에"): starred rooms lead their half.
+    const star = h("button", { class: "room-star", type: "button", data: { star: room.id }, "aria-pressed": String(isStarred), "aria-label": isStarred ? "별표 빼기" : "별표 (맨 위에 두기)",
+      onclick: (e) => {
+        e.stopPropagation();
+        const on = toggleStar(app.store, room.id);
+        buzz(app);
+        draw();
+        toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600);
+      } }, icon("star"));
+    // Held, the room lifts: let go where it is, its actions open (as before); drawn onto a house in
+    // the dock below, it goes into that house (the owner: "꾹 눌러서 폴더에 넣으면 그 안에 포함").
+    let lift = null;
     const hold = () => {
       held = true;
       clearTimeout(timer);
-      roomMenu(room);
+      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: houseDock() };
+      row.classList.add("lifted");
+      try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
+      buzz(app, 10);
+    };
+    const endLift = () => {
+      row.classList.remove("lifted");
+      lift?.ghost?.remove();
+      const dock = lift?.dock;
+      lift = null;
+      if (dock) {
+        if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(110%)", opacity: 0 }], { duration: 220, easing: "ease-in", fill: "forwards" }).finished.then(() => dock.remove(), () => dock.remove());
+        else dock.remove();
+      }
+    };
+    const dragTo = (x, y) => {
+      if (!lift.moved && Math.hypot(x - lift.x, y - lift.y) < 8) return;
+      if (!lift.moved) {
+        lift.moved = true;
+        lift.ghost = h("div", { class: "room-ghost", "aria-hidden": "true" }, icon(kind?.icon || "lines"), room.name);
+        document.body.append(lift.ghost);
+      }
+      lift.ghost.style.translate = `${x}px ${y}px`;
+      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house") || null;
+      if (target !== lift.over) {
+        lift.over?.classList.remove("over");
+        target?.classList.add("over");
+        if (target) buzz(app, 6);
+        lift.over = target;
+      }
+    };
+    const drop = () => {
+      const target = lift.over;
+      const moved = lift.moved;
+      endLift();
+      if (!moved) return void roomMenu(room);
+      if (!target) return;
+      const id = target.dataset.house;
+      if (id === "new") return void openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } });
+      putInHouse(app.store, room.id, id);
+      buzz(app, 14);
+      draw();
+      toast(root, `'${houses(app.store).find((x) => x.id === id)?.name || "집"}'에 넣었어요`);
     };
     row.addEventListener("pointerdown", (e) => {
       held = false;
-      start = { x: e.clientX, y: e.clientY };
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
       clearTimeout(timer);
-      timer = setTimeout(hold, 500);
+      if (e.button === 0) timer = setTimeout(hold, 500);
     });
-    row.addEventListener("pointermove", (e) => { if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer); });
-    for (const t of ["pointerup", "pointercancel", "pointerleave"]) row.addEventListener(t, () => clearTimeout(timer));
+    row.addEventListener("pointermove", (e) => {
+      if (lift) return void dragTo(e.clientX, e.clientY);
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer);
+    });
+    row.addEventListener("pointerup", () => { clearTimeout(timer); if (lift) drop(); });
+    row.addEventListener("pointercancel", () => { clearTimeout(timer); if (lift) endLift(); });
+    row.addEventListener("pointerleave", () => { if (!lift) clearTimeout(timer); });
+    // Lifted, the finger moves the room, not the list.
+    row.addEventListener("touchmove", (e) => { if (lift) e.preventDefault(); }, { passive: false });
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (!held) hold();
+      if (lift || held) return;
+      held = true;
+      roomMenu(room);
     });
-    return row;
+    return h("div", { class: "room-cell" }, row, star);
+  }
+
+  /** The houses at the bottom while a room is held, to drop it into (and a new one). */
+  function houseDock() {
+    const list = houses(app.store);
+    const dock = h("div", { class: "house-dock", id: "house-dock", "aria-hidden": "true" },
+      h("p", { class: "dock-hint", text: list.length ? "집 위에 놓으면 그 집에 들어가요" : "새 집 위에 놓으면 집을 지어 넣어요" }),
+      h("div", { class: "dock-row" },
+        ...list.map((house) => h("div", { class: "dock-house", data: { house: house.id } }, houseShape(house), h("span", { class: "dock-name", text: house.name }))),
+        h("div", { class: "dock-house dock-new", data: { house: "new" } }, h("span", { class: "house-shape house-plan" }, icon("plus")), h("span", { class: "dock-name", text: "새 집" }))));
+    document.body.append(dock);
+    if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "translateY(110%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+    return dock;
+  }
+
+  // ---- ⋮: 찾기와 집 ---------------------------------------------------------------------------
+
+  let panelCtl = null;
+  const allRooms = () => {
+    const remembered = app.store.get("rooms", []);
+    return [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))];
+  };
+  async function openPanel({ edge = "bottom", at = 0.5, strength = 0.35, view } = {}) {
+    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
+    buzz(app, 8);
+    await glowEdge({ edge, at, strength });
+    if (!alive) return;
+    panelCtl = openHomePanel(app, { edge, view, rooms: allRooms, changed: () => draw() });
+  }
+
+  /**
+   * The ⋮ at the top right: a tap brings 찾기와 집 up from the bottom; held and thrown toward an edge
+   * of the screen, that edge lights up in my colour where it lands and the panel comes out of it.
+   */
+  function kebab() {
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르거나, 꾹 눌러 화면 끝으로 던져요)",
+      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("kebab"));
+    let g = null;
+    const reset = () => {
+      btn.classList.remove("charging");
+      const was = btn.style.translate;
+      btn.style.translate = "";
+      if (was && btn.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) btn.animate([{ translate: was }, { translate: "0 0" }], { duration: 380, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+    };
+    btn.addEventListener("pointerdown", (e) => {
+      g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, trail: [[e.clientX, e.clientY, performance.now()]] };
+      try { btn.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      btn.classList.add("charging");
+    });
+    btn.addEventListener("pointermove", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const now = performance.now();
+      g.trail.push([e.clientX, e.clientY, now]);
+      while (g.trail.length > 2 && now - g.trail[0][2] > 90) g.trail.shift();
+      // The dots lean after the finger, held back like a ball in a sling.
+      const dx = e.clientX - g.x0;
+      const dy = e.clientY - g.y0;
+      const d = Math.hypot(dx, dy) || 1;
+      const pull = Math.min(24, d * 0.3);
+      btn.style.translate = `${(dx / d) * pull}px ${(dy / d) * pull}px`;
+    });
+    btn.addEventListener("touchmove", (e) => { if (g) e.preventDefault(); }, { passive: false });
+    btn.addEventListener("pointercancel", () => { g = null; reset(); });
+    btn.addEventListener("pointerup", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x0;
+      const dy = e.clientY - g.y0;
+      const dist = Math.hypot(dx, dy);
+      const [ax, ay, at] = g.trail[0];
+      const dt = Math.max(16, performance.now() - at);
+      const vx = (e.clientX - ax) / dt;
+      const vy = (e.clientY - ay) / dt;
+      const speed = Math.hypot(vx, vy);
+      g = null;
+      reset();
+      if (dist < 14) return void openPanel();
+      const dir = speed > 0.25 ? [vx, vy] : [dx, dy];
+      const hit = edgeOf(e.clientX, e.clientY, dir[0], dir[1], innerWidth, innerHeight);
+      openPanel({ edge: hit.edge, at: hit.at, strength: Math.max(0.12, Math.min(1, speed / 2.4 + dist / 900)) });
+    });
+    return btn;
   }
 
   function roomMenu(room) {
@@ -172,12 +322,26 @@ export function showHome(app) {
         // 보내기: what this room holds, to where it can go (the owner: "홈화면에서 꾹 누르면 보내기… 뭘 보내고").
         h("button", { class: "btn quiet", type: "button", id: "room-send", text: "보내기", onclick: () => pickWhere() }),
         h("button", { class: "btn quiet", type: "button", id: "room-to-board", text: "화이트보드에 넣기", onclick: () => pickBoard() }),
+        // 별표 and 집 from the menu too (a mouse, or whoever does not drag).
+        h("button", { class: "btn quiet", type: "button", id: "room-star", text: starred(app.store).has(room.id) ? "별표 빼기" : "별표 (맨 위에)", onclick: () => { const on = toggleStar(app.store, room.id); close(); draw(); toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600); } }),
+        houseOf(app.store, room.id)
+          ? h("button", { class: "btn quiet", type: "button", id: "room-out-of-house", text: `'${houseOf(app.store, room.id).name}'에서 꺼내기`, onclick: () => { takeOutOfHouse(app.store, room.id); close(); draw(); } })
+          : h("button", { class: "btn quiet", type: "button", id: "room-into-house", text: "집에 넣기", onclick: () => {
+            panel.querySelector("#room-actions").replaceChildren(
+              h("p", { class: "help", text: "어느 집에 넣을까요?" }),
+              ...houses(app.store).map((x) => h("button", { class: "btn quiet", type: "button", data: { intoHouse: x.id }, text: x.name, onclick: () => { putInHouse(app.store, room.id, x.id); close(); draw(); toast(root, `'${x.name}'에 넣었어요`); } })),
+              h("button", { class: "btn", type: "button", id: "room-new-house", text: "새 집 짓기", onclick: () => { close(); openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } }); } }));
+          } }),
         h("button", { class: "btn quiet", type: "button", id: "room-forget", text: "목록에서 빼기", onclick: () => { forgetRoom(app.store, room.id); close(); draw(); toast(root, "목록에서 뺐어요. 방은 그대로 있어요"); } })));
     });
   }
 
   function half(side, title, note, emptyText) {
-    const mine = app.store.get("rooms", []).filter((r) => sideOf(r.kind) === side).sort((a, b) => b.at - a.at);
+    const stars = starred(app.store);
+    const housed = new Set(houses(app.store).flatMap((x) => x.rooms || []));
+    const all = app.store.get("rooms", []).filter((r) => sideOf(r.kind) === side);
+    const mine = all.filter((r) => !housed.has(r.id)).sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
+    const inHouses = all.length - mine.length;
     const known = new Set(app.store.get("rooms", []).map((r) => r.id));
     const elsewhere = others.filter((r) => sideOf(r.kind) === side && !known.has(r.id));
     return h("section", { class: "half field " + side, data: { side } },
@@ -186,7 +350,8 @@ export function showHome(app) {
         h("p", { class: "half-note", text: note }),
         mine.length
           ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
-          : h("p", { class: "empty", text: emptyText }),
+          : h("p", { class: "empty", text: inHouses ? "방은 모두 집에 있어요." : emptyText }),
+        inHouses > 0 && h("button", { class: "in-houses", id: "in-houses-" + side, type: "button", onclick: () => openPanel() }, icon("home"), `집에 둔 방 ${inHouses}개`),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
           h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r))),
@@ -211,13 +376,16 @@ export function showHome(app) {
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
         h("div", { class: "home-top" },
           getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
-          iconButton("home-settings", "more", "설정", openSettings)),
+          iconButton("home-settings", "more", "설정", openSettings),
+          kebab()),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
           h("button", { class: "pill rec-pill", id: "home-record", type: "button", "aria-label": "녹음 (모아 두고 방으로 보내기)", onclick: () => openReference(app, { tab: "sounds" }) },
             h("span", { class: "dot-rec", "aria-hidden": "true" }), "녹음", refSounds(app.store).length > 0 && h("span", { class: "rec-count", text: String(refSounds(app.store).length) })),
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
+    // 찾기와 집 stays open while home draws itself again behind it.
+    if (panelCtl?.isOpen()) root.append(...panelCtl.nodes);
   }
 
   function sheet(title, build) {
@@ -344,8 +512,12 @@ export function showHome(app) {
   }
 
   function openSettings() {
+    const recent = String(getSettings(app.store).recentSearchMax || 5);
     sheet("설정", (panel) => panel.append(
       displaySettings(app, { withColors: false }),
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
+        h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
+          segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
       h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }), diagnostics(app, null))));
   }
 

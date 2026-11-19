@@ -411,8 +411,8 @@ export class InkLayer {
 function brushPreview(brush, color, width) {
   const canvas = h("canvas", { class: "ink-preview", "aria-hidden": "true" });
   const draw = () => {
-    const w = 46;
-    const ht = 18;
+    const w = 34;
+    const ht = 16;
     const ratio = Math.min(3, window.devicePixelRatio || 1);
     canvas.width = Math.round(w * ratio);
     canvas.height = Math.round(ht * ratio);
@@ -425,7 +425,7 @@ function brushPreview(brush, color, width) {
     const n = 24;
     for (let i = 0; i <= n; i++) {
       const t = i / n;
-      pts.push(Math.round(30 + t * 228), Math.round(56 + Math.sin(t * Math.PI * 2) * 26), Math.round(25 + 70 * Math.sin(t * Math.PI)));
+      pts.push(Math.round(24 + t * 164), Math.round(50 + Math.sin(t * Math.PI * 2) * 22), Math.round(25 + 70 * Math.sin(t * Math.PI)));
     }
     paintStroke(g, pts, color, Math.min(width, 2), brush);
   };
@@ -455,8 +455,6 @@ export function drawInkTools(panel, { pen, setTool, store }) {
     h("div", { class: "ink-row ink-row-brushes" },
       brushes,
       iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
-      h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
-        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
       erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
         ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
           onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
@@ -464,8 +462,13 @@ export function drawInkTools(panel, { pen, setTool, store }) {
       ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
         style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
       ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
+        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
+      h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
+        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기")));
   panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
-  // The chosen brush in view (the row scrolls sideways on a narrow screen).
-  requestAnimationFrame(() => brushes.querySelector('[aria-pressed="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
+  // The chosen brush in view (the row scrolls sideways on a very narrow screen, and says so).
+  requestAnimationFrame(() => {
+    brushes.classList.toggle("more", brushes.scrollWidth > brushes.clientWidth + 1);
+    brushes.querySelector('[aria-pressed="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  });
 }

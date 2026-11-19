@@ -13,6 +13,7 @@ import { watchContrast } from "./contrast.js";
 import { textPreview, songPreview, boardPreview } from "../core/preview.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
+import { keepRoomWords } from "../houses.js";
 import { memberColor, PALETTE } from "../core/paint.js";
 import { memberOps, makeVerifier, validPin } from "../core/room.js";
 
@@ -124,7 +125,13 @@ export function showRoom(app, roomId) {
     });
     remember();
     // Only while the room is still in my list ('방 나가기' takes it out, and leaving must not bring it back).
-    const keepPreview = () => { if (roomEntry(app.store, roomId)) remember(true); };
+    const keepPreview = () => {
+      if (!roomEntry(app.store, roomId)) return;
+      remember(true);
+      // Its words too, for 찾기 (내용) on home.
+      const words = wordsNow();
+      if (words !== undefined) keepRoomWords(app.store, roomId, words);
+    };
     const hidden = () => { if (document.visibilityState === "hidden") keepPreview(); };
     document.addEventListener("visibilitychange", hidden);
     offs.push(() => {
@@ -247,6 +254,32 @@ export function showRoom(app, roomId) {
   }
 
   const isLocal = () => !!roomEntry(app.store, roomId)?.local;
+
+  /**
+   * The room's words for 찾기 on home: what is written (the sheets read so far), the recordings'
+   * names, the board's words and cards. undefined: nothing read yet (the kept words stay).
+   */
+  function wordsNow() {
+    try {
+      const kind = session.room.meta("kind") || "daily-text";
+      const name = session.room.meta("name") || "";
+      if (kind === "daily-text") {
+        const read = session.days().filter((day) => session.isLoaded("s:" + day));
+        return read.length ? [name, ...read.map((day) => session.sheet(day).text())].join("\n") : undefined;
+      }
+      if (kind === "creative-song") {
+        if (!session.isLoaded("song")) return undefined;
+        return [name, ...[...session.doc("song").sources.values()].map((src) => src.name).filter(Boolean)].join("\n");
+      }
+      if (kind === "creative-board") {
+        if (!session.isLoaded("board")) return undefined;
+        return [name, ...session.doc("board").items().map((it) => (it.kind === "note" ? it.data?.text : it.data?.name)).filter(Boolean)].join("\n");
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+    return undefined;
+  }
 
   /** What home shows of this room now; undefined keeps the one kept before (e.g. nothing read yet). */
   function previewNow() {
