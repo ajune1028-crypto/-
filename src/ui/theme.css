@@ -1032,9 +1032,20 @@ html[data-orient="landscape"] .panel { width: min(100%, 32rem); border-radius: 1
 html[data-orient="landscape"] .panel.editor-panel { width: min(100%, 52rem); }
 html[data-orient="landscape"] .join, html[data-orient="landscape"] .center { width: min(100%, 30rem); margin-inline: auto; }
 html[data-orient="landscape"] .song-start { max-width: 26rem; }
-.ink-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.18rem; }
-.ink-brush { height: 1.9rem; padding: 0 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; color: var(--muted); }
+.ink-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.18rem; max-width: 100%; }
+/* The brushes: a little line of each above its name, in a row that slides sideways when narrow. */
+/* The first row stays one row: the brushes slide sideways, the eraser and 모양 잡기 stay in view. */
+.ink-row-brushes { flex-wrap: nowrap; width: 100%; }
+.ink-tools:has(.ink-row-brushes) { width: min(100% - 1rem, 34rem); }
+.ink-brushes { display: flex; gap: 0.1rem; flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 0.6rem, #000 calc(100% - 0.6rem), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 0.6rem, #000 calc(100% - 0.6rem), transparent 100%); padding: 0 0.4rem; }
+.ink-brushes::-webkit-scrollbar { display: none; }
+.ink-brush { flex: none; display: grid; justify-items: center; gap: 0.05rem; padding: 0.2rem 0.3rem 0.15rem; border-radius: 0.8rem; color: var(--muted); transition: background 0.2s var(--ease), color 0.2s var(--ease); }
 .ink-brush[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
+.ink-preview { display: block; width: 46px; height: 18px; }
+.ink-brush-name { font-size: 0.6rem; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.ink-shapes.chip { flex: none; height: 1.55rem; padding: 0 0.5rem; font-size: 0.62rem; white-space: nowrap; }
+.ink-row-brushes > .icon-btn { flex: none; }
+.ink-shapes[aria-pressed="false"] { opacity: 0.6; }
 .seg.ink-erase { padding: 0.12rem; }
 .seg.ink-erase button { height: 1.7rem; padding: 0 0.6rem; font-size: 0.72rem; }
 

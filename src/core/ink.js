@@ -8,7 +8,10 @@
 // left, with pressure 0..100: the same place on every screen size, because
 // the whole layout is measured in rem.
 //
-//   stroke  { id, pts: [x, y, p, x, y, p, …], c: colour, w: width, by, at }
+//   stroke  { id, pts: [x, y, p, x, y, p, …], c: colour, w: width, b?: brush, s?: style, q?: 1, by, at }
+//
+// `b` is a brush every device knows; `s` names a newer brush (만년필, 붓펜, 에어브러시) that a
+// device from before draws as its `b`. `q: 1` is a shape made straight (its points are exact).
 //   srm     { id, s: stroke id, n: removes counter }
 //
 // Used by the text room's sheets ("k:<day>" documents) and meant for the
@@ -25,6 +28,8 @@ export const INK_WIDTHS = [1, 2, 3];
  * A stroke without `b` is a pen, as strokes were before brushes.
  */
 export const BRUSHES = ["pen", "pencil", "marker", "highlighter", "erase"];
+/** Newer brushes, each with the older brush a device from before draws it as. */
+export const STYLES = { fountain: "pen", brushpen: "pen", airbrush: "highlighter" };
 const MAX_POINTS = 3000;
 const MAX_UNKNOWN = 300;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -48,9 +53,15 @@ export class InkDoc {
       const ok = Array.isArray(op.pts) && op.pts.length >= 3 && op.pts.length % 3 === 0 && op.pts.length <= MAX_POINTS * 3 &&
         op.pts.every((v, i) => (i % 3 === 2 ? isInt(v, 0, 100) : isInt(v, -100000, 1000000))) &&
         COLOR_OK(op.c) && INK_WIDTHS.includes(op.w) && typeof op.by === "string" && op.by.length <= 40 && Number.isFinite(op.at) &&
-        (op.b === undefined || BRUSHES.includes(op.b));
+        (op.b === undefined || BRUSHES.includes(op.b)) &&
+        // A style is a name; one this version does not know is drawn as its brush.
+        (op.s === undefined || (typeof op.s === "string" && /^[a-z]{1,20}$/.test(op.s))) &&
+        (op.q === undefined || op.q === 1);
       if (!ok) return this.setAside(op);
-      this.byId.set(op.id, { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 });
+      const stroke = { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 };
+      if (op.s) stroke.s = op.s;
+      if (op.q) stroke.q = 1;
+      this.byId.set(op.id, stroke);
       this.done(op);
       for (const waiting of this.waiting.get(op.id) || []) this.apply(waiting);
       this.waiting.delete(op.id);
@@ -138,11 +149,24 @@ export function thinPoints(pts, min = 25) {
   return out;
 }
 
-export function strokeOps(clock, ink, { pts, color, width, by, at = Date.now(), brush = "pen" }) {
+/** The brush a stroke is drawn with: its style where it has one. */
+export function brushOf(stroke) {
+  return stroke.s || stroke.b || "pen";
+}
+
+export function strokeOps(clock, ink, { pts, color, width, by, at = Date.now(), brush = "pen", style, shape = false }) {
   clock.atLeast(ink.maxN);
-  const op = { t: "stroke", id: clock.next(), pts: thinPoints(pts).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
-  // Pen strokes leave `b` out, so devices from before brushes draw them as they always did.
+  // A shape's points are already few and exact (thinning would cut its corners).
+  const op = { t: "stroke", id: clock.next(), pts: (shape ? pts.slice() : thinPoints(pts)).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
+  // Pen strokes leave `b` out, so devices from before brushes draw them as they always did; a
+  // newer brush goes as its style, with the older brush it falls back to.
+  if (style === undefined && STYLES[brush]) {
+    style = brush;
+    brush = STYLES[brush];
+  }
   if (brush !== "pen") op.b = brush;
+  if (style) op.s = style;
+  if (shape) op.q = 1;
   return { ops: [op], atoms: [{ k: "ink+", s: op.id }] };
 }
 
@@ -165,7 +189,7 @@ export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
     if (!s || s.rm % 2 === 1) continue;
     const gone = eraseOps(clock, ink, id);
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, by, brush: s.b || "pen" });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -181,7 +205,7 @@ export function recolorStrokesOps(clock, ink, ids, color, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
     const gone = eraseOps(clock, ink, id);
-    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, by, brush: s.b || "pen" });
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }

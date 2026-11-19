@@ -225,12 +225,14 @@ export function mountBoardRoom(body, app, session, frame) {
     host: surface,
     ink: () => session.doc(INK_DOC),
     blocked: () => fingers.pinching,
+    shapes: () => getSettings(app.store).inkShapes !== false,
+    onShape: () => buzzOnce(app),
     view: {
       point: (cx, cy) => { const p = toBoard(cx, cy); return [p.x * INK_UNIT, p.y * INK_UNIT]; },
       matrix: () => [(zoom * sx) / INK_UNIT, 0, 0, zoom / INK_UNIT, panX, panY],
     },
-    onStroke: ({ pts, color, width, brush }) => {
-      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, by: session.memberId });
+    onStroke: ({ pts, color, width, brush, shape }) => {
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, shape, by: session.memberId });
       session.commit(INK_DOC, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
     },
@@ -910,7 +912,7 @@ export function mountBoardRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "board-items",
       items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) })),
-      strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, b: l.b || "pen" })),
+      strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, b: l.b || "pen", ...(l.s ? { s: l.s } : {}), ...(l.q ? { q: 1 } : {}) })),
     });
     toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
   }
@@ -1974,7 +1976,7 @@ export function mountBoardRoom(body, app, session, frame) {
     }
     for (const l of strokes) {
       const pts = l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v + at.x * INK_UNIT) : k % 3 === 1 ? Math.round(v + at.y * INK_UNIT) : v));
-      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color: l.c, width: l.w, by: session.memberId, brush: l.b || "pen" });
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color: l.c, width: l.w, by: session.memberId, brush: l.b || "pen", style: l.s, shape: !!l.q });
       session.commit(INK_DOC, made.ops);
       atoms.push(...made.atoms.map((a) => ({ ...a, doc: INK_DOC })));
     }

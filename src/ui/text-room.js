@@ -20,6 +20,7 @@ import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
+import { buzz } from "./chime.js";
 import { InkLayer, inkColor, drawInkTools as drawInkToolsInto } from "./ink.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
 
@@ -254,12 +255,14 @@ export function mountTextRoom(body, app, session) {
       editor.ink = new InkLayer({
         host: editor.paper,
         blocked: () => fingers.pinching,
+        shapes: () => getSettings(app.store).inkShapes !== false,
+        onShape: () => buzz(app),
         // While the pen is on, today's paper leaves room to draw below the words (a short page
         // already reaches the bottom of the screen; a long one grows past its last line).
         room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width, brush }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, by: session.memberId });
+        onStroke: ({ pts, color, width, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, shape, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
         },

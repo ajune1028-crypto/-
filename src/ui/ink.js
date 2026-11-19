@@ -2,15 +2,18 @@
 // and, while a tool is on, turns the finger or pen into strokes.
 //
 // Off, it lets every touch through to what is underneath (the text).
-// Brushes: 펜 (swells and thins with the pen's pressure), 연필 (grainy, like a
-// colored pencil), 마커 (even and bold), 형광펜 (wide and see-through). Two
-// erasers: 부분 지우개 rubs out only where it passes (it is a stroke of its
-// own that clears what lies under it), 획 지우개 removes whole strokes.
-// Used by the text room; the photo room and whiteboard can reuse it.
+// Brushes (the shapes they paint come from core/brush.js, the same on every screen): 펜 (swells
+// and thins with the pen's pressure, or a finger's speed), 만년필 (a slanted nib: wide across it,
+// a hairline along it), 붓펜 (pointed ends, very soft), 연필 (grain), 마커 (even and bold),
+// 에어브러시 (soft mist), 형광펜 (wide and see-through). Two erasers: 부분 지우개 rubs out only
+// where it passes (it is a stroke of its own that clears what lies under it), 획 지우개 removes
+// whole strokes. 모양 잡기: a line held still a moment becomes the shape it was meant to be.
+// Used by the text room and the whiteboard.
 
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
+import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape } from "../core/brush.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
 
@@ -19,14 +22,10 @@ const COLORS = {
 };
 /** Pixel width of each size at 1 rem = 16 px. */
 const WIDTHS = { 1: 2, 2: 4, 3: 8 };
-/** How each brush scales the size, and how solid it is. */
-const LOOK = {
-  pen: { scale: 1, alpha: 1 },
-  pencil: { scale: 0.9, alpha: 0.9 },
-  marker: { scale: 1.6, alpha: 1 },
-  highlighter: { scale: 3.4, alpha: 0.32 },
-  erase: { scale: 3.2, alpha: 1 },
-};
+/** The brushes in the tools, in this order. */
+export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"]];
+/** How long a line is held still before it becomes a shape. */
+const SHAPE_HOLD_MS = 600;
 
 export function inkColor(c) {
   if (c === "black") return INK[currentTheme()];
@@ -60,6 +59,105 @@ function grainFor(g, color) {
   return g.createPattern(tile, "repeat");
 }
 
+// An airbrush's mist: one soft round of the colour, drawn many times along the line.
+const mists = new Map();
+function mistFor(color) {
+  if (mists.has(color)) return mists.get(color);
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = 64;
+  const t = tile.getContext("2d");
+  if (t) {
+    const grad = t.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, color);
+    grad.addColorStop(0.35, color);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    t.globalAlpha = 1;
+    t.fillStyle = grad;
+    t.fillRect(0, 0, 64, 64);
+    // The middle softer than solid: the colour fades out from a gentle core.
+    t.globalCompositeOperation = "destination-in";
+    const fade = t.createRadialGradient(32, 32, 0, 32, 32, 32);
+    fade.addColorStop(0, "rgba(0,0,0,0.85)");
+    fade.addColorStop(0.5, "rgba(0,0,0,0.45)");
+    fade.addColorStop(1, "rgba(0,0,0,0)");
+    t.fillStyle = fade;
+    t.fillRect(0, 0, 64, 64);
+  }
+  mists.set(color, tile);
+  return tile;
+}
+
+/** The outline as a smooth filled shape (curves through the middles of its edges). */
+function fillOutline(g, poly) {
+  const n = poly.length / 2;
+  if (n < 3) return;
+  g.beginPath();
+  g.moveTo((poly[0] + poly[2]) / 2, (poly[1] + poly[3]) / 2);
+  for (let i = 1; i <= n; i++) {
+    const x = poly[(i % n) * 2];
+    const y = poly[(i % n) * 2 + 1];
+    const nx = poly[((i + 1) % n) * 2];
+    const ny = poly[((i + 1) % n) * 2 + 1];
+    g.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2);
+  }
+  g.closePath();
+  g.fill();
+}
+
+/**
+ * Paints one stroke: points [x, y, p, …] in stroke units on a context already set to them.
+ * shaped: a shape made straight (followed exactly, no pressure).
+ */
+export function paintStroke(g, pts, color, width, brush, shaped = false) {
+  if (!pts || pts.length < 3) return;
+  const look = brushLook(brush);
+  const size = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
+  const erase = brush === "erase";
+  const ink = erase ? "#000" : inkColor(color);
+  const real = hasPressure(pts);
+  const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
+  g.save();
+  g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  if (look.kind === "dabs") {
+    const marks = dabs(points, { step: size * look.spacing });
+    const seed = (pts[0] * 31 + pts[1]) | 0;
+    if (look.soft) {
+      const mist = mistFor(ink);
+      for (const m of marks) {
+        const p = real ? m.p : 0.6;
+        const r = (size / 2) * (0.75 + 0.35 * p);
+        g.globalAlpha = look.alpha * (0.45 + 0.55 * p);
+        g.drawImage(mist, m.x - r, m.y - r, r * 2, r * 2);
+      }
+    } else {
+      g.fillStyle = look.grain ? grainFor(g, ink) : ink;
+      for (const m of marks) {
+        const p = real ? m.p : 0.62;
+        const r = (size / 2) * (0.55 + 0.45 * p);
+        g.globalAlpha = look.alpha * (0.3 + 0.5 * p);
+        g.beginPath();
+        g.arc(m.x + wobble(m.i, seed) * r * 0.18, m.y + wobble(m.i + 7919, seed) * r * 0.18, r, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  } else {
+    const thinning = shaped ? 0 : real ? look.thinning : look.fingerThinning || 0;
+    const poly = outline(points, {
+      size,
+      thinning,
+      simulate: !real && !shaped && !!look.fingerThinning,
+      taperStart: shaped ? 0 : (look.taperStart || 0) * size,
+      taperEnd: shaped ? 0 : (look.taperEnd || 0) * size,
+      nib: !!look.nib,
+      flat: !!look.flat,
+    });
+    g.globalAlpha = look.alpha;
+    g.fillStyle = ink;
+    fillOutline(g, poly);
+  }
+  g.restore();
+}
+
 export class InkLayer {
   /**
    * host     the element to draw over (gets position: relative)
@@ -78,8 +176,11 @@ export class InkLayer {
    * screen-sized canvas): point(clientX, clientY) → [x, y] in stroke units, matrix() → the
    * canvas transform [a, b, c, d, e, f] from stroke units to CSS pixels of the host.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null }) {
+  /** shapes(): whether a line held still becomes a shape (모양 잡기); onShape() when one does. */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {} }) {
     this.host = host;
+    this.shapes = shapes;
+    this.onShape = onShape;
     this.view = view;
     this.blocked = blocked;
     this.room = room;
@@ -134,6 +235,7 @@ export class InkLayer {
    */
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
+    clearTimeout(this.live.timer);
     this.live = null;
     this.render();
   }
@@ -157,9 +259,17 @@ export class InkLayer {
     c.addEventListener("pointermove", (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
+      const live = this.live;
+      if (live.shape) {
+        // Still held after it became a shape: a line's end follows, any other shape grows or shrinks.
+        const [x, y] = this.point(e);
+        live.shapeNow = adjustShape(live.shape, live.shapeFrom, [x, y]);
+        return void this.renderSoon();
+      }
       // Every point the pen passed (not only one per frame), drawn at the next frame: the line
       // keeps up with the pen however fast it goes.
-      for (const ev of e.getCoalescedEvents?.() || [e]) this.live.pts.push(...this.point(ev));
+      for (const ev of e.getCoalescedEvents?.() || [e]) live.pts.push(...this.point(ev));
+      this.holdForShape(e);
       this.renderSoon();
     });
     const end = (e) => {
@@ -167,14 +277,41 @@ export class InkLayer {
       if (e.type === "pointerup" && !this.live.erase) for (const ev of e.getCoalescedEvents?.() || []) this.live.pts.push(...this.point(ev));
       const live = this.live;
       this.live = null;
+      clearTimeout(live?.timer);
+      const shape = live?.shapeNow || live?.shape;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
-      if (live?.pts && live.pts.length >= 3) this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
+      if (shape) this.onStroke({ pts: shape.pts, color: this.color, width: this.width, brush: live.brush, shape: true });
+      else if (live?.pts && live.pts.length >= 3) this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
       this.render();
     };
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
     // Losing hold of the pointer without a lift also ends the line, so it never waits forever.
     c.addEventListener("lostpointercapture", end);
+  }
+
+  /**
+   * 모양 잡기: each time the hand moves on, the clock starts again; held still that long, the line
+   * becomes the shape it was meant to be (when it clearly is one). Not for the erasers.
+   */
+  holdForShape(e) {
+    const live = this.live;
+    if (!live || live.brush === "erase" || !this.shapes()) return;
+    if (live.still && Math.hypot(e.clientX - live.still[0], e.clientY - live.still[1]) <= 6) return;
+    live.still = [e.clientX, e.clientY];
+    clearTimeout(live.timer);
+    live.timer = setTimeout(() => this.snap(live), SHAPE_HOLD_MS);
+  }
+
+  snap(live) {
+    if (this.live !== live || live.shape || !live.pts) return;
+    const shape = quickShape(thinPoints(live.pts));
+    if (!shape) return;
+    live.shape = shape;
+    live.shapeNow = shape;
+    live.shapeFrom = live.pts.slice(-3, -1);
+    this.onShape();
+    this.renderSoon();
   }
 
   eraseAt(e) {
@@ -225,7 +362,7 @@ export class InkLayer {
       pg.setTransform(t);
       for (const s of this.ink().strokes()) {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, s.w, s.b || "pen");
+        this.paint(pg, pts, s.c, s.w, brushOf(s), !!s.q);
       }
       this.kept = { key, canvas: pic };
     }
@@ -233,7 +370,10 @@ export class InkLayer {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.drawImage(this.kept.canvas, 0, 0);
     g.restore();
-    if (this.live?.pts) this.paint(g, this.live.pts, this.color, this.width, this.live.brush);
+    // The line being drawn as it will be kept (the same points), or the shape it became.
+    const live = this.live;
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.width, live.brush, true);
+    else if (live?.pts) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
   }
 
   /** One drawing per frame however many points came. */
@@ -256,44 +396,8 @@ export class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, width, brush) {
-    const look = LOOK[brush] || LOOK.pen;
-    const base = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
-    g.save();
-    g.globalAlpha = look.alpha;
-    g.globalCompositeOperation = brush === "erase" ? "destination-out" : "source-over";
-    const paintStyle = brush === "erase" ? "#000" : brush === "pencil" ? grainFor(g, inkColor(color)) : inkColor(color);
-    g.strokeStyle = paintStyle;
-    g.fillStyle = paintStyle;
-    g.lineCap = brush === "highlighter" ? "square" : "round";
-    g.lineJoin = "round";
-    if (pts.length <= 3) {
-      g.beginPath();
-      g.arc(pts[0], pts[1], brush === "pen" ? (base * (0.5 + pts[2] / 100)) / 2 : base / 2, 0, Math.PI * 2);
-      g.fill();
-    } else if (brush === "pen") {
-      // Short pieces, each as wide as the pressure there: a pen that swells and thins.
-      for (let i = 3; i < pts.length; i += 3) {
-        g.lineWidth = base * (0.5 + (pts[i + 2] + pts[i - 1]) / 200);
-        g.beginPath();
-        g.moveTo(pts[i - 3], pts[i - 2]);
-        g.lineTo(pts[i], pts[i + 1]);
-        g.stroke();
-      }
-    } else {
-      // One smooth path of even width, so see-through brushes do not darken where pieces meet.
-      g.lineWidth = base;
-      g.beginPath();
-      g.moveTo(pts[0], pts[1]);
-      for (let i = 3; i < pts.length - 3; i += 3) {
-        const mx = (pts[i] + pts[i + 3]) / 2;
-        const my = (pts[i + 1] + pts[i + 4]) / 2;
-        g.quadraticCurveTo(pts[i], pts[i + 1], mx, my);
-      }
-      g.lineTo(pts[pts.length - 3], pts[pts.length - 2]);
-      g.stroke();
-    }
-    g.restore();
+  paint(g, pts, color, width, brush, shaped = false) {
+    paintStroke(g, pts, color, width, brush, shaped);
   }
 
   destroy() {
@@ -303,10 +407,38 @@ export class InkLayer {
   }
 }
 
+/** A small line drawn with the brush, as it will look (pressure rising and falling, as a hand does). */
+function brushPreview(brush, color, width) {
+  const canvas = h("canvas", { class: "ink-preview", "aria-hidden": "true" });
+  const draw = () => {
+    const w = 46;
+    const ht = 18;
+    const ratio = Math.min(3, window.devicePixelRatio || 1);
+    canvas.width = Math.round(w * ratio);
+    canvas.height = Math.round(ht * ratio);
+    const g = canvas.getContext("2d");
+    if (!g) return;
+    // Stroke units: 100 to a rem (16 px), so 1 unit = 0.16 px.
+    const k = 0.16 * ratio;
+    g.setTransform(k, 0, 0, k, 0, 0);
+    const pts = [];
+    const n = 24;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      pts.push(Math.round(30 + t * 228), Math.round(56 + Math.sin(t * Math.PI * 2) * 26), Math.round(25 + 70 * Math.sin(t * Math.PI)));
+    }
+    paintStroke(g, pts, color, Math.min(width, 2), brush);
+  };
+  // Its size is fixed, so it is painted at once (a frame may never come to a screen in the back).
+  draw();
+  return canvas;
+}
+
 /**
- * The drawing tools (펜·연필·마커·형광펜, 지우개 부분/획, eight colours, three widths), the same in
- * the text room and on the whiteboard. pen: { tool, brush, color, width }; setTool(tool) applies a
- * change. Hidden while no tool is on.
+ * The drawing tools (펜·만년필·붓펜·연필·마커·에어브러시·형광펜, 지우개 부분/획, eight colours, three widths,
+ * 모양 잡기), the same in the text room and on the whiteboard. pen: { tool, brush, color, width };
+ * setTool(tool) applies a change. Hidden while no tool is on. Each brush shows a little line of
+ * itself in the chosen colour, its name beneath.
  */
 export function drawInkTools(panel, { pen, setTool, store }) {
   panel.hidden = !pen.tool;
@@ -314,12 +446,17 @@ export function drawInkTools(panel, { pen, setTool, store }) {
   const erasing = pen.tool !== "pen";
   const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
-  const brushes = [["pen", "펜"], ["pencil", "연필"], ["marker", "마커"], ["highlighter", "형광펜"]];
+  const shapes = getSettings(store).inkShapes !== false;
+  const brushes = h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
+    ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), "aria-label": name,
+      onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } },
+      brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name }))));
   panel.replaceChildren(
-    h("div", { class: "ink-row" },
-      ...brushes.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), text: name,
-        onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } })),
+    h("div", { class: "ink-row ink-row-brushes" },
+      brushes,
       iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
+      h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
+        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
       erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
         ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
           onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
@@ -329,4 +466,6 @@ export function drawInkTools(panel, { pen, setTool, store }) {
       ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
         onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } })))));
   panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
+  // The chosen brush in view (the row scrolls sideways on a narrow screen).
+  requestAnimationFrame(() => brushes.querySelector('[aria-pressed="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
 }

@@ -137,3 +137,37 @@ test("strokes take another colour (the 올가미's 색 on 그림): each goes and
   invertInkOps(ink, clock, made.atoms, "undo").forEach((op) => ink.apply(op));
   assert.deepEqual(ink.strokes().map((s) => s.c), ["black"]);
 });
+
+test("new brushes travel as a style beside a brush every device knows; a shape keeps its exact points; moving and recolouring keep both", async () => {
+  const { moveStrokesOps, recolorStrokesOps, STYLES } = await import("../src/core/ink.js");
+  assert.deepEqual(Object.keys(STYLES), ["fountain", "brushpen", "airbrush"]);
+  const ink = new InkDoc();
+  const clock = new Clock("a");
+  const fountain = strokeOps(clock, ink, { pts: line(0, 0, 500, 0), color: "blue", width: 2, by: "m1", brush: "fountain" }).ops[0];
+  assert.equal(fountain.b, undefined, "a device from before draws it as a pen");
+  assert.equal(fountain.s, "fountain");
+  const air = strokeOps(clock, ink, { pts: line(0, 100, 500, 100), color: "red", width: 3, by: "m1", brush: "airbrush" }).ops[0];
+  assert.deepEqual([air.b, air.s], ["highlighter", "airbrush"]);
+  ink.applyAll([fountain, air]);
+  assert.deepEqual(ink.strokes().map((s) => [s.b, s.s]), [["pen", "fountain"], ["highlighter", "airbrush"]]);
+  // A style this version does not know yet is still drawn, as its brush.
+  assert.equal(ink.apply({ t: "stroke", id: "70@z", pts: [0, 0, 50, 10, 10, 50], c: "red", w: 1, s: "glitter", by: "m", at: 1 }), "applied");
+  assert.equal(ink.apply({ t: "stroke", id: "71@z", pts: [0, 0, 50], c: "red", w: 1, s: 42, by: "m", at: 1 }), "unknown");
+  assert.equal(ink.apply({ t: "stroke", id: "72@z", pts: [0, 0, 50], c: "red", w: 1, q: 7, by: "m", at: 1 }), "unknown");
+  // A shape made straight: its points exactly (thinning would drop these, 10 apart).
+  const pts = [0, 0, 50, 10, 0, 50, 20, 0, 50, 30, 0, 50, 40, 0, 50];
+  const shape = strokeOps(clock, ink, { pts, color: "black", width: 2, by: "m1", brush: "marker", shape: true }).ops[0];
+  assert.equal(shape.q, 1);
+  assert.deepEqual(shape.pts, pts);
+  ink.apply(shape);
+  for (const op of moveStrokesOps(clock, ink, [fountain.id, shape.id], 5, 5, "m1").ops) ink.apply(op);
+  for (const op of recolorStrokesOps(clock, ink, ink.strokes().filter((s) => s.s === "fountain").map((s) => s.id), "#2f9e5b", "m1").ops) ink.apply(op);
+  const now = ink.strokes();
+  const f = now.find((s) => s.s === "fountain");
+  assert.deepEqual([f.pts.slice(0, 2), f.c], [[5, 5], "#2f9e5b"], "moved and recoloured, still a fountain pen");
+  const q = now.find((s) => s.q === 1);
+  assert.deepEqual(q.pts.slice(0, 6), [5, 5, 50, 15, 5, 50], "moved, still exact");
+  // A style from a newer version stays itself when this version moves it.
+  for (const op of moveStrokesOps(clock, ink, ["70@z"], 1, 1, "m1").ops) ink.apply(op);
+  assert.deepEqual(ink.strokes().filter((s) => s.s === "glitter").map((s) => [s.b, s.pts[0]]), [["pen", 1]]);
+});

@@ -4473,3 +4473,84 @@ scenario("whiteboard bar at the bottom: dragged down it stays in view and pressa
     await page.shot(out(`board-bar-bottom-${size.width}.png`));
   }
 });
+
+// The owner: brushes like Procreate, GoodNotes and Adobe (pressure, smoothing, taper, textures,
+// shapes). Each brush shows a little line of itself; a 붓펜 line comes to a point; a stylus's
+// pressure makes it thick and thin; a line held still a moment becomes a straight line or a circle
+// (모양 잡기) and the friend sees exactly that; with 모양 잡기 off it stays as drawn.
+scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러시 go to the friend as drawn; a stylus presses thick and thin; held still a line or a circle becomes exact (모양 잡기), and not when it is off", async ({ open, out }) => {
+  const [a, b] = await together(open, ["나래"], { width: 430, height: 1300 });
+  const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await click(a, "#pen");
+  await a.waitFor(`!${q("#ink-tools")}.hidden`);
+  const toolsTop = await a.eval(`${q("#ink-tools")}.getBoundingClientRect().top`);
+  assert.ok(toolsTop > box.y + 860, "room to draw above the tools: " + toolsTop);
+  // Every brush in the tools, each with a painted little line and its name.
+  const shown = await a.eval(`[...document.querySelectorAll("#ink-tools .ink-brush")].map((b) => { const c = b.querySelector("canvas"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 20) n++; return [b.dataset.brush, b.textContent, n]; })`);
+  assert.deepEqual(shown.map((s) => s[0]), ["pen", "fountain", "brushpen", "pencil", "marker", "airbrush", "highlighter"]);
+  assert.deepEqual(shown.map((s) => s[1]), ["펜", "만년필", "붓펜", "연필", "마커", "에어브러시", "형광펜"]);
+  assert.ok(shown.every((s) => s[2] > 40), "each little line is painted: " + JSON.stringify(shown));
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const strokes = (page) => page.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => ({ b: s.b, s: s.s || null, q: s.q || 0, n: s.pts.length / 3, pts: s.pts }))`);
+  const drag = async (path, holdMs = 0) => {
+    await a.press(path[0][0], path[0][1]);
+    for (const [x, y] of path.slice(1)) await a.moveTo(x, y);
+    if (holdMs) await pause(holdMs);
+    const [x, y] = path[path.length - 1];
+    await a.release(x, y);
+  };
+  const across = (y, from = 0.15, to = 0.85, n = 12) => Array.from({ length: n + 1 }, (_, i) => [box.x + box.w * (from + ((to - from) * i) / n), y + Math.sin(i * 1.3) * 4]);
+  // 붓펜.
+  await click(a, '[data-brush="brushpen"]');
+  await drag(across(box.y + 120));
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
+  // 만년필 and 에어브러시.
+  await click(a, '[data-brush="fountain"]');
+  await drag(across(box.y + 200));
+  await click(a, '[data-brush="airbrush"]');
+  await click(a, '[data-ink="violet"]');
+  await drag(across(box.y + 280));
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 3`);
+  const three = await strokes(a);
+  assert.deepEqual(three.map((s) => [s.b, s.s]), [["pen", "brushpen"], ["pen", "fountain"], ["highlighter", "airbrush"]], "new brushes go as a style beside a brush every device knows");
+  await b.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 3`);
+  assert.deepEqual((await strokes(b)).map((s) => s.s), ["brushpen", "fountain", "airbrush"], "the friend has them as drawn");
+  // A stylus: pressure rises and falls along the line, and is kept.
+  await click(a, '[data-brush="pen"]');
+  await click(a, '[data-ink="blue"]');
+  const sy = box.y + 360;
+  await a.front();
+  await a.stylus("down", box.x + box.w * 0.15, sy, 0.15);
+  for (let i = 1; i <= 12; i++) await a.stylus("move", box.x + box.w * (0.15 + 0.06 * i), sy, i <= 6 ? 0.15 + i * 0.13 : 0.93 - (i - 6) * 0.13);
+  await a.stylus("up", box.x + box.w * 0.87, sy, 0.1);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 4`);
+  const pressed = (await strokes(a))[3].pts.filter((_, i) => i % 3 === 2);
+  assert.ok(Math.max(...pressed) - Math.min(...pressed) > 40, "the pen's pressure is kept: " + pressed.join(","));
+  // 모양 잡기: a shaky line held still becomes a straight one.
+  await click(a, '[data-brush="marker"]');
+  const ly = box.y + 450;
+  await drag(across(ly, 0.15, 0.85, 14).map(([x, y], i) => [x, y + (i % 2 ? 5 : -5)]), 900);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 5`);
+  const straight = (await strokes(a))[4];
+  assert.equal(straight.q, 1, "it became a shape");
+  const lys = straight.pts.filter((_, i) => i % 3 === 1);
+  assert.ok(Math.max(...lys) - Math.min(...lys) < 30, "and it is straight: " + lys.join(","));
+  // A rough circle held still becomes a circle.
+  const cx = box.x + box.w / 2;
+  const cy = box.y + 600;
+  const ring = Array.from({ length: 29 }, (_, i) => { const t = (i / 28) * Math.PI * 2; return [cx + Math.cos(t) * (90 + (i % 3) * 3), cy + Math.sin(t) * (90 - (i % 2) * 4)]; });
+  await drag(ring, 900);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 6`);
+  const round = (await strokes(a))[5];
+  assert.equal(round.q, 1);
+  await b.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.q === 1).length === 2`);
+  // Quickly lifted, a line stays as drawn; and with 모양 잡기 off, holding changes nothing.
+  await drag(across(box.y + 760, 0.2, 0.6, 8));
+  await click(a, "#ink-shapes");
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkShapes`), false);
+  await drag(across(box.y + 800, 0.2, 0.8, 10), 900);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 8`);
+  assert.deepEqual((await strokes(a)).slice(6).map((s) => s.q), [0, 0]);
+  await a.front();
+  await a.shot(out("brushes.png"));
+});
