@@ -4945,3 +4945,69 @@ scenario("같이 그리기: a friend's line shows while it is drawn, with their 
   }
   assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkSteady`), 1);
 });
+
+// From the reference study (Procreate's gestures, 하던 대로): two fingers tapped together 되돌리기,
+// three 다시하기, each saying so for a moment; a finger held still where it lands picks the colour
+// under it (스포이트) with a loupe above the finger, and draws nothing.
+scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoes, saying so; a finger held still picks the colour under it (스포이트) and draws nothing", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "몸짓 그림");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const doc = await a.eval(`"k:L" + window.__app.session.doc("draw").layers()[0].id`);
+  const count = () => a.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const at = (fx, fy) => [box.x + box.w * fx, box.y + box.h * fy];
+  const line = async (fy) => {
+    await a.front();
+    await a.touch("start", [at(0.2, fy)]);
+    for (let i = 1; i <= 10; i++) await a.touch("move", [at(0.2 + 0.05 * i, fy)]);
+    await a.touch("end");
+  };
+  await click(a, '[data-ink="red"]');
+  await click(a, "#ink-steady"); await click(a, "#ink-steady"); await click(a, "#ink-steady"); // 끔: the line goes exactly where the finger went
+  await line(0.3);
+  await click(a, '[data-ink="blue"]');
+  await line(0.5);
+  await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 2`);
+  // Two fingers tapped: 되돌리기.
+  await a.front();
+  await a.touch("start", [at(0.4, 0.7), at(0.6, 0.72)]);
+  await pause(60);
+  await a.touch("end");
+  await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 1`);
+  await a.waitFor(`document.getElementById("gesture-hint")?.textContent === "되돌리기"`, 1500);
+  // Three fingers tapped: 다시하기.
+  await pause(950);
+  await a.touch("start", [at(0.3, 0.7), at(0.5, 0.72), at(0.7, 0.7)]);
+  await pause(60);
+  await a.touch("end");
+  await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 2`);
+  await a.waitFor(`document.getElementById("gesture-hint")?.textContent === "다시하기"`, 1500);
+  // 스포이트: held still on the red line, the loupe shows; lifted, red is the pen's colour; no dot was drawn.
+  await click(a, '[data-ink="black"]');
+  const red = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return [r.left + r.width * 0.45, r.top + r.height * 0.3]; })()`);
+  await a.front();
+  await a.touch("start", [red]);
+  await pause(650);
+  await a.waitFor(q(".loupe"), 1500);
+  await a.shot(out("eyedropper.png"));
+  await a.touch("end");
+  await a.waitFor(`!document.querySelector(".loupe") && ${q("#ink-picked")}`, 2000);
+  const picked = await a.eval(`getComputedStyle(${q("#ink-picked")}).backgroundColor`);
+  const [r, g, b] = picked.match(/\d+/g).map(Number);
+  assert.ok(r > 180 && g < 120 && b < 120, "the red was picked: " + picked);
+  assert.equal(await a.eval(`${q("#ink-picked")}.getAttribute("aria-pressed")`), "true");
+  assert.equal(await count(), 2, "holding still drew nothing");
+  // Two fingers that move are a zoom, not a tap: nothing is undone.
+  await a.touch("start", [at(0.4, 0.7), at(0.6, 0.72)]);
+  for (let i = 1; i <= 6; i++) await a.touch("move", [at(0.4 - 0.02 * i, 0.7), at(0.6 + 0.02 * i, 0.72)]);
+  await a.touch("end");
+  await pause(200);
+  assert.equal(await count(), 2, "a pinch undoes nothing");
+});

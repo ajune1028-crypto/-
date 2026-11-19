@@ -1,9 +1,9 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-import { h, icon, iconButton, mount, toast, openSheet } from "./dom.js";
+import { h, icon, iconButton, mount, toast, openSheet, flashHint } from "./dom.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
-import { watchFingers } from "./fingers.js";
+import { watchFingers, watchFingerTaps } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
@@ -153,6 +153,11 @@ export function mountTextRoom(body, app, session) {
   }
   // A second finger stops a line being drawn: two fingers mean zoom.
   const fingers = watchFingers(body, () => { for (const editor of editors.values()) editor.ink?.cancelTouch(); });
+  // Procreate's taps: two fingers 되돌리기, three 다시하기.
+  const stopTaps = watchFingerTaps(body, {
+    two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
+    three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+  });
   let pinch = null;
   const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom }; };
@@ -259,6 +264,7 @@ export function mountTextRoom(body, app, session) {
         host: editor.paper,
         share: liveInk.on(inkDoc),
         steady: () => getSettings(app.store).inkSteady ?? 1,
+        onPick: (color) => { pen.color = color; setTool(pen.tool); },
         blocked: () => fingers.pinching,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
@@ -694,6 +700,7 @@ export function mountTextRoom(body, app, session) {
     body.removeEventListener("wheel", onWheel);
     body.classList.remove("text-body");
     fingers.stop();
+    stopTaps();
     for (const off of offs) off();
     clearInterval(midnight);
     clearTimeout(presenceTimer);

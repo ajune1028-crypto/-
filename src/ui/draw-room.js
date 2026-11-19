@@ -4,8 +4,9 @@
 // strokes are their own drawing document, drawn with the same brushes as everywhere (ui/ink.js).
 // Two fingers zoom and move the page; one draws.
 
-import { h, icon, iconButton, toast, closeOnOutside } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke } from "./ink.js";
+import { h, icon, iconButton, toast, closeOnOutside, flashHint } from "./dom.js";
+import { watchFingerTaps } from "./fingers.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
 import { strokeOps, eraseOps, invertInkOps, brushOf } from "../core/ink.js";
@@ -100,6 +101,11 @@ export function mountDrawRoom(body, app, session, frame) {
   };
   window.addEventListener("pointerup", lift, true);
   window.addEventListener("pointercancel", lift, true);
+  // Procreate's taps: two fingers 되돌리기, three 다시하기.
+  const stopTaps = watchFingerTaps(stage, {
+    two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
+    three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+  });
   // A mouse wheel zooms around the pointer.
   stage.addEventListener("wheel", (e) => {
     e.preventDefault();
@@ -126,6 +132,8 @@ export function mountDrawRoom(body, app, session, frame) {
       ink: () => session.doc(name),
       share: liveInk.on(name),
       steady: () => getSettings(app.store).inkSteady ?? 1,
+      onPick: (color) => { pen.color = color; setTool(pen.tool); },
+      pick: (x, y) => colorAt(x, y),
       blocked: () => !!pinch,
       grow: false,
       maxPixels: 3.2e6,
@@ -150,6 +158,20 @@ export function mountDrawRoom(body, app, session, frame) {
     hosts.set(layer.id, entry);
     session.load(name).then(() => { if (alive) { ink.render(); thumbSoon(layer.id); } });
     return entry;
+  }
+
+  /**
+   * 스포이트 on the page: the colour that shows at a point, the visible layers from the top down
+   * (the first one with ink there, through its opacity).
+   */
+  function colorAt(x, y) {
+    for (const layer of doc.layers().slice().reverse()) {
+      if (!layer.visible || layer.opacity <= 0.05) continue;
+      const c = hosts.get(layer.id)?.ink.canvas;
+      const got = c && pixelAt(c, x, y);
+      if (got) return got;
+    }
+    return null;
   }
 
   /** The page as the layers are now: order, shown or hidden, opacity, blend; only mine takes the pen. */
@@ -392,6 +414,7 @@ export function mountDrawRoom(body, app, session, frame) {
       resize.disconnect();
       window.removeEventListener("pointerup", lift, true);
       window.removeEventListener("pointercancel", lift, true);
+      stopTaps();
       for (const { ink } of hosts.values()) ink.destroy();
       liveInk.close();
       inkTools.remove();

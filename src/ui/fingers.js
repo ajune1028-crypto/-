@@ -7,6 +7,56 @@
 // until a fresh touch starts, so the lifts that end a pinch are never read as
 // taps or double taps.
 
+/**
+ * Two or three fingers that land together and lift without moving: Procreate's taps (two =
+ * 되돌리기, three = 다시하기), the way people who draw on a tablet already undo. A pinch moves, so
+ * it is never one; fingers that land far apart in time are a hold and a tap, not one either.
+ * Returns stop().
+ */
+export function watchFingerTaps(el, { two = null, three = null, slop = 14, within = 360, together = 160 } = {}) {
+  const down = new Map();
+  let most = 0;
+  let start = 0;
+  let spoiled = false;
+  const press = (e) => {
+    if (e.pointerType !== "touch") return;
+    if (!down.size) {
+      start = e.timeStamp;
+      most = 0;
+      spoiled = false;
+    } else if (e.timeStamp - start > together) spoiled = true;
+    down.set(e.pointerId, [e.clientX, e.clientY]);
+    most = Math.max(most, down.size);
+  };
+  const move = (e) => {
+    const at = down.get(e.pointerId);
+    if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > slop) spoiled = true;
+  };
+  const lift = (e) => {
+    if (!el.isConnected) return stop();
+    if (!down.has(e.pointerId)) return;
+    if (e.type === "pointercancel") spoiled = true;
+    down.delete(e.pointerId);
+    if (down.size) return;
+    if (!spoiled && e.timeStamp - start <= within) {
+      if (most === 2) two?.();
+      else if (most === 3) three?.();
+    }
+    most = 0;
+  };
+  function stop() {
+    el.removeEventListener("pointerdown", press, true);
+    window.removeEventListener("pointermove", move, true);
+    window.removeEventListener("pointerup", lift, true);
+    window.removeEventListener("pointercancel", lift, true);
+  }
+  el.addEventListener("pointerdown", press, true);
+  window.addEventListener("pointermove", move, true);
+  window.addEventListener("pointerup", lift, true);
+  window.addEventListener("pointercancel", lift, true);
+  return stop;
+}
+
 /** Watches the touch points that begin on el. Returns { pinching, stop }. */
 export function watchFingers(el, onPinch = () => {}) {
   const down = new Set();

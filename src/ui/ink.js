@@ -38,6 +38,23 @@ export function inkColor(c) {
 
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
+/** The colour of a canvas at a point of the screen as "#rrggbb", or null where it is see-through. */
+export function pixelAt(canvas, x, y) {
+  const r = canvas.getBoundingClientRect();
+  if (!r.width || !r.height || x < r.left || y < r.top || x >= r.right || y >= r.bottom) return null;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  const px = Math.floor(((x - r.left) / r.width) * canvas.width);
+  const py = Math.floor(((y - r.top) / r.height) * canvas.height);
+  const [red, green, blue, alpha] = g.getImageData(px, py, 1, 1).data;
+  if (alpha < 40) return null;
+  // What shows is the colour over the paper: half see-through ink reads lighter, as it looks.
+  const k = alpha / 255;
+  const paper = currentTheme() === "dark" ? [24, 26, 30] : [255, 253, 248];
+  const mixed = [red, green, blue].map((v, i) => Math.round(v * k + paper[i] * (1 - k)));
+  return "#" + mixed.map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
 // A colored pencil's grain: the color in specks of uneven strength, tiled.
 const grains = new Map();
 function grainFor(g, color) {
@@ -220,8 +237,15 @@ export class InkLayer {
    * share: what friends draw and point at on this document, and where mine goes (ui/live-ink.js,
    * LiveInk.on); steady(): 손떨림 보정, 0 (끔) to 3 (강). onStroke returns the stroke op's id.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0 }) {
+  /**
+   * onPick(color): a finger held still at the start of a line picks the colour under it (스포이트,
+   * as in Procreate); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare
+   * paper), by default from this layer's own picture.
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null }) {
     this.host = host;
+    this.onPick = onPick;
+    this.pickAt = pick;
     this.share = share;
     this.steady = steady;
     this.light = null; // my pointer's light (가리키기)
@@ -297,6 +321,8 @@ export class InkLayer {
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
     clearTimeout(this.live.timer);
+    clearTimeout(this.live.pickTimer);
+    if (this.live.picking) this.loupe?.remove();
     if (this.live.pts && this.live.brush !== "erase") this.share?.end("ink", null);
     if (this.live.light && this.light) {
       this.light.ended = performance.now();
@@ -330,7 +356,13 @@ export class InkLayer {
         const brush = this.tool === "eraser" ? "erase" : this.brush;
         const level = Math.max(0, Math.min(3, this.steady() | 0));
         const string = STEADY_PX[level] * this.unitsPerPx();
-        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2 };
+        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2, down: [e.clientX, e.clientY] };
+        // 스포이트: a finger held still where it went down picks the colour there (not a pen,
+        // which often rests a moment before it draws; not the erasers).
+        if (this.onPick && e.pointerType === "touch" && brush !== "erase") {
+          const live = this.live;
+          live.pickTimer = setTimeout(() => this.startPick(live), 450);
+        }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
           this.share.begin("ink", { c: this.color, w: this.width, b: brush });
@@ -359,6 +391,11 @@ export class InkLayer {
         this.share?.grow("laser", this.light.pts);
         return void this.renderSoon();
       }
+      if (live.picking) return void this.movePick(e.clientX, e.clientY);
+      if (live.pickTimer && Math.hypot(e.clientX - live.down[0], e.clientY - live.down[1]) > 6) {
+        clearTimeout(live.pickTimer);
+        live.pickTimer = 0;
+      }
       // Every point the pen passed (not only one per frame), drawn at the next frame: the line
       // keeps up with the pen however fast it goes.
       for (const ev of e.getCoalescedEvents?.() || [e]) this.take(live, this.point(ev));
@@ -374,6 +411,14 @@ export class InkLayer {
         if (this.light) this.light.ended = performance.now();
         this.share?.end("laser");
         return void this.renderSoon();
+      }
+      clearTimeout(live.pickTimer);
+      if (live.picking) {
+        this.live = null;
+        this.loupe?.remove();
+        this.loupe = null;
+        if (e.type === "pointerup" && live.picked) this.onPick?.(live.picked);
+        return void this.render();
       }
       if (e.type === "pointerup" && !live.erase && !live.shape) for (const ev of e.getCoalescedEvents?.() || []) this.take(live, this.point(ev));
       // With 손떨림 보정 the brush trails the hand on its string: as the pen lifts, the line goes the
@@ -397,6 +442,39 @@ export class InkLayer {
     c.addEventListener("pointercancel", end);
     // Losing hold of the pointer without a lift also ends the line, so it never waits forever.
     c.addEventListener("lostpointercapture", end);
+  }
+
+  /** Held still: the line's first dot goes, and the loupe shows the colour under the finger. */
+  startPick(live) {
+    if (this.live !== live || live.shape) return;
+    live.picking = true;
+    live.pickTimer = 0;
+    live.pts = null;
+    this.share?.end("ink", null);
+    // The dot the touch began is taken off the picture first, so it is not what is picked.
+    this.render();
+    this.loupe = h("div", { class: "loupe", "aria-hidden": "true" });
+    this.loupe.style.setProperty("--cur", inkColor(this.color));
+    document.body.append(this.loupe);
+    this.movePick(live.down[0], live.down[1]);
+  }
+
+  movePick(x, y) {
+    const live = this.live;
+    if (!live?.picking || !this.loupe) return;
+    const color = this.readColor(x, y);
+    live.picked = color;
+    this.loupe.style.setProperty("--pick", color || "transparent");
+    this.loupe.classList.toggle("bare", !color);
+    // Above the finger, so the finger does not hide it; below it near the top of the screen.
+    this.loupe.style.left = x + "px";
+    this.loupe.style.top = (y > 110 ? y - 78 : y + 78) + "px";
+  }
+
+  /** The colour drawn at a point of the screen ("#rrggbb"), or null where nothing is drawn. */
+  readColor(x, y) {
+    if (this.pickAt) return this.pickAt(x, y);
+    return pixelAt(this.canvas, x, y);
   }
 
   /** A point from the hand: with 손떨림 보정 the brush follows on its string, and only its moves count. */
@@ -696,6 +774,9 @@ export function drawInkTools(panel, { pen, setTool, store }) {
     h("div", { class: "ink-row" },
       ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
         style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
+      // A colour picked from the drawing (스포이트) shows beside them while it is the pen's.
+      typeof pen.color === "string" && pen.color.startsWith("#") && h("button", { class: "ink-color custom", id: "ink-picked", type: "button", "aria-label": "고른 색 " + pen.color, "aria-pressed": String(!erasing),
+        style: { background: pen.color }, onclick: () => choose({ color: pen.color }) }),
       ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
         onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
       h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",

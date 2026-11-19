@@ -14,8 +14,8 @@
 // a drag inside it moves it with its cards, its chip drags just the loop, ✕ takes it
 // off, and it closes itself the shortest way when the end does not reach the start.
 
-import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress } from "./dom.js";
-import { watchFingers } from "./fingers.js";
+import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint } from "./dom.js";
+import { watchFingers, watchFingerTaps } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
 import { timeText } from "./song-view.js";
@@ -290,6 +290,7 @@ export function mountBoardRoom(body, app, session, frame) {
     ink: () => session.doc(INK_DOC),
     share: liveInk.on(INK_DOC),
     steady: () => getSettings(app.store).inkSteady ?? 1,
+    onPick: (color) => { pen.color = color; setPen(pen.tool); },
     blocked: () => fingers.pinching,
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzzOnce(app),
@@ -1344,6 +1345,11 @@ export function mountBoardRoom(body, app, session, frame) {
     gesture?.();
     pan = null;
     boardInk?.cancelTouch();
+  });
+  // Procreate's taps: two fingers 되돌리기, three 다시하기.
+  const stopTaps = watchFingerTaps(surface, {
+    two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
+    three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
   });
 
   function wireCard(el, id) {
@@ -2930,6 +2936,7 @@ export function mountBoardRoom(body, app, session, frame) {
       insetWatch.disconnect();
       boardInk?.destroy();
       liveInk.close();
+      stopTaps();
       inkTools.remove();
       roomEl?.style.removeProperty("--top-inset");
       roomEl?.style.removeProperty("--bottom-inset");

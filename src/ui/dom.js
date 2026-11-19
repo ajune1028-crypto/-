@@ -82,6 +82,24 @@ export function icon(name) {
   return span.firstChild;
 }
 
+/**
+ * A word that shows for a moment at the top middle and goes (what a gesture did: "되돌리기"), as
+ * Procreate says what a two-finger tap did. Again soon, the same pill says the new word.
+ */
+export function flashHint(text) {
+  let el = document.getElementById("gesture-hint");
+  if (!el) {
+    el = h("div", { class: "gesture-hint", id: "gesture-hint", role: "status", "aria-live": "polite" });
+    document.body.append(el);
+  }
+  el.textContent = text;
+  el.classList.remove("on");
+  void el.offsetWidth;
+  el.classList.add("on");
+  clearTimeout(el.timer);
+  el.timer = setTimeout(() => el.remove(), 900);
+}
+
 /** cap: a short word shown under the icon (bottom toolbars say what each button does). */
 export function iconButton(id, name, label, onclick, cap = null) {
   return h("button", { class: "icon-btn", id, type: "button", "aria-label": label, data: cap ? { cap } : undefined, onclick }, icon(name));

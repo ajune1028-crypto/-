@@ -1720,3 +1720,14 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .layer-name-input { height: 2rem; font-size: 0.85rem; }
 #draw-layers[data-count]::before { content: attr(data-count); position: absolute; top: 0.1rem; right: 0.15rem; min-width: 1rem; height: 1rem; padding: 0 0.2rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 0.6rem; font-weight: 800; line-height: 1rem; text-align: center; }
 #draw-layers { position: relative; }
+
+/* What a gesture did, said for a moment at the top (Procreate: "Undo"). */
+.gesture-hint { position: fixed; z-index: 90; top: calc(env(safe-area-inset-top) + 4.6rem); left: 50%; translate: -50% 0; padding: 0.35rem 0.9rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--paper) 78%, transparent); box-shadow: var(--glass-shine), 0 6px 18px color-mix(in srgb, var(--tint) 22%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; opacity: 0; }
+.gesture-hint.on { animation: hint-flash 0.9s var(--ease) forwards; }
+@keyframes hint-flash { 0% { opacity: 0; scale: 0.92; } 15% { opacity: 1; scale: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 스포이트: a ring above the finger, the colour under it on top, the pen's colour below (Procreate). */
+.loupe { position: fixed; z-index: 92; width: 4.2rem; height: 4.2rem; translate: -50% -50%; border-radius: 50%; pointer-events: none; background: linear-gradient(180deg, var(--pick, transparent) 50%, var(--cur, #000) 50%); -webkit-mask-image: radial-gradient(circle, transparent 46%, #000 47%); mask-image: radial-gradient(circle, transparent 46%, #000 47%); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 8px 22px rgb(0 0 0 / 0.25); }
+.loupe::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.18); }
+.loupe.bare { background: linear-gradient(180deg, color-mix(in srgb, var(--paper) 92%, transparent) 50%, var(--cur, #000) 50%); }
+.ink-color.custom { outline: 2px dashed color-mix(in srgb, var(--ink) 35%, transparent); outline-offset: 1px; }
