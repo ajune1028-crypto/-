@@ -6,6 +6,7 @@
 
 import { h, icon, iconButton, toast, closeOnOutside } from "./dom.js";
 import { InkLayer, drawInkTools, paintStroke } from "./ink.js";
+import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
 import { strokeOps, eraseOps, invertInkOps, brushOf } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
@@ -32,6 +33,8 @@ export function mountDrawRoom(body, app, session, frame) {
   let pinch = null;
   const pen = { tool: "pen", brush: getSettings(app.store).inkBrush || "pen", color: "black", width: 2 };
   const hosts = new Map(); // layer id → { el, ink }
+  // Friends' lines while they draw them and their pointer's light, on whichever layer they draw.
+  const liveInk = new LiveInk(session);
 
   const page = h("div", { class: "draw-page", id: "draw-page", style: { width: PAGE_W / 100 + "rem", height: PAGE_H / 100 + "rem" } });
   const stage = h("div", { class: "draw-stage", id: "draw-stage" }, page);
@@ -121,6 +124,8 @@ export function mountDrawRoom(body, app, session, frame) {
     const ink = new InkLayer({
       host: el,
       ink: () => session.doc(name),
+      share: liveInk.on(name),
+      steady: () => getSettings(app.store).inkSteady ?? 1,
       blocked: () => !!pinch,
       grow: false,
       maxPixels: 3.2e6,
@@ -132,6 +137,7 @@ export function mountDrawRoom(body, app, session, frame) {
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
+        return made.ops[0]?.id;
       },
       onErase: (id) => {
         const made = eraseOps(session.clock, session.doc(name), id);
@@ -387,6 +393,7 @@ export function mountDrawRoom(body, app, session, frame) {
       window.removeEventListener("pointerup", lift, true);
       window.removeEventListener("pointercancel", lift, true);
       for (const { ink } of hosts.values()) ink.destroy();
+      liveInk.close();
       inkTools.remove();
       toolbar.remove();
     },

@@ -236,7 +236,7 @@ scenario("create: on the creative side 노래 만들기 and 화이트보드 are 
   const page = await open();
   await click(page, "#add-creative");
   const kinds = await page.eval(`[...document.querySelectorAll(".kind")].map((b) => [b.dataset.kind, b.disabled, b.querySelector(".soon")?.textContent ?? ""])`);
-  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", false, ""]]);
+  assert.deepEqual(kinds, [["creative-song", false, ""], ["creative-writing", true, "준비 중"], ["creative-board", false, ""], ["creative-draw", false, ""]]);
 });
 
 scenario("second device: finds the room, joins as a new person with another colour", async ({ open }) => {
@@ -4491,8 +4491,8 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
   assert.ok(toolsTop > box.y + 860, "room to draw above the tools: " + toolsTop);
   // Every brush in the tools, each with a painted little line and its name.
   const shown = await a.eval(`[...document.querySelectorAll("#ink-tools .ink-brush")].map((b) => { const c = b.querySelector("canvas"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 20) n++; return [b.dataset.brush, b.textContent, n]; })`);
-  assert.deepEqual(shown.map((s) => s[0]), ["pen", "fountain", "brushpen", "pencil", "marker", "airbrush", "highlighter"]);
-  assert.deepEqual(shown.map((s) => s[1]), ["펜", "만년필", "붓펜", "연필", "마커", "에어브러시", "형광펜"]);
+  assert.deepEqual(shown.map((s) => s[0]), ["pen", "fountain", "brushpen", "pencil", "sketch", "crayon", "marker", "airbrush", "highlighter"]);
+  assert.deepEqual(shown.map((s) => s[1]), ["펜", "만년필", "붓펜", "연필", "스케치", "크레용", "마커", "에어브러시", "형광펜"]);
   assert.ok(shown.every((s) => s[2] > 40), "each little line is painted: " + JSON.stringify(shown));
   const day = await a.eval(`${TODAY}.dataset.day`);
   const strokes = (page) => page.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => ({ b: s.b, s: s.s || null, q: s.q || 0, n: s.pts.length / 3, pts: s.pts }))`);
@@ -4559,9 +4559,10 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
   await a.shot(out("brushes.png"));
 });
 
-// Every brush is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
-// tapped); on 320 the row slides sideways and fades at its end to say so.
-scenario("brushes fit: all seven brushes, the eraser, the colours, the widths and 모양 잡기 are in view on a 360-wide phone", async ({ open }) => {
+// Every tool is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
+// tapped). Nine brushes no longer fit in one row there: the brush row slides sideways, fades at its
+// end to say so, and every brush can be brought into view and pressed; the rest stays in view.
+scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all nine brushes can be reached and pressed", async ({ open, out }) => {
   const page = await open({ width: 360, height: 760 });
   await createRoom(page, { name: "가람" });
   await page.waitFor(TODAY);
@@ -4569,16 +4570,21 @@ scenario("brushes fit: all seven brushes, the eraser, the colours, the widths an
   await page.waitFor(`!${q("#ink-tools")}.hidden`);
   const seen = await page.eval(`(() => {
     const out = [];
-    for (const el of document.querySelectorAll("#ink-tools .ink-brush, #ink-tools #eraser, #ink-tools .ink-color, #ink-tools .ink-width, #ink-tools #ink-shapes")) {
+    for (const el of document.querySelectorAll("#ink-tools #ink-laser, #ink-tools #eraser, #ink-tools .ink-color, #ink-tools .ink-width, #ink-tools #ink-shapes, #ink-tools #ink-steady")) {
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      out.push([el.dataset.brush || el.dataset.ink || el.dataset.width || el.id, r.left >= 0 && r.right <= innerWidth && !!hit && el.contains(hit)]);
+      out.push([el.dataset.ink || el.dataset.width || el.id, r.left >= 0 && r.right <= innerWidth && !!hit && el.contains(hit)]);
     }
     return out;
   })()`);
-  assert.ok(seen.length === 7 + 1 + 8 + 3 + 1 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
-  await click(page, '[data-brush="highlighter"]');
-  assert.equal(await page.eval(`${q('[data-brush="highlighter"]')}.getAttribute("aria-pressed")`), "true");
+  assert.ok(seen.length === 1 + 1 + 8 + 3 + 2 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
+  assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 9);
+  assert.ok(await page.eval(`${q("#ink-tools .ink-brushes")}.classList.contains("more")`), "the row says there is more");
+  await page.shot(out("brushes-360.png"));
+  for (const brush of ["highlighter", "crayon", "sketch", "pen"]) {
+    await click(page, `[data-brush="${brush}"]`);
+    assert.equal(await page.eval(`${q(`[data-brush="${brush}"]`)}.getAttribute("aria-pressed")`), "true", brush);
+  }
 });
 
 // The owner (17 November): 별표 rooms at the top; ⋮ at the top right — a tap brings 찾기와 집 up, a
@@ -4881,4 +4887,61 @@ scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden
   await click(a, "#draw-undo");
   await b.waitFor(`window.__app.session.doc("draw").layers().length === 1`, 4000);
   assert.equal(await strokesOn(b, 0), 1, "the first layer's line stays");
+});
+
+// The owner: "실시간으로 같이 그림 그리는 거". As in Excalidraw and Figma, a friend's line shows while
+// it is being drawn (with their pen and name), not only after the hand lifts; 가리키기 (GoodNotes'
+// and Excalidraw's laser) lights the friend's screen and fades, leaving nothing; 손떨림 보정 (lazy-brush)
+// steps through 약·중·강·끔 and is remembered.
+scenario("같이 그리기: a friend's line shows while it is drawn, with their name at the pen; 가리키기 lights the friend's screen and fades, keeping nothing; 보정 steps 약·중·강·끔", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "실시간 그림");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const doc = await a.eval(`"k:L" + window.__app.session.doc("draw").layers()[0].id`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const at = (fx, fy) => [box.x + box.w * fx, box.y + box.h * fy];
+  // Drawing, the hand still down: the friend already sees the line, with the drawer's name.
+  await a.press(...at(0.2, 0.3));
+  for (let i = 1; i <= 10; i++) await a.moveTo(...at(0.2 + 0.05 * i, 0.3 + Math.sin(i / 2) * 0.03));
+  await b.waitFor(`(() => { const lines = window.__app.session.liveInk?.linesOn(${JSON.stringify(doc)}) || []; return lines.length === 1 && lines[0].pts.length >= 6 * 3 && lines[0].name === "가람" && lines[0].live; })()`, 5000);
+  assert.equal(await b.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length`), 0, "nothing is kept before the hand lifts");
+  await b.front();
+  await pause(200);
+  await b.shot(out("live-line.png"));
+  await a.front();
+  await a.release(...at(0.72, 0.3));
+  // Lifted: the stroke comes as an op and the live line gives way to it.
+  await b.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 1 && (window.__app.session.liveInk?.linesOn(${JSON.stringify(doc)}) || []).length === 0`, 5000);
+  // 가리키기: a light on the friend's screen that fades; no stroke is made.
+  await click(a, "#ink-laser");
+  assert.equal(await a.eval(`${q("#ink-laser")}.getAttribute("aria-pressed")`), "true");
+  await a.press(...at(0.3, 0.6));
+  for (let i = 1; i <= 8; i++) await a.moveTo(...at(0.3 + 0.04 * i, 0.6 - 0.02 * i));
+  await b.waitFor(`(() => { const lights = window.__app.session.liveInk?.lightsOn(${JSON.stringify(doc)}) || []; return lights.length === 1 && lights[0].pts.length >= 5 * 3; })()`, 5000);
+  await b.front();
+  await pause(120);
+  await b.shot(out("live-pointer.png"));
+  await a.front();
+  await a.release(...at(0.62, 0.44));
+  await b.waitFor(`(window.__app.session.liveInk?.lightsOn(${JSON.stringify(doc)}) || []).length === 0`, 6000);
+  assert.equal(await a.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length`), 1, "the light kept nothing");
+  // 손떨림 보정: 약 → 중 → 강 → 끔 → 약, remembered on this device.
+  await click(a, "#ink-laser");
+  const steady = () => a.eval(`${q("#ink-steady")}.textContent`);
+  assert.equal(await steady(), "보정 약");
+  for (const next of ["보정 중", "보정 강", "보정 끔", "보정 약"]) {
+    await click(a, "#ink-steady");
+    assert.equal(await steady(), next);
+  }
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkSteady`), 1);
 });

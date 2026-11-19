@@ -13,7 +13,8 @@
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
 import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
-import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape } from "../core/brush.js";
+import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks } from "../core/brush.js";
+import { LIGHT_MS } from "./live-ink.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
 
@@ -23,7 +24,10 @@ const COLORS = {
 /** Pixel width of each size at 1 rem = 16 px. */
 const WIDTHS = { 1: 2, 2: 4, 3: 8 };
 /** The brushes in the tools, in this order. */
-export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"]];
+export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"]];
+/** 손떨림 보정's string, in screen pixels, for 끔 · 약 · 중 · 강. */
+const STEADY_PX = [0, 6, 14, 26];
+export const STEADY_NAMES = ["끔", "약", "중", "강"];
 /** How long a line is held still before it becomes a shape. */
 const SHAPE_HOLD_MS = 600;
 
@@ -118,10 +122,41 @@ export function paintStroke(g, pts, color, width, brush, shaped = false) {
   const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  if (look.kind === "sketch") {
+    // 스케치: the line itself, fine and pencil-dark, then faint strokes joining its near points.
+    const poly = outline(points, { size: size * 0.55, thinning: real ? 0.5 : 0, taperStart: 0, taperEnd: size * 1.5 });
+    g.globalAlpha = look.alpha;
+    g.fillStyle = ink;
+    fillOutline(g, poly);
+    const seg = sketchLines(points, { reach: size * 9, seed: (pts[0] * 31 + pts[1]) | 0 });
+    if (seg.length) {
+      g.globalAlpha = 0.22;
+      g.strokeStyle = ink;
+      g.lineWidth = Math.max(size * 0.25, 2);
+      g.lineCap = "round";
+      g.beginPath();
+      for (let i = 0; i < seg.length; i += 4) {
+        g.moveTo(seg[i], seg[i + 1]);
+        g.lineTo(seg[i + 2], seg[i + 3]);
+      }
+      g.stroke();
+    }
+    g.restore();
+    return;
+  }
   if (look.kind === "dabs") {
     const marks = dabs(points, { step: size * look.spacing });
     const seed = (pts[0] * 31 + pts[1]) | 0;
-    if (look.soft) {
+    if (look.crayon) {
+      // 크레용: uneven waxy marks on the paper's grain.
+      g.fillStyle = grainFor(g, ink);
+      for (const m of crayonMarks(marks, { size, seed, pressure: real })) {
+        g.globalAlpha = look.alpha * m.alpha;
+        g.beginPath();
+        g.ellipse(m.x, m.y, m.rx, m.ry, m.angle, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else if (look.soft) {
       const mist = mistFor(ink);
       for (const m of marks) {
         const p = real ? m.p : 0.6;
@@ -181,8 +216,15 @@ export class InkLayer {
    * grow: false keeps the host's size (a page of fixed size, as in 그림 방); maxPixels caps the
    * canvas (many layers zoomed in must not take all the memory).
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity }) {
+  /**
+   * share: what friends draw and point at on this document, and where mine goes (ui/live-ink.js,
+   * LiveInk.on); steady(): 손떨림 보정, 0 (끔) to 3 (강). onStroke returns the stroke op's id.
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0 }) {
     this.host = host;
+    this.share = share;
+    this.steady = steady;
+    this.light = null; // my pointer's light (가리키기)
     this.shapes = shapes;
     this.onShape = onShape;
     this.growing = grow;
@@ -203,6 +245,19 @@ export class InkLayer {
     this.resize = new ResizeObserver(() => this.render());
     this.resize.observe(host);
     this.wire();
+    share?.attach(this);
+  }
+
+  /** Drawing units in one screen pixel here (zoom included). */
+  unitsPerPx() {
+    if (this.view) {
+      const m = this.view.matrix();
+      return m[3] ? 1 / Math.abs(m[3]) : 1;
+    }
+    const r = this.live?.frame?.r || this.host.getBoundingClientRect();
+    const w = this.live?.frame?.w ?? this.host.offsetWidth;
+    const zoom = w ? r.width / w : 1;
+    return 100 / (remPx() * zoom);
   }
 
   setTool(tool) {
@@ -242,6 +297,11 @@ export class InkLayer {
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
     clearTimeout(this.live.timer);
+    if (this.live.pts && this.live.brush !== "erase") this.share?.end("ink", null);
+    if (this.live.light && this.light) {
+      this.light.ended = performance.now();
+      this.share?.end("laser");
+    }
     this.live = null;
     this.render();
   }
@@ -257,8 +317,25 @@ export class InkLayer {
       if (this.tool === "eraser-stroke") {
         this.live = { pointer: e.pointerId, kind: e.pointerType, erase: new Set() };
         this.eraseAt(e);
+      } else if (this.tool === "laser") {
+        // 가리키기: a light that follows the finger on every screen and fades; nothing is kept.
+        const [x, y] = this.point(e);
+        this.live = { pointer: e.pointerId, kind: e.pointerType, light: true };
+        this.light = { pts: [x, y, 0], times: [performance.now()], ended: 0 };
+        this.share?.begin("laser", {});
+        this.share?.grow("laser", this.light.pts);
+        this.renderSoon();
       } else {
-        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: this.point(e), brush: this.tool === "eraser" ? "erase" : this.brush };
+        const first = this.point(e);
+        const brush = this.tool === "eraser" ? "erase" : this.brush;
+        const level = Math.max(0, Math.min(3, this.steady() | 0));
+        const string = STEADY_PX[level] * this.unitsPerPx();
+        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2 };
+        // Friends see the line from its first point (the eraser's rubbing shows when it is done).
+        if (this.share && brush !== "erase") {
+          this.share.begin("ink", { c: this.color, w: this.width, b: brush });
+          this.share.grow("ink", this.live.pts);
+        }
         this.render();
       }
     });
@@ -272,28 +349,61 @@ export class InkLayer {
         live.shapeNow = adjustShape(live.shape, live.shapeFrom, [x, y]);
         return void this.renderSoon();
       }
+      if (live.light) {
+        const now = performance.now();
+        for (const ev of e.getCoalescedEvents?.() || [e]) {
+          const [x, y] = this.point(ev);
+          this.light.pts.push(x, y, 0);
+          this.light.times.push(now);
+        }
+        this.share?.grow("laser", this.light.pts);
+        return void this.renderSoon();
+      }
       // Every point the pen passed (not only one per frame), drawn at the next frame: the line
       // keeps up with the pen however fast it goes.
-      for (const ev of e.getCoalescedEvents?.() || [e]) live.pts.push(...this.point(ev));
+      for (const ev of e.getCoalescedEvents?.() || [e]) this.take(live, this.point(ev));
       this.holdForShape(e);
+      if (this.share && live.brush !== "erase") this.share.grow("ink", live.pts);
       this.renderSoon();
     });
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
-      if (e.type === "pointerup" && !this.live.erase) for (const ev of e.getCoalescedEvents?.() || []) this.live.pts.push(...this.point(ev));
       const live = this.live;
+      if (live.light) {
+        this.live = null;
+        if (this.light) this.light.ended = performance.now();
+        this.share?.end("laser");
+        return void this.renderSoon();
+      }
+      if (e.type === "pointerup" && !live.erase && !live.shape) for (const ev of e.getCoalescedEvents?.() || []) this.take(live, this.point(ev));
+      // With 손떨림 보정 the brush trails the hand on its string: as the pen lifts, the line goes the
+      // rest of the way to where it was lifted (Krita's stabiliser "finishes the line" so too).
+      if (live.lazy && live.pts && !live.shape && e.type === "pointerup") {
+        const [hx, hy] = live.hand;
+        const n = live.pts.length;
+        if (Math.hypot(hx - live.pts[n - 3], hy - live.pts[n - 2]) >= 1) live.pts.push(Math.round(hx), Math.round(hy), live.pts[n - 1]);
+      }
       this.live = null;
       clearTimeout(live?.timer);
       const shape = live?.shapeNow || live?.shape;
+      let opId = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
-      if (shape) this.onStroke({ pts: shape.pts, color: this.color, width: this.width, brush: live.brush, shape: true });
-      else if (live?.pts && live.pts.length >= 3) this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, brush: live.brush, shape: true });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
+      if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
     // Losing hold of the pointer without a lift also ends the line, so it never waits forever.
     c.addEventListener("lostpointercapture", end);
+  }
+
+  /** A point from the hand: with 손떨림 보정 the brush follows on its string, and only its moves count. */
+  take(live, p) {
+    if (!live.lazy) return void live.pts.push(...p);
+    live.hand = [p[0], p[1]];
+    if (live.lazy.update(p[0], p[1])) live.pts.push(Math.round(live.lazy.x), Math.round(live.lazy.y), p[2]);
   }
 
   /**
@@ -383,6 +493,118 @@ export class InkLayer {
     const live = this.live;
     if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.width, live.brush, true);
     else if (live?.pts) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
+    // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
+    if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
+    // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
+    const tips = [];
+    for (const line of this.share?.lines() || []) {
+      this.paint(g, line.pts, line.c, line.w, line.b);
+      if (line.live) tips.push(line);
+    }
+    // Pointer lights: friends' and mine; while one still glows, the next frame comes.
+    const now = performance.now();
+    let glowing = false;
+    for (const light of this.share?.lights() || []) glowing = this.paintLight(g, light, now) || glowing;
+    if (this.light) {
+      const mine = this.share?.mine?.() || { color: inkColor("blue") };
+      if (this.paintLight(g, { ...this.light, color: mine.color }, now)) glowing = true;
+      else if (this.light.ended) this.light = null;
+    }
+    if (tips.length) this.paintTips(g, tips);
+    if (glowing) this.renderSoon();
+  }
+
+  paintRope(g, live) {
+    const unit = this.unitsPerPx();
+    g.save();
+    g.globalAlpha = 0.45;
+    g.strokeStyle = inkColor(this.color);
+    g.lineWidth = 1.2 * unit;
+    g.setLineDash([3 * unit, 3 * unit]);
+    g.beginPath();
+    g.moveTo(live.lazy.x, live.lazy.y);
+    g.lineTo(live.hand[0], live.hand[1]);
+    g.stroke();
+    g.setLineDash([]);
+    g.globalAlpha = 0.3;
+    g.beginPath();
+    g.arc(live.hand[0], live.hand[1], live.lazy.radius, 0, Math.PI * 2);
+    g.stroke();
+    g.restore();
+  }
+
+  /** A pointer's light: a neon trail in the person's colour, each part fading as it ages. */
+  paintLight(g, { pts, times, color }, now) {
+    const n = Math.floor(pts.length / 3);
+    if (!n) return false;
+    const unit = this.unitsPerPx();
+    const ratio = window.devicePixelRatio || 1;
+    let alive = false;
+    g.save();
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    // The trail goes in short runs, each one path (no bright dots where pieces would overlap),
+    // fading with the age of its newest point.
+    let first = 0;
+    while (first < n && now - (times[first] || 0) > LIGHT_MS) first++;
+    const RUN = 6;
+    for (const pass of [0, 1]) {
+      g.shadowColor = color;
+      g.shadowBlur = pass ? 0 : 14 * ratio;
+      g.strokeStyle = pass ? "rgba(255,255,255,0.92)" : color;
+      for (let i = first; i < n; i += RUN) {
+        const last = Math.min(n, i + RUN) - 1;
+        const k = 1 - Math.min(1, (now - (times[last] || 0)) / LIGHT_MS);
+        if (k <= 0) continue;
+        alive = true;
+        g.globalAlpha = pass ? k * k * 0.85 : k * k;
+        g.lineWidth = (pass ? 1.6 : 5.5) * unit * (0.45 + 0.55 * k);
+        g.beginPath();
+        const from = Math.max(0, i - 1);
+        g.moveTo(pts[from * 3], pts[from * 3 + 1]);
+        for (let j = from + 1; j <= last; j++) g.lineTo(pts[j * 3], pts[j * 3 + 1]);
+        if (last === from) g.lineTo(pts[from * 3] + 0.01, pts[from * 3 + 1]);
+        g.stroke();
+      }
+    }
+    g.restore();
+    return alive;
+  }
+
+  /** Where each friend's pen is: a dot in their colour, their name beside it (kept screen-sized). */
+  paintTips(g, tips) {
+    const ratio = window.devicePixelRatio || 1;
+    const t = g.getTransform();
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.font = `700 ${Math.round(11 * ratio)}px system-ui, sans-serif`;
+    g.textBaseline = "middle";
+    for (const tip of tips) {
+      const n = tip.pts.length;
+      const at = t.transformPoint(new DOMPoint(tip.pts[n - 3], tip.pts[n - 2]));
+      g.globalAlpha = 1;
+      g.fillStyle = tip.color;
+      g.strokeStyle = "rgba(255,255,255,0.95)";
+      g.lineWidth = 2 * ratio;
+      g.beginPath();
+      g.arc(at.x, at.y, 4.5 * ratio, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      if (!tip.name) continue;
+      const w = g.measureText(tip.name).width + 12 * ratio;
+      const hgt = 18 * ratio;
+      const x = at.x + 9 * ratio;
+      const y = at.y - hgt - 4 * ratio;
+      g.fillStyle = tip.color;
+      g.globalAlpha = 0.92;
+      g.beginPath();
+      g.roundRect?.(x, y, w, hgt, hgt / 2);
+      g.fill();
+      g.globalAlpha = 1;
+      g.fillStyle = "#fff";
+      g.fillText(tip.name, x + 6 * ratio, y + hgt / 2);
+    }
+    g.restore();
   }
 
   /** One drawing per frame however many points came. */
@@ -412,6 +634,7 @@ export class InkLayer {
   destroy() {
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
+    this.share?.detach(this);
     this.canvas.remove();
   }
 }
@@ -452,17 +675,20 @@ function brushPreview(brush, color, width) {
 export function drawInkTools(panel, { pen, setTool, store }) {
   panel.hidden = !pen.tool;
   if (!pen.tool) return;
-  const erasing = pen.tool !== "pen";
+  const erasing = pen.tool === "eraser" || pen.tool === "eraser-stroke";
+  const pointing = pen.tool === "laser";
+  const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
   const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
   const shapes = getSettings(store).inkShapes !== false;
   const brushes = h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
-    ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(!erasing && pen.brush === b), "aria-label": name,
+    ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
       onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } },
       brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name }))));
   panel.replaceChildren(
     h("div", { class: "ink-row ink-row-brushes" },
       brushes,
+      iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser")),
       iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
       erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
         ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
@@ -473,11 +699,19 @@ export function drawInkTools(panel, { pen, setTool, store }) {
       ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
         onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
       h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
-        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기")));
+        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
+      h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
+        onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); setTool(pen.tool); } }, "보정 " + STEADY_NAMES[steady])));
   panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
-  // The chosen brush in view (the row scrolls sideways on a very narrow screen, and says so).
-  requestAnimationFrame(() => {
-    brushes.classList.toggle("more", brushes.scrollWidth > brushes.clientWidth + 1);
-    brushes.querySelector('[aria-pressed="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  });
+  panel.querySelector("#ink-laser").setAttribute("aria-pressed", String(pointing));
+  // The chosen brush in view (the row slides sideways on a narrow screen, and says so). Done at
+  // once, not a frame later: a frame later it could slide the row away under a finger already
+  // reaching for another brush.
+  brushes.classList.toggle("more", brushes.scrollWidth > brushes.clientWidth + 1);
+  const chosen = brushes.querySelector('[aria-pressed="true"]');
+  if (chosen) {
+    const r = chosen.getBoundingClientRect();
+    const box = brushes.getBoundingClientRect();
+    if (r.left < box.left || r.right > box.right) chosen.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
 }

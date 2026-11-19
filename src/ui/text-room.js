@@ -22,6 +22,7 @@ import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
 import { InkLayer, inkColor, drawInkTools as drawInkToolsInto } from "./ink.js";
+import { LiveInk } from "./live-ink.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
 
 const FIRST_SHEETS = 7;
@@ -49,6 +50,8 @@ export function mountTextRoom(body, app, session) {
   // Drawing: the pen button turns every sheet into a drawing surface, with its own small tool row.
   // The brush and the kind of eraser are remembered on this device.
   const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
+  // Friends' lines while they draw them, and their pointer's light (같이: as it happens).
+  const liveInk = new LiveInk(session);
   const penButton = iconButton("pen", "pen", "그리기", () => setTool(pen.tool ? null : "pen"), "그리기");
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   // 사진: choose words, then a photo; it hides in them and they sparkle (2 s hold brings it out).
@@ -254,6 +257,8 @@ export function mountTextRoom(body, app, session) {
       const inkDoc = "k:" + day;
       editor.ink = new InkLayer({
         host: editor.paper,
+        share: liveInk.on(inkDoc),
+        steady: () => getSettings(app.store).inkSteady ?? 1,
         blocked: () => fingers.pinching,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
@@ -265,6 +270,7 @@ export function mountTextRoom(body, app, session) {
           const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, shape, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
+          return made.ops[0]?.id;
         },
         onErase: (id) => {
           const made = eraseOps(session.clock, session.doc(inkDoc), id);
@@ -674,6 +680,7 @@ export function mountTextRoom(body, app, session) {
   }
 
   const close = () => {
+    liveInk.close();
     for (const el of document.querySelectorAll(".reveal")) el.remove();
     closeSound?.();
     stopSoundPickers();

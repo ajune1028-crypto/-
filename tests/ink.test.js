@@ -140,7 +140,9 @@ test("strokes take another colour (the 올가미's 색 on 그림): each goes and
 
 test("new brushes travel as a style beside a brush every device knows; a shape keeps its exact points; moving and recolouring keep both", async () => {
   const { moveStrokesOps, recolorStrokesOps, STYLES } = await import("../src/core/ink.js");
-  assert.deepEqual(Object.keys(STYLES), ["fountain", "brushpen", "airbrush"]);
+  assert.deepEqual(Object.keys(STYLES), ["fountain", "brushpen", "airbrush", "sketch", "crayon"]);
+  // 스케치 and 크레용 (ported from Klecks and Easy-Brush) fall back to a pencil on older devices.
+  assert.deepEqual([STYLES.sketch, STYLES.crayon], ["pencil", "pencil"]);
   const ink = new InkDoc();
   const clock = new Clock("a");
   const fountain = strokeOps(clock, ink, { pts: line(0, 0, 500, 0), color: "blue", width: 2, by: "m1", brush: "fountain" }).ops[0];

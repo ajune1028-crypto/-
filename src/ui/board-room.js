@@ -35,6 +35,7 @@ import {
 } from "../core/board.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
+import { LiveInk } from "./live-ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
@@ -283,9 +284,12 @@ export function mountBoardRoom(body, app, session, frame) {
   const pen = { tool: null, color: "black", width: 2, brush: getSettings(app.store).inkBrush || "pen" };
   const inkTools = h("div", { class: "ink-tools", id: "board-ink-tools", hidden: true, role: "toolbar", "aria-label": "그리기 도구" });
   toolbar.before(inkTools);
+  const liveInk = new LiveInk(session);
   boardInk = new InkLayer({
     host: surface,
     ink: () => session.doc(INK_DOC),
+    share: liveInk.on(INK_DOC),
+    steady: () => getSettings(app.store).inkSteady ?? 1,
     blocked: () => fingers.pinching,
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzzOnce(app),
@@ -297,6 +301,7 @@ export function mountBoardRoom(body, app, session, frame) {
       const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, shape, by: session.memberId });
       session.commit(INK_DOC, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+      return made.ops[0]?.id;
     },
     onErase: (id) => {
       const made = eraseOps(session.clock, session.doc(INK_DOC), id);
@@ -2924,6 +2929,7 @@ export function mountBoardRoom(body, app, session, frame) {
       alive = false;
       insetWatch.disconnect();
       boardInk?.destroy();
+      liveInk.close();
       inkTools.remove();
       roomEl?.style.removeProperty("--top-inset");
       roomEl?.style.removeProperty("--bottom-inset");

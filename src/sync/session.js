@@ -268,8 +268,25 @@ export class RoomSession extends Emitter {
     this.refreshDocs().then(() => this.emit("change", { doc: ROOM }));
   }
 
+  /** What this screen tells the others about itself (who, where its caret is…), from the room. */
   setPresence(state) {
-    this.channel?.setPresence(state);
+    this.presenceBase = state || {};
+    this.sendPresence();
+  }
+
+  /**
+   * One more part of it, kept beside what the room said: a line being drawn, a pointer's light
+   * (ui/live-ink.js). null takes the part away.
+   */
+  setPresencePart(key, value) {
+    this.presenceParts ||= {};
+    if (value == null) delete this.presenceParts[key];
+    else this.presenceParts[key] = value;
+    this.sendPresence();
+  }
+
+  sendPresence() {
+    this.channel?.setPresence({ ...(this.presenceBase || {}), ...(this.presenceParts || {}) });
   }
 
   close() {

@@ -35,6 +35,8 @@ const ICONS = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
   pen: '<path d="M4.5 19.5l1.2-4.4L15.6 5.2a2.1 2.1 0 013 3l-9.9 9.9z"/><path d="M13.8 7l3 3"/>',
   eraser: '<path d="M8.6 19.5h10.9"/><path d="M4.9 15.3l8.4-8.4a2 2 0 012.8 0l2.9 2.9a2 2 0 010 2.8l-6.6 6.6H8.5z"/>',
+  // 가리키기: a pen whose tip gives light.
+  laser: '<path d="M4.6 19.4l7.6-7.6"/><path d="M10.9 13.1l2-2"/><circle cx="16.4" cy="7.6" r="1.9"/><path d="M16.4 2.9v1.3M21.1 7.6h-1.3M19.7 4.3l-.9.9M19.7 10.9l-.9-.9M13.1 4.3l.9.9"/>',
   // Room kinds.
   lines: '<path d="M5 7h14M5 12h14M5 17h9"/>',
   note: '<path d="M9 17.5V6.5l10-2.2V15.5"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.6" r="2.4"/>',
