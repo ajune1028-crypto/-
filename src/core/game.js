@@ -11,15 +11,28 @@
 //                                                  stones claiming the same turn, the lowest id that is
 //                                                  allowed counts
 //   quit   { id, g, by }                            leaving: the one who stays wins
+//
+// 이어 그리기 ("relay", for any number of people; the owner: "인원수가 많아 질 수록 2인용 게임 말고도…
+// 갈틱폰의 느낌"; the old paper game of words and drawings passed round): everyone who says yes joins,
+// and the asker begins it with them. Everyone writes a line, passes their book on, draws the line
+// they got, passes on, writes what the drawing they got shows, and so on until each book has gone
+// round; then the album shows every book from its first words to its last page.
+//   begin  { id, g, by (the asker), at, players }    the players are fixed then
+//   page   { id, g, by, r, text?, at }               a round's page from the one whose turn it is
+//                                                  (the first counts; a drawing is in relayDoc)
+//   turn   { id, g, by, n }                          the album shown up to page n, for everyone
 // Whatever order they arrive in, every screen derives the same game.
 
 import { cmpId, validId } from "./crdt.js";
 
-export const KINDS = ["rps", "omok"];
+export const KINDS = ["rps", "omok", "relay"];
 export const RPS = ["rock", "paper", "scissors"];
 export const OMOK_SIZE = 15;
 export const COUNTDOWN_MS = 3600;
 const MAX_UNKNOWN = 300;
+// 이어 그리기's times (ms): a line to write, a drawing, a guess; the pause as the books pass on; how
+// late a page may come (a slow network, a clock a little behind); words kept short.
+export const RELAY = { write: 45000, draw: 90000, guess: 40000, gap: 1600, grace: 3000, maxText: 60, maxPlayers: 10, maxRounds: 8 };
 
 const counterOf = (id) => Number(id.slice(0, id.indexOf("@")));
 const who = (v) => typeof v === "string" && v.length > 0 && v.length <= 40;
@@ -46,7 +59,7 @@ export class GameDoc {
     if (this.seen.has(op.id)) return "dup";
     if (op.t === "ask") {
       if (!KINDS.includes(op.kind) || !who(op.by) || !Number.isFinite(op.at)) return this.setAside(op);
-      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [] });
+      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [], begins: [], pages: [], turns: [] });
       this.done(op);
       for (const later of this.waiting.get(op.id) || []) this.apply(later);
       this.waiting.delete(op.id);
@@ -66,6 +79,17 @@ export class GameDoc {
       list = "stones";
     } else if (op.t === "quit") {
       list = "quits";
+    } else if (op.t === "begin") {
+      const ok = Number.isFinite(op.at) && Array.isArray(op.players) && op.players.length >= 2 && op.players.length <= RELAY.maxPlayers && op.players.every(who) && new Set(op.players).size === op.players.length;
+      if (!ok) return this.setAside(op);
+      list = "begins";
+    } else if (op.t === "page") {
+      const ok = Number.isInteger(op.r) && op.r >= 0 && op.r < RELAY.maxRounds && Number.isFinite(op.at) && (op.text === undefined || (typeof op.text === "string" && op.text.length <= 400));
+      if (!ok) return this.setAside(op);
+      list = "pages";
+    } else if (op.t === "turn") {
+      if (!Number.isInteger(op.n) || op.n < 0 || op.n > RELAY.maxPlayers * RELAY.maxRounds) return this.setAside(op);
+      list = "turns";
     } else return this.setAside(op);
     const game = this.games.get(op.g);
     if (!game) {
@@ -103,6 +127,7 @@ export class GameDoc {
   game(id) {
     const g = this.games.get(id);
     if (!g) return null;
+    if (g.kind === "relay") return this.relay(g);
     const byId = (a, b) => cmpId(a.id, b.id);
     const out = { id: g.id, kind: g.kind, by: g.by, at: g.at, state: "asked", players: [g.by], start: null, picks: {}, stones: [], winner: null, draw: false, line: [] };
     const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
@@ -170,6 +195,55 @@ export class GameDoc {
     }
   }
 
+  /**
+   * 이어 그리기 as it stands: { id, kind, by, at, state: "gathering" | "cancelled" | "playing" | "done",
+   * players, start (when the first round begins), rounds, schedule: [{ r, kind: "write" | "draw" |
+   * "guess", start, end, done (pages in) }], albumAt, pages: { "book:round": { by, at, text? } },
+   * turn (the album shown up to this page; −1 none) }. Book b is player b's; in round r it is with
+   * player (b + r). A round ends when every page is in (at the last one's moment) or at its time.
+   */
+  relay(g) {
+    const byId = (a, b) => cmpId(a.id, b.id);
+    const out = { id: g.id, kind: "relay", by: g.by, at: g.at, state: "gathering", players: [g.by], start: null, rounds: 0, schedule: [], albumAt: null, pages: {}, turn: -1 };
+    const begin = g.begins.filter((b) => b.by === g.by && b.players[0] === g.by).sort(byId)[0];
+    if (!begin) {
+      // Each person's last answer counts; they stand in the order they first said yes.
+      const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
+      const last = new Map();
+      for (const r of replies) last.set(r.by, r.yes);
+      for (const r of replies) if (last.get(r.by) && !out.players.includes(r.by)) out.players.push(r.by);
+      if (g.quits.some((q) => q.by === g.by)) out.state = "cancelled";
+      return out;
+    }
+    const players = begin.players.slice();
+    const P = players.length;
+    const R = Math.max(3, Math.min(RELAY.maxRounds, P));
+    Object.assign(out, { state: "playing", players, start: begin.at + COUNTDOWN_MS, rounds: R });
+    const pages = g.pages.slice().sort(byId);
+    let at = out.start;
+    for (let r = 0; r < R; r++) {
+      const kind = r === 0 ? "write" : r % 2 ? "draw" : "guess";
+      const deadline = at + RELAY[kind];
+      const got = new Map();
+      for (const p of pages) {
+        if (p.r !== r || p.at > deadline + RELAY.grace) continue;
+        const i = players.indexOf(p.by);
+        if (i < 0) continue;
+        const book = (((i - r) % P) + P) % P;
+        if (!got.has(book)) got.set(book, p);
+      }
+      let end = deadline;
+      if (got.size === P) end = Math.min(deadline, Math.max(at, ...[...got.values()].map((p) => p.at)));
+      out.schedule.push({ r, kind, start: at, end, done: got.size });
+      for (const [book, p] of got) out.pages[book + ":" + r] = kind === "draw" ? { by: p.by, at: p.at } : { by: p.by, at: p.at, text: cleanText(p.text) };
+      at = end + RELAY.gap;
+    }
+    out.albumAt = at;
+    for (const t of g.turns) if (players.includes(t.by) && t.n > out.turn) out.turn = Math.min(t.n, P * R);
+    if (out.turn >= P * R) out.state = "done";
+    return out;
+  }
+
   /** The games there are, oldest first. */
   list() {
     return [...this.games.keys()].map((id) => this.game(id)).sort((a, b) => cmpId(a.id, b.id));
@@ -228,6 +302,71 @@ export function stoneOps(clock, doc, g, { by, x, y }) {
   if (!now) return { ops: [] };
   clock.atLeast(doc.maxN);
   return { ops: [{ t: "stone", id: clock.next(), g, by, x, y, n: now.stones.length }] };
+}
+
+const cleanText = (text) => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, RELAY.maxText);
+
+/** Where an 이어 그리기 is at a moment: countdown, a round (with the time left), between rounds, the album, done. */
+export function relayAt(g, now) {
+  if (!g || g.kind !== "relay") return { phase: "none" };
+  if (g.state === "gathering" || g.state === "cancelled" || g.state === "done") return { phase: g.state };
+  if (now < g.start) return { phase: "countdown", left: g.start - now };
+  for (const s of g.schedule) {
+    if (now < s.start) return { phase: "between", round: s.r, kind: s.kind, until: s.start };
+    if (now < s.end) return { phase: "round", round: s.r, kind: s.kind, left: s.end - now, end: s.end };
+  }
+  if (now < g.albumAt) return { phase: "between", round: g.rounds, kind: "album", until: g.albumAt };
+  return { phase: "album", turn: g.turn };
+}
+
+/** What m does in round r: { book, round, kind, from (the page it follows, or null) }, or null. */
+export function relayTask(g, m, r) {
+  const i = g.players.indexOf(m);
+  if (i < 0 || !(r >= 0 && r < g.rounds)) return null;
+  const P = g.players.length;
+  const book = (((i - r) % P) + P) % P;
+  return { book, round: r, kind: g.schedule[r].kind, from: r === 0 ? null : { book, round: r - 1 } };
+}
+
+/** The drawing of book b in round r (an ink document; no dots, so a database path takes it). */
+export function relayDoc(id, b, r) {
+  return `k:Q${id}~${b}~${r}`;
+}
+
+/** Every book from its first words to its last page: [{ book, round, by, kind, text, given, doc }]. */
+export function relayAlbum(g) {
+  const out = [];
+  const P = g.players.length;
+  for (let b = 0; b < P; b++) {
+    for (let r = 0; r < g.rounds; r++) {
+      const kind = g.schedule[r].kind;
+      const page = g.pages[b + ":" + r];
+      out.push({ book: b, round: r, by: g.players[(b + r) % P], kind, text: page?.text ?? null, given: !!page, doc: kind === "draw" ? relayDoc(g.id, b, r) : null });
+    }
+  }
+  return out;
+}
+
+/** The asker begins 이어 그리기 with those who have joined. */
+export function beginOps(clock, doc, g, { by, at = Date.now() }) {
+  const now = doc.game(g);
+  if (!now || now.kind !== "relay") return { ops: [] };
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "begin", id: clock.next(), g, by, at, players: now.players.slice(0, RELAY.maxPlayers) }] };
+}
+
+/** My page for a round: words (a line, a guess) or, for a drawing, nothing (the drawing is in relayDoc). */
+export function pageOps(clock, doc, g, { by, round, text, at = Date.now() }) {
+  clock.atLeast(doc.maxN);
+  const op = { t: "page", id: clock.next(), g, by, r: round, at };
+  if (typeof text === "string") op.text = text.slice(0, 400);
+  return { ops: [op] };
+}
+
+/** The album shown up to page n. */
+export function turnOps(clock, doc, g, { by, n }) {
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "turn", id: clock.next(), g, by, n }] };
 }
 
 export function quitOps(clock, doc, g, { by }) {

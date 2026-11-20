@@ -5396,6 +5396,84 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
 
 // The owner: "친구한테 미니게임 신청하기… 친구가 수락하면 전체가 조금 불투명하게 바뀌고 가운데 3, 2, 1…
 // 카운트가 끝났을 때 미니게임이 뜨게", "그거 끄는 기능도 홈 화면에서". From the reference study §4.
+// The owner (20 November): "인원수가 많아 질 수록 2인용 게임 말고도 다른것도… 갈틱폰의 느낌". 이어 그리기 for
+// everyone in the room: the asker opens it, friends join from their small card, the asker begins it
+// with who joined; a line each, the books pass on, the line is drawn, the books pass on, the drawing
+// is put into words; then the album is turned page by page, the same page on every screen.
+scenario("이어 그리기: three friends join, write a line each, draw the line they got, put the drawing they got into words; the album turns for everyone; 한 판 더 and 닫기", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 400, height: 860 });
+  await createRoom(a, { room: "파티 방", name: "가람" });
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 400, height: 860 });
+  await joinNew(b, { name: "나래" });
+  const c = await open({ dev: "c", hash: "r-" + id, width: 400, height: 860 });
+  await joinNew(c, { name: "다온" });
+  await a.waitFor(`window.__app.session.peers.filter((p) => !p.isMe && p.state?.m).length >= 2`, 6000);
+  await a.front();
+  await click(a, "#room-game");
+  await a.waitFor(`${q("#game-menu")} && !${q('[data-game="relay"]')}.disabled`);
+  assert.match(await text(a, ".game-menu-title"), /3명이/);
+  await click(a, '[data-game="relay"]');
+  await a.waitFor(q("#relay-gather"), 5000);
+  assert.ok(await a.eval(`${q("#relay-begin")}.disabled`), "alone it cannot begin");
+  for (const p of [b, c]) {
+    await p.waitFor(q("#game-invite"), 6000);
+    assert.match(await text(p, "#game-invite"), /가람님이 이어 그리기를 열었어요/);
+    await p.front();
+    await click(p, "#game-accept");
+    await p.waitFor(q("#relay-gather"), 5000);
+  }
+  await a.waitFor(`${q("#relay-begin")}?.textContent === "3명이서 시작" && !${q("#relay-begin")}.disabled`, 5000);
+  await a.front();
+  await a.shot(out("relay-gather.png"));
+  await click(a, "#relay-begin");
+  const pages = [a, b, c];
+  for (const p of pages) await p.waitFor(`${q("#relay-round")}?.dataset.kind === "write"`, 9000);
+  // Round 1: a line each.
+  const lines = { a: "우산 쓴 펭귄", b: "피아노 치는 문어", c: "달에서 라면 먹기" };
+  for (const [name, p] of [["a", a], ["b", b], ["c", c]]) {
+    await p.front();
+    await fill(p, "#relay-text", lines[name]);
+    await click(p, "#relay-done");
+  }
+  // Round 2: each draws the line of the one before (a gets c's, b gets a's, c gets b's).
+  for (const p of pages) await p.waitFor(`${q("#relay-round")}?.dataset.kind === "draw"`, 9000);
+  assert.equal(await text(a, "#relay-given"), lines.c);
+  assert.equal(await text(b, "#relay-given"), lines.a);
+  assert.equal(await text(c, "#relay-given"), lines.b);
+  for (const p of pages) {
+    await p.front();
+    const box = await p.eval(`(() => { const r = document.getElementById("relay-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+    await p.press(box.x + box.w * 0.25, box.y + box.h * 0.5);
+    for (let i = 1; i <= 8; i++) await p.moveTo(box.x + box.w * (0.25 + 0.06 * i), box.y + box.h * (0.5 + Math.sin(i) * 0.15));
+    await p.release(box.x + box.w * 0.73, box.y + box.h * 0.5);
+  }
+  await b.shot(out("relay-draw.png"));
+  for (const p of pages) { await p.front(); await click(p, "#relay-done"); }
+  // Round 3: what the drawing shows (a sees b's drawing of a's own line? no: the book of b, drawn by c… each gets the next book).
+  for (const p of pages) await p.waitFor(`${q("#relay-round")}?.dataset.kind === "guess"`, 9000);
+  await c.waitFor(`document.querySelector("#relay-round .relay-page canvas") !== null`);
+  for (const [name, p] of [["a", a], ["b", b], ["c", c]]) {
+    await p.front();
+    await fill(p, "#relay-text", name + "의 생각");
+    await click(p, "#relay-done");
+  }
+  // The album: the same page for everyone, whoever turns it.
+  for (const p of pages) await p.waitFor(q("#relay-album-card"), 9000);
+  await click(b, "#relay-next");
+  for (const p of pages) await p.waitFor(`document.querySelectorAll("#relay-album .relay-entry").length === 1`, 5000);
+  assert.equal(await text(a, "#relay-album .relay-entry-text"), lines.a, "a's book begins with a's line");
+  await click(c, "#relay-next");
+  await click(a, "#relay-next");
+  for (const p of pages) await p.waitFor(`document.querySelectorAll("#relay-album .relay-entry").length === 3`, 5000);
+  assert.equal(await c.eval(`document.querySelectorAll("#relay-album .relay-entry")[1].dataset.kind`), "draw");
+  await a.shot(out("relay-album.png"));
+  for (let n = 3; n <= 9; n++) { await a.front(); await click(a, "#relay-next"); await a.waitFor(`window.__app.session.doc("game").game(${JSON.stringify(await a.eval(`window.__app.session.doc("game").list().at(-1).id`))}).turn >= ${n}`, 4000); }
+  for (const p of pages) await p.waitFor(q("#relay-again"), 5000);
+  await click(a, "#relay-close");
+  await a.waitFor(`!${q("#game-layer")}`, 3000);
+});
+
 scenario("미니게임: 가위바위보 asked from the top bar; the friend's small card accepts it; both screens dim and count 3·2·1, then show the hands together; 오목 to five in a row; the tally; switched off at home, no button and no invitation", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 400, height: 860 });
   await createRoom(a, { room: "게임 방", name: "가람" });

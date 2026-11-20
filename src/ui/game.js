@@ -11,10 +11,13 @@ import { h, icon, toast } from "./dom.js";
 import { buzz, chime } from "./chime.js";
 import { getSettings } from "../identity.js";
 import { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS } from "../core/game.js";
+import { relayScreen } from "./relay.js";
 import { memberColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 
-const GAMES = [["rps", "가위바위보", "✊✋✌️"], ["omok", "오목", "⚫⚪"]];
+// [kind, name, faces, many]: 이어 그리기 is for everyone in the room (2 and more), the others for two.
+const GAMES = [["rps", "가위바위보", "✊✋✌️", false], ["omok", "오목", "⚫⚪", false], ["relay", "이어 그리기", "📝🎨", true]];
+const gameName = (kind) => GAMES.find(([k]) => k === kind)?.[1] || "게임";
 const RPS_FACE = { rock: "✊", paper: "✋", scissors: "✌️" };
 const RPS_NAME = { rock: "바위", paper: "보", scissors: "가위" };
 const STALE_MS = 2 * 60 * 1000; // an invitation older than this is not shown
@@ -31,7 +34,9 @@ export function mountGames(app, session) {
   let shown = null; // the game on screen: { id, el, timer }
   let invite = null; // the invitation card: { id, el }
   let closeMenu = null;
+  let relay = null; // 이어 그리기's screens (ui/relay.js), made when one is first shown
   const seenAsks = new Set(); // asks that were already there when the room opened
+  const dismissed = new Set(); // games put away here (닫기, 다음에): not opened again on this screen
   const button = gamesOn(app.store)
     ? h("button", { class: "icon-btn game-btn", id: "room-game", type: "button", "aria-label": "미니게임 (친구와 잠깐)", onclick: () => openMenu() }, icon("game"))
     : null;
@@ -54,12 +59,13 @@ export function mountGames(app, session) {
   function openMenu() {
     if (!doc) return;
     closeMenu?.();
-    const friend = friendsHere()[0];
+    const friends = [...new Set(friendsHere())];
+    const friend = friends[0];
     const menu = h("div", { class: "game-menu", id: "game-menu", role: "menu" },
-      h("p", { class: "game-menu-title", text: friend ? `${nameOf(friend)}님과 잠깐` : "친구가 들어오면 같이 해요" }),
-      ...GAMES.map(([kind, name, faces]) => h("button", { class: "game-pick", type: "button", data: { game: kind }, disabled: !friend, onclick: () => { close(); ask(kind); } },
-        h("span", { class: "game-faces", text: faces }), h("span", { text: name }))),
-      friend && tallyLine(friend));
+      h("p", { class: "game-menu-title", text: !friend ? "친구가 들어오면 같이 해요" : friends.length > 1 ? `${friends.length + 1}명이 같이 있어요` : `${nameOf(friend)}님과 잠깐` }),
+      ...GAMES.map(([kind, name, faces, many]) => h("button", { class: "game-pick" + (many ? " many" : ""), type: "button", data: { game: kind }, disabled: !friend, onclick: () => { close(); ask(kind); } },
+        h("span", { class: "game-faces", text: faces }), h("span", { text: name }), many && h("small", { class: "game-many", text: "여럿이" }))),
+      friend && friends.length === 1 && tallyLine(friend));
     document.body.append(menu);
     const r = button.getBoundingClientRect();
     menu.style.top = r.bottom + 8 + "px";
@@ -83,7 +89,9 @@ export function mountGames(app, session) {
 
   function ask(kind) {
     const made = askOps(session.clock, doc, { kind, by: me() });
-    if (commit(made)) toast(app.root, `${GAMES.find(([k]) => k === kind)[1]}를 신청했어요. 친구가 받으면 시작해요`);
+    if (!commit(made)) return;
+    if (kind === "relay") look();
+    else toast(app.root, `${gameName(kind)}를 신청했어요. 친구가 받으면 시작해요`);
   }
 
   // ---- an invitation from a friend: a small card at the top ---------------------------------------
@@ -91,11 +99,12 @@ export function mountGames(app, session) {
   function showInvite(g) {
     if (invite?.id === g.id) return;
     invite?.el.remove();
-    const name = GAMES.find(([k]) => k === g.kind)?.[1] || "게임";
+    const name = gameName(g.kind);
+    const many = g.kind === "relay";
     const el = h("div", { class: "game-invite", id: "game-invite", role: "alertdialog", "aria-label": "미니게임 신청" },
       h("span", { class: "game-invite-dot", style: { background: colorOf(g.by) } }),
-      h("span", { class: "game-invite-text", text: `${nameOf(g.by)}님이 ${name}를 신청했어요` }),
-      h("button", { class: "chip primary", id: "game-accept", type: "button", text: "수락", onclick: () => answer(g.id, true) }),
+      h("span", { class: "game-invite-text", text: many ? `${nameOf(g.by)}님이 ${name}를 열었어요` : `${nameOf(g.by)}님이 ${name}를 신청했어요` }),
+      h("button", { class: "chip primary", id: "game-accept", type: "button", text: many ? "같이 하기" : "수락", onclick: () => answer(g.id, true) }),
       h("button", { class: "chip", id: "game-decline", type: "button", text: "다음에", onclick: () => answer(g.id, false) }));
     document.body.append(el);
     invite = { id: g.id, el };
@@ -105,6 +114,7 @@ export function mountGames(app, session) {
   function answer(id, yes) {
     invite?.el.remove();
     invite = null;
+    if (!yes) dismissed.add(id);
     commit(replyOps(session.clock, doc, id, { by: me(), yes }));
   }
 
@@ -121,30 +131,40 @@ export function mountGames(app, session) {
 
   function shut() {
     if (!shown) return;
+    dismissed.add(shown.id);
     clearTimeout(shown.timer);
+    relay?.close();
     shown.el.remove();
     shown = null;
+  }
+
+  /** The 3·2·1 until the shared start. */
+  function countdown(g) {
+    const el = shown.el;
+    const left = g.start - Date.now();
+    const n = Math.ceil(left / 1000);
+    // While counting, 가위바위보 can already be chosen (a hand made ready before "보!").
+    el.replaceChildren(h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
+    shown.card = null;
+    el.classList.add("counting");
+    if (shown.lastCount !== n) {
+      shown.lastCount = n;
+      buzz(app, 10);
+    }
+    clearTimeout(shown.timer);
+    shown.timer = setTimeout(() => draw(doc.game(g.id) || g), Math.min(250, left));
   }
 
   /** The 3·2·1 until the shared start, then the game itself. */
   function draw(g) {
     if (!shown) return;
     const el = shown.el;
-    const left = g.start - Date.now();
-    if (g.state === "playing" && left > 0) {
-      const n = Math.ceil(left / 1000);
-      // While counting, 가위바위보 can already be chosen (a hand made ready before "보!").
-      el.replaceChildren(h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
-      shown.card = null;
-      el.classList.add("counting");
-      if (shown.lastCount !== n) {
-        shown.lastCount = n;
-        buzz(app, 10);
-      }
-      clearTimeout(shown.timer);
-      shown.timer = setTimeout(() => draw(doc.game(g.id) || g), Math.min(250, left));
-      return;
+    if (g.kind === "relay") {
+      relay ||= relayScreen({ app, session, doc: () => doc, me, nameOf, colorOf, commit, countdown, shut, again: () => ask("relay") });
+      return relay.draw(g, el);
     }
+    const left = g.start - Date.now();
+    if (g.state === "playing" && left > 0) return countdown(g);
     el.classList.remove("counting");
     if (!shown.counted && g.state === "playing") {
       shown.counted = true;
@@ -233,6 +253,16 @@ export function mountGames(app, session) {
     let mine = null;
     let asked = null;
     for (const g of doc.list()) {
+      if (g.kind === "relay") {
+        // 이어 그리기: open while gathering (once I am in it) and while it goes on; the invitation
+        // shows to those not in it until it begins.
+        if (dismissed.has(g.id) && shown?.id !== g.id) continue;
+        const inIt = g.players.includes(me());
+        if (inIt && (g.state === "gathering" || g.state === "playing")) mine = g;
+        else if (g.state === "done" && shown?.id === g.id) mine = g;
+        else if (g.state === "gathering" && !inIt && g.by !== me() && !seenAsks.has(g.id) && now - g.at < STALE_MS) asked = g;
+        continue;
+      }
       if (g.state === "playing" && g.players.includes(me())) mine = g;
       else if (g.state === "done" && shown?.id === g.id) mine = g;
       else if (g.state === "asked" && g.by !== me() && !seenAsks.has(g.id) && now - g.at < STALE_MS) asked = g;
@@ -248,7 +278,7 @@ export function mountGames(app, session) {
   const offs = [];
   session.load("game").then(() => {
     doc = session.doc("game");
-    for (const g of doc.list()) seenAsks.add(g.state === "asked" ? g.id : "");
+    for (const g of doc.list()) seenAsks.add(g.state === "asked" || g.state === "gathering" ? g.id : "");
     offs.push(session.on("change", ({ doc: name }) => { if (name === "game") look(); }));
     look();
   });
@@ -257,6 +287,7 @@ export function mountGames(app, session) {
     button,
     close() {
       for (const off of offs) off();
+      relay?.destroy();
       closeMenu?.();
       invite?.el.remove();
       shut();

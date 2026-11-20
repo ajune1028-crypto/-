@@ -1858,3 +1858,40 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 }
 .home-panel .house-tile.over { outline: 2px solid var(--tint); outline-offset: 2px; scale: 1.06; }
 .home-panel[data-drop-house].over { box-shadow: var(--glass-shine), 0 0 0 2px var(--tint), var(--glass-shadow); }
+
+/* 이어 그리기 (ui/relay.js): a line, a drawing, a guess passed round; the album turned for everyone. */
+.relay-card { grid-template-columns: minmax(0, 1fr); width: min(30rem, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain; }
+.relay-card .ink-tools { max-width: 100%; }
+.relay-sub { font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.relay-say { margin: 0; font-size: 0.88rem; color: var(--soft); text-align: center; }
+.relay-big { margin: 0.2rem 0; text-align: center; font-size: 1.15rem; font-weight: 800; }
+.relay-given { margin: 0; padding: 0.6rem 0.8rem; border-radius: 1rem; font-size: 1.2rem; font-weight: 800; text-align: center; background: color-mix(in srgb, var(--tint) 14%, var(--paper)); overflow-wrap: anywhere; }
+.relay-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; }
+.relay-person { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem 0.2rem 0.4rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; background: color-mix(in srgb, var(--c) 16%, transparent); }
+#relay-wait .relay-person:not(.done) { opacity: 0.45; }
+.relay-person.done::after { content: "✓"; font-size: 0.75rem; }
+.relay-dot { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--c); }
+.relay-head { display: grid; gap: 0.45rem; }
+.relay-time { position: relative; height: 0.45rem; margin-top: 0.15rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.relay-time-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: inherit; background: var(--tint); transition: width 0.95s linear, background 0.3s; }
+.relay-time.hurry .relay-time-fill { background: var(--danger, #e5484d); }
+.relay-secs { min-width: 2.6rem; text-align: right; font-size: 0.85rem; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.relay-secs.hurry { color: var(--danger, #e5484d); }
+.relay-page-wrap { position: relative; width: 100%; overflow: hidden; border-radius: 1rem; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
+.relay-page { position: absolute; left: 0; top: 0; width: 28rem; height: 21rem; transform-origin: 0 0; }
+.relay-page > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.relay-page > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.relay-tools { margin: 0 auto; box-shadow: none; }
+.relay-input { font-size: 1.05rem; text-align: center; }
+.relay-album { display: grid; gap: 0.7rem; max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0.1rem; }
+.relay-entry { display: grid; gap: 0.3rem; }
+.relay-entry-who { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.relay-entry-text { margin: 0; width: fit-content; max-width: 100%; padding: 0.55rem 0.85rem; border-radius: 1.1rem 1.1rem 1.1rem 0.35rem; font-size: 1.05rem; font-weight: 700; background: color-mix(in srgb, var(--c) 18%, var(--paper)); overflow-wrap: anywhere; }
+.relay-entry.arrived { animation: card-in 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
+.relay-between { justify-items: center; }
+.relay-pass { position: relative; width: 6rem; height: 3.4rem; }
+.relay-book { position: absolute; left: 0; top: 0.3rem; width: 2.3rem; height: 2.8rem; border-radius: 0.35rem 0.6rem 0.6rem 0.35rem; background: linear-gradient(90deg, color-mix(in srgb, var(--tint) 70%, #000) 0 0.35rem, var(--tint) 0.35rem); box-shadow: 0 8px 18px color-mix(in srgb, var(--tint) 35%, transparent); animation: relay-pass 1.4s cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes relay-pass { from { translate: 0 0; rotate: -10deg; } to { translate: 3.6rem 0; rotate: 8deg; } }
+@media (prefers-reduced-motion: reduce) { .relay-book, .relay-entry.arrived { animation: none; } }
+.game-pick.many { position: relative; }
+.game-many { margin-left: auto; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; color: var(--tint); background: color-mix(in srgb, var(--tint) 14%, transparent); }
