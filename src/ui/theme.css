@@ -1900,3 +1900,36 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .tint-amount-row { display: flex; align-items: center; gap: 0.6rem; }
 .tint-amount { flex: 1; min-width: 0; accent-color: var(--accent); }
 .tint-amount-text { min-width: 2.6rem; text-align: right; font-size: 0.85rem; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 옆 패널 again (the owner on an iPad): its width by its inner edge like a split screen, a small dark
+   lock against a resting hand, hidden to a tab at the edge and shown again; its actions a tidy grid
+   of buttons with the word under the icon. */
+.side-edge, .side-tab { display: none; }
+@media (min-width: 1000px) and (min-height: 600px) and (orientation: landscape) {
+  .song-side { padding-top: 0.35rem; }
+  .side-head { display: flex; justify-content: flex-end; gap: 0.2rem; margin: 0 -0.35rem -0.1rem 0; }
+  .side-lock, .side-hide { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; color: var(--ink); opacity: 0.5; transition: opacity 0.15s var(--ease), background 0.15s var(--ease); }
+  .side-lock svg, .side-hide svg { width: 0.95rem; height: 0.95rem; }
+  .side-lock:hover, .side-hide:hover { opacity: 0.85; }
+  .side-lock[aria-pressed="true"] { opacity: 1; color: var(--paper); background: var(--ink); }
+  .song-side.locked > :not(.side-head) { pointer-events: none; }
+  .song-side.locked { box-shadow: var(--glass-shine), var(--glass-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent); }
+  .side-edge { position: absolute; top: 0.4rem; bottom: 0.65rem; right: calc(var(--side-w) + 0.6rem); z-index: 7; display: grid; place-items: center; width: 1rem; translate: 50% 0; cursor: ew-resize; touch-action: none; }
+  .side-edge .grip-bar { width: 0.26rem; height: 2.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); transition: background 0.15s var(--ease), height 0.15s var(--ease); }
+  .side-edge:hover .grip-bar, .song-side.resizing ~ .side-edge .grip-bar { height: 3.6rem; background: var(--tint); }
+  .room-body.song-body:has(.song-side.locked) .side-edge { pointer-events: none; opacity: 0.3; }
+  .room-body.song-body.side-hidden .timeline { margin-right: 2.7rem; }
+  .room-body.song-body.side-hidden .song-side, .room-body.song-body.side-hidden .side-edge { display: none; }
+  .room-body.song-body.side-hidden .side-tab { display: grid; place-items: center; position: absolute; right: 0.6rem; top: 50%; translate: 0 -50%; z-index: 6; width: 1.8rem; height: 4.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; color: var(--ink); background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+  .side-tab svg { width: 1rem; height: 1rem; }
+  .song-side .clip-menu.side:not(.tints) { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); gap: 0.35rem; }
+  .song-side .clip-menu.side:not(.tints) > .menu-info { grid-column: 1 / -1; }
+  .song-side .clip-menu.side:not(.tints) > button:not(.side-btn) { grid-column: 1 / -1; }
+  .song-side .clip-menu.side .side-btn { display: grid; justify-items: center; justify-content: center; align-content: center; gap: 0.28rem; min-height: 3.9rem; padding: 0.5rem 0.2rem 0.45rem; border-radius: 0.95rem; text-align: center; background: color-mix(in srgb, var(--ink) 5%, transparent); transition: scale 0.1s var(--ease), background 0.15s var(--ease); }
+  .song-side .clip-menu.side .side-btn:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+  .song-side .clip-menu.side .side-btn:active { scale: 0.95; }
+  .side-btn svg { width: 1.3rem; height: 1.3rem; }
+  .side-btn .menu-swatch { width: 1.25rem; height: 1.25rem; margin: 0; }
+  .side-btn-word { font-size: 0.72rem; font-weight: 700; line-height: 1.15; word-break: keep-all; }
+  #clip-delete.side-btn { color: var(--danger, #e5484d); }
+}

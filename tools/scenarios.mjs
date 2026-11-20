@@ -4414,6 +4414,54 @@ scenario("song 옆 패널: on a wide screen lying down the chosen clip's name an
   assert.match(await text(page, "#side-summary"), /클립 2개/);
 });
 
+// The owner on an iPad: "폴드폰처럼… 크기를 줄였다", "손을 기대고 하는데… 잠금 기능으로 위에다가 아이콘
+// 검정으로 조그마낳게… 아무것도 안눌리게", "잠시 옆에 숨기기로 안 나오게", "너무 나열식… 버튼 형식으로다가
+// 설명은 아래에".
+scenario("song 옆 패널 again: the actions are a grid of buttons with the word under the icon; its inner edge drags it wider (remembered); the small lock makes a resting hand press nothing; it hides to a tab and comes back", async ({ open, out, fixtures }) => {
+  const page = await open({ width: 1180, height: 820 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await page.waitFor(q("#song-side #clip-menu .side-btn"));
+  const grid = await page.eval(`[...document.querySelectorAll("#song-side .side-btn")].map((b) => ({ id: b.id, icon: !!b.querySelector("svg, .menu-swatch"), word: b.querySelector(".side-btn-word")?.textContent || "", w: b.getBoundingClientRect().width }))`);
+  assert.ok(grid.length >= 8 && grid.every((b) => b.icon && b.word), "icon and word on each: " + JSON.stringify(grid));
+  assert.ok(grid.find((b) => b.id === "clip-play")?.word === "듣기" && grid.find((b) => b.id === "clip-delete")?.word === "삭제");
+  const rowOf = await page.eval(`(() => { const ys = [...document.querySelectorAll("#song-side .side-btn")].map((b) => Math.round(b.getBoundingClientRect().top)); return new Set(ys).size < ys.length; })()`);
+  assert.ok(rowOf, "several buttons side by side in a row (a grid, not a list)");
+  await page.shot(out("song-side-grid.png"));
+  // Wider by its inner edge.
+  const before = await page.eval(`document.getElementById("song-side").getBoundingClientRect().width`);
+  const edge = await page.eval(`(() => { const r = document.getElementById("side-edge").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.press(edge[0], edge[1]);
+  for (let i = 1; i <= 8; i++) await page.moveTo(edge[0] - i * 10, edge[1]);
+  await page.release(edge[0] - 80, edge[1]);
+  await page.waitFor(`document.getElementById("song-side").getBoundingClientRect().width > ${before} + 60`);
+  const saved = await page.eval(`window.__app.store.get("settings", {}).songSide?.w`);
+  assert.ok(saved > 15 && saved < 26, "the width is remembered: " + saved);
+  const tl = await page.eval(`(() => { const t = document.getElementById("timeline").getBoundingClientRect(), s = document.getElementById("song-side").getBoundingClientRect(); return t.right <= s.left + 1; })()`);
+  assert.ok(tl, "the timeline still ends before it");
+  // The lock: a resting hand on the panel presses nothing; the lock itself still answers.
+  await click(page, "#side-lock");
+  await page.waitFor(`${q("#side-lock")}.getAttribute("aria-pressed") === "true"`);
+  const muteAt = await page.eval(`(() => { const r = document.getElementById("clip-mute").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.tap(muteAt[0], muteAt[1]);
+  await pause(300);
+  assert.equal(await page.eval(`window.__app.session.doc("song").layout()[0].muted || false`), false, "locked: the tap did nothing");
+  await page.shot(out("song-side-locked.png"));
+  await click(page, "#side-lock");
+  await page.waitFor(`${q("#side-lock")}.getAttribute("aria-pressed") === "false"`);
+  await click(page, "#clip-mute");
+  await page.waitFor(`window.__app.session.doc("song").layout()[0].muted === true`);
+  // Hidden to a tab at the edge; the timeline takes the width; back again.
+  await click(page, "#side-hide");
+  await page.waitFor(`getComputedStyle(document.getElementById("song-side")).display === "none" && ${q("#side-tab")}.getBoundingClientRect().width > 0`);
+  const wide = await page.eval(`document.getElementById("timeline").getBoundingClientRect().right > innerWidth - 80`);
+  assert.ok(wide, "the timeline takes the width while it is hidden");
+  await page.shot(out("song-side-hidden.png"));
+  await click(page, "#side-tab");
+  await page.waitFor(`getComputedStyle(document.getElementById("song-side")).display !== "none"`);
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).songSide?.hidden`), false);
+});
+
 // The owner: "노래 모드랑 어디 모드로 갈 때 그냥 단지 그 모드로 가는 게 아니라… 물처럼 작아졌다가 거기까지 가는".
 scenario("motion: the chosen mark runs like a drop of water from one mode to the next - smaller on the way, the same size as the new choice where it settles; in the song room 원본/피아노 too", async ({ open, fixtures }) => {
   const page = await open();

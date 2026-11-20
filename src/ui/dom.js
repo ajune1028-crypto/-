@@ -64,6 +64,16 @@ const ICONS = {
   // A panel floating on its own (찾기와 집 like 레퍼런스).
   float: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9.5h16"/><circle cx="7.2" cy="7.25" r="0.6" fill="currentColor" stroke="none"/><path d="M8 13.5h8M8 16h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
+  // The side panel's buttons (icon above, word below).
+  trash: '<path d="M4.5 7h15M9.5 7V5h5v2"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 11v5M14 11v5"/>',
+  paste: '<rect x="5.5" y="5" width="13" height="15" rx="2.2"/><path d="M9 5V3.8h6V5"/><path d="M9 11h6M9 14.5h4"/>',
+  join: '<path d="M10 14l4-4"/><path d="M8.6 16.4l-1.2 1.2a3 3 0 01-4.2-4.2l3-3a3 3 0 014.2 0"/><path d="M15.4 7.6l1.2-1.2a3 3 0 014.2 4.2l-3 3a3 3 0 01-4.2 0"/>',
+  speed: '<path d="M4 17.5a8 8 0 1116 0"/><path d="M12 17.5l4.2-5.2"/><circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>',
+  fork: '<path d="M9 3.5v7.5a3 3 0 006 0V3.5"/><path d="M12 14v6.5"/>',
+  chords: '<circle cx="8" cy="17.5" r="2.3"/><circle cx="8" cy="11" r="2.3"/><path d="M10.3 17.5V5h6.2M10.3 11V8.5"/>',
+  send: '<path d="M4.5 12l15-7-4.5 15-3-6z"/><path d="M12 14l7.5-9"/>',
+  hideRight: '<path d="M9 6l6 6-6 6"/>',
+  showLeft: '<path d="M15 6l-6 6 6 6"/>',
 };
 
 export function h(tag, props, ...children) {

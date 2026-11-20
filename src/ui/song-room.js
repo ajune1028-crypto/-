@@ -154,6 +154,57 @@ export function mountSongRoom(body, app, session, frame) {
   const side = h("aside", { class: "song-side", id: "song-side", "aria-label": "고른 클립" });
   body.append(side);
   const wideSide = matchMedia("(min-width: 1000px) and (min-height: 600px) and (orientation: landscape)");
+  // Its own controls (the owner: "폴드폰처럼 크기를 줄였다", "손을 기대고 하는데… 잠금… 아이콘 검정으로
+  // 조그마낳게… 아무것도 안눌리게", "잠시 옆에 숨기기로", "패널을 안보고 또 보고"): its width by its inner
+  // edge, a small lock (a resting hand presses nothing), hide to a tab at the screen's edge and back.
+  // Kept on this device.
+  const SIDE_MIN = 11;
+  const SIDE_MAX = 26;
+  const sideLook = () => ({ w: 15, locked: false, hidden: false, ...(getSettings(app.store).songSide || {}) });
+  const saveSide = (patch) => setSetting(app.store, "songSide", { ...sideLook(), ...patch });
+  const sideLock = h("button", { class: "side-lock", id: "side-lock", type: "button", onclick: (e) => { e.stopPropagation(); saveSide({ locked: !sideLook().locked }); paintSide(); buzz(app, 8); } }, icon("lock"));
+  const sideHide = h("button", { class: "side-hide", id: "side-hide", type: "button", "aria-label": "옆 패널 숨기기", title: "옆 패널 숨기기", onclick: (e) => { e.stopPropagation(); saveSide({ hidden: true }); paintSide(); } }, icon("hideRight"));
+  const sideHead = h("div", { class: "side-head" }, sideLock, sideHide);
+  const sideEdge = h("div", { class: "side-edge", id: "side-edge", role: "separator", "aria-orientation": "vertical", "aria-label": "옆 패널 크기 (끌어서)" }, h("span", { class: "grip-bar" }));
+  const sideTab = h("button", { class: "side-tab", id: "side-tab", type: "button", "aria-label": "옆 패널 보이기", title: "옆 패널 보이기", onclick: () => { saveSide({ hidden: false }); paintSide(); } }, icon("showLeft"));
+  side.append(sideHead);
+  body.append(sideEdge, sideTab);
+  function paintSide() {
+    const look = sideLook();
+    body.style.setProperty("--side-w", Math.max(SIDE_MIN, Math.min(SIDE_MAX, look.w)) + "rem");
+    body.classList.toggle("side-hidden", !!look.hidden);
+    side.classList.toggle("locked", !!look.locked);
+    sideLock.setAttribute("aria-pressed", String(!!look.locked));
+    sideLock.setAttribute("aria-label", look.locked ? "잠금 풀기 (옆 패널이 다시 눌려요)" : "옆 패널 잠금 (손이 닿아도 안 눌려요)");
+    sideLock.title = sideLock.getAttribute("aria-label");
+  }
+  paintSide();
+  // Dragged by its inner edge: wider or narrower, as a split screen is.
+  let edgeDrag = null;
+  sideEdge.addEventListener("pointerdown", (e) => {
+    if (sideLook().locked || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    edgeDrag = { id: e.pointerId };
+    try { sideEdge.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    side.classList.add("resizing");
+  });
+  sideEdge.addEventListener("pointermove", (e) => {
+    if (!edgeDrag || e.pointerId !== edgeDrag.id) return;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const right = body.getBoundingClientRect().right - 0.6 * rem;
+    const w = Math.max(SIDE_MIN, Math.min(SIDE_MAX, (right - e.clientX) / rem));
+    body.style.setProperty("--side-w", w.toFixed(2) + "rem");
+    edgeDrag.w = w;
+  });
+  const edgeUp = (e) => {
+    if (!edgeDrag || e.pointerId !== edgeDrag.id) return;
+    if (edgeDrag.w) saveSide({ w: Math.round(edgeDrag.w * 4) / 4 });
+    edgeDrag = null;
+    side.classList.remove("resizing");
+    timeline.render(model());
+  };
+  sideEdge.addEventListener("pointerup", edgeUp);
+  sideEdge.addEventListener("pointercancel", edgeUp);
   const onWide = () => { if (alive) { menu?.stopGuard?.(); menu?.remove(); menu = null; draw(); } };
   wideSide.addEventListener?.("change", onWide);
 
@@ -806,7 +857,9 @@ export function mountSongRoom(body, app, session, frame) {
     const scale = song.scaleOf(clip.src);
     const toTonal = state === "sung";
     const label = toTonal ? "조에 맞춰" + (scale ? " · " + keyName(scale.tonic, scale.minor) : "") : "부른 그대로";
-    return h("button", { type: "button", id: "clip-tonal", text: label, onclick: (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); } });
+    const onclick = (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); };
+    if (wideSide.matches) return h("button", { type: "button", id: "clip-tonal", class: "side-btn", "aria-label": label, onclick }, icon("fork"), h("span", { class: "side-btn-word", text: toTonal ? "조에 맞춰" : "부른 그대로" }));
+    return h("button", { type: "button", id: "clip-tonal", text: label, onclick });
   }
 
   function step(dir) {
@@ -1193,10 +1246,15 @@ export function mountSongRoom(body, app, session, frame) {
           () => select(null), menu);
       }
     }
-    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
-    const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
+    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다"). At the side (옆 패널)
+    // they stand as a grid of buttons, the icon above and the word below (the owner: "너무 나열식…
+    // 버튼 형식으로다가 설명은 아래에"); floating, as words.
+    const item = (id, text, onclick, can = true, ic = null) => can && (docked && ic
+      ? h("button", { type: "button", id, class: "side-btn", "aria-label": text.replace(/^[▶■] /, ""), onclick: (e) => { e.stopPropagation(); onclick(); } }, icon(ic), h("span", { class: "side-btn-word", text: text.replace(/^[▶■] /, "") }))
+      : h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } }));
     // 색: the people colours in place of the menu (small, so it covers little), and 기본 (the recorder's).
     const named = clipName(clip);
+    menu.classList.toggle("tints", menuView === "tints" && !locked);
     if (menuView === "tints" && !locked) {
       const now = clip.tint ?? null;
       // Whose it is, so a colour that is a person's is not taken for theirs (the owner: "색깔 들어가면은
@@ -1212,24 +1270,24 @@ export function mountSongRoom(body, app, session, frame) {
     } else menu.replaceChildren(...[
       // What it is: its name, what it came from, who put it in.
       h("p", { class: "menu-info", id: "clip-info", text: [named.title, named.long, named.who && named.who + "이(가) 넣음"].filter(Boolean).join(" · ") }),
-      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
-      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
-      item("clip-copy", "복사", () => copyClip(clip.id)),
-      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly()),
-      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec, soloClip === clip.id ? "stop" : "play"),
+      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id), "scissors"),
+      item("clip-copy", "복사", () => copyClip(clip.id), true, "copy"),
+      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
+      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
-      item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src)),
+      item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
       // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
       tonalItem(clip),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
-      item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),
-      !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
-        h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), "색"),
-      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
-      item("clip-notes", "음 편집", () => editNotes(clip.id)),
-      item("clip-send", "보내기", () => sendClip(clip.id)),
-      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly()),
-      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked),
+      item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly(), "speed"),
+      !locked && h("button", { type: "button", id: "clip-tint", class: docked ? "side-btn" : null, onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
+        h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), docked ? h("span", { class: "side-btn-word", text: "색" }) : "색"),
+      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy, "join"),
+      item("clip-notes", "음 편집", () => editNotes(clip.id), true, "roll"),
+      item("clip-send", "보내기", () => sendClip(clip.id), true, "send"),
+      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly(), "lock"),
+      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked, "trash"),
     ].filter(Boolean));
     if (docked) return;
     const w = menu.offsetWidth;
@@ -1249,7 +1307,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (menu) return void rest?.remove();
     if (!rest) {
       rest = h("div", { class: "side-summary", id: "side-summary" });
-      side.prepend(rest);
+      sideHead.after(rest);
     }
     const clips = song.layout();
     const people = [...new Set(clips.map((c) => c.by))].map((by) => session.room.member(by)?.name).filter(Boolean);
