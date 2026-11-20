@@ -122,6 +122,11 @@ for (const { name, run } of scenarios) {
     failed++;
     console.log(`FAIL ${name}\n     ${String(err.message).split("\n").join("\n     ")}`);
   }
+  // Every scenario runs in its own space (?ns=), but they all share one origin, whose localStorage holds
+  // about 5 MB: what one leaves (a song's shared original, a filled drawing) is cleared before the
+  // next, or the later ones find it full (a friend's screen then never sees the room).
+  if (process.env.E2E_STORAGE) console.log("     storage: " + (await pages[0]?.eval("(() => { let n = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += k.length + localStorage.getItem(k).length; } return n; })()").catch(() => "?")) + " chars");
+  await pages[0]?.eval("localStorage.clear()").catch(() => {});
   await Promise.all(pages.map((p) => p.close()));
 }
 

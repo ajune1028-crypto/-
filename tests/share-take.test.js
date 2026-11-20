@@ -65,3 +65,26 @@ test("a take not found on this device yet is tried again later, not given up for
   await shareDone(d.session);
   assert.equal(files.namedProgress("take-2"), 1);
 });
+
+// A room kept on this device only (no server named: the public address before Firebase) has nobody
+// to send the sound to, and the take is already here: a copy in the room's files would only fill the
+// device's small store (localStorage, about 5 MB) until nothing more could be kept.
+test("a room on this device only sends no copy of the take", async () => {
+  const files = new FileDoc();
+  const blobs = new Map([["take-3", { data: encodeWav(tone(3), 24000) }]]);
+  const d = device(files, blobs);
+  const here = { local: true };
+  Object.assign(d.app, { limited: true, transport: here, local: () => here });
+  d.session.transport = here;
+  shareTake(d.app, d.session, "take-3");
+  await shareDone(d.session);
+  assert.equal(d.sent.length, 0);
+  assert.equal(files.namedProgress("take-3"), 0);
+  // The same device with a shared room (test devices share theirs, a server, the trial page) sends it.
+  const shared = device(files, blobs);
+  Object.assign(shared.app, { limited: false, transport: here, local: () => here });
+  shared.session.transport = here;
+  shareTake(shared.app, shared.session, "take-3");
+  await shareDone(shared.session);
+  assert.equal(files.namedProgress("take-3"), 1);
+});

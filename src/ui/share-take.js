@@ -27,6 +27,10 @@ export const MAX_SHARED_SECONDS = Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS *
  */
 export function shareTake(app, session, key) {
   if (!key || !session || session.transport?.readOnly || app.transport?.readOnly) return;
+  // A room kept on this device only has nobody to send it to, and the take is already here: a copy
+  // in its files would only fill the device's small store (localStorage) until nothing more fits.
+  const local = app.local?.();
+  if (local && session.transport === local && (app.limited || app.transport !== local)) return;
   let q = queues.get(session);
   if (!q) queues.set(session, (q = { busy: false, waiting: [], sent: new Set(), done: Promise.resolve() }));
   if (q.sent.has(key) || q.waiting.includes(key)) return;
