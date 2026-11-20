@@ -19,7 +19,7 @@
 //   larm  { id, la, n }                         removes counter for a loop
 
 import { cmpId, validId, Clock } from "./crdt.js";
-import { SongDoc, CLIP_SPEEDS, isNoteTuple, packNote } from "./song.js";
+import { SongDoc, CLIP_SPEEDS, isNoteTuple, packNote, unpackNote, EDGE_SLIVER_MS } from "./song.js";
 import { fromBase64, toBase64 } from "./b64.js";
 import { INK_COLORS } from "./ink.js";
 
@@ -67,6 +67,13 @@ export function songWidth(dur) {
   return Math.min(960, Math.max(120, Math.round((dur / 1000) * 60)));
 }
 
+function validPairs(pairs, count) {
+  if (pairs === undefined) return true;
+  if (!Array.isArray(pairs) || pairs.length > count) return false;
+  return pairs.every((x) => Array.isArray(x) && x.length === 2 && isInt(x[0], 0, count - 1) && isInt(x[1], 0, 127));
+}
+const validScale = (sc) => sc === undefined || (Array.isArray(sc) && sc.length === 2 && isInt(sc[0], 0, 11) && (sc[1] === 0 || sc[1] === 1));
+
 function validData(kind, d) {
   if (!d || typeof d !== "object" || Array.isArray(d)) return false;
   if (kind === "note") return isText(d.text, 4000);
@@ -77,19 +84,65 @@ function validData(kind, d) {
   return isInt(d.dur, 1, MAX_MS) && typeof d.peaks === "string" && d.peaks.length <= 40000 &&
     Array.isArray(d.notes) && d.notes.length <= 3000 &&
     d.notes.every((n) => isNoteTuple(n, MAX_MS)) &&
-    (d.name === undefined || isText(d.name, 60)) && (d.blob === undefined || isText(d.blob, 80));
+    (d.name === undefined || isText(d.name, 60)) && (d.blob === undefined || isText(d.blob, 80)) &&
+    validPairs(d.sung, d.notes.length) && validPairs(d.meant, d.notes.length) && validScale(d.scale);
 }
 
-/** A song card's data from a sound (notes in seconds, as the analysis and the clipboard keep them). */
-export function songCardData({ duration, notes, peaks, name, blob }) {
+/**
+ * A song card's data from a sound (notes in seconds, as the analysis and the clipboard keep them).
+ * A note's `s` (what was sung plainly, where the key meant differs) is kept as `sung` pairs, and the
+ * key as `scale`, so the card can switch between 조에 맞춰 and 부른 그대로.
+ */
+export function songCardData({ duration, notes, peaks, name, blob, scale }) {
   const ms = (s) => Math.max(0, Math.round(s * 1000));
+  const kept = notes.slice(0, 3000);
   const data = {
     dur: Math.max(1, ms(duration)), peaks: peaks || "",
-    notes: notes.slice(0, 3000).map(packNote),
+    notes: kept.map(packNote),
   };
+  const sung = [];
+  kept.forEach((n, i) => { if (Number.isInteger(n.s) && n.s !== Math.round(n.p) && n.s >= 0 && n.s <= 127) sung.push([i, n.s]); });
+  if (sung.length) data.sung = sung;
+  if (scale && isInt(scale.tonic, 0, 11)) data.scale = [scale.tonic, scale.minor ? 1 : 0];
   if (name) data.name = String(name).slice(0, 60);
   if (blob) data.blob = blob;
   return data;
+}
+
+/** A song card's notes in seconds, each that plays the key meant with what was sung as `s`. */
+export function cardNotes(d) {
+  const notes = d.notes.map(unpackNote);
+  for (const [i, k] of d.sung || []) if (notes[i]) notes[i].s = k;
+  return notes;
+}
+
+/** A song card's key ({ tonic, minor }) or null. */
+export const cardScale = (d) => (Array.isArray(d.scale) ? { tonic: d.scale[0], minor: d.scale[1] === 1 } : null);
+
+/** "tonal" (plays the keys meant, can switch to 부른 그대로), "sung" (the other way), or null. */
+export function cardTonalState(d) {
+  if (d.meant && d.meant.length) return "sung";
+  if (d.sung && d.sung.length) return "tonal";
+  return null;
+}
+
+/** The card's data switched to 조에 맞춰 (toTonal) or 부른 그대로; the other keys kept for switching back. */
+export function cardTonalData(d, toTonal) {
+  const from = toTonal ? d.meant : d.sung;
+  if (!from || !from.length) return d;
+  const notes = d.notes.map((n) => n.slice());
+  const other = [];
+  for (const [i, k] of from) {
+    if (!notes[i]) continue;
+    other.push([i, notes[i][2]]);
+    notes[i][2] = k;
+  }
+  const out = { ...d, notes };
+  delete out.sung;
+  delete out.meant;
+  if (toTonal) out.sung = other;
+  else out.meant = other;
+  return out;
 }
 
 /**
@@ -101,13 +154,13 @@ export function cardFromClip({ source, offset, length }) {
   const lo = offset / 1000;
   const hi = (offset + length) / 1000;
   const notes = source.notes
-    .map((n) => ({ ...n, s: Math.max(n.t, lo), e: Math.min(n.t + n.d, hi) }))
+    .map((n) => ({ ...n, sung: n.s, s: Math.max(n.t, lo), e: Math.min(n.t + n.d, hi) }))
     .filter((n) => n.e - n.s >= 0.02)
-    .map((n) => ({ t: n.s - lo, d: n.e - n.s, p: n.p, v: n.v, ...(n.h ? { h: true } : {}) }));
+    .map((n) => ({ t: n.s - lo, d: n.e - n.s, p: n.p, v: n.v, ...(n.h ? { h: true } : {}), ...(n.sung !== undefined ? { s: n.sung } : {}) }));
   const bytes = fromBase64(source.peaks || "");
   const peaks = toBase64(bytes.subarray(Math.floor(offset / 40), Math.ceil((offset + length) / 40)));
   const whole = offset === 0 && Math.abs(length - source.duration * 1000) < 50;
-  return songCardData({ duration: length / 1000, notes, peaks, name: source.name, blob: whole ? source.blob : undefined });
+  return songCardData({ duration: length / 1000, notes, peaks, name: source.name, blob: whole ? source.blob : undefined, scale: source.scale });
 }
 
 export class BoardDoc {
@@ -515,8 +568,8 @@ const MIN_PART_MS = 100;
 /** The part of a song card's data between from and to (ms), notes measured from from. */
 function partOf(d, from, to) {
   const notes = d.notes
-    .map(([t, len, p, v, h]) => [Math.max(t, from), Math.min(t + len, to), p, v, h])
-    .filter(([s, e]) => e - s >= 20)
+    .map(([t, len, p, v, h]) => [Math.max(t, from), Math.min(t + len, to), p, v, h, t, t + len])
+    .filter(([s, e, , , , t0, t1]) => e - s >= 20 && !((s > t0 || e < t1) && e - s < EDGE_SLIVER_MS))
     .map(([s, e, p, v, h]) => (h ? [s - from, e - s, p, v, 1] : [s - from, e - s, p, v]));
   const bytes = fromBase64(d.peaks || "");
   const out = { dur: to - from, peaks: toBase64(bytes.subarray(Math.floor(from / 40), Math.ceil(to / 40))), notes };
@@ -532,7 +585,17 @@ function partOf(d, from, to) {
 export function splitCardOps(clock, board, itemId, at, by) {
   const item = board.item(itemId);
   if (!item || item.removed || item.kind !== "song") return { ops: [], atoms: [] };
-  const cut = Math.round(at);
+  let cut = Math.round(at);
+  // As a song clip's cut: onto a note's start or end when one is that near, so no half keeps a sliver.
+  let best = null;
+  for (const [t, len] of item.data.notes) {
+    if (!(t < cut && cut < t + len)) continue;
+    for (const edge of [t, t + len]) {
+      const dist = Math.abs(edge - cut);
+      if (dist <= 60 && edge >= MIN_PART_MS && edge <= item.data.dur - MIN_PART_MS && (!best || dist < best.dist)) best = { edge, dist };
+    }
+  }
+  if (best) cut = best.edge;
   if (cut < MIN_PART_MS || cut > item.data.dur - MIN_PART_MS) return { ops: [], atoms: [] };
   clock.atLeast(board.maxN);
   const gone = { t: "irm", id: clock.next(), i: itemId, n: item.rm + 1 };

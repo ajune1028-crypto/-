@@ -17,6 +17,9 @@
 //   nadd  adds a note to a sound: { note: { t, d, p, v } }
 // A stored note is [start ms, length ms, key, loudness 0-100], with a fifth 1 when it belongs to
 // the harmony (화음) and not to the tune: a clip may leave those out (`chords: false`).
+// A sound may keep, beside its notes (the keys meant, read in the take's key), what was sung plainly
+// where that differs (`sung`: [note index, key] pairs) and the key it was read in (`scale`: [tonic
+// 0-11, minor 0/1]). 부른 그대로 and 조에 맞춰 switch a sound's notes between the two with note edits.
 // A sound's own notes never change; edits lie over them, so every device
 // agrees and every edit can be undone. notesOf(src) gives the result.
 //
@@ -35,6 +38,10 @@ const MAX_PEAKS = 40000;
 const MAX_UNKNOWN = 300;
 const MIN_PIECE_MS = 50; // a split leaves at least this much on each side
 const MIN_EVENT_MS = 30;
+// A note cut by a clip's edge leaving less than this inside the clip is not played or drawn there:
+// a sliver, not a note (the owner: "엄청 조그마난거면 아니지만").
+export const EDGE_SLIVER_MS = 60;
+const SNAP_CUT_MS = 60; // a cut this near a note's start or end is moved onto it
 
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const shortText = (v, max) => typeof v === "string" && v.length > 0 && v.length <= max;
@@ -82,6 +89,18 @@ export function isNoteTuple(n, maxMs = MAX_SOURCE_MS) {
     isInt(n[0], 0, maxMs) && isInt(n[1], 1, maxMs) && isInt(n[2], 0, 127) && isInt(n[3], 0, 100);
 }
 
+function validSung(sung, count) {
+  if (sung === undefined) return true;
+  if (!Array.isArray(sung) || sung.length > count) return false;
+  const seen = new Set();
+  for (const pair of sung) {
+    if (!Array.isArray(pair) || pair.length !== 2 || !isInt(pair[0], 0, count - 1) || !isInt(pair[1], 0, 127) || seen.has(pair[0])) return false;
+    seen.add(pair[0]);
+  }
+  return true;
+}
+const validScale = (sc) => sc === undefined || (Array.isArray(sc) && sc.length === 2 && isInt(sc[0], 0, 11) && (sc[1] === 0 || sc[1] === 1));
+
 function validNotes(notes) {
   return Array.isArray(notes) && notes.length <= MAX_NOTES && notes.every((n) => isNoteTuple(n));
 }
@@ -104,6 +123,8 @@ export function unpackNote([t, d, p, v, h]) {
 export function noteInSeconds(n) {
   const out = { t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v };
   if (n.h) out.h = true;
+  // A copy keeps 부른 그대로 for the notes that now play the key meant.
+  if (n.sung !== undefined && n.p === n.meant) out.s = n.sung;
   return out;
 }
 /** A song's note (milliseconds) as it is stored. */
@@ -159,11 +180,14 @@ export class SongDoc {
     switch (op.t) {
       case "src": {
         const ok = isInt(op.dur, 1, MAX_SOURCE_MS) && validNotes(op.notes) && typeof op.peaks === "string" && op.peaks.length <= MAX_PEAKS &&
-          shortText(op.by, 40) && Number.isFinite(op.at) && (op.blob === undefined || shortText(op.blob, 80)) && (op.name === undefined || shortText(op.name, 60));
+          shortText(op.by, 40) && Number.isFinite(op.at) && (op.blob === undefined || shortText(op.blob, 80)) && (op.name === undefined || shortText(op.name, 60)) &&
+          validSung(op.sung, op.notes.length) && validScale(op.scale);
         if (!ok) return this.setAside(op);
         this.sources.set(op.id, {
           id: op.id, dur: op.dur, peaks: op.peaks, by: op.by, at: op.at, blob: op.blob || null, name: op.name || null,
           notes: op.notes.map(([t, d, p, v, h]) => (h ? { t, d, p, v: v / 100, h: true } : { t, d, p, v: v / 100 })),
+          sung: new Map(op.sung || []),
+          scale: op.scale ? { tonic: op.scale[0], minor: op.scale[1] === 1 } : null,
         });
         return this.done(op);
       }
@@ -296,7 +320,11 @@ export class SongDoc {
     if (this.noteCache.by.has(key)) return this.noteCache.by.get(key);
     const src = this.sources.get(srcId);
     if (!src) return [];
-    const list = src.notes.map((n, i) => ({ key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false, h: !!n.h }));
+    const list = src.notes.map((n, i) => {
+      const note = { key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false, h: !!n.h };
+      if (src.sung && src.sung.has(i)) { note.sung = src.sung.get(i); note.meant = n.p; }
+      return note;
+    });
     for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false, h: false });
     for (const n of list) {
       const fields = this.fixes.get(srcId + "|" + n.key);
@@ -305,6 +333,26 @@ export class SongDoc {
     const out = list.filter((n) => withGone || !n.gone).sort((a, b) => a.t - b.t || a.p - b.p);
     this.noteCache.by.set(key, out);
     return out;
+  }
+
+  /** The key a sound's notes were read in ({ tonic, minor }), or null. */
+  scaleOf(srcId) {
+    return this.sources.get(srcId)?.scale || null;
+  }
+
+  /**
+   * Whether a sound plays the keys meant ("tonal"), what was sung plainly ("sung"), some of each
+   * ("mixed"), or has no such choice (null).
+   */
+  tonalState(srcId) {
+    let meant = 0, sung = 0;
+    for (const n of this.notesOf(srcId)) {
+      if (n.sung === undefined) continue;
+      if (n.p === n.meant) meant++;
+      else if (n.p === n.sung) sung++;
+    }
+    if (!meant && !sung) return null;
+    return meant && sung ? "mixed" : meant ? "tonal" : "sung";
   }
 
   /** Whether a sound has notes of the harmony (화음) among its notes now. */
@@ -419,7 +467,7 @@ export class SongDoc {
         if (n.h && clip.chords === false) continue;
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
-        if (e - s < MIN_EVENT_MS) continue;
+        if (e - s < MIN_EVENT_MS || ((s > n.t || e < n.t + n.d) && e - s < EDGE_SLIVER_MS)) continue;
         let at = clip.start + (s - lo) / sp;
         let d = (e - s) / sp;
         if (at < from) {
@@ -469,15 +517,39 @@ const ms = (seconds) => Math.max(0, Math.round(seconds * 1000));
  * The op that adds a sound. `notes` come from the analysis in seconds
  * ({ t, d, p, v }); they are stored in whole milliseconds.
  */
-export function sourceOp(clock, song, { duration, notes, peaks, by, at, blob, name }) {
+export function sourceOp(clock, song, { duration, notes, peaks, by, at, blob, name, scale }) {
   clock.atLeast(song.maxN);
+  const kept = notes.slice(0, MAX_NOTES);
   const op = {
     t: "src", id: clock.next(), dur: Math.max(1, ms(duration)), peaks, by, at,
-    notes: notes.slice(0, MAX_NOTES).map(packNote),
+    notes: kept.map(packNote),
   };
+  const sung = [];
+  kept.forEach((n, i) => { if (Number.isInteger(n.s) && n.s !== Math.round(n.p) && n.s >= 0 && n.s <= 127) sung.push([i, n.s]); });
+  if (sung.length) op.sung = sung;
+  if (scale && isInt(scale.tonic, 0, 11)) op.scale = [scale.tonic, scale.minor ? 1 : 0];
   if (blob) op.blob = blob;
   if (name) op.name = String(name).slice(0, 60);
   return op;
+}
+
+/**
+ * 부른 그대로 (toTonal false) or 조에 맞춰 (true): note edits that set each note with a choice to the
+ * other key. A note changed by hand to something else is left alone. One undo step.
+ */
+export function tonalOps(clock, song, srcId, toTonal) {
+  const ops = [];
+  const atoms = [];
+  for (const n of song.notesOf(srcId)) {
+    if (n.sung === undefined) continue;
+    const from = toTonal ? n.sung : n.meant;
+    const to = toTonal ? n.meant : n.sung;
+    if (n.p !== from) continue;
+    const made = noteSetOps(clock, song, srcId, n.key, { p: to });
+    ops.push(...made.ops);
+    atoms.push(...made.atoms);
+  }
+  return { ops, atoms };
 }
 
 /** Adds a clip; returns the ops and the undo atoms. */
@@ -512,8 +584,23 @@ export function splitClipOps(clock, song, clipId, at, by, now = Date.now()) {
   const clip = song.clip(clipId);
   if (!clip || clip.removed) return null;
   // `at` is a time on the timeline; a clip with its own speed reads its sound that much faster.
-  const along = Math.round(at) - clip.start;
-  const cut = Math.round(along * (clip.speed || 1));
+  let along = Math.round(at) - clip.start;
+  let cut = Math.round(along * (clip.speed || 1));
+  // A cut that falls inside a note just beside its start or end goes there, so neither half begins
+  // or ends with a sliver of a note (the tune is cut between its notes). A cut in a rest stays.
+  const target = clip.offset + cut;
+  let best = null;
+  for (const n of song.notesOf(clip.src)) {
+    if (!(n.t < target && target < n.t + n.d)) continue;
+    for (const edge of [n.t, n.t + n.d]) {
+      const dist = Math.abs(edge - target);
+      if (dist <= SNAP_CUT_MS && edge - clip.offset >= MIN_PIECE_MS && clip.offset + clip.length - edge >= MIN_PIECE_MS && (!best || dist < best.dist)) best = { edge, dist };
+    }
+  }
+  if (best) {
+    cut = best.edge - clip.offset;
+    along = Math.round(cut / (clip.speed || 1));
+  }
   if (cut < MIN_PIECE_MS || clip.length - cut < MIN_PIECE_MS) return null;
   const front = setClipOps(clock, song, clipId, { length: cut });
   const back = addClipOps(clock, song, { src: clip.src, row: clip.row, start: clip.start + along, offset: clip.offset + cut, length: clip.length - cut, by, at: now });

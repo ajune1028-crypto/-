@@ -21,7 +21,7 @@ export function takeWhere(app, roomId) {
 /** A take already analysed and stored (blob): listed in 레퍼런스 too. Never throws. */
 export function keepTake(app, { name, result, blob, where }) {
   try {
-    addRefSound(app.store, { name: name || "녹음", dur: result.duration, notes: result.notes, peaks: toBase64(result.peaks), blob, from: where });
+    addRefSound(app.store, { name: name || "녹음", dur: result.duration, notes: result.notes, peaks: toBase64(result.peaks), blob, from: where, scale: result.scale });
   } catch (err) {
     console.warn(err);
   }

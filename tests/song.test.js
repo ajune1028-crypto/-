@@ -378,3 +378,65 @@ test("a note marked with anything but 1 is not taken; older four-number notes st
   const bad = { t: "src", id: "2@a", dur: 1000, notes: [[0, 500, 60, 80, 2]], peaks: "", by: "m1", at: 1 };
   assert.notEqual(song.apply(bad), "applied");
 });
+
+test("a take keeps what was sung where the key meant differs, and its key; 부른 그대로 and 조에 맞춰 switch between them, for everyone, one undo step", async () => {
+  const { SongDoc, sourceOp, tonalOps, invertSongOps } = await import("../src/core/song.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const song = new SongDoc();
+  const clock = new Clock("a");
+  const notes = [
+    { t: 0, d: 0.3, p: 57, v: 0.8 },
+    { t: 0.4, d: 0.3, p: 60, v: 0.8, s: 59 },
+    { t: 0.8, d: 0.3, p: 62, v: 0.8, s: 61 },
+    { t: 1.2, d: 0.3, p: 64, v: 0.8 },
+  ];
+  const src = sourceOp(clock, song, { duration: 1.6, notes, peaks: "", by: "m1", at: 1, scale: { tonic: 9, minor: true } });
+  assert.deepEqual(src.sung, [[1, 59], [2, 61]], "only the notes that differ");
+  assert.deepEqual(src.scale, [9, 1]);
+  song.apply(src);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 60, 62, 64], "the keys meant play first");
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.sung ?? null), [null, 59, 61, null]);
+  assert.deepEqual(song.scaleOf(src.id), { tonic: 9, minor: true });
+  assert.equal(song.tonalState(src.id), "tonal");
+  const toSung = tonalOps(clock, song, src.id, false);
+  song.applyAll(toSung.ops);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 59, 61, 64], "부른 그대로");
+  assert.equal(song.tonalState(src.id), "sung");
+  // A note edited by hand is left as it is by the switch.
+  song.applyAll([{ t: "nfix", id: clock.next(), src: src.id, n: "2", f: { p: 65 } }]);
+  song.applyAll(tonalOps(clock, song, src.id, true).ops);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 60, 65, 64], "조에 맞춰, the hand edit kept");
+  // Undo of the first switch, on a fresh copy: one step back to the keys meant.
+  const other = new SongDoc();
+  other.apply(src);
+  other.applyAll(toSung.ops);
+  other.applyAll(invertSongOps(other, clock, toSung.atoms, "undo"));
+  assert.deepEqual(other.notesOf(src.id).map((n) => n.p), [57, 60, 62, 64]);
+  // Nonsense in the new fields sets the op aside; an old take without them is as before.
+  const bad = new SongDoc();
+  assert.equal(bad.apply({ ...src, id: "77@z", sung: [[9, 59]] }), "unknown", "an index past the notes");
+  const old = new SongDoc();
+  const plain = { ...src };
+  delete plain.sung;
+  delete plain.scale;
+  old.apply(plain);
+  assert.equal(old.tonalState(src.id), null);
+  assert.equal(old.scaleOf(src.id), null);
+});
+
+test("a cut that falls inside a note just beside its edge goes onto the edge (no sliver in either half); a cut in a rest stays", async () => {
+  const { SongDoc, sourceOp, addClipOps, splitClipOps } = await import("../src/core/song.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const song = new SongDoc();
+  const clock = new Clock("a");
+  const src = sourceOp(clock, song, { duration: 2, notes: [{ t: 0.1, d: 0.45, p: 60, v: 0.8 }, { t: 0.55, d: 0.45, p: 62, v: 0.8 }, { t: 1.2, d: 0.5, p: 64, v: 0.8 }], peaks: "", by: "m1", at: 1 });
+  song.apply(src);
+  const clip = addClipOps(clock, song, { src: src.id, row: 0, start: 0, length: 2000, by: "m1", at: 1 });
+  song.applyAll(clip.ops);
+  const near = splitClipOps(clock, song, clip.id, 530, "m1");
+  song.applyAll(near.ops);
+  assert.equal(song.clip(clip.id).length, 550, "24 ms before the next note: cut where it starts");
+  const rest = splitClipOps(clock, song, near.id, 1100, "m1");
+  song.applyAll(rest.ops);
+  assert.equal(song.clip(rest.id).offset, 1100, "in the rest between notes: cut where asked");
+});

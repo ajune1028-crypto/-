@@ -31,8 +31,9 @@ import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
-  tintLassoOps, rowLayout, boxLoop, strokesInLoop,
+  tintLassoOps, rowLayout, boxLoop, strokesInLoop, cardTonalState, cardTonalData, cardScale,
 } from "../core/board.js";
+import { keyName } from "../audio/intent.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
@@ -1214,6 +1215,12 @@ export function mountBoardRoom(body, app, session, frame) {
         }),
         // 화음: the harmony found under the tune, left out or brought back (only when there is some).
         can && item.data.notes.some((n) => n[4] === 1) && one("card-chords", item.chords === false ? "화음 켜기" : "화음 끄기", () => apply(setItemOps(session.clock, board, item.id, { chords: item.chords === false }))),
+        // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
+        can && cardTonalState(item.data) && (() => {
+          const toTonal = cardTonalState(item.data) === "sung";
+          const sc = cardScale(item.data);
+          return one("card-tonal", toTonal ? "조에 맞춰" + (sc ? " · " + keyName(sc.tonic, sc.minor) : "") : "부른 그대로", () => apply(setItemOps(session.clock, board, item.id, { data: cardTonalData(item.data, toTonal) })));
+        })(),
         tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
@@ -2114,7 +2121,8 @@ export function mountBoardRoom(body, app, session, frame) {
         for (const op of made.ops) temp.apply(op);
         const notes = temp.notesOf(src.id).map(packMs);
         const now = board.item(id);
-        if (now) apply(setItemOps(session.clock, board, id, { data: { ...now.data, notes } }));
+        // Edited by hand: the notes are now what the person chose; the 조/부른 그대로 choice goes.
+        if (now) { const { sung, meant, ...rest } = now.data; apply(setItemOps(session.clock, board, id, { data: { ...rest, notes } })); }
       },
       preview: (p, seconds) => preview(p, seconds),
       canEdit: () => !readOnly(),
@@ -2652,7 +2660,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const kept = rate === KEEP_RATE ? samples : resample(samples, rate, KEEP_RATE);
     const blob = newBlobId();
     await app.blobs.put(blob, encodeWav(kept, KEEP_RATE), "audio/wav");
-    placeCard(songCardData({ duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), name: name || undefined, blob }));
+    placeCard(songCardData({ duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), name: name || undefined, blob, scale: result.scale }));
     keepTake(app, { name, result, blob, where: takeWhere(app, session.roomId) });
     if (!result.notes.length) toast(root, "음을 찾지 못했어요. 원본으로 들을 수 있어요", 3600);
   }
@@ -2923,7 +2931,7 @@ export function mountBoardRoom(body, app, session, frame) {
   return {
     /** 레퍼런스 → 이 방에 붙이기, a recording: a song card (its sound is already on this device). */
     insertSound(memo) {
-      placeCard(songCardData({ duration: memo.dur, notes: memo.notes, peaks: memo.peaks, name: memo.name, blob: memo.blob }));
+      placeCard(songCardData({ duration: memo.dur, notes: memo.notes, peaks: memo.peaks, name: memo.name, blob: memo.blob, scale: memo.scale }));
     },
     /** 레퍼런스 → 이 방에 붙이기: a memo card. */
     insertText(text) {

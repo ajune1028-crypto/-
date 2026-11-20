@@ -5,7 +5,8 @@
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, joinOps } from "../core/room.js";
 import { myPeopleColor } from "./theme.js";
-import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields } from "../core/board.js";
+import { addItemOps, cardFromClip, setItemOps, songCardData, keepOf, keptFields, cardNotes, cardScale } from "../core/board.js";
+import { shareTake, shareDone } from "./share-take.js";
 import { sourceOp, addClipOps, setClipOps, noteInSeconds, unpackNote } from "../core/song.js";
 import { rememberRoom, roomEntry, getSettings } from "../identity.js";
 
@@ -59,6 +60,16 @@ export function meIn(app, to, entry, me) {
 /** Waits (a little) until what was written has gone out. */
 async function sent(session) {
   for (let i = 0; i < 100 && session.pending; i++) await sleep(100);
+}
+
+/**
+ * The originals of these takes go with them (the owner: "원본 녹음 파일도 공유 가능이여야되는데… 없다고
+ * 떠"): this device has them, so it sends them into the room now, before the room is closed, and
+ * not only the next time the room is opened here.
+ */
+async function sendOriginals(app, session, keys) {
+  for (const key of keys) if (key) shareTake(app, session, key);
+  await shareDone(session);
 }
 
 /** 복제: a new room with everything the room holds, named "… 복사본", in my list. Resolves with its id. */
@@ -163,16 +174,18 @@ export async function putSoundInto(app, entry, sound, me = null) {
       const length = Math.max(1, Math.round(sound.dur * 1000));
       const start = song.end();
       const row = song.freeRow(start, length, 0) ?? 0;
-      const src = sourceOp(to.clock, song, { duration: sound.dur, notes: sound.notes, peaks: sound.peaks, by, at: Date.now(), blob: sound.blob, name: sound.name });
+      const src = sourceOp(to.clock, song, { duration: sound.dur, notes: sound.notes, peaks: sound.peaks, by, at: Date.now(), blob: sound.blob, name: sound.name, scale: sound.scale });
       const clip = addClipOps(to.clock, song, { src: src.id, row, start, length, by, at: Date.now() });
       to.commit("song", [src, ...clip.ops]);
+      await sendOriginals(app, to, [sound.blob]);
     } else if (entry.kind === "creative-board") {
       const board = await to.load("board");
       const items = board.items();
       const x = items.length ? Math.max(...items.map((i) => i.x + i.w)) + 60 : 40;
       const y = items.length ? Math.min(...items.map((i) => i.y)) : 40;
-      const data = songCardData({ duration: sound.dur, notes: sound.notes, peaks: sound.peaks, name: sound.name, blob: sound.blob });
+      const data = songCardData({ duration: sound.dur, notes: sound.notes, peaks: sound.peaks, name: sound.name, blob: sound.blob, scale: sound.scale });
       to.commit("board", addItemOps(to.clock, board, { kind: "song", x, y, data, by }).ops);
+      await sendOriginals(app, to, [sound.blob]);
     } else throw new Error("not a room for sounds");
     await sent(to);
   } finally {
@@ -197,7 +210,7 @@ export async function putCardsIntoSong(app, entry, cards, me = null) {
       if (!song.canAddClip()) break;
       const d = card.data;
       const src = sourceOp(to.clock, song, {
-        duration: d.dur / 1000, notes: d.notes.map(unpackNote),
+        duration: d.dur / 1000, notes: cardNotes(d), scale: cardScale(d) || undefined,
         peaks: d.peaks || "", by, at: Date.now(), blob: d.blob || undefined, name: d.name || undefined,
       });
       const clip = addClipOps(to.clock, song, { src: src.id, row, start: at, length: d.dur, by, at: Date.now() });
@@ -210,6 +223,7 @@ export async function putCardsIntoSong(app, entry, cards, me = null) {
       at += Math.round(d.dur / (card.speed || 1));
       n++;
     }
+    await sendOriginals(app, to, cards.map((c) => c.data.blob));
     await sent(to);
     return n;
   } finally {

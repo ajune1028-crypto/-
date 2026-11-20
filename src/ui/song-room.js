@@ -19,8 +19,9 @@ import { memberColor, INK, PALETTE } from "../core/paint.js";
 import {
   MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan,
   joinClipOps, joinWithSourceOps, combinedSource,
-  packMs, noteInSeconds,
+  packMs, noteInSeconds, tonalOps,
 } from "../core/song.js";
+import { keyName } from "../audio/intent.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
@@ -759,7 +760,7 @@ export function mountSongRoom(body, app, session, frame) {
     localBlobs.set(blob, true);
     shareTake(app, session, blob);
     const by = session.memberId;
-    const src = sourceOp(session.clock, song, { duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), by, at: Date.now(), blob, name });
+    const src = sourceOp(session.clock, song, { duration: result.duration, notes: result.notes, peaks: toBase64(result.peaks), by, at: Date.now(), blob, name, scale: result.scale });
     if (ctx) audio.set(src.id, bufferFromSamples(ctx, samples, rate));
     const length = Math.max(1, Math.round(result.duration * 1000));
     const place = song.freeRow(at, length, row) ?? row;
@@ -794,6 +795,16 @@ export function mountSongRoom(body, app, session, frame) {
     session.commit("song", made.ops);
     record(made.atoms);
     return true;
+  }
+
+  /** The clip menu's 조에 맞춰 / 부른 그대로 (the other one than what plays now), or nothing. */
+  function tonalItem(clip) {
+    const state = song.tonalState(clip.src);
+    if (!state || readOnly() || clip.locked) return null;
+    const scale = song.scaleOf(clip.src);
+    const toTonal = state === "sung";
+    const label = toTonal ? "조에 맞춰" + (scale ? " · " + keyName(scale.tonic, scale.minor) : "") : "부른 그대로";
+    return h("button", { type: "button", id: "clip-tonal", text: label, onclick: (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); } });
   }
 
   function step(dir) {
@@ -958,7 +969,7 @@ export function mountSongRoom(body, app, session, frame) {
       clips: clips.map((c) => {
         const src = song.source(c.src);
         return { dx: c.start - from, dy: c.lane - top, offset: c.offset, length: c.length, speed: c.speed || 1, tint: c.tint ?? null, muted: !!c.muted, src: c.src,
-          source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name } };
+          source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) } };
       }),
     });
     toast(root, `클립 ${clips.length}개를 복사했어요. 클립을 눌러 '붙여넣기'로 넣어요`, 2600);
@@ -993,7 +1004,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!src) return;
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length, speed: clip.speed || 1, tint: clip.tint ?? null,
-      source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name },
+      source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) },
     });
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
     draw();
@@ -1204,6 +1215,8 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
       item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src)),
+      // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
+      tonalItem(clip),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
       item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),
       !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
@@ -1486,7 +1499,7 @@ export function mountSongRoom(body, app, session, frame) {
       const row = song.freeRow(playhead, length, selectedRow);
       if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요");
       const by = session.memberId;
-      const src = sourceOp(session.clock, song, { duration: memo.dur, notes: memo.notes, peaks: memo.peaks, by, at: Date.now(), blob: memo.blob, name: memo.name });
+      const src = sourceOp(session.clock, song, { duration: memo.dur, notes: memo.notes, peaks: memo.peaks, by, at: Date.now(), blob: memo.blob, name: memo.name, scale: memo.scale });
       localBlobs.set(memo.blob, true);
       shareTake(app, session, memo.blob);
       const clip = addClipOps(session.clock, song, { src: src.id, row, start: playhead, length, by, at: Date.now() });

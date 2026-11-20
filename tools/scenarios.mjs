@@ -3773,6 +3773,36 @@ scenario("home 녹음: the button opens the kept recordings with an example take
   await page.waitFor(`document.querySelectorAll(".card.song").length === 1`, 8000);
 });
 
+// The owner: "아직도 원본 녹음 파일도 공유 가능이여야되는데. 안돼. 공유가 내그거에 그게 없다고 떠". A take sent
+// from home's 녹음 into a room went in as notes only: its original waited until the room was opened
+// again on the sending device.
+scenario("home 녹음 → 보내기: the take's original goes into the room right away, so a friend's device plays the voice itself without the sender ever opening the room", async ({ open }) => {
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a, { room: "원본 가는 방" });
+  await click(a, "#back");
+  await a.waitFor(q("#home-record"));
+  await click(a, "#home-record");
+  await a.waitFor(`[...document.querySelectorAll(".ref-sound .pick-name")].some((n) => n.textContent.startsWith("예시 녹음"))`, 20000);
+  const take = await a.eval(`document.querySelector(".ref-sound").dataset.id`);
+  await click(a, `[data-send-sound="${take}"]`);
+  await a.waitFor(q("#send-rooms"));
+  const room = await a.eval(`[...document.querySelectorAll("#send-rooms [data-send-to]")].find((b) => b.textContent.includes("원본 가는 방")).dataset.sendTo`);
+  await click(a, `[data-send-to="${room}"]`);
+  await a.waitFor(`document.querySelector(".toast")?.textContent.includes("보냈어요")`, 15000);
+  // A friend opens the room; the sender stays on home.
+  const b = await open({ dev: "b" });
+  await b.goto(await localLink(a, "b", id));
+  await b.waitFor("window.__app && window.__app.booted");
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 10000);
+  const blob = await b.eval(`[...window.__app.session.doc("song").sources.values()][0].blob`);
+  assert.ok(blob, "the clip knows its recording");
+  await b.waitFor(`!!window.__app.session.doc("files").named(${JSON.stringify(blob)})`, 15000);
+  await click(b, "#mode-original");
+  await b.waitFor(`!document.querySelector(".clip[data-id] .clip-note")`, 8000);
+  assert.ok(await a.eval(`!!document.getElementById("home") || !!document.querySelector(".home")`), "the sender never opened the room");
+});
+
 scenario("레퍼런스 floats over the room (no dark around it), moves by its head and opens there again; 내 방 shows my other rooms, and 가져오기 brings their words and clips into this room", async ({ open, fixtures }) => {
   const page = await open();
   await createRoom(page, { room: "글 방" });

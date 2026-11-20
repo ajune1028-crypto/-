@@ -12,7 +12,7 @@ import { watchFingers } from "./fingers.js";
 import { solfege } from "../audio/notes.js";
 import { fromBase64, PEAKS_PER_SECOND } from "../audio/peaks.js";
 import { beatMs } from "../core/beat.js";
-import { clipSpan } from "../core/song.js";
+import { clipSpan, EDGE_SLIVER_MS } from "../core/song.js";
 
 const LONG_PRESS_MS = 380;
 const SLOP_PX = 8;
@@ -347,7 +347,7 @@ export class Timeline {
         if (n.h && clip.chords === false) continue;
         const s = Math.max(n.t, lo);
         const e = Math.min(n.t + n.d, hi);
-        if (e - s < 20) continue;
+        if (e - s < 20 || ((s > n.t || e < n.t + n.d) && e - s < EDGE_SLIVER_MS)) continue;
         any = true;
         const widthPx = (e - s) * pxPerMs;
         const bar = h("i", {

@@ -1,12 +1,15 @@
 // Recording in, notes out: mixes the pieces above into one step that can run
 // live while someone sings, or over a whole file. Pure computation.
 
-import { StreamResampler } from "./dsp.js";
+import { StreamResampler, resample } from "./dsp.js";
 import { ANALYSIS_RATE, PitchTracker } from "./pitch.js";
 import { segmentNotes } from "./notes.js";
 import { PeakCollector } from "./peaks.js";
 import { fillPitches, frameCount, polyState, POLY_WINDOW } from "./poly.js";
 import { chordNotes, agreement, tuneWithHarmony } from "./chords.js";
+import { swiftF0Async } from "./swiftf0.js";
+import { segmentPitch, checkPeriods, syllableDips } from "./segment.js";
+import { intendedKeys } from "./intent.js";
 
 // A take with harmony under less than this share of its tune is one voice alone: it is read by
 // the pitch tracker, which hears a single voice best (measured on 40 real solo takes: the
@@ -66,9 +69,11 @@ export class Analyzer {
   }
 
   /**
-   * The notes, looking for several pitches at once too (a voice over a guitar, two people, a
-   * song with its band): then the tune and, marked `h`, the harmony under it; `chords: true`.
-   * A voice alone comes out as `finish()` gives it. `onProgress` gets 0..1.
+   * The final notes. The voice is read again, finely (SwiftF0, then notes by syllable and pitch,
+   * then the keys meant: `voiceNotes`); each note keeps what was sung plainly as `s` where the key
+   * meant differs, and the take its key as `scale`. Then the look for several pitches at once (a
+   * voice over a guitar, two people, a song with its band): the tune and, marked `h`, the harmony
+   * under it; `chords: true`. `onProgress` gets 0..1.
    */
   async finishAll({ onProgress = () => {} } = {}) {
     const result = this.finish();
@@ -77,14 +82,16 @@ export class Analyzer {
     const low = new Float32Array(total);
     let at = 0;
     for (const part of this.kept) { low.set(part, at); at += part.length; }
-    const found = await chordsOf(low, { onProgress });
-    if (!found) return result;
-    // Where the tune is a voice the pitch tracker could follow (it hears the same line), its
-    // notes are the tune: it places and parts them more finely. The harmony comes from the look
-    // for several pitches. Where it could not follow (two voices, a loud band), that look gives both.
-    const agree = agreement(found.notes.filter((n) => !n.h), result.notes);
-    const notes = agree >= SAME_TUNE ? tuneWithHarmony(result.notes, found.notes) : found.notes;
-    return { ...result, notes, chords: true, agree };
+    const voice = await voiceNotes(low, ANALYSIS_RATE, { onProgress: (p) => onProgress(VOICE_SHARE * p) });
+    const solo = { ...result, notes: voice.notes, scale: voice.scale };
+    const found = await chordsOf(low, { onProgress: (p) => onProgress(VOICE_SHARE + (1 - VOICE_SHARE) * p) });
+    if (!found) return solo;
+    // Where the tune is the voice that was read (the same line), its notes are the tune: they are
+    // placed and parted more finely. The harmony comes from the look for several pitches. Where the
+    // voice could not be followed (two voices, a loud band), that look gives both.
+    const agree = agreement(found.notes.filter((n) => !n.h), solo.notes);
+    const notes = agree >= SAME_TUNE ? tuneWithHarmony(solo.notes, found.notes) : found.notes;
+    return { ...solo, notes, chords: true, agree };
   }
 }
 
@@ -138,7 +145,32 @@ export async function chordsOf(samples, { onProgress = () => {} } = {}) {
 }
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 0));
-const MONO_SHARE = 0.3; // of the progress shown: the first pass (one voice); the rest is the look for more
+const MONO_SHARE = 0.15; // of the progress shown: the first quick pass while the take is read in
+const VOICE_SHARE = 0.55; // of the rest: the voice read finely; then the look for several pitches
+
+/**
+ * One voice's notes, as a listener would write them down: SwiftF0's pitch and confidence every
+ * 16 ms, notes by syllable and held pitch (`segmentPitch`), the keys meant (`intendedKeys`).
+ * Returns { notes: [{ t, d, p (key meant), v (0..1), s (the key sung plainly, where it differs) }],
+ * scale: { tonic, minor } or null }.
+ */
+export async function voiceNotes(samples, rate, { onProgress = () => {}, periods = true, dips = true, segment = {} } = {}) {
+  const x = rate === ANALYSIS_RATE ? samples : resample(samples, rate, ANALYSIS_RATE);
+  const frames = await swiftF0Async(x, ANALYSIS_RATE, { onProgress, pause });
+  if (periods) checkPeriods(x, frames);
+  if (dips) frames.dips = syllableDips(x, ANALYSIS_RATE, frames.hz.length);
+  const parts = segmentPitch(frames, segment);
+  if (!parts.length) return { notes: [], scale: null };
+  const { keys, sung, tonic, minor } = intendedKeys(parts);
+  const levels = parts.map((n) => n.level).sort((a, b) => a - b);
+  const loud = levels[Math.ceil(0.9 * (levels.length - 1))];
+  const notes = parts.map((n, i) => {
+    const note = { t: n.t, d: n.d, p: keys[i], v: Math.min(1, Math.max(0.05, 10 ** ((n.level - loud) / 20))) };
+    if (sung[i] !== keys[i]) note.s = sung[i];
+    return note;
+  });
+  return { notes, scale: tonic === null ? null : { tonic, minor } };
+}
 
 /**
  * Analyses a whole recording in pieces, letting the page breathe between them.

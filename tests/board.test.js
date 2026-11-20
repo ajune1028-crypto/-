@@ -452,3 +452,23 @@ test("a card's speed never changes its size: the halves of a cut card are as wid
   assert.deepEqual([l.w, r.w, l.speed, r.speed], [180, 180, 2, 2], "each half 3 s wide, both at 2×");
   assert.equal(r.x, l.x + 180 + 24);
 });
+
+test("a song card keeps what was sung and its key, and switches 부른 그대로 ↔ 조에 맞춰 in its own data", async () => {
+  const { songCardData, cardTonalState, cardTonalData, cardNotes, cardScale, cardFromClip } = await import("../src/core/board.js");
+  const notes = [{ t: 0, d: 0.3, p: 57, v: 0.8 }, { t: 0.4, d: 0.3, p: 60, v: 0.8, s: 59 }, { t: 0.8, d: 0.3, p: 64, v: 0.8 }];
+  const d = songCardData({ duration: 1.2, notes, peaks: "", scale: { tonic: 9, minor: true } });
+  assert.deepEqual(d.sung, [[1, 59]]);
+  assert.deepEqual(cardScale(d), { tonic: 9, minor: true });
+  assert.equal(cardTonalState(d), "tonal");
+  const sung = cardTonalData(d, false);
+  assert.deepEqual(sung.notes.map((n) => n[2]), [57, 59, 64]);
+  assert.equal(cardTonalState(sung), "sung");
+  const back = cardTonalData(sung, true);
+  assert.deepEqual(back.notes.map((n) => n[2]), [57, 60, 64]);
+  assert.deepEqual(back.sung, [[1, 59]]);
+  assert.deepEqual(cardNotes(back).map((n) => n.s ?? null), [null, 59, null], "a card's notes into a song room keep the choice");
+  // From a song clip (the clipboard's source): the part's notes keep theirs.
+  const part = cardFromClip({ source: { duration: 1.2, notes, peaks: "", scale: { tonic: 9, minor: true } }, offset: 300, length: 900 });
+  assert.deepEqual(part.sung, [[0, 59]]);
+  assert.deepEqual(part.scale, [9, 1]);
+});

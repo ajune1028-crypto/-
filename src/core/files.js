@@ -89,6 +89,25 @@ export class FileDoc {
   }
 }
 
+/**
+ * The file sent under a name that is not whole yet: { f, n, type, missing: [part indexes] }; null when
+ * there is none or it is whole. (A sending cut short is finished with `partOps` by the device that has it.)
+ */
+export function missingParts(doc, name) {
+  const f = doc.names.get(name);
+  const file = f && doc.files.get(f);
+  if (!file || file.parts.size >= file.n) return null;
+  const missing = [];
+  for (let i = 0; i < file.n; i++) if (!file.parts.has(i)) missing.push(i);
+  return { f, n: file.n, type: file.type, missing };
+}
+
+/** Ops for some parts of a file already begun (`f`, its `n` parts of `data`): the ones in `only`. */
+export function partOps(clock, { f, n, type, data, by, only }) {
+  if (Math.max(1, Math.ceil(data.length / FILE_PART_CHARS)) !== n) return [];
+  return only.map((i) => ({ t: "fpart", id: clock.next(), f, i, n, type, data: data.slice(i * FILE_PART_CHARS, (i + 1) * FILE_PART_CHARS), by }));
+}
+
 /** The ops that carry a file; its id is the first part's id. */
 export function fileOps(clock, { type, data, by, name }) {
   const n = Math.max(1, Math.ceil(data.length / FILE_PART_CHARS));

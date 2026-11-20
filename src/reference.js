@@ -30,7 +30,7 @@ export function refSounds(store) {
   return store.get(SOUNDS, []);
 }
 
-export function addRefSound(store, { name, dur, notes, peaks, blob, from = null }, now = Date.now()) {
+export function addRefSound(store, { name, dur, notes, peaks, blob, from = null, scale = null }, now = Date.now()) {
   // The same recording again (kept when it was made, then put in from a room): one line, at the top.
   const had = blob ? refSounds(store).find((s) => s.blob === blob) : null;
   if (had) {
@@ -38,6 +38,7 @@ export function addRefSound(store, { name, dur, notes, peaks, blob, from = null 
     return had;
   }
   const sound = { id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6), name: name ? String(name).slice(0, 60) : "녹음", dur, notes, peaks: peaks || "", blob, at: now };
+  if (scale && Number.isInteger(scale.tonic)) sound.scale = { tonic: scale.tonic, minor: !!scale.minor };
   // Made in a room (every take is kept here too): which one.
   if (from && typeof from.room === "string") sound.from = { room: from.room.slice(0, 40), name: String(from.name || "").slice(0, 30), kind: String(from.kind || "").slice(0, 30) };
   store.set(SOUNDS, [sound, ...refSounds(store)].slice(0, MAX_SOUNDS));

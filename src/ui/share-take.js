@@ -5,7 +5,7 @@
 // piano. Whoever has the original and sees the room lacks it sends it; it is sent once.
 
 import { encodeAdpcm, decodeAdpcm } from "../audio/adpcm.js";
-import { fileOps, FILE_PART_CHARS, MAX_FILE_PARTS } from "../core/files.js";
+import { fileOps, missingParts, partOps, FILE_PART_CHARS, MAX_FILE_PARTS } from "../core/files.js";
 import { toBase64, fromBase64 } from "../core/b64.js";
 import { decodeWav } from "../audio/wav.js";
 import { toMono, resample } from "../audio/dsp.js";
@@ -14,22 +14,29 @@ export const SHARE_RATE = 16000;
 const PART_PAUSE_MS = 120; // between parts: the room's store takes them one by one
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const queues = new WeakMap(); // session → { busy, waiting: [key], sent: Set }
+const queues = new WeakMap(); // session → { busy, waiting: [key], sent: Set, done: Promise }
 
 /** The longest take that fits the room's files, in seconds. */
 export const MAX_SHARED_SECONDS = Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 - 16) / (SHARE_RATE / 2));
 
 /**
  * Makes sure the room has this take's sound: sends it (in the background) when this device has
- * the original and the room has none. Safe to call often.
+ * the original and the room has none, or finishes it when a sending was cut short (the room was
+ * left halfway). A take not found here yet (still being kept) is tried again on the next call.
+ * Safe to call often. `shareDone(session)` resolves when what was asked has gone.
  */
 export function shareTake(app, session, key) {
   if (!key || !session || session.transport?.readOnly || app.transport?.readOnly) return;
   let q = queues.get(session);
-  if (!q) queues.set(session, (q = { busy: false, waiting: [], sent: new Set() }));
+  if (!q) queues.set(session, (q = { busy: false, waiting: [], sent: new Set(), done: Promise.resolve() }));
   if (q.sent.has(key) || q.waiting.includes(key)) return;
   q.waiting.push(key);
-  if (!q.busy) run(app, session, q);
+  if (!q.busy) q.done = run(app, session, q);
+}
+
+/** Resolves once this session has sent every take asked of it so far. */
+export function shareDone(session) {
+  return queues.get(session)?.done || Promise.resolve();
 }
 
 async function run(app, session, q) {
@@ -38,19 +45,24 @@ async function run(app, session, q) {
     const files = await session.load("files");
     while (q.waiting.length) {
       const key = q.waiting.shift();
-      q.sent.add(key);
-      if (!files || files.namedProgress(key) > 0) continue; // someone has sent it (or is sending)
+      if (!files) continue;
+      if (files.namedProgress(key) >= 1) { q.sent.add(key); continue; } // it is there
       const kept = await app.blobs.get(key).catch(() => null);
       const wav = kept && decodeWav(kept.data);
-      if (!wav) continue;
+      if (!wav) continue; // not here (yet): asked again later
+      q.sent.add(key);
       const mono = toMono(wav.channels);
       if (mono.length / wav.rate > MAX_SHARED_SECONDS) continue;
       const low = wav.rate === SHARE_RATE ? mono : resample(mono, wav.rate, SHARE_RATE);
       const data = toBase64(encodeAdpcm(low, SHARE_RATE));
-      // Looked again just before sending: two of my devices open at once send it only once.
-      if (files.namedProgress(key) > 0) continue;
-      const made = fileOps(session.clock, { type: "audio/adpcm", data, by: session.memberId || "", name: key });
-      for (const op of made.ops) {
+      // Begun before (this device left the room halfway): the parts still missing, under the same file.
+      // Otherwise (looked again just before sending, so two of my devices open at once send it once) whole.
+      const begun = missingParts(files, key);
+      if (!begun && files.namedProgress(key) > 0) continue;
+      const ops = begun
+        ? partOps(session.clock, { f: begun.f, n: begun.n, type: begun.type, data, by: session.memberId || "", only: begun.missing })
+        : fileOps(session.clock, { type: "audio/adpcm", data, by: session.memberId || "", name: key }).ops;
+      for (const op of ops) {
         if (!session.docs) return;
         session.commit("files", [op]);
         await pause(PART_PAUSE_MS);
