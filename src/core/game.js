@@ -21,11 +21,25 @@
 //   page   { id, g, by, r, text?, at }               a round's page from the one whose turn it is
 //                                                  (the first counts; a drawing is in relayDoc)
 //   turn   { id, g, by, n }                          the album shown up to page n, for everyone
+//
+// 그려서 맞히기 ("sketch", for any number of people; the reference study §4: Skribbl's turns as
+// scribble.rs (BSD-3) and Skribblrs.io (MIT) run them, read for the flow and the scoring, with Korean
+// 초성 for hints): everyone who says yes plays, and the asker begins it (begin, as 이어 그리기). Each
+// in turn picks one of three words and draws it (live, in sketchDoc) while the others type guesses;
+// the hint grows from blanks to 초성 to one syllable shown. A right guess scores more the sooner it
+// comes, and the one drawing scores for each who got it; a turn ends when everyone has it or its time
+// is up, the answer shows, and the next one draws. At the end, everyone's points.
+//   word   { id, g, by, n (the turn), w, at }       the drawer's pick of the three (the first counts)
+//   try    { id, g, by, n, text, at }               a guess
 // Whatever order they arrive in, every screen derives the same game.
 
 import { cmpId, validId } from "./crdt.js";
+import { SKETCH_WORDS } from "./words.js";
+import { initialOf } from "./search.js";
 
-export const KINDS = ["rps", "omok", "relay"];
+export const KINDS = ["rps", "omok", "relay", "sketch"];
+/** The games for everyone in the room (gathered, then begun by the asker). */
+export const MANY = ["relay", "sketch"];
 export const RPS = ["rock", "paper", "scissors"];
 export const OMOK_SIZE = 15;
 export const COUNTDOWN_MS = 3600;
@@ -33,6 +47,10 @@ const MAX_UNKNOWN = 300;
 // 이어 그리기's times (ms): a line to write, a drawing, a guess; the pause as the books pass on; how
 // late a page may come (a slow network, a clock a little behind); words kept short.
 export const RELAY = { write: 45000, draw: 90000, guess: 40000, gap: 1600, grace: 3000, maxText: 60, maxPlayers: 10, maxRounds: 8 };
+// 그려서 맞히기's times (ms) and points: picking a word, drawing it, the answer shown; how late a
+// guess may come; a guess's points (from most, at once, to least, at the end); the drawer's for each
+// who got it.
+export const SKETCH = { choose: 12000, draw: 80000, reveal: 4000, grace: 3000, maxTry: 30, maxTurns: 20, most: 200, least: 40, drawerPoints: 50 };
 
 const counterOf = (id) => Number(id.slice(0, id.indexOf("@")));
 const who = (v) => typeof v === "string" && v.length > 0 && v.length <= 40;
@@ -59,7 +77,7 @@ export class GameDoc {
     if (this.seen.has(op.id)) return "dup";
     if (op.t === "ask") {
       if (!KINDS.includes(op.kind) || !who(op.by) || !Number.isFinite(op.at)) return this.setAside(op);
-      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [], begins: [], pages: [], turns: [] });
+      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [], begins: [], pages: [], turns: [], words: [], tries: [] });
       this.done(op);
       for (const later of this.waiting.get(op.id) || []) this.apply(later);
       this.waiting.delete(op.id);
@@ -90,6 +108,12 @@ export class GameDoc {
     } else if (op.t === "turn") {
       if (!Number.isInteger(op.n) || op.n < 0 || op.n > RELAY.maxPlayers * RELAY.maxRounds) return this.setAside(op);
       list = "turns";
+    } else if (op.t === "word") {
+      if (!Number.isInteger(op.n) || op.n < 0 || op.n >= SKETCH.maxTurns || typeof op.w !== "string" || op.w.length > 20 || !Number.isFinite(op.at)) return this.setAside(op);
+      list = "words";
+    } else if (op.t === "try") {
+      if (!Number.isInteger(op.n) || op.n < 0 || op.n >= SKETCH.maxTurns || typeof op.text !== "string" || op.text.length > 60 || !Number.isFinite(op.at)) return this.setAside(op);
+      list = "tries";
     } else return this.setAside(op);
     const game = this.games.get(op.g);
     if (!game) {
@@ -128,6 +152,7 @@ export class GameDoc {
     const g = this.games.get(id);
     if (!g) return null;
     if (g.kind === "relay") return this.relay(g);
+    if (g.kind === "sketch") return this.sketch(g);
     const byId = (a, b) => cmpId(a.id, b.id);
     const out = { id: g.id, kind: g.kind, by: g.by, at: g.at, state: "asked", players: [g.by], start: null, picks: {}, stones: [], winner: null, draw: false, line: [] };
     const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
@@ -202,19 +227,28 @@ export class GameDoc {
    * turn (the album shown up to this page; −1 none) }. Book b is player b's; in round r it is with
    * player (b + r). A round ends when every page is in (at the last one's moment) or at its time.
    */
+  /**
+   * A game for everyone (이어 그리기, 그려서 맞히기) before it begins: who has joined (each person's last
+   * answer counts; they stand in the order they first said yes), or cancelled by the asker. Returns the
+   * asker's begin once there is one.
+   */
+  gather(g, out) {
+    const byId = (a, b) => cmpId(a.id, b.id);
+    const begin = g.begins.filter((b) => b.by === g.by && b.players[0] === g.by).sort(byId)[0];
+    if (begin) return begin;
+    const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
+    const last = new Map();
+    for (const r of replies) last.set(r.by, r.yes);
+    for (const r of replies) if (last.get(r.by) && !out.players.includes(r.by)) out.players.push(r.by);
+    if (g.quits.some((q) => q.by === g.by)) out.state = "cancelled";
+    return null;
+  }
+
   relay(g) {
     const byId = (a, b) => cmpId(a.id, b.id);
     const out = { id: g.id, kind: "relay", by: g.by, at: g.at, state: "gathering", players: [g.by], start: null, rounds: 0, schedule: [], albumAt: null, pages: {}, turn: -1 };
-    const begin = g.begins.filter((b) => b.by === g.by && b.players[0] === g.by).sort(byId)[0];
-    if (!begin) {
-      // Each person's last answer counts; they stand in the order they first said yes.
-      const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
-      const last = new Map();
-      for (const r of replies) last.set(r.by, r.yes);
-      for (const r of replies) if (last.get(r.by) && !out.players.includes(r.by)) out.players.push(r.by);
-      if (g.quits.some((q) => q.by === g.by)) out.state = "cancelled";
-      return out;
-    }
+    const begin = this.gather(g, out);
+    if (!begin) return out;
     const players = begin.players.slice();
     const P = players.length;
     const R = Math.max(3, Math.min(RELAY.maxRounds, P));
@@ -241,6 +275,58 @@ export class GameDoc {
     out.albumAt = at;
     for (const t of g.turns) if (players.includes(t.by) && t.n > out.turn) out.turn = Math.min(t.n, P * R);
     if (out.turn >= P * R) out.state = "done";
+    return out;
+  }
+
+  /**
+   * 그려서 맞히기 as it stands: { id, kind, by, at, state: "gathering" | "cancelled" | "playing", players,
+   * start, turns, schedule: [{ n, drawer, options, word, chosen, start, chosenAt, deadline, end,
+   * correct: [{ by, at, points }], said: [{ by, at, text? , got? }] }], scores: { member: points }, endAt }.
+   * Everyone draws in turn (twice round for two or three people). A turn's word is the drawer's pick, or
+   * the first of the three when the picking time runs out; it ends when every guesser has it (at the
+   * last one's moment) or at its time, and the next begins after the answer has shown.
+   */
+  sketch(g) {
+    const byId = (a, b) => cmpId(a.id, b.id);
+    const out = { id: g.id, kind: "sketch", by: g.by, at: g.at, state: "gathering", players: [g.by], start: null, turns: 0, schedule: [], scores: {}, endAt: null };
+    const begin = this.gather(g, out);
+    if (!begin) return out;
+    const players = begin.players.slice();
+    const P = players.length;
+    const T = Math.min(SKETCH.maxTurns, P <= 3 ? P * 2 : P);
+    Object.assign(out, { state: "playing", players, start: begin.at + COUNTDOWN_MS, turns: T });
+    for (const p of players) out.scores[p] = 0;
+    const words = g.words.slice().sort(byId);
+    const tries = g.tries.slice().sort((a, b) => a.at - b.at || cmpId(a.id, b.id));
+    let at = out.start;
+    for (let n = 0; n < T; n++) {
+      const drawer = players[n % P];
+      const options = wordsFor(g.id, n);
+      const pick = words.find((w) => w.n === n && w.by === drawer && options.includes(w.w) && w.at <= at + SKETCH.choose + SKETCH.grace);
+      const chosenAt = pick ? Math.min(Math.max(pick.at, at), at + SKETCH.choose) : at + SKETCH.choose;
+      const word = pick ? pick.w : options[0];
+      const deadline = chosenAt + SKETCH.draw;
+      const correct = [];
+      const said = [];
+      const got = new Set();
+      for (const t of tries) {
+        if (t.n !== n || t.by === drawer || !players.includes(t.by) || got.has(t.by)) continue;
+        if (t.at < at - SKETCH.grace || t.at > deadline + SKETCH.grace) continue;
+        if (sameWord(word, t.text)) {
+          const when = Math.min(deadline, Math.max(chosenAt, t.at));
+          const points = Math.round(SKETCH.least + (SKETCH.most - SKETCH.least) * ((deadline - when) / SKETCH.draw));
+          got.add(t.by);
+          correct.push({ by: t.by, at: when, points });
+          said.push({ by: t.by, at: t.at, got: true });
+          out.scores[t.by] += points;
+          out.scores[drawer] += SKETCH.drawerPoints;
+        } else said.push({ by: t.by, at: t.at, text: cleanTry(t.text) });
+      }
+      const end = P > 1 && got.size === P - 1 ? Math.min(deadline, Math.max(chosenAt, ...correct.map((x) => x.at))) : deadline;
+      out.schedule.push({ n, drawer, options, word, chosen: !!pick, start: at, chosenAt, deadline, end, correct, said: said.filter((x) => x.at <= end + SKETCH.grace) });
+      at = end + SKETCH.reveal;
+    }
+    out.endAt = at;
     return out;
   }
 
@@ -347,10 +433,10 @@ export function relayAlbum(g) {
   return out;
 }
 
-/** The asker begins 이어 그리기 with those who have joined. */
+/** The asker begins 이어 그리기 or 그려서 맞히기 with those who have joined. */
 export function beginOps(clock, doc, g, { by, at = Date.now() }) {
   const now = doc.game(g);
-  if (!now || now.kind !== "relay") return { ops: [] };
+  if (!now || !MANY.includes(now.kind)) return { ops: [] };
   clock.atLeast(doc.maxN);
   return { ops: [{ t: "begin", id: clock.next(), g, by, at, players: now.players.slice(0, RELAY.maxPlayers) }] };
 }
@@ -373,3 +459,111 @@ export function quitOps(clock, doc, g, { by }) {
   clock.atLeast(doc.maxN);
   return { ops: [{ t: "quit", id: clock.next(), g, by }] };
 }
+
+// ---- 그려서 맞히기 ------------------------------------------------------------------------------------
+
+const cleanTry = (text) => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, SKETCH.maxTry);
+/** A word as it is compared: no spaces, no marks, one case. */
+const plain = (text) => String(text ?? "").normalize("NFC").toLowerCase().replace(/[\s.,!?~'"`·…\-_]/g, "");
+
+/** A guess that is the word (spaces, marks and case aside). */
+export function sameWord(word, text) {
+  const w = plain(word);
+  return w.length > 0 && w === plain(text);
+}
+
+/** A guess one syllable off (one wrong, missing or extra): "거의 맞았어요", told only to the one guessing. */
+export function nearWord(word, text) {
+  const a = [...plain(word)];
+  const b = [...plain(text)];
+  if (a.length < 2 || !b.length || a.join("") === b.join("")) return false;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  // Levenshtein distance, rows kept.
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = row;
+  }
+  return prev[b.length] === 1;
+}
+
+// The words of a game: the list shuffled by the game's id (the same on every screen), three a turn.
+const decks = new Map();
+function seedOf(text) {
+  let h = 2166136261;
+  for (const ch of text) {
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+function deckOf(id) {
+  let deck = decks.get(id);
+  if (deck) return deck;
+  let a = seedOf(id);
+  const random = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  deck = SKETCH_WORDS.slice();
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  decks.set(id, deck);
+  return deck;
+}
+
+/** The three words offered in turn n (none met before in the same game). */
+export function wordsFor(id, n) {
+  const deck = deckOf(id);
+  const k = (n * 3) % (deck.length - 2);
+  return deck.slice(k, k + 3);
+}
+
+/** The drawing of turn n (an ink document; no dots, so a database path takes it). */
+export function sketchDoc(id, n) {
+  return `k:G${id}~${n}`;
+}
+
+/**
+ * The hint as the drawing goes on (f: how far into the drawing time, 0..1): a ○ for each syllable,
+ * then each syllable's first sound (초성), then one syllable shown — never the whole of a one-syllable word.
+ */
+export function sketchHint(word, f) {
+  const syl = [...word];
+  if (f < 1 / 3) return syl.map((ch) => (/\s/.test(ch) ? "" : "○")).join(" ");
+  const cho = syl.map((ch) => initialOf(ch));
+  if (f < 2 / 3 || syl.length < 2) return cho.join(" ");
+  const k = syl.reduce((sum, ch) => sum + ch.codePointAt(0), 0) % syl.length;
+  return cho.map((c, i) => (i === k ? syl[i] : c)).join(" ");
+}
+
+/** Where a 그려서 맞히기 is at a moment: countdown, a word being picked, drawing (how far in), the answer, the scores. */
+export function sketchAt(g, now) {
+  if (!g || g.kind !== "sketch") return { phase: "none" };
+  if (g.state !== "playing") return { phase: g.state };
+  if (now < g.start) return { phase: "countdown", left: g.start - now };
+  for (const s of g.schedule) {
+    if (now < s.chosenAt) return { phase: "choose", n: s.n, s, left: s.chosenAt - now, until: s.chosenAt };
+    if (now < s.end) return { phase: "draw", n: s.n, s, left: s.end - now, until: s.end, f: (now - s.chosenAt) / SKETCH.draw };
+    if (now < s.end + SKETCH.reveal) return { phase: "reveal", n: s.n, s, until: s.end + SKETCH.reveal };
+  }
+  return { phase: "scores" };
+}
+
+/** The drawer's pick of the three words for turn n. */
+export function wordOps(clock, doc, g, { by, n, w, at = Date.now() }) {
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "word", id: clock.next(), g, by, n, w: String(w).slice(0, 20), at }] };
+}
+
+/** A guess in turn n. */
+export function tryOps(clock, doc, g, { by, n, text, at = Date.now() }) {
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "try", id: clock.next(), g, by, n, text: String(text ?? "").slice(0, 60), at }] };
+}
+

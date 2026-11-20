@@ -10,17 +10,19 @@
 import { h, icon, toast } from "./dom.js";
 import { buzz, chime } from "./chime.js";
 import { getSettings } from "../identity.js";
-import { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS } from "../core/game.js";
+import { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS, MANY } from "../core/game.js";
 import { relayScreen } from "./relay.js";
+import { sketchScreen } from "./sketch.js";
 import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 
-// [kind, name, faces, many]: 이어 그리기 is for everyone in the room (2 and more), the others for two.
-const GAMES = [["rps", "가위바위보", "✊✋✌️", false], ["omok", "오목", "⚫⚪", false], ["relay", "이어 그리기", "📝🎨", true]];
+// [kind, name, faces, many]: 이어 그리기 and 그려서 맞히기 are for everyone in the room (2 and more), the others for two.
+const GAMES = [["rps", "가위바위보", "✊✋✌️", false], ["omok", "오목", "⚫⚪", false], ["relay", "이어 그리기", "📝🎨", true], ["sketch", "그려서 맞히기", "✏️❓", true]];
 const gameName = (kind) => GAMES.find(([k]) => k === kind)?.[1] || "게임";
 const RPS_FACE = { rock: "✊", paper: "✋", scissors: "✌️" };
 const RPS_NAME = { rock: "바위", paper: "보", scissors: "가위" };
 const STALE_MS = 2 * 60 * 1000; // an invitation older than this is not shown
+const SCORES_MS = 60 * 1000; // 그려서 맞히기's scores open again after a reload this long after the end
 
 export const gamesOn = (store) => getSettings(store).games !== false;
 
@@ -35,6 +37,7 @@ export function mountGames(app, session) {
   let invite = null; // the invitation card: { id, el }
   let closeMenu = null;
   let relay = null; // 이어 그리기's screens (ui/relay.js), made when one is first shown
+  let sketch = null; // 그려서 맞히기's (ui/sketch.js)
   const seenAsks = new Set(); // asks that were already there when the room opened
   const dismissed = new Set(); // games put away here (닫기, 다음에): not opened again on this screen
   const button = gamesOn(app.store)
@@ -90,7 +93,7 @@ export function mountGames(app, session) {
   function ask(kind) {
     const made = askOps(session.clock, doc, { kind, by: me() });
     if (!commit(made)) return;
-    if (kind === "relay") look();
+    if (MANY.includes(kind)) look();
     else toast(app.root, `${gameName(kind)}를 신청했어요. 친구가 받으면 시작해요`);
   }
 
@@ -100,7 +103,7 @@ export function mountGames(app, session) {
     if (invite?.id === g.id) return;
     invite?.el.remove();
     const name = gameName(g.kind);
-    const many = g.kind === "relay";
+    const many = MANY.includes(g.kind);
     const el = h("div", { class: "game-invite", id: "game-invite", role: "alertdialog", "aria-label": "미니게임 신청" },
       h("span", { class: "game-invite-dot", style: { background: colorOf(g.by) } }),
       h("span", { class: "game-invite-text", text: many ? `${nameOf(g.by)}님이 ${name}를 열었어요` : `${nameOf(g.by)}님이 ${name}를 신청했어요` }),
@@ -134,6 +137,7 @@ export function mountGames(app, session) {
     dismissed.add(shown.id);
     clearTimeout(shown.timer);
     relay?.close();
+    sketch?.close();
     shown.el.remove();
     shown = null;
   }
@@ -162,6 +166,10 @@ export function mountGames(app, session) {
     if (g.kind === "relay") {
       relay ||= relayScreen({ app, session, doc: () => doc, me, nameOf, colorOf, commit, countdown, shut, again: () => ask("relay") });
       return relay.draw(g, el);
+    }
+    if (g.kind === "sketch") {
+      sketch ||= sketchScreen({ app, session, doc: () => doc, me, nameOf, colorOf, commit, countdown, shut, again: () => ask("sketch") });
+      return sketch.draw(g, el);
     }
     const left = g.start - Date.now();
     if (g.state === "playing" && left > 0) return countdown(g);
@@ -253,11 +261,13 @@ export function mountGames(app, session) {
     let mine = null;
     let asked = null;
     for (const g of doc.list()) {
-      if (g.kind === "relay") {
-        // 이어 그리기: open while gathering (once I am in it) and while it goes on; the invitation
-        // shows to those not in it until it begins.
+      if (MANY.includes(g.kind)) {
+        // 이어 그리기, 그려서 맞히기: open while gathering (once I am in it) and while it goes on; the
+        // invitation shows to those not in it until it begins. 그려서 맞히기 is over by the clock.
         if (dismissed.has(g.id) && shown?.id !== g.id) continue;
         const inIt = g.players.includes(me());
+        const over = g.kind === "sketch" && g.endAt && now > g.endAt + SCORES_MS && shown?.id !== g.id;
+        if (over) continue;
         if (inIt && (g.state === "gathering" || g.state === "playing")) mine = g;
         else if (g.state === "done" && shown?.id === g.id) mine = g;
         else if (g.state === "gathering" && !inIt && g.by !== me() && !seenAsks.has(g.id) && now - g.at < STALE_MS) asked = g;
@@ -288,6 +298,7 @@ export function mountGames(app, session) {
     close() {
       for (const off of offs) off();
       relay?.destroy();
+      sketch?.destroy();
       closeMenu?.();
       invite?.el.remove();
       shut();

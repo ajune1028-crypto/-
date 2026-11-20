@@ -25,6 +25,11 @@ function parts(ch) {
 
 const isConsonant = (ch) => ch.length === 1 && CHO.includes(ch);
 
+/** A syllable's first sound (초성): 고 → ㄱ; anything else stays as it is. */
+export function initialOf(ch) {
+  return parts(ch)?.cho ?? ch;
+}
+
 /** How many characters of `text` from i the query character q takes (0: it does not match). */
 function step(q, last, text, i) {
   const c = text[i];
