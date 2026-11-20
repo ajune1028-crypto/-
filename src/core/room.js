@@ -1,10 +1,19 @@
-// A room's shared facts: its name and kind, and the people in it.
+// A room's shared facts: its name and kind, and the people in it; and its 역사 (the owner: "처음 시작한
+// 날짜, 그리고 현재 지금 수정한 날짜 가장 최근에, 그리고 방에 누가 언제 들어갔는지"):
+//   seen { m, at }        someone came in (noted at most once in half an hour)
+//   did  { m, at, k, n }  what someone made: k a kind of work (녹음, 그림, 글…), n how many, gathered
+//                         over ten minutes
 //
 // There is no login. A person is a name and a colour inside one room, and may
 // set a five-digit personal code so another device can become the same person.
 
 import { cmpId, validId } from "./crdt.js";
 import { PALETTE } from "./paint.js";
+import { dayKey } from "./time.js";
+
+export const WORK_KINDS = ["녹음", "노래", "글", "그림", "카드", "보드", "애니", "게임"];
+const SEEN_EVERY_MS = 30 * 60 * 1000;
+const MAX_LOG = 4000;
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const MEMBER_ID = /^[a-z0-9]{1,24}$/;
@@ -140,6 +149,8 @@ export class RoomState {
     this.facts = new Map();
     this.people = new Map();
     this.unknown = [];
+    this.log = []; // seen and did, as they came
+    this.logIds = new Set();
   }
 
   apply(op) {
@@ -152,6 +163,20 @@ export class RoomState {
       if (typeof op.m !== "string" || !MEMBER_ID.test(op.m) || !FIELD_OK[op.k] || !FIELD_OK[op.k](op.v)) return this.setAside(op);
       if (!this.people.has(op.m)) this.people.set(op.m, new Map());
       return this.put(this.people.get(op.m), op.k, op);
+    }
+    if (op.t === "seen" || op.t === "did") {
+      const ok = typeof op.m === "string" && MEMBER_ID.test(op.m) && Number.isFinite(op.at) && op.at > 0 &&
+        (op.t === "seen" || (WORK_KINDS.includes(op.k) && Number.isInteger(op.n) && op.n >= 1 && op.n <= 100000));
+      if (!ok) return this.setAside(op);
+      if (this.logIds.has(op.id)) return "dup";
+      this.logIds.add(op.id);
+      this.log.push(op.t === "seen" ? { t: "seen", id: op.id, m: op.m, at: op.at } : { t: "did", id: op.id, m: op.m, at: op.at, k: op.k, n: op.n });
+      if (this.log.length > MAX_LOG) {
+        this.log.sort((a, b) => a.at - b.at || cmpId(a.id, b.id));
+        this.log.splice(0, this.log.length - MAX_LOG);
+      }
+      this.version++;
+      return "applied";
     }
     return this.setAside(op);
   }
@@ -200,12 +225,59 @@ export class RoomState {
       .sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1));
   }
 
+  /** Whether this person's coming in was noted within the last half hour. */
+  seenRecently(memberId, now) {
+    return this.log.some((e) => e.t === "seen" && e.m === memberId && now - e.at >= 0 && now - e.at < SEEN_EVERY_MS);
+  }
+
+  /**
+   * The room's story: { createdAt, createdBy, lastAt, lastBy (the latest change), visits: [{ m, at }]
+   * newest first, days: [{ day ("YYYY-MM-DD" in the room's time zone), work: [{ m, k, n }] }] newest first }.
+   * Rooms from before this was kept have their start and their people's first coming in.
+   */
+  history() {
+    const tz = this.meta("tz") || "UTC";
+    const byTime = (a, b) => b.at - a.at || cmpId(b.id, a.id);
+    const log = this.log.slice().sort(byTime);
+    const visits = log.filter((e) => e.t === "seen").map(({ m, at }) => ({ m, at }));
+    for (const p of this.members()) if (p.joinedAt && !visits.some((v) => v.m === p.id && v.at <= p.joinedAt + 1000)) visits.push({ m: p.id, at: p.joinedAt });
+    visits.sort((a, b) => b.at - a.at || (a.m < b.m ? -1 : 1));
+    const work = log.filter((e) => e.t === "did");
+    const last = work[0];
+    const days = new Map();
+    for (const e of work.slice().reverse()) {
+      const day = dayKey(e.at, tz);
+      if (!days.has(day)) days.set(day, new Map());
+      const key = e.m + "|" + e.k;
+      const all = days.get(day);
+      all.set(key, { m: e.m, k: e.k, n: (all.get(key)?.n || 0) + e.n });
+    }
+    return {
+      createdAt: this.meta("createdAt") ?? null,
+      createdBy: this.meta("createdBy") ?? null,
+      lastAt: last ? last.at : null,
+      lastBy: last ? last.m : null,
+      visits,
+      days: [...days.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([day, all]) => ({ day, work: [...all.values()] })),
+    };
+  }
+
   /** The lowest palette index nobody uses; once all are taken, the least used. */
   freeColor() {
     const used = new Array(PALETTE.length).fill(0);
     for (const m of this.members()) used[m.color]++;
     return used.indexOf(Math.min(...used));
   }
+}
+
+/** Noting that someone came in. */
+export function seenOps(clock, memberId, now = Date.now()) {
+  return [{ t: "seen", id: clock.next(), m: memberId, at: now }];
+}
+
+/** Noting what someone made: counts by kind of work ({ 녹음: 2, 그림: 14 }). */
+export function didOps(clock, memberId, counts, now = Date.now()) {
+  return Object.entries(counts).filter(([k, n]) => WORK_KINDS.includes(k) && n > 0).map(([k, n]) => ({ t: "did", id: clock.next(), m: memberId, at: now, k, n: Math.min(100000, Math.round(n)) }));
 }
 
 /** Ops that set fields of one person. */

@@ -263,3 +263,26 @@ test("documents no type claims are ignored", async (t) => {
   a.commit("nonsense", [{ t: "x", id: a.clock.next() }]);
   assert.equal(a.doc("nonsense"), null);
 });
+
+test("방의 역사 from a session: coming in is noted once in half an hour; what I make is written down by kind soon after the first change, and on leaving", async (t) => {
+  const w = world(t);
+  const tr = w.transport();
+  await tr.createRoom({ id: "roomroomroom", kind: "daily-text", name: "방" });
+  const a = w.session(tr, "roomroomroom", undefined, { workTimes: [20, 60_000] });
+  assert.equal(await a.open(), "ok");
+  a.commit("room", createRoomOps(a.clock, { kind: "daily-text", name: "방", tz: "Asia/Seoul", now: 1, memberId: "m1", memberName: "가", pin: null }));
+  a.setMe("m1");
+  a.noteVisit(1_000_000);
+  a.noteVisit(1_000_000 + 60_000);
+  assert.equal(a.room.history().visits.filter((v) => v.m === "m1" && v.at >= 1_000_000).length, 1, "once in half an hour");
+  type(a, "안녕하세요");
+  await until(() => a.room.history().days.length === 1 && a.pending === 0);
+  type(a, "!");
+  a.close();
+  const b = w.session(w.transport(), "roomroomroom");
+  assert.equal(await b.open(), "ok");
+  await until(() => b.room.history().days.length === 1);
+  const [day] = b.room.history().days;
+  assert.deepEqual(day.work.map((x) => [x.m, x.k]), [["m1", "글"]]);
+  assert.ok(day.work[0].n >= 1);
+});

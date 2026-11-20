@@ -1,7 +1,7 @@
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
 import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast, toggle } from "./dom.js";
-import { duplicateRoom, putIntoBoard, putRoomIntoSong } from "./room-actions.js";
+import { duplicateRoom, putIntoBoard, putRoomIntoSong, roomHistory } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
 import { validPreview } from "../core/preview.js";
@@ -33,6 +33,62 @@ function whenLabel(ms) {
  * What a room holds, at a glance (the owner chose 홈 미리보기): kept when the room was last left on
  * this device. Its last line; its notes as small bars along the song; its cards as a tiny map.
  */
+/** "오늘 오후 3:02", "어제 오전 9:10", "11월 14일 오후 3:02", "2025년 3월 1일 …" (this device's time). */
+export function whenText(ms, now = Date.now()) {
+  const d = new Date(ms);
+  const n = new Date(now);
+  const hh = d.getHours();
+  const time = `${hh < 12 ? "오전" : "오후"} ${hh % 12 === 0 ? 12 : hh % 12}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, n)) return "오늘 " + time;
+  const y = new Date(n);
+  y.setDate(n.getDate() - 1);
+  if (sameDay(d, y)) return "어제 " + time;
+  const date = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  return (d.getFullYear() === n.getFullYear() ? date : `${d.getFullYear()}년 ${date}`) + " " + time;
+}
+
+const WORK_WORDS = { 녹음: (n) => `녹음 ${n}개`, 그림: (n) => `그림 ${n}획`, 카드: (n) => `카드 ${n}장`, 게임: (n) => `게임 ${n}판`, 글: () => "글", 노래: () => "노래 다듬기", 보드: () => "보드 정리", 애니: () => "애니메이션" };
+
+/** The room's story, as the top of its long-press sheet. */
+function historyView(hist) {
+  const who = (id) => hist.people.get(id);
+  const name = (id) => who(id)?.name || "누군가";
+  const dot = (id) => h("span", { class: "dot", style: { background: memberColor(who(id)?.color ?? 0, currentTheme()) } });
+  const line = (label, value, id) => h("p", { class: "hist-line" }, h("span", { class: "hist-label", text: label }), h("span", { class: "hist-value" }, value));
+  const parts = [];
+  if (hist.createdAt) parts.push(line("시작", [whenText(hist.createdAt), hist.createdBy ? ` · ${name(hist.createdBy)}이(가) 만듦` : ""].join(""), hist.createdBy));
+  parts.push(line("최근 수정", hist.lastAt ? `${whenText(hist.lastAt)} · ${name(hist.lastBy)}` : "기록이 아직 없어요 (이제부터 남아요)"));
+  // Who came in: each person once, with their latest coming in and how often.
+  const people = new Map();
+  for (const v of hist.visits) {
+    const p = people.get(v.m) || { last: v.at, count: 0 };
+    p.count++;
+    if (v.at > p.last) p.last = v.at;
+    people.set(v.m, p);
+  }
+  if (people.size) {
+    parts.push(h("p", { class: "hist-head", text: "들어온 사람" }));
+    parts.push(h("ul", { class: "hist-people", id: "hist-people" }, [...people.entries()].sort((a, b) => b[1].last - a[1].last).map(([id, p]) =>
+      h("li", { data: { member: id } }, dot(id), h("span", { class: "hist-name", text: name(id) }), h("span", { class: "hist-when", text: `${whenText(p.last)}${p.count > 1 ? ` · ${p.count}번` : ""}` })))));
+  }
+  // What each made, by day (newest first; a week, then 더 보기).
+  if (hist.days.length) {
+    parts.push(h("p", { class: "hist-head", text: "날마다" }));
+    const dayView = ({ day, work }) => {
+      const [, m, d] = day.split("-").map(Number);
+      const byPerson = new Map();
+      for (const w of work) (byPerson.get(w.m) || byPerson.set(w.m, []).get(w.m)).push(WORK_WORDS[w.k] ? WORK_WORDS[w.k](w.n) : w.k);
+      return h("li", { data: { day } }, h("span", { class: "hist-day", text: `${m}월 ${d}일` }),
+        h("span", { class: "hist-work" }, [...byPerson.entries()].map(([id, words]) => h("span", { class: "hist-made" }, dot(id), `${name(id)} ${words.join(" · ")}`))));
+    };
+    const list = h("ul", { class: "hist-days", id: "hist-days" }, hist.days.slice(0, 7).map(dayView));
+    parts.push(list);
+    if (hist.days.length > 7) parts.push(h("button", { class: "btn quiet small", type: "button", id: "hist-more", text: "더 보기", onclick: (e) => { list.replaceChildren(...hist.days.map(dayView)); e.currentTarget.remove(); } }));
+  }
+  return parts;
+}
+
 function previewOf(room) {
   const p = room.preview;
   if (!validPreview(p)) return null;
@@ -80,14 +136,18 @@ export function showHome(app) {
       }
       app.go("r-" + room.id);
     } },
-      h("span", { class: "room-name", text: room.name }),
-      h("span", { class: "room-meta" },
-        h("span", { class: "room-kind" }, icon(kind?.icon || "lines"), kind?.name || "새 버전의 방"),
-        when && h("span", { class: "room-when", text: when }),
-        // Who is behind the door: the colours of the people in it, once it is more than me.
-        room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
-          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))),
-      previewOf(room));
+      // What it holds, at the top left (the owner: "안에 있는 거 좀 보여주는 거를 안에 위 왼쪽에다가"), and
+      // what kind of room it is as a round logo with only its icon ("동그라미 하나 원형으로 … 아이콘만").
+      h("span", { class: "room-thumb" + (validPreview(room.preview) ? "" : " no-preview") },
+        previewOf(room),
+        h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines"))),
+      h("span", { class: "room-card-text" },
+        h("span", { class: "room-name", text: room.name }),
+        h("span", { class: "room-meta" },
+          when && h("span", { class: "room-when", text: when }),
+          // Who is behind the door: the colours of the people in it, once it is more than me.
+          room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
+            room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } }))))));
     if (!mine) return row;
     // 별표 (the owner: "별표 표시한 방은 맨 위에"): starred rooms lead their half.
     const star = h("button", { class: "room-star", type: "button", data: { star: room.id }, "aria-pressed": String(isStarred), "aria-label": isStarred ? "별표 빼기" : "별표 (맨 위에 두기)",
@@ -302,6 +362,12 @@ export function showHome(app) {
           !toSong.length && !boards.length && h("p", { class: "help", text: "보낼 수 있는 방이 아직 없어요. 창작 +에서 만들 수 있어요." }),
         ].filter(Boolean));
       };
+      // 역사 first: when it began, its latest change, who came in when, what was made by day.
+      const story = h("div", { class: "room-history", id: "room-history" }, h("p", { class: "help", text: "역사를 불러오는 중…" }));
+      panel.append(story);
+      roomHistory(app, room).then(
+        (hist) => story.replaceChildren(...historyView(hist)),
+        (err) => { console.warn(err); story.replaceChildren(h("p", { class: "help", text: "역사를 불러오지 못했어요" })); });
       panel.append(h("div", { class: "form", id: "room-actions" },
         h("button", { class: "btn", type: "button", id: "room-open", text: "열기", onclick: () => { close(); app.go("r-" + room.id); } }),
         h("button", { class: "btn quiet", type: "button", id: "room-duplicate", text: "복제", onclick: async () => {

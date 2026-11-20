@@ -143,3 +143,40 @@ test("the maker and a newcomer may bring the colour they prefer; without one the
   for (const op of joinOps(clock, room, { memberId: "m3", name: "다", now: 3 })) room.apply(op);
   assert.equal(room.member("m3").color, 0, "no preference: the first free");
 });
+
+test("방의 역사: when it began and by whom, the latest change and by whom, who came in when (one visit per half hour), and what each made by day - the same in any order", async () => {
+  const { RoomState, createRoomOps, joinOps, seenOps, didOps } = await import("../src/core/room.js");
+  const day = (d, h, m = 0) => Date.UTC(2026, 10, d, h, m);
+  const c = new Clock("a");
+  const ops = [
+    ...createRoomOps(c, { kind: "creative-song", name: "방", tz: "Asia/Seoul", now: day(14, 3), memberId: "m1", memberName: "나래", color: 2 }),
+    ...seenOps(c, "m1", day(14, 3)),
+  ];
+  const room = new RoomState();
+  room.applyAll(ops);
+  ops.push(...joinOps(c, room, { memberId: "m2", name: "민수", now: day(15, 9) }));
+  ops.push(...seenOps(c, "m2", day(15, 9)), ...didOps(c, "m2", { 녹음: 2, 그림: 14 }, day(15, 9, 20)));
+  ops.push(...seenOps(c, "m1", day(20, 12)), ...didOps(c, "m1", { 글: 30 }, day(20, 12, 5)));
+  const a = new RoomState();
+  a.applyAll(ops);
+  const hist = a.history();
+  assert.equal(hist.createdAt, day(14, 3));
+  assert.equal(hist.createdBy, "m1");
+  assert.equal(hist.lastAt, day(20, 12, 5), "the latest change");
+  assert.equal(hist.lastBy, "m1");
+  assert.deepEqual(hist.visits.map((v) => [v.m, v.at]), [["m1", day(20, 12)], ["m2", day(15, 9)], ["m1", day(14, 3)]], "newest first");
+  assert.deepEqual(hist.days.map((d) => [d.day, d.work.map((w) => [w.m, w.k, w.n])]), [
+    ["2026-11-20", [["m1", "글", 30]]],
+    ["2026-11-15", [["m2", "녹음", 2], ["m2", "그림", 14]]],
+  ]);
+  // Shuffled and repeated: the same story.
+  const b = new RoomState();
+  b.applyAll(shuffle(rng(3), [...ops, ...ops.slice(0, 6)]));
+  assert.deepEqual(b.history(), hist);
+  // A visit is noted at most once in half an hour.
+  assert.equal(a.seenRecently("m1", day(20, 12, 20)), true);
+  assert.equal(a.seenRecently("m1", day(20, 12, 40)), false);
+  // Nonsense is set aside.
+  assert.equal(new RoomState().apply({ t: "did", id: "1@x", m: "m1", at: 1, k: "해킹", n: 1 }), "unknown");
+  assert.equal(new RoomState().apply({ t: "seen", id: "2@x", m: "M!", at: 1 }), "unknown");
+});

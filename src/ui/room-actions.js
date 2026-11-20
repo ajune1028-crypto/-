@@ -58,6 +58,20 @@ export function meIn(app, to, entry, me) {
 }
 
 /** Waits (a little) until what was written has gone out. */
+/**
+ * A room's 역사 for home's long press (the owner: "처음 시작한 날짜, 그리고 현재 지금 수정한 날짜 가장
+ * 최근에, 그리고 방에 누가 언제 들어갔는지"): the room is opened quietly (no visit is noted), its story
+ * read, and closed. { createdAt, createdBy, lastAt, lastBy, visits, days, people: Map(id → member) }.
+ */
+export async function roomHistory(app, entry) {
+  const session = await openRoom(app, entry.id);
+  try {
+    return { ...session.room.history(), people: new Map(session.room.members().map((m) => [m.id, m])) };
+  } finally {
+    session.close();
+  }
+}
+
 async function sent(session) {
   for (let i = 0; i < 100 && session.pending; i++) await sleep(100);
 }

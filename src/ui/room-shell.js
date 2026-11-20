@@ -117,6 +117,8 @@ export function showRoom(app, roomId) {
   function enter(memberId) {
     if (!alive) return;
     session.setMe(memberId);
+    // The room's 역사: who came in when.
+    session.noteVisit();
     // withPreview: also what home shows of the room (its last line, its notes, its cards), worked
     // out when the room is left or the app goes to the background.
     const remember = (withPreview = false) => rememberRoom(app.store, {

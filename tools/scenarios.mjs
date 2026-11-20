@@ -125,7 +125,9 @@ scenario("create: an empty room name or a bad code is refused with a reason", as
   assert.equal(await page.eval("location.hash"), "");
 });
 
-scenario("home: each room says what kind it is; nothing flashes blue; corners take the glass colour, the middle colours stay in dark", async ({ open, out }) => {
+// The owner: "아이콘 그거를 … 무슨 모드인지 … 동그라미 하나 원형으로 해가지고 거기에 아이콘만 있게 … 안에 있는 거
+// 좀 보여주는 거를 안에 위 왼쪽에다가".
+scenario("home: each room says what kind it is as a round logo with only its icon, on the corner of what it holds at the card's top left; nothing flashes blue; corners take the glass colour, the middle colours stay in dark", async ({ open, out }) => {
   const page = await open();
   await createSongRoom(page, { room: "노래 방" });
   await click(page, "#back");
@@ -134,8 +136,12 @@ scenario("home: each room says what kind it is; nothing flashes blue; corners ta
   await createRoom(page, { room: "글 방" });
   await click(page, "#back");
   await page.waitFor(`document.querySelectorAll(".room-row").length === 3`);
-  const rows = await page.eval(`[...document.querySelectorAll(".room-row")].map((r) => [r.querySelector(".room-name").textContent, r.querySelector(".room-kind")?.textContent ?? "", !!r.querySelector(".room-kind svg")]).sort()`);
-  assert.deepEqual(rows, [["글 방", "텍스트", true], ["노래 방", "노래 만들기", true], ["보드 방", "화이트보드", true]]);
+  const rows = await page.eval(`[...document.querySelectorAll(".room-row")].map((r) => { const logo = r.querySelector(".room-logo"); return [r.querySelector(".room-name").textContent, logo?.getAttribute("aria-label") ?? "", !!logo?.querySelector("svg"), (logo?.textContent || "").trim(), getComputedStyle(logo).borderRadius]; }).sort()`);
+  assert.deepEqual(rows.map((r) => r.slice(0, 4)), [["글 방", "텍스트", true, ""], ["노래 방", "노래 만들기", true, ""], ["보드 방", "화이트보드", true, ""]], "an icon only, its kind said to readers");
+  assert.ok(rows.every((r) => r[4] === "50%"), "round: " + JSON.stringify(rows));
+  // At the top left of the card; the name beside it, or beneath it on a phone's narrow half.
+  const place = await page.eval(`[...document.querySelectorAll(".room-row")].map((r) => { const a = r.getBoundingClientRect(), t = r.querySelector(".room-thumb").getBoundingClientRect(), n = r.querySelector(".room-name").getBoundingClientRect(); return [t.left - a.left, t.top - a.top, n.left >= t.right - 1 || n.top >= t.bottom - 1]; })`);
+  assert.ok(place.every(([x, y, clear]) => x < 20 && y < 20 && clear), "what it holds at the top left, the name clear of it: " + JSON.stringify(place));
   // No blue flash where a finger lands (Android draws one on anything tappable unless told not to).
   const flash = await page.eval(`[...document.querySelectorAll(".room-row, .add, .icon-btn")].map((el) => getComputedStyle(el).webkitTapHighlightColor)`);
   assert.ok(flash.length > 3 && flash.every((c) => c === "rgba(0, 0, 0, 0)"), JSON.stringify(flash));
@@ -189,6 +195,34 @@ scenario("home 미리보기: a room's row shows what it holds as it was left - a
   await page.waitFor(`location.hash === "" || location.hash === "#"`);
   await page.waitFor(q(".room-row"));
   assert.ok(!(await page.eval(`window.__app.store.get("rooms", []).some((r) => r.kind === "daily-text")`)), "the text room stays off my list");
+});
+
+// The owner: "방을 만들 때 그 날짜 같은 거는 꾹 눌러가지고 … 처음 시작한 날짜, 그리고 현재 지금 수정한 날짜
+// 가장 최근에, 그리고 방에 누가 언제 들어갔는지".
+scenario("home: a long press shows the room's 역사 first - when it began and who made it, its latest change, who came in when, what each made by day", async ({ open }) => {
+  const page = await open();
+  await createRoom(page, { room: "역사 방" });
+  await focusEnd(page);
+  await page.type("오늘 쓴 한 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "오늘 쓴 한 줄"`);
+  // What was made is written down soon after the first change.
+  await page.waitFor(`window.__app.session.room.history().days.length === 1`, 8000);
+  await click(page, "#back");
+  await page.waitFor(q('.room-row[data-room-kind="daily-text"]'));
+  const at = await page.eval(`(() => { const r = ${q('.room-row[data-room-kind="daily-text"]')}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.touch("start", [at]);
+  await pause(700);
+  await page.touch("end");
+  await page.waitFor(q("#room-history .hist-line"), 8000);
+  const story = await page.eval(`[...document.querySelectorAll("#room-history .hist-line")].map((l) => l.textContent)`);
+  assert.ok(story[0].startsWith("시작") && story[0].includes("오늘") && story[0].includes("만듦"), "when it began, by whom: " + story[0]);
+  assert.ok(story[1].startsWith("최근 수정") && story[1].includes("오늘"), "the latest change: " + story[1]);
+  const people = await page.eval(`[...document.querySelectorAll("#hist-people li")].map((l) => l.textContent)`);
+  assert.equal(people.length, 1);
+  assert.ok(people[0].includes("오늘"), "who came in when: " + people[0]);
+  const days = await page.eval(`[...document.querySelectorAll("#hist-days li")].map((l) => l.textContent)`);
+  assert.ok(days.length === 1 && days[0].includes("글"), "what was made by day: " + JSON.stringify(days));
+  assert.ok(await page.eval(q("#room-actions #room-open")), "the actions are still there below");
 });
 
 scenario("home: a long press on a room offers 열기, 복제, 링크 복사, 화이트보드에 넣기 and 목록에서 빼기; 복제 makes '… 복사본' with the same words; 화이트보드에 넣기 puts its lines on a board", async ({ open }) => {

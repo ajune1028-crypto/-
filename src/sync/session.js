@@ -11,7 +11,7 @@
 
 import { Emitter } from "./transport.js";
 import { Clock, Sheet } from "../core/crdt.js";
-import { RoomState, newReplicaId } from "../core/room.js";
+import { RoomState, newReplicaId, seenOps, didOps } from "../core/room.js";
 import { SongDoc } from "../core/song.js";
 import { InkDoc } from "../core/ink.js";
 import { BoardDoc } from "../core/board.js";
@@ -43,10 +43,35 @@ export const DOC_TYPES = [
   { test: (doc) => doc === "game", make: () => new GameDoc() },
 ];
 
+// The room's 역사: what I make here, by kind of work, written into the room (core/room.js `did`):
+// two seconds after the first change (so "최근 수정" is right on every device soon), then at most
+// every ten minutes, and on leaving.
+const WORK_FIRST_MS = 2000;
+const WORK_EVERY_MS = 10 * 60 * 1000;
+function workOf(doc, ops) {
+  const out = {};
+  const add = (k, n) => { if (n > 0) out[k] = (out[k] || 0) + n; };
+  if (doc === "song") {
+    const takes = ops.filter((o) => o.t === "src").length;
+    add("녹음", takes);
+    add("노래", ops.length - takes);
+  } else if (doc.startsWith(SHEET)) add("글", ops.length);
+  else if (doc.startsWith("k:")) add(doc.startsWith("k:F") ? "애니" : "그림", ops.filter((o) => o.t === "stroke").length);
+  else if (doc === "board") {
+    const cards = ops.filter((o) => o.t === "item").length;
+    add("카드", cards);
+    add("보드", ops.length - cards);
+  } else if (doc === "anim") add("애니", ops.length);
+  else if (doc === "draw") add("그림", ops.length);
+  else if (doc === "game") add("게임", ops.filter((o) => o.t === "ask").length);
+  return out;
+}
+
 export class RoomSession extends Emitter {
-  constructor({ transport, roomId, store, clock = new Clock(newReplicaId()), retry = [1000, 2000, 5000, 10000], types = DOC_TYPES }) {
+  constructor({ transport, roomId, store, clock = new Clock(newReplicaId()), retry = [1000, 2000, 5000, 10000], types = DOC_TYPES, workTimes = [WORK_FIRST_MS, WORK_EVERY_MS] }) {
     super();
     this.transport = transport;
+    this.workTimes = workTimes;
     this.roomId = roomId;
     this.store = store;
     this.clock = clock;
@@ -85,6 +110,23 @@ export class RoomSession extends Emitter {
 
   setMe(memberId) {
     this.memberId = memberId;
+  }
+
+  /** I came into the room (the room screen, not a look from home): noted once in half an hour. */
+  noteVisit(now = Date.now()) {
+    if (!this.memberId || this.closed || this.room.seenRecently(this.memberId, now)) return;
+    this.commit(ROOM, seenOps(this.clock, this.memberId, now));
+  }
+
+  /** What I made since it was last written down goes into the room's 역사. */
+  writeWork() {
+    clearTimeout(this.workTimer);
+    this.workTimer = null;
+    const counts = this.work;
+    this.work = {};
+    if (!this.memberId || !counts || !Object.keys(counts).length) return;
+    this.workWritten = Date.now();
+    this.commit(ROOM, didOps(this.clock, this.memberId, counts));
   }
 
   async open() {
@@ -202,6 +244,18 @@ export class RoomSession extends Emitter {
   /** My own change: shown at once, then sent. */
   commit(doc, ops) {
     if (!ops.length || this.closed) return;
+    if (doc !== ROOM && this.memberId) {
+      const made = workOf(doc, ops);
+      if (Object.keys(made).length) {
+        this.work ||= {};
+        for (const [k, n] of Object.entries(made)) this.work[k] = (this.work[k] || 0) + n;
+        if (!this.workTimer) {
+          const [first, every] = this.workTimes;
+          const wait = this.workWritten ? Math.max(first, every - (Date.now() - this.workWritten)) : first;
+          this.workTimer = setTimeout(() => this.writeWork(), wait);
+        }
+      }
+    }
     this.absorb(doc, ops);
     const last = this.outbox[this.outbox.length - 1];
     if (last && last.doc === doc) last.ops.push(...ops);
@@ -295,6 +349,8 @@ export class RoomSession extends Emitter {
 
   close() {
     if (this.closed) return;
+    // What was made goes into the room's 역사 first (kept in the outbox if it cannot be sent now).
+    try { this.writeWork(); } catch (err) { console.warn(err); }
     this.closed = true;
     clearTimeout(this.timer);
     for (const off of this.offs) off();
