@@ -11,7 +11,7 @@ import { MOTTO } from "./motto.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
 import { diffText, spliceOps, mixOps, lockedEdit } from "../core/edit.js";
-import { memberColor, INK, splitWords, paintFor, paintCss } from "../core/paint.js";
+import { memberColor, personColor, INK, splitWords, paintFor, paintCss } from "../core/paint.js";
 import { dayKey, dayLabel } from "../core/time.js";
 import { getSettings } from "../identity.js";
 
@@ -206,7 +206,7 @@ export class SheetEditor {
     const texts = this.sheet.text().split("\n");
     const words = splitWords(chars);
     const options = {
-      color: (by) => { const m = room.member(by); return m ? memberColor(m.color, theme) : INK[theme]; },
+      color: (by) => { const m = room.member(by); return m ? personColor(m, theme) : INK[theme]; },
       colors: settings.colors, mixing: settings.mixing, ink: INK[theme], theme,
     };
 
@@ -460,7 +460,7 @@ export class SheetEditor {
       if (peer.isMe || !s || s.d !== this.day || typeof s.i !== "string") continue;
       const member = this.session.room.member(s.m);
       if (!member) continue;
-      wanted.set(peer.key, { index: this.sheet.indexAfter(s.i), color: memberColor(member.color, theme), name: member.name });
+      wanted.set(peer.key, { index: this.sheet.indexAfter(s.i), color: personColor(member, theme), name: member.name });
     }
     for (const [key, el] of this.caretEls) {
       if (wanted.has(key)) continue;

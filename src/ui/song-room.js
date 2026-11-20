@@ -15,7 +15,7 @@ import { currentTheme, onThemeChange } from "./theme.js";
 import { Timeline, timeText } from "./song-view.js";
 import { openNoteEditor } from "./note-editor.js";
 import { UndoStack } from "../core/undo.js";
-import { memberColor, INK, PALETTE } from "../core/paint.js";
+import { memberColor, personColor, INK, PALETTE } from "../core/paint.js";
 import {
   MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan,
   joinClipOps, joinWithSourceOps, combinedSource,
@@ -255,7 +255,7 @@ export function mountSongRoom(body, app, session, frame) {
 
   function colorOf(by) {
     const m = session.room.member(by);
-    return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()];
+    return m ? personColor(m, currentTheme()) : INK[currentTheme()];
   }
 
   function peerSelections() {
@@ -263,7 +263,7 @@ export function mountSongRoom(body, app, session, frame) {
     for (const p of session.peers) {
       if (p.isMe || !p.state || typeof p.state.sel !== "string") continue;
       const m = session.room.member(p.state.m);
-      if (m) map.set(p.state.sel, memberColor(m.color, currentTheme()));
+      if (m) map.set(p.state.sel, personColor(m, currentTheme()));
     }
     return map;
   }
@@ -277,7 +277,7 @@ export function mountSongRoom(body, app, session, frame) {
       live.add(p.key);
       const m = session.room.member(p.state.m);
       if (!peerRecs.has(p.key)) peerRecs.set(p.key, { row: r.row, at: r.at, since: performance.now() });
-      Object.assign(peerRecs.get(p.key), { name: m?.name || "친구", color: m ? memberColor(m.color, currentTheme()) : "#e5484d" });
+      Object.assign(peerRecs.get(p.key), { name: m?.name || "친구", color: m ? personColor(m, currentTheme()) : "#e5484d" });
     }
     for (const key of [...peerRecs.keys()]) if (!live.has(key)) peerRecs.delete(key);
   }

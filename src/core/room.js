@@ -132,6 +132,8 @@ export class Attempts {
 const FIELD_OK = {
   name: (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 20,
   color: (v) => Number.isInteger(v) && v >= 0 && v < PALETTE.length,
+  // A colour of one's own beside the palette's (roadmap 7); null goes back to the palette colour.
+  hex: (v) => v === null || (typeof v === "string" && /^#[0-9a-f]{6}$/.test(v)),
   pin: (v) => v === null || validVerifier(v),
   joinedAt: (v) => Number.isFinite(v),
 };
@@ -212,6 +214,7 @@ export class RoomState {
       id,
       name,
       color: fields.get("color")?.v ?? 0,
+      hex: fields.get("hex")?.v ?? null,
       pin: fields.get("pin")?.v ?? null,
       joinedAt: fields.get("joinedAt")?.v ?? 0,
     };
@@ -282,7 +285,7 @@ export function didOps(clock, memberId, counts, now = Date.now()) {
 
 /** Ops that set fields of one person. */
 export function memberOps(clock, memberId, fields) {
-  return Object.entries(fields).map(([k, v]) => ({ t: "mem", id: clock.next(), m: memberId, k, v }));
+  return Object.entries(fields).map(([k, v]) => ({ t: "mem", id: clock.next(), m: memberId, k, v: k === "hex" && typeof v === "string" ? v.toLowerCase() : v }));
 }
 
 export function createRoomOps(clock, { kind, name, tz, now, memberId, memberName, pin, color = 0 }) {

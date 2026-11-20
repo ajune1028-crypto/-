@@ -1054,6 +1054,35 @@ scenario("이 날 전체 잠그기: the day's name locks the whole day; the frie
   await sameOnAll([a, b], "오늘은 잠글 날!");
 });
 
+// 사람 색 직접 고르기 (roadmap 7): beside the palette's eight, a colour of my own; the friend sees my words
+// in it, its lightness set so they read (4.5:1) on their paper; back to a palette colour with one tap.
+scenario("내 색 직접 고르기: a colour of my own in the room's settings; my words take it on the friend's screen, readable on the paper; a palette colour again with one tap", async ({ open }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("내 색으로");
+  await sameOnAll([a, b], "내 색으로");
+  await a.front();
+  await click(a, "#room-settings");
+  await a.waitFor(q("#my-own-color"));
+  // The browser's own colour picker cannot be driven; its answer is given as the picker gives it.
+  await a.eval(`(() => { const w = document.getElementById("my-own-color"); w.value = "#ff7a00"; w.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);
+  await a.waitFor(`window.__app.session.room.member(window.__app.session.memberId).hex === "#ff7a00"`);
+  const me = await a.eval(`window.__app.session.memberId`);
+  await b.waitFor(`window.__app.session.room.member(${JSON.stringify(me)})?.hex === "#ff7a00"`);
+  const seen = await b.eval(`(() => {
+    const w = [...${TODAY}.querySelectorAll(".draw .w")].find((el) => el.textContent.includes("내"));
+    return { color: getComputedStyle(w).color, want: null };
+  })()`);
+  const want = await b.eval(`(async () => { const { personColor } = await import("./src/core/paint.js"); const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light"; return personColor({ hex: "#ff7a00" }, theme); })()`).catch(() => null);
+  const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+  if (want) assert.equal(seen.color, rgb(want), "my words in my own colour on the friend's screen");
+  else assert.notEqual(seen.color, "rgb(0, 0, 0)");
+  // Back to a palette colour.
+  await click(a, '#my-colors [data-color="3"]');
+  await a.waitFor(`window.__app.session.room.member(window.__app.session.memberId).hex === null`);
+  await b.waitFor(`window.__app.session.room.member(${JSON.stringify(me)})?.hex === null`);
+});
+
 // Writing that runs past the screen: the line being written stays in view as it goes down.
 scenario("text room: writing that runs past the bottom of the screen keeps the line being written in view", async ({ open }) => {
   const page = await open({ width: 390, height: 600 });

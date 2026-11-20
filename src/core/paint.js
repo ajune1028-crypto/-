@@ -52,6 +52,23 @@ export function memberColor(index, theme) {
   return cache.get(key);
 }
 
+/**
+ * A person's colour on a paper: their own colour (hex, roadmap 7) with its hue and strength kept and
+ * only its lightness moved as far as the words need to read (4.5:1), else their palette colour.
+ */
+export function personColor(member, theme) {
+  const hex = member?.hex;
+  if (typeof hex === "string" && /^#[0-9a-f]{6}$/i.test(hex)) {
+    const key = theme + hex.toLowerCase();
+    if (!cache.has(key)) {
+      const { l, c, h } = hexToOklch(hex.toLowerCase());
+      cache.set(key, legible(l, c, h, theme));
+    }
+    return cache.get(key);
+  }
+  return memberColor(member?.color ?? 0, theme);
+}
+
 // ---- colour space ----------------------------------------------------------
 
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -124,7 +141,7 @@ export function contrast(a, b) {
 function legible(l, c, h, theme) {
   const step = theme === "light" ? -0.01 : 0.01;
   let hex = oklchToHex(l, c, h);
-  for (let i = 0; i < 40 && contrast(hex, PAPER[theme]) < MIN_CONTRAST; i++) {
+  for (let i = 0; i < 100 && contrast(hex, PAPER[theme]) < MIN_CONTRAST; i++) {
     l += step;
     hex = oklchToHex(l, c, h);
   }

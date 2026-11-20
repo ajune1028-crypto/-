@@ -23,7 +23,7 @@ import { SPEEDS } from "./song-room.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
-import { memberColor, INK, contrast, PALETTE } from "../core/paint.js";
+import { memberColor, personColor, INK, contrast, PALETTE } from "../core/paint.js";
 import { UndoStack } from "../core/undo.js";
 import { Clock } from "../core/crdt.js";
 import { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS, packMs, noteInSeconds, unpackNote } from "../core/song.js";
@@ -346,7 +346,7 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   const readOnly = () => !!session.transport.readOnly;
-  const colorOf = (by) => { const m = session.room.member(by); return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()]; };
+  const colorOf = (by) => { const m = session.room.member(by); return m ? personColor(m, currentTheme()) : INK[currentTheme()]; };
   const settings = () => getSettings(app.store);
   const writeStyle = () => ({ color: "black", size: 2, ...(settings().boardText || {}) });
   // 노래's stretch is one card's own (the owner: "이 녹음된 것만 늘리려고 했는데 다른 것까지 다

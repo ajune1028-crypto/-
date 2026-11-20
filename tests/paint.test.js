@@ -202,3 +202,20 @@ test("모래 필름: grains in my colour and its neighbour, with pale (light) or
   assert.ok(!/[#"]/.test(light.slice(5, -2)), "nothing that would end the picture early (# as %23, no double quotes)");
   assert.equal(filmImage("nonsense", "#000000", false), filmImage("#8c919c", "#000000", false), "a colour it cannot read is grey");
 });
+
+// 사람 색을 직접 고르기 (roadmap 7): a colour of my own, not only the palette's eight. It keeps its hue
+// and strength; only its lightness moves, as far as it must, for the words to read on either paper.
+test("personColor: a member's own colour reads on the light and the dark paper (4.5:1), keeps its hue, and without one the palette colour is used", async () => {
+  const { personColor, memberColor, contrast, PAPER, hexToOklch } = await import("../src/core/paint.js");
+  for (const hex of ["#ff7a00", "#00c2a8", "#8a2be2", "#ffe066", "#111111", "#f5f5f5"]) {
+    for (const theme of ["light", "dark"]) {
+      const c = personColor({ color: 2, hex }, theme);
+      assert.ok(contrast(c, PAPER[theme]) >= 4.5, `${hex} on ${theme}: ${c} ${contrast(c, PAPER[theme]).toFixed(2)}`);
+      const a = hexToOklch(hex), b = hexToOklch(c);
+      if (a.c > 0.04) assert.ok(Math.abs(((a.h - b.h + 540) % 360) - 180) < 12, `${hex} keeps its hue on ${theme}: ${c}`);
+    }
+  }
+  assert.equal(personColor({ color: 3 }, "light"), memberColor(3, "light"));
+  assert.equal(personColor({ color: 3, hex: null }, "dark"), memberColor(3, "dark"));
+  assert.equal(personColor(null, "light"), memberColor(0, "light"));
+});

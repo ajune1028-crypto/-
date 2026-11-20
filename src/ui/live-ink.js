@@ -10,7 +10,7 @@
 // Nothing of this is kept. Each drawing layer asks for what lies on its own document.
 
 import { liveTail, mergeLive } from "../core/live.js";
-import { memberColor } from "../core/paint.js";
+import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 
 const SEND_MS = 66; // at most about fifteen pieces a second
@@ -132,7 +132,7 @@ export class LiveInk {
 
   who(m) {
     const member = m ? this.session.room.member(m) : null;
-    return { color: member ? memberColor(member.color, currentTheme()) : "#8c919c", name: member?.name || "" };
+    return { color: member ? personColor(member, currentTheme()) : "#8c919c", name: member?.name || "" };
   }
 
   // ---- what this screen sends -----------------------------------------------------------------

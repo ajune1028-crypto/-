@@ -18,7 +18,7 @@ import { strokeOps, eraseOps, invertInkOps, brushOf } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
-import { memberColor } from "../core/paint.js";
+import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 
 const ONION = { before: "#e5484d", after: "#2f9e5b" };
@@ -254,7 +254,7 @@ export function mountAnimRoom(body, app, session) {
       const member = peer.state?.m ? session.room.member(peer.state.m) : null;
       if (peer.isMe || !f || !member) continue;
       if (!out.has(f)) out.set(f, []);
-      out.get(f).push(memberColor(member.color, currentTheme()));
+      out.get(f).push(personColor(member, currentTheme()));
     }
     return out;
   }

@@ -12,7 +12,7 @@ import { buzz, chime } from "./chime.js";
 import { getSettings } from "../identity.js";
 import { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS } from "../core/game.js";
 import { relayScreen } from "./relay.js";
-import { memberColor } from "../core/paint.js";
+import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 
 // [kind, name, faces, many]: 이어 그리기 is for everyone in the room (2 and more), the others for two.
@@ -44,7 +44,7 @@ export function mountGames(app, session) {
   const nameOf = (m) => session.room.member(m)?.name || "친구";
   const colorOf = (m) => {
     const member = session.room.member(m);
-    return member ? memberColor(member.color, currentTheme()) : "#8c919c";
+    return member ? personColor(member, currentTheme()) : "#8c919c";
   };
   const friendsHere = () => (session.peers || []).filter((p) => !p.isMe && p.state?.m && p.state.m !== me()).map((p) => p.state.m);
 

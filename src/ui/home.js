@@ -18,7 +18,7 @@ import { glowEdge, aimMarker } from "./edge-glow.js";
 import { VelocityTracker, throwOf } from "../core/fling.js";
 import { buzz } from "./chime.js";
 import { segmented } from "./dom.js";
-import { memberColor } from "../core/paint.js";
+import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme, myPeopleColor } from "./theme.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -54,7 +54,7 @@ const WORK_WORDS = { 녹음: (n) => `녹음 ${n}개`, 그림: (n) => `그림 ${n
 function historyView(hist) {
   const who = (id) => hist.people.get(id);
   const name = (id) => who(id)?.name || "누군가";
-  const dot = (id) => h("span", { class: "dot", style: { background: memberColor(who(id)?.color ?? 0, currentTheme()) } });
+  const dot = (id) => h("span", { class: "dot", style: { background: personColor(who(id), currentTheme()) } });
   const line = (label, value, id) => h("p", { class: "hist-line" }, h("span", { class: "hist-label", text: label }), h("span", { class: "hist-value" }, value));
   const parts = [];
   if (hist.createdAt) parts.push(line("시작", [whenText(hist.createdAt), hist.createdBy ? ` · ${name(hist.createdBy)}이(가) 만듦` : ""].join(""), hist.createdBy));

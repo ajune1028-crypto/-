@@ -52,7 +52,7 @@ test("creating a room sets its info and its first person", () => {
   assert.equal(room.meta("name"), "우리 방");
   assert.equal(room.meta("tz"), "Asia/Seoul");
   assert.equal(room.meta("createdBy"), "m1");
-  assert.deepEqual(room.members(), [{ id: "m1", name: "나", color: 0, pin: null, joinedAt: 5 }]);
+  assert.deepEqual(room.members(), [{ id: "m1", name: "나", color: 0, hex: null, pin: null, joinedAt: 5 }]);
 });
 
 test("joining takes the lowest unused colour, then the least used", () => {
@@ -82,7 +82,7 @@ test("room info and each person's fields are last-writer-wins in any order", () 
     const room = new RoomState();
     room.applyAll(shuffle(rng(seed), [...ops, ...ops.slice(0, 3)]));
     assert.equal(room.meta("name"), "나중에 바꿈");
-    assert.deepEqual(room.member("m1"), { id: "m1", name: "나", color: 3, pin: null, joinedAt: 0 });
+    assert.deepEqual(room.member("m1"), { id: "m1", name: "나", color: 3, hex: null, pin: null, joinedAt: 0 });
   }
 });
 
@@ -179,4 +179,20 @@ test("방의 역사: when it began and by whom, the latest change and by whom, w
   // Nonsense is set aside.
   assert.equal(new RoomState().apply({ t: "did", id: "1@x", m: "m1", at: 1, k: "해킹", n: 1 }), "unknown");
   assert.equal(new RoomState().apply({ t: "seen", id: "2@x", m: "M!", at: 1 }), "unknown");
+});
+
+test("a member's own colour (hex) is kept beside the palette colour, put back to the palette with null, and nonsense is set aside", async () => {
+  const { RoomState, memberOps } = await import("../src/core/room.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const room = new RoomState();
+  const clock = new Clock("a");
+  for (const op of memberOps(clock, "m1", { name: "가람", color: 2, joinedAt: 1 })) room.apply(op);
+  assert.equal(room.member("m1").hex, null);
+  for (const op of memberOps(clock, "m1", { hex: "#FF7A00" })) room.apply(op);
+  assert.equal(room.member("m1").hex, "#ff7a00", "kept, lower case");
+  assert.equal(room.member("m1").color, 2, "the palette colour stays for older screens");
+  for (const op of memberOps(clock, "m1", { hex: null })) room.apply(op);
+  assert.equal(room.member("m1").hex, null);
+  const bad = memberOps(clock, "m1", { hex: "red" });
+  for (const op of bad) assert.equal(room.apply(op), "unknown");
 });

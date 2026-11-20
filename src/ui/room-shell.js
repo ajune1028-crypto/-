@@ -15,7 +15,7 @@ import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { keepRoomWords } from "../houses.js";
 import { mountGames } from "./game.js";
-import { memberColor, PALETTE } from "../core/paint.js";
+import { memberColor, personColor, PALETTE } from "../core/paint.js";
 import { memberOps, makeVerifier, validPin } from "../core/room.js";
 
 /** Theme, and optionally the two colour switches. Shared by home and room settings. */
@@ -176,7 +176,7 @@ export function showRoom(app, roomId) {
     const drawPeople = () => {
       const here = [memberId, ...session.peers.map((p) => p.state?.m)].filter((id, i, all) => typeof id === "string" && all.indexOf(id) === i);
       mount(people, here.map((id) => session.room.member(id)).filter(Boolean)
-        .map((m) => h("span", { class: "dot", title: m.name, style: { background: memberColor(m.color, currentTheme()) } })));
+        .map((m) => h("span", { class: "dot", title: m.name, style: { background: personColor(m, currentTheme()) } })));
     };
     const drawStatus = () => {
       status.dataset.status = session.status;
@@ -403,10 +403,16 @@ export function showRoom(app, roomId) {
         onchange: () => { const v = roomName.input.value.trim(); if (v) session.commit("room", [{ t: "meta", id: session.clock.next(), k: "name", v }]); } });
       const myName = inputRow("set-name", "내 별명", { maxLength: 20, value: me.name,
         onchange: () => { const v = myName.input.value.trim(); if (v && v !== session.me.name) set({ name: v }); } });
-      const swatches = h("div", { class: "swatches" }, PALETTE.map((_, i) =>
-        h("button", { class: "swatch", type: "button", data: { color: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(i === me.color),
+      // 내 색: the palette's eight, or one of my own (roadmap 7: "직접 고르기"). My own keeps its hue; only
+      // its lightness is set on each paper so my words read (personColor). Older screens show my palette colour.
+      const pressSwatch = (key) => { for (const b of swatches.children) b.setAttribute("aria-pressed", String(b.dataset.color === key)); };
+      const ownWell = h("input", { type: "color", id: "my-own-color", value: me.hex || memberColor(me.color, "light"), "aria-label": "내 색 직접 고르기",
+        oninput: () => { set({ hex: ownWell.value.toLowerCase() }); ownSwatch.style.background = personColor({ hex: ownWell.value }, currentTheme()); pressSwatch("own"); } });
+      const ownSwatch = h("label", { class: "swatch own", data: { color: "own" }, title: "직접 고르기", "aria-pressed": String(!!me.hex), style: me.hex ? { background: personColor(me, currentTheme()) } : {} }, ownWell);
+      const swatches = h("div", { class: "swatches", id: "my-colors" }, ...PALETTE.map((_, i) =>
+        h("button", { class: "swatch", type: "button", data: { color: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(!me.hex && i === me.color),
           style: { background: memberColor(i, currentTheme()) },
-          onclick: () => { set({ color: i }); for (const b of swatches.children) b.setAttribute("aria-pressed", String(b.dataset.color === String(i))); } })));
+          onclick: () => { set({ color: i, hex: null }); pressSwatch(String(i)); } })), ownSwatch);
       const pin = h("input", { class: "input", id: "set-pin", type: "text", inputMode: "numeric", maxLength: 5, autocomplete: "off", placeholder: me.pin ? "새 코드" : "숫자 5자리" });
       const pinError = h("p", { class: "error", id: "pin-error", role: "alert" });
       const savePin = async () => {
