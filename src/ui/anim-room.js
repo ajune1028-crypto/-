@@ -14,7 +14,7 @@ import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { PAGE_W, PAGE_H } from "./draw-room.js";
 import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -133,7 +133,7 @@ export function mountAnimRoom(body, app, session) {
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, s.w, brushOf(s), !!s.q);
+    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, widthOf(s), brushOf(s), !!s.q);
   }
 
   const neighbours = () => {
@@ -386,7 +386,7 @@ export function mountAnimRoom(body, app, session) {
     const atoms = made.atoms.map((atom) => ({ ...atom, doc: "anim" }));
     const name = frameDocOf(made.id);
     for (const s of from.strokes()) {
-      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
+      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
       session.commit(name, one.ops);
       atoms.push(...one.atoms.map((atom) => ({ ...atom, doc: name })));
     }

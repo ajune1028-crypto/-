@@ -130,6 +130,42 @@ function luminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+
+/** 색 원판: hue (degrees), saturation and brightness (0..1) as #rrggbb. */
+export function hsvToHex(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const f = (n) => {
+    const k = (n + h / 60) % 6;
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  return "#" + [f(5), f(3), f(1)].map((c) => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
+}
+
+/** #rrggbb as { h, s, v } (a grey's hue is 0). */
+export function hexToHsv(hex) {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const v = Math.max(r, g, b);
+  const d = v - Math.min(r, g, b);
+  const s = v ? d / v : 0;
+  let h = 0;
+  if (d) {
+    if (v === r) h = ((g - b) / d) % 6;
+    else if (v === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return { h, s, v };
+}
+
+/** The last colours chosen (newest first, at most eight, each once); only #rrggbb is kept. */
+export function rememberColor(list, color) {
+  if (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color)) return list.slice(0, 8);
+  const c = color.toLowerCase();
+  return [c, ...list.filter((x) => x !== c)].slice(0, 8);
+}
 /** WCAG contrast ratio between two colours. */
 export function contrast(a, b) {
   const la = luminance(a);

@@ -13,18 +13,17 @@
 
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX } from "../core/ink.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
 import { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } from "../core/fill.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
+import { openColorWheel, closeColorWheel, colorWheelOpen } from "./color-wheel.js";
 
 const COLORS = {
   red: "#e5484d", orange: "#f2802a", yellow: "#e8b422", green: "#2f9e5b", blue: "#2f7bf0", indigo: "#4b4fd8", violet: "#9a4fd8",
 };
-/** Pixel width of each size at 1 rem = 16 px. */
-const WIDTHS = { 1: 2, 2: 4, 3: 8 };
 /** The brushes in the tools, in this order. */
 export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"], ["fill", "채우기"], ["smudge", "문지르기"]];
 /** 손떨림 보정's string, in screen pixels, for 끔 · 약 · 중 · 강. */
@@ -159,10 +158,11 @@ function fillOutline(g, poly) {
  * Paints one stroke: points [x, y, p, …] in stroke units on a context already set to them.
  * shaped: a shape made straight (followed exactly, no pressure).
  */
-export function paintStroke(g, pts, color, width, brush, shaped = false) {
+/** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
+export function paintStroke(g, pts, color, px, brush, shaped = false) {
   if (!pts || pts.length < 3) return;
   const look = brushLook(brush);
-  const size = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
+  const size = (px || 4) * (100 / 16) * look.scale;
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
   const real = hasPressure(pts);
@@ -330,6 +330,7 @@ export class InkLayer {
     this.tool = null; // null, "pen", "eraser" (부분) or "eraser-stroke" (획)
     this.color = "black";
     this.width = 2;
+    this.size = null;
     this.brush = "pen";
     this.live = null;
     this.canvas = h("canvas", { class: "ink", "aria-hidden": "true" });
@@ -359,10 +360,17 @@ export class InkLayer {
     this.canvas.dataset.tool = tool || "";
   }
 
-  setStyle({ color, width, brush }) {
+  /** size: a width of my own in px (그림 방's slider), null for the width's. */
+  setStyle({ color, width, brush, size }) {
     if (color) this.color = color;
     if (width) this.width = width;
     if (brush) this.brush = brush;
+    if (size !== undefined) this.size = size;
+  }
+
+  /** The pen's width in px now. */
+  px() {
+    return this.size || WIDTH_PX[this.width] || 4;
   }
 
   /** Points in hundredths of a rem from the host's top left. */
@@ -439,7 +447,7 @@ export class InkLayer {
         }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
-          this.share.begin("ink", { c: this.color, w: this.width, b: brush });
+          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}) });
           this.share.grow("ink", this.live.pts);
         }
         this.render();
@@ -507,8 +515,9 @@ export class InkLayer {
       const shape = live?.shapeNow || live?.shape;
       let opId = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
-      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, brush: live.brush, shape: true });
-      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
+      const size = this.size || undefined;
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush });
       if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
@@ -672,7 +681,7 @@ export class InkLayer {
       pg.setTransform(t);
       for (const s of this.ink().strokes()) {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, s.w, brushOf(s), !!s.q);
+        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q);
       }
       this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
@@ -681,17 +690,17 @@ export class InkLayer {
     const wet = live?.pts && live.brush === "smudge" && !live.shapeNow;
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.width) : this.kept.canvas, 0, 0);
+    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px()) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.width, live.brush, true);
-    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
-      this.paint(g, line.pts, line.c, line.w, line.b);
+      this.paint(g, line.pts, line.c, widthOf(line), line.b);
       if (line.live) tips.push(line);
     }
     // Pointer lights: friends' and mine; while one still glows, the next frame comes.
@@ -820,8 +829,8 @@ export class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, width, brush, shaped = false) {
-    paintStroke(g, pts, color, width, brush, shaped);
+  paint(g, pts, color, px, brush, shaped = false) {
+    paintStroke(g, pts, color, px, brush, shaped);
   }
 
   destroy() {
@@ -895,7 +904,7 @@ function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
 }
 
 /** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
-function wetPicture(live, kept, color, width) {
+function wetPicture(live, kept, color, px) {
   if (!live.wet || live.wet.key !== kept.key) {
     const c = live.wet?.canvas || document.createElement("canvas");
     c.width = kept.canvas.width;
@@ -907,7 +916,7 @@ function wetPicture(live, kept, color, width) {
   const pts = thinPoints(live.pts);
   if (pts.length < 6) return live.wet.canvas;
   const look = brushLook("smudge");
-  const size = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
+  const size = (px || 4) * (100 / 16) * look.scale;
   const points = strokePoints(pts, { streamline: look.streamline });
   // Only up to the line's last settled point: its very end still moves as the hand goes on.
   const settled = points.length > 2 ? Math.floor(points[points.length - 2].run / Math.max(1, size * look.spacing)) + 1 : 1;
@@ -934,7 +943,7 @@ function brushPreview(brush, color, width) {
     const pts = [];
     if (brush === "smudge") {
       // 문지르기 shows itself pulling three bars of the colour along to the right.
-      for (const x of [40, 78, 116]) paintStroke(g, [x, 10, 60, x, 50, 60, x, 90, 60], color, 2, "marker");
+      for (const x of [40, 78, 116]) paintStroke(g, [x, 10, 60, x, 50, 60, x, 90, 60], color, WIDTH_PX[2], "marker");
       for (let i = 0; i <= 12; i++) pts.push(Math.round(24 + i * 13), 50, 70);
     } else if (brush === "fill") {
       // 채우기 shows a filled drop (a bucket's paint) rather than a line.
@@ -952,7 +961,7 @@ function brushPreview(brush, color, width) {
         pts.push(Math.round(24 + t * 164), Math.round(50 + Math.sin(t * Math.PI * 2) * 22), Math.round(25 + 70 * Math.sin(t * Math.PI)));
       }
     }
-    paintStroke(g, pts, color, Math.min(width, 2), brush);
+    paintStroke(g, pts, color, WIDTH_PX[Math.min(width, 2)] || 4, brush);
   };
   // Its size is fixed, so it is painted at once (a frame may never come to a screen in the back).
   draw();
@@ -967,6 +976,7 @@ function brushPreview(brush, color, width) {
  */
 export function drawInkTools(panel, { pen, setTool, store }) {
   panel.hidden = !pen.tool;
+  if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return;
   const erasing = pen.tool === "eraser" || pen.tool === "eraser-stroke";
   const pointing = pen.tool === "laser";
@@ -989,15 +999,41 @@ export function drawInkTools(panel, { pen, setTool, store }) {
     h("div", { class: "ink-row" },
       ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
         style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-      // A colour picked from the drawing (스포이트) shows beside them while it is the pen's.
-      typeof pen.color === "string" && pen.color.startsWith("#") && h("button", { class: "ink-color custom", id: "ink-picked", type: "button", "aria-label": "고른 색 " + pen.color, "aria-pressed": String(!erasing),
-        style: { background: pen.color }, onclick: () => choose({ color: pen.color }) }),
-      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
+      // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from
+      // the drawing (스포이트), fills it while it is the pen's.
+      inkWell(),
+      // A size of my own (그림 방's size bar) leaves all three unchosen; one of them takes it back.
+      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
+        onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
       h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
         onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
       h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
         onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); setTool(pen.tool); } }, "보정 " + STEADY_NAMES[steady])));
+  function inkWell() {
+    const own = typeof pen.color === "string" && pen.color.startsWith("#");
+    const well = h("button", { class: "ink-color more" + (own ? " has" : ""), id: "ink-more", type: "button", "aria-label": own ? "고른 색 " + pen.color + " · 색 원판" : "색 더 고르기 (색 원판)",
+      "aria-pressed": String(own && !erasing), "aria-expanded": String(colorWheelOpen()), style: own ? { "--well": pen.color } : {},
+      onclick: () => {
+        if (colorWheelOpen()) return void closeColorWheel();
+        well.setAttribute("aria-expanded", "true");
+        openColorWheel({
+          anchor: well,
+          color: own ? pen.color : inkColor(pen.color),
+          recent: getSettings(store).inkRecent || [],
+          // While the finger moves only the pen and this well change; the lift chooses it.
+          onPick: (hex, done) => {
+            if (done) return void choose({ color: hex });
+            pen.color = hex;
+            const now = panel.querySelector("#ink-more");
+            now?.classList.add("has");
+            now?.style.setProperty("--well", hex);
+          },
+          onRecent: (list) => setSetting(store, "inkRecent", list),
+          alive: () => panel.isConnected && !panel.hidden && pen.tool === "pen",
+        });
+      } });
+    return well;
+  }
   panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
   panel.querySelector("#ink-laser").setAttribute("aria-pressed", String(pointing));
   // The chosen brush in view (the row slides sideways on a narrow screen, and says so). Done at

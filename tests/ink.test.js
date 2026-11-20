@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock } from "../src/core/crdt.js";
-import { InkDoc, strokeOps, eraseOps, invertInkOps, thinPoints } from "../src/core/ink.js";
+import { InkDoc, strokeOps, eraseOps, invertInkOps, thinPoints, moveStrokesOps, recolorStrokesOps, widthOf, nearestWidth } from "../src/core/ink.js";
 import { rng, shuffle } from "./helpers.js";
 
 const line = (x0, y0, x1, y1, n = 10) => Array.from({ length: n + 1 }, (_, i) => [Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 50]).flat();
@@ -172,4 +172,31 @@ test("new brushes travel as a style beside a brush every device knows; a shape k
   // A style from a newer version stays itself when this version moves it.
   for (const op of moveStrokesOps(clock, ink, ["70@z"], 1, 1, "m1").ops) ink.apply(op);
   assert.deepEqual(ink.strokes().filter((s) => s.s === "glitter").map((s) => [s.b, s.pts[0]]), [["pen", 1]]);
+});
+
+// 붓 크기 막대 (그림 방): any size from 0.5 px to 40 px, kept as `z` (tenths of a px) beside the
+// nearest of the three widths, which is what a device from before draws.
+test("a stroke of any size keeps it, with the nearest width for older devices", () => {
+  const ink = new InkDoc();
+  const clock = new Clock("me");
+  const pts = [0, 0, 50, 100, 0, 50, 200, 0, 50];
+  const fine = strokeOps(clock, ink, { pts, color: "red", width: 2, size: 0.5, by: "me" }).ops[0];
+  const bold = strokeOps(clock, ink, { pts, color: "red", width: 2, size: 24, by: "me" }).ops[0];
+  const plain = strokeOps(clock, ink, { pts, color: "red", width: 3, by: "me" }).ops[0];
+  assert.deepEqual([fine.z, fine.w], [5, 1]);
+  assert.deepEqual([bold.z, bold.w], [240, 3]);
+  assert.equal(plain.z, undefined, "a plain width needs no size");
+  for (const op of [fine, bold, plain]) assert.equal(ink.apply(op), "applied");
+  assert.deepEqual(ink.strokes().map(widthOf), [0.5, 24, 8]);
+  // Out of range is clamped when made, refused when received.
+  assert.equal(strokeOps(clock, ink, { pts, color: "red", width: 2, size: 500, by: "me" }).ops[0].z, 400);
+  assert.equal(ink.apply({ ...plain, id: clock.next(), z: 4000 }), "unknown");
+  assert.equal(ink.apply({ ...plain, id: clock.next(), z: 2.5 }), "unknown");
+  // Moved or recoloured, it keeps its size.
+  const moved = moveStrokesOps(clock, ink, [bold.id], 10, 0, "me").ops.find((o) => o.t === "stroke");
+  assert.equal(moved.z, 240);
+  const recoloured = recolorStrokesOps(clock, ink, [fine.id], "blue", "me").ops.find((o) => o.t === "stroke");
+  assert.equal(recoloured.z, 5);
+  // The nearest width, by how it looks (2, 4, 8 px).
+  assert.deepEqual([1, 2.8, 2.9, 5.6, 5.7, 30].map(nearestWidth), [1, 1, 2, 2, 3, 3]);
 });

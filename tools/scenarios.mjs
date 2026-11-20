@@ -860,7 +860,8 @@ scenario("contrast: ink, muted text and all eight colours read on the paper, lig
       assert.ok(contrast(hex(value), hex(css.paper)) >= 4.5, `${theme} ${name} ${contrast(hex(value), hex(css.paper)).toFixed(2)}`);
     }
     await click(a, "#room-settings");
-    const swatches = await a.eval(`[...document.querySelectorAll(".swatch[data-color]")].map((s) => getComputedStyle(s).backgroundColor)`);
+    // The palette's eight (a colour of my own beside them is made legible by personColor).
+    const swatches = await a.eval(`[...document.querySelectorAll(".swatch[data-color]:not(.own)")].map((s) => getComputedStyle(s).backgroundColor)`);
     assert.equal(swatches.length, 8);
     swatches.forEach((c, i) => assert.ok(contrast(hex(c), hex(css.paper)) >= 4.5, `${theme} colour ${i}`));
   }
@@ -4828,7 +4829,7 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
 // Every tool is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
 // tapped). Nine brushes no longer fit in one row there: the brush row slides sideways, fades at its
 // end to say so, and every brush can be brought into view and pressed; the rest stays in view.
-scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all eleven brushes (채우기 and 문지르기 among them) can be reached and pressed", async ({ open, out }) => {
+scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours (색 원판's well too), the widths, 모양 잡기 and 보정 are in view; all eleven brushes (채우기 and 문지르기 among them) can be reached and pressed", async ({ open, out }) => {
   const page = await open({ width: 360, height: 760 });
   await createRoom(page, { name: "가람" });
   await page.waitFor(TODAY);
@@ -4843,7 +4844,7 @@ scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the col
     }
     return out;
   })()`);
-  assert.ok(seen.length === 1 + 1 + 8 + 3 + 2 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
+  assert.ok(seen.length === 1 + 1 + 9 + 3 + 2 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
   assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 11);
   assert.ok(await page.eval(`${q("#ink-tools .ink-brushes")}.classList.contains("more")`), "the row says there is more");
   await page.shot(out("brushes-360.png"));
@@ -5301,11 +5302,11 @@ scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoe
   await a.waitFor(q(".loupe"), 1500);
   await a.shot(out("eyedropper.png"));
   await a.touch("end");
-  await a.waitFor(`!document.querySelector(".loupe") && ${q("#ink-picked")}`, 2000);
-  const picked = await a.eval(`getComputedStyle(${q("#ink-picked")}).backgroundColor`);
-  const [r, g, b] = picked.match(/\d+/g).map(Number);
+  await a.waitFor(`!document.querySelector(".loupe") && ${q("#ink-more")}?.classList.contains("has")`, 2000);
+  const picked = await a.eval(`${q("#ink-more")}.style.getPropertyValue("--well")`);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(picked.slice(i, i + 2), 16));
   assert.ok(r > 180 && g < 120 && b < 120, "the red was picked: " + picked);
-  assert.equal(await a.eval(`${q("#ink-picked")}.getAttribute("aria-pressed")`), "true");
+  assert.equal(await a.eval(`${q("#ink-more")}.getAttribute("aria-pressed")`), "true");
   assert.equal(await count(), 2, "holding still drew nothing");
   // Two fingers that move are a zoom, not a tap: nothing is undone.
   await a.touch("start", [at(0.4, 0.7), at(0.6, 0.72)]);
@@ -5369,6 +5370,122 @@ scenario("채우기: a tap inside a drawn square fills it up to the line in the 
   await a.front();
   await click(a, "#draw-undo");
   await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+});
+
+// 색 원판 (the reference study: Procreate's colour disc): any colour from a hue ring and a square,
+// and the last eight; a press outside puts it away and draws nothing.
+scenario("색 원판: the well at the end of the colours opens a wheel above the tools; the ring and the square give a colour of my own that draws; it is remembered among the last colours; a press outside only closes it", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "색 원판");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const layerDoc = `("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  const strokes = () => a.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => s.c)`);
+  assert.equal(await a.eval(`${q("#ink-more")}.classList.contains("has")`), false, "a + while the pen has a palette colour");
+  await click(a, "#ink-more");
+  await a.waitFor(q("#color-wheel"));
+  // Above the tools, inside the screen.
+  const place = await a.eval(`(() => { const w = document.getElementById("color-wheel").getBoundingClientRect(); const t = document.getElementById("ink-tools").getBoundingClientRect(); return { w: [w.left, w.top, w.right, w.bottom], tools: t.top }; })()`);
+  assert.ok(place.w[0] >= 0 && place.w[2] <= 390 && place.w[1] >= 0 && place.w[3] <= place.tools, "above the tools (the brushes stay in view), on screen: " + JSON.stringify(place));
+  const disc = await a.eval(`(() => { const r = document.getElementById("cw-disc").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 }; })()`);
+  // The ring on its right side (hue 90: a yellowish green), then the square's top right corner (full colour).
+  const ringAt = (deg) => [disc.x + (disc.r - 11) * Math.sin((deg * Math.PI) / 180), disc.y - (disc.r - 11) * Math.cos((deg * Math.PI) / 180)];
+  await a.press(...ringAt(60));
+  for (let k = 1; k <= 6; k++) await a.moveTo(...ringAt(60 + k * 5));
+  await a.release(...ringAt(90));
+  await a.press(disc.x, disc.y);
+  for (let k = 1; k <= 6; k++) await a.moveTo(disc.x + k * 9, disc.y - k * 9);
+  await a.release(disc.x + 60, disc.y - 60);
+  const chosen = await a.eval(`document.getElementById("color-wheel").dataset.color`);
+  const [cr, cg, cb] = [1, 3, 5].map((i) => parseInt(chosen.slice(i, i + 2), 16));
+  assert.ok(cg === 255 && cb === 0 && cr > 100 && cr < 160, "about hue 90 at full saturation and brightness: " + chosen);
+  assert.equal(await a.eval(`${q("#ink-more")}.style.getPropertyValue("--well")`), chosen);
+  assert.equal(await a.eval(`${q("#ink-more")}.getAttribute("aria-pressed")`), "true");
+  assert.equal(await a.eval(`document.querySelectorAll("#cw-recent .cw-swatch").length`), 0, "no last colours yet");
+  await a.shot(out("color-wheel.png"));
+  // A press on the page only closes it: nothing is drawn.
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await a.press(box.x + box.w * 0.2, box.y + box.h * 0.2);
+  await a.moveTo(box.x + box.w * 0.5, box.y + box.h * 0.25);
+  await a.release(box.x + box.w * 0.5, box.y + box.h * 0.25);
+  await a.waitFor(`!document.getElementById("color-wheel")`, 1500);
+  assert.deepEqual(await strokes(), [], "the closing press drew nothing");
+  // The next line is drawn in that colour.
+  await a.press(box.x + box.w * 0.2, box.y + box.h * 0.4);
+  for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * (0.2 + k * 0.06), box.y + box.h * 0.4);
+  await a.release(box.x + box.w * 0.7, box.y + box.h * 0.4);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+  assert.deepEqual(await strokes(), [chosen]);
+  // A palette colour again: the well goes back to its +; the wheel remembers the colour.
+  await click(a, '[data-ink="red"]');
+  assert.equal(await a.eval(`${q("#ink-more")}.classList.contains("has")`), false);
+  await click(a, "#ink-more");
+  await a.waitFor(q("#cw-recent .cw-swatch"));
+  assert.deepEqual(await a.eval(`[...document.querySelectorAll("#cw-recent .cw-swatch")].map((b) => b.dataset.color)`), [chosen], "the colour it was put away with, once");
+  await click(a, `#cw-recent .cw-swatch[data-color="${chosen}"]`);
+  assert.equal(await a.eval(`${q("#ink-more")}.style.getPropertyValue("--well")`), chosen, "a last colour chosen with one tap");
+  // The well again closes it.
+  await click(a, "#ink-more");
+  await a.waitFor(`!document.getElementById("color-wheel")`, 1500);
+});
+
+// 붓 크기 막대 (Procreate's sidebar): any size from very fine to very bold in 그림 방, kept as the
+// stroke's own size with the nearest of the three widths for older screens.
+scenario("붓 크기 막대: the thin bar at the left edge makes the brush very bold (top) or very fine (bottom), shown by a dot while it moves; strokes keep that size; a width in the tools takes it back", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "크기");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1 && !${q("#size-rail")}.hidden`);
+  const layerDoc = `("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  const rail = await a.eval(`(() => { const r = document.getElementById("size-rail").getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, w: r.width, left: r.left }; })()`);
+  assert.ok(rail.w <= 30 && rail.left < 16, "thin, at the left edge: " + JSON.stringify(rail));
+  assert.equal(await a.eval(`${q("#size-rail")}.getAttribute("aria-valuenow")`), "4", "the middle width to begin with");
+  // Up to the top: the boldest. The dot beside it shows the size while the finger is on the bar.
+  await a.press(rail.x, rail.bottom - 30);
+  for (let k = 1; k <= 8; k++) await a.moveTo(rail.x, rail.bottom - 30 - ((rail.bottom - rail.top) * k) / 8);
+  const peek = await a.eval(`(() => { const p = document.querySelector("#size-rail .size-peek"); return { shown: getComputedStyle(p).opacity, w: p.getBoundingClientRect().width }; })()`);
+  await a.shot(out("size-rail.png"));
+  await a.release(rail.x, rail.top - 10);
+  assert.equal(await a.eval(`${q("#size-rail")}.getAttribute("aria-valuenow")`), "40");
+  assert.ok(Number(peek.shown) > 0.5 && peek.w > 25, "the dot shows a bold brush: " + JSON.stringify(peek));
+  assert.equal(await a.eval(`document.querySelectorAll('#ink-tools .ink-width[aria-pressed="true"]').length`), 0, "no width chosen in the tools");
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (v) => {
+    await a.press(box.x + box.w * 0.25, box.y + box.h * v);
+    for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * (0.25 + k * 0.06), box.y + box.h * v);
+    await a.release(box.x + box.w * 0.73, box.y + box.h * v);
+  };
+  await line(0.3);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+  // Down to the bottom: the finest.
+  await a.press(rail.x, rail.top + 30);
+  for (let k = 1; k <= 8; k++) await a.moveTo(rail.x, rail.top + 30 + ((rail.bottom - rail.top) * k) / 8);
+  await a.release(rail.x, rail.bottom + 10);
+  assert.equal(await a.eval(`${q("#size-rail")}.getAttribute("aria-valuenow")`), "0.5");
+  await line(0.55);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
+  assert.deepEqual(await a.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => [s.z, s.w])`), [[400, 3], [5, 1]], "each its own size, with the nearest width");
+  // How thick each line is on the page.
+  const thick = (v) => a.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; const c = document.querySelector('.draw-layer[data-layer="' + l.id + '"] canvas'); const r = c.getBoundingClientRect(); const g = c.getContext("2d"); const x = Math.round((${box.x + box.w * 0.5} - r.left) * c.width / r.width); const d = g.getImageData(x, 0, 1, c.height).data; const y0 = (${box.y + box.h * v} - r.top) * c.height / r.height; let n = 0; for (let y = Math.max(0, Math.round(y0 - 200)); y < Math.min(c.height, Math.round(y0 + 200)); y++) if (d[y * 4 + 3] > 40) n++; return n * r.height / c.height; })()`);
+  const bold = await thick(0.3);
+  const fine = await thick(0.55);
+  assert.ok(bold > 20 && fine < 3 && fine > 0, `bold ${bold.toFixed(1)} px, fine ${fine.toFixed(1)} px`);
+  // The middle width in the tools: the size of its own goes.
+  await click(a, '[data-width="2"]');
+  assert.equal(await a.eval(`${q("#size-rail")}.getAttribute("aria-valuenow")`), "4");
+  await line(0.75);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 3`);
+  assert.deepEqual(await a.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => s.z ?? null)`), [400, 5, null]);
 });
 
 // 문지르기 (libmypaint's smudge for the idea, Krita's smearing): a finger through wet paint pulls

@@ -7,10 +7,11 @@
 import { h, icon, iconButton, toast, closeOnOutside, flashHint } from "./dom.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, inkColor } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX } from "../core/ink.js";
+import { brushLook } from "../core/brush.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -46,6 +47,67 @@ export function mountDrawRoom(body, app, session, frame) {
   body.append(panel);
   body.after(inkTools, toolbar);
 
+  // 붓 크기 막대 (Procreate's sidebar): a thin bar at the left edge, fine at the bottom and bold at the
+  // top (0.5 to 40 px, a doubling every eighth of the way); while it moves, a dot beside it shows the
+  // brush as big as it will draw on the page now. A width chosen in the tools goes back to that width.
+  const sizeThumb = h("span", { class: "size-thumb" });
+  const sizePeek = h("span", { class: "size-peek", "aria-hidden": "true" });
+  const sizeRail = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
+    "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), sizeThumb, sizePeek);
+  body.append(sizeRail);
+  const penPx = () => pen.size || WIDTH_PX[pen.width] || 4;
+  const sizeT = (px) => Math.log(px / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
+  const sizeFrom = (t) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** clamp(t, 0, 1) * 10) / 10;
+  function paintRail() {
+    const px = penPx();
+    sizeRail.hidden = readOnly() || !(pen.tool === "pen" || pen.tool === "eraser");
+    sizeRail.style.setProperty("--t", sizeT(px).toFixed(4));
+    sizeRail.setAttribute("aria-valuenow", String(px));
+    sizeRail.setAttribute("aria-valuetext", px + "px");
+    // The brush on the page now: its width in stroke units over the units in a screen pixel.
+    const unit = hosts.get(active)?.ink.unitsPerPx() || 1;
+    const look = brushLook(pen.tool === "eraser" ? "erase" : pen.brush);
+    const d = Math.max(2, Math.min(220, (px * (100 / 16) * (look.scale || 1)) / unit));
+    sizePeek.style.width = sizePeek.style.height = d.toFixed(1) + "px";
+    sizePeek.style.background = pen.tool === "eraser" ? "transparent" : inkColor(pen.color);
+    sizePeek.classList.toggle("erase", pen.tool === "eraser");
+  }
+  function setSize(px) {
+    pen.size = px;
+    for (const { ink } of hosts.values()) ink.setStyle({ size: px });
+    paintRail();
+  }
+  let sizing = null;
+  const sizeAt = (e) => {
+    const r = sizeRail.getBoundingClientRect();
+    const pad = 11;
+    setSize(sizeFrom(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
+  };
+  sizeRail.addEventListener("pointerdown", (e) => {
+    if (sizing || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    sizing = { id: e.pointerId };
+    sizeRail.setPointerCapture?.(e.pointerId);
+    sizeRail.classList.add("sizing");
+    sizeAt(e);
+  });
+  sizeRail.addEventListener("pointermove", (e) => { if (sizing && e.pointerId === sizing.id) sizeAt(e); });
+  const sizeDone = (e) => {
+    if (!sizing || e.pointerId !== sizing.id) return;
+    sizing = null;
+    sizeRail.classList.remove("sizing");
+    drawLayers(); // the widths in the tools let go of their choice
+  };
+  sizeRail.addEventListener("pointerup", sizeDone);
+  sizeRail.addEventListener("pointercancel", sizeDone);
+  sizeRail.addEventListener("keydown", (e) => {
+    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    setSize(sizeFrom(sizeT(penPx()) + step / 24));
+    drawLayers();
+  });
+
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
@@ -70,9 +132,9 @@ export function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, brush, shape }) => {
+      onStroke: ({ pts, color, width, size, brush, shape }) => {
         if (readOnly()) return;
-        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: session.memberId });
+        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
@@ -126,9 +188,10 @@ export function mountDrawRoom(body, app, session, frame) {
       page.append(el); // in order, bottom first
       const tool = layer.id === active && layer.visible && !readOnly() ? pen.tool : null;
       if (ink.tool !== tool) ink.setTool(tool);
-      ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
+      ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
     drawInkTools(inkTools, { pen, setTool, store: app.store });
+    paintRail();
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -170,7 +233,7 @@ export function mountDrawRoom(body, app, session, frame) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
     g.setTransform(c.width / PAGE_W, 0, 0, c.height / PAGE_H, 0, 0);
-    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, s.w, brushOf(s), !!s.q);
+    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
   }
 
   function drawPanel() {
@@ -294,7 +357,7 @@ export function mountDrawRoom(body, app, session, frame) {
       one.height = hgt;
       const lg = one.getContext("2d");
       lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, s.w, brushOf(s), !!s.q);
+      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
       g.globalAlpha = layer.opacity;
       g.globalCompositeOperation = layer.mode;
       g.drawImage(one, 0, 0);

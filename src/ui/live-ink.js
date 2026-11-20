@@ -49,7 +49,7 @@ export class LiveInk {
       const ink = s.ink;
       const had = this.lines.get(p.key);
       if (ink && typeof ink.d === "string" && ink.id) {
-        const line = had && had.id === ink.id ? had : { m: s.m, d: ink.d, id: ink.id, c: ink.c, w: ink.w, b: ink.b, state: null, done: null, ended: 0 };
+        const line = had && had.id === ink.id ? had : { m: s.m, d: ink.d, id: ink.id, c: ink.c, w: ink.w, z: ink.z, b: ink.b, state: null, done: null, ended: 0 };
         if (had && had !== line) touched.add(had.d);
         line.state = mergeLive(line.state, ink);
         line.m = s.m;
@@ -112,7 +112,7 @@ export class LiveInk {
     for (const [key, line] of this.lines) {
       if (line.d !== doc || !line.state?.pts.length) continue;
       if (line.ended && now - line.ended > DONE_HOLD_MS) { this.lines.delete(key); continue; }
-      out.push({ ...this.who(line.m), pts: line.state.pts, c: line.c, w: line.w, b: line.b, live: !line.done });
+      out.push({ ...this.who(line.m), pts: line.state.pts, c: line.c, w: line.w, z: line.z, b: line.b, live: !line.done });
     }
     return out;
   }

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PALETTE, INK, PAPER, memberColor, hexToOklch, oklchToHex, contrast, mixColors,
-  splitWords, paintFor, paintCss,
+  splitWords, paintFor, paintCss, hsvToHex, hexToHsv, rememberColor,
 } from "../src/core/paint.js";
 
 const THEMES = ["light", "dark"];
@@ -219,3 +219,37 @@ test("personColor: a member's own colour reads on the light and the dark paper (
   assert.equal(personColor({ color: 3, hex: null }, "dark"), memberColor(3, "dark"));
   assert.equal(personColor(null, "light"), memberColor(0, "light"));
 });
+
+// 색 원판: a hue ring and a saturation/brightness square give a #rrggbb, and back.
+test("hsv → hex: the ring's corners and the square's edges", () => {
+  assert.equal(hsvToHex(0, 1, 1), "#ff0000");
+  assert.equal(hsvToHex(120, 1, 1), "#00ff00");
+  assert.equal(hsvToHex(240, 1, 1), "#0000ff");
+  assert.equal(hsvToHex(60, 1, 1), "#ffff00");
+  assert.equal(hsvToHex(200, 0, 1), "#ffffff", "no saturation is white at the top");
+  assert.equal(hsvToHex(200, 1, 0), "#000000", "no brightness is black whatever the hue");
+  assert.equal(hsvToHex(360, 1, 1), "#ff0000", "the ring closes");
+  assert.equal(hsvToHex(-120, 1, 1), "#0000ff");
+});
+
+test("hex → hsv → hex comes back the same", () => {
+  for (const hex of ["#e5484d", "#2f9e5b", "#4b4fd8", "#111111", "#ffffff", "#808080", "#f2802a"]) {
+    const { h, s, v } = hexToHsv(hex);
+    assert.ok(h >= 0 && h < 360 && s >= 0 && s <= 1 && v >= 0 && v <= 1, hex);
+    assert.equal(hsvToHex(h, s, v), hex);
+  }
+  // A grey keeps no hue of its own (0), black no saturation.
+  assert.deepEqual(hexToHsv("#000000"), { h: 0, s: 0, v: 0 });
+});
+
+test("recent colours: newest first, no repeats, at most eight, only #rrggbb", () => {
+  let list = [];
+  for (const c of ["#111111", "#222222", "#111111"]) list = rememberColor(list, c);
+  assert.deepEqual(list, ["#111111", "#222222"]);
+  for (let i = 0; i < 12; i++) list = rememberColor(list, "#0000" + String(i).padStart(2, "0"));
+  assert.equal(list.length, 8);
+  assert.equal(list[0], "#000011");
+  assert.deepEqual(rememberColor(["#abcdef"], "red"), ["#abcdef"], "names are not kept (they have their own dots)");
+  assert.deepEqual(rememberColor(["#abcdef"], "#ABCDEF"), ["#abcdef"], "case does not make a new one");
+});
+
