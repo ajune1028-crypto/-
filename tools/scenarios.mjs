@@ -4828,7 +4828,7 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
 // Every tool is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
 // tapped). Nine brushes no longer fit in one row there: the brush row slides sideways, fades at its
 // end to say so, and every brush can be brought into view and pressed; the rest stays in view.
-scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all nine brushes can be reached and pressed", async ({ open, out }) => {
+scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all ten brushes (채우기 among them) can be reached and pressed", async ({ open, out }) => {
   const page = await open({ width: 360, height: 760 });
   await createRoom(page, { name: "가람" });
   await page.waitFor(TODAY);
@@ -4844,7 +4844,7 @@ scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the col
     return out;
   })()`);
   assert.ok(seen.length === 1 + 1 + 8 + 3 + 2 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
-  assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 9);
+  assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 10);
   assert.ok(await page.eval(`${q("#ink-tools .ink-brushes")}.classList.contains("more")`), "the row says there is more");
   await page.shot(out("brushes-360.png"));
   for (const brush of ["highlighter", "crayon", "sketch", "pen"]) {
@@ -5317,6 +5317,60 @@ scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoe
 
 // Every brush on one page, as the owner will see them (a picture to look at), each kept with its
 // own brush: 펜, 만년필, 붓펜, 연필 (Klecks' chalk), 스케치 (Klecks), 크레용 (Easy-Brush), 마커, 에어브러시, 형광펜.
+// 채우기 (the brush table's paint bucket, as Klecks fills): a tap inside a drawn shape fills it in the
+// chosen colour up to its line (and a pixel under the line's soft edge), outside stays as it was; it
+// is one shape, the same on the friend's screen; 되돌리기 takes it away.
+scenario("채우기: a tap inside a drawn square fills it up to the line in the chosen colour, outside stays clear; the friend sees the same; undo takes it away", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "색칠");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const layerDoc = `("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  const strokes = (page) => page.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => s.s || s.b)`);
+  await a.front();
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  // A closed square with the pen (모양 잡기 makes it exact).
+  const sq = [[0.3, 0.3], [0.7, 0.3], [0.7, 0.6], [0.3, 0.6], [0.3, 0.3]].map(([u, v]) => [box.x + box.w * u, box.y + box.h * v]);
+  await a.press(sq[0][0], sq[0][1]);
+  for (let i = 1; i < sq.length; i++) for (let k = 1; k <= 6; k++) await a.moveTo(sq[i - 1][0] + ((sq[i][0] - sq[i - 1][0]) * k) / 6, sq[i - 1][1] + ((sq[i][1] - sq[i - 1][1]) * k) / 6);
+  await a.release(sq[4][0], sq[4][1]);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+  // 채우기 in red, a tap in the middle.
+  await click(a, '[data-brush="fill"]');
+  await click(a, '[data-ink="red"]');
+  await click(a, '[data-brush="fill"]');
+  const mid = [box.x + box.w * 0.5, box.y + box.h * 0.45];
+  await a.tap(mid[0], mid[1]);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
+  assert.deepEqual(await strokes(a), ["pen", "fill"]);
+  // The colour under the tap is red; far outside the square it is clear.
+  const pixel = (page, x, y) => page.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; const c = document.querySelector('.draw-layer[data-layer="' + l.id + '"] canvas'); const r = c.getBoundingClientRect(); const g = c.getContext("2d"); const d = g.getImageData(Math.round((${x} - r.left) * c.width / r.width), Math.round((${y} - r.top) * c.height / r.height), 1, 1).data; return [d[0], d[1], d[2], d[3]]; })()`);
+  const inside = await pixel(a, mid[0], mid[1]);
+  assert.ok(inside[3] > 200 && inside[0] > 150 && inside[1] < 120, "red inside: " + inside);
+  const outside = await pixel(a, box.x + box.w * 0.15, box.y + box.h * 0.85);
+  assert.equal(outside[3], 0, "clear outside: " + outside);
+  await a.shot(out("fill.png"));
+  // The friend sees the same fill.
+  await b.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
+  await b.front();
+  await pause(300);
+  const theirs = await pixel(b, mid[0], mid[1]);
+  assert.ok(theirs[3] > 200 && theirs[0] > 150, "the friend sees it red: " + theirs);
+  // Undo takes it away.
+  await a.front();
+  await click(a, "#draw-undo");
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+});
+
 scenario("brush sheet: all nine brushes drawn on one page, each kept as its own brush", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 430, height: 900 });
   await click(a, "#add-creative");

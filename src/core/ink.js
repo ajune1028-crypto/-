@@ -29,7 +29,7 @@ export const INK_WIDTHS = [1, 2, 3];
  */
 export const BRUSHES = ["pen", "pencil", "marker", "highlighter", "erase"];
 /** Newer brushes, each with the older brush a device from before draws it as. */
-export const STYLES = { fountain: "pen", brushpen: "pen", airbrush: "highlighter", sketch: "pencil", crayon: "pencil" };
+export const STYLES = { fountain: "pen", brushpen: "pen", airbrush: "highlighter", sketch: "pencil", crayon: "pencil", fill: "marker" };
 const MAX_POINTS = 3000;
 const MAX_UNKNOWN = 300;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;

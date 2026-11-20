@@ -15,6 +15,7 @@ import { getSettings, setSetting } from "../identity.js";
 import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
+import { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } from "../core/fill.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
 
@@ -24,7 +25,7 @@ const COLORS = {
 /** Pixel width of each size at 1 rem = 16 px. */
 const WIDTHS = { 1: 2, 2: 4, 3: 8 };
 /** The brushes in the tools, in this order. */
-export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"]];
+export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"], ["fill", "채우기"]];
 /** 손떨림 보정's string, in screen pixels, for 끔 · 약 · 중 · 강. */
 const STEADY_PX = [0, 6, 14, 26];
 export const STEADY_NAMES = ["끔", "약", "중", "강"];
@@ -167,6 +168,19 @@ export function paintStroke(g, pts, color, width, brush, shaped = false) {
   const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  if (look.kind === "fill") {
+    // 채우기: the region's rings, filled even-odd (its holes stay open).
+    g.globalAlpha = look.alpha;
+    g.fillStyle = ink;
+    g.beginPath();
+    for (const ring of pointsToRings(pts)) {
+      ring.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.closePath();
+    }
+    g.fill("evenodd");
+    g.restore();
+    return;
+  }
   if (look.kind === "sketch") {
     // 스케치: the line itself, fine and pencil-dark, then faint strokes joining its near points.
     const poly = outline(points, { size: size * 0.55, thinning: real ? 0.5 : 0, taperStart: 0, taperEnd: size * 1.5 });
@@ -399,6 +413,9 @@ export class InkLayer {
         this.share?.begin("laser", {});
         this.share?.grow("laser", this.light.pts);
         this.renderSoon();
+      } else if (this.tool === "pen" && this.brush === "fill") {
+        // 채우기: a tap, not a line.
+        this.fillAt(e);
       } else {
         const first = this.point(e);
         const brush = this.tool === "eraser" ? "erase" : this.brush;
@@ -529,6 +546,37 @@ export class InkLayer {
   }
 
   /** A point from the hand: with 손떨림 보정 the brush follows on its string, and only its moves count. */
+  /**
+   * 채우기 at a tap: the region joined to it on this layer's own picture (what is drawn here, not the
+   * layers above or below), grown a little under the soft edges of its lines, kept as a shape (its
+   * edge and its holes) in my colour. Too thin a sliver to see is not kept.
+   */
+  fillAt(e) {
+    if (!this.kept) this.render();
+    const kept = this.kept;
+    if (!kept?.canvas || !kept.t) return;
+    const c = kept.canvas;
+    const box = this.canvas.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const sx = c.width / box.width;
+    const sy = c.height / box.height;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    const img = g.getImageData(0, 0, c.width, c.height);
+    const mask = fillMask(img.data, c.width, c.height, (e.clientX - box.left) * sx, (e.clientY - box.top) * sy, { tolerance: 48, grow: Math.max(1, Math.round(sx)) });
+    let eps = 0.75 * sx;
+    let rings = maskRings(mask, c.width, c.height).map((r) => simplifyRing(r, eps));
+    // A stroke holds at most 3000 points: a very ragged region is simplified more.
+    while (rings.reduce((n, r) => n + r.length, 0) > 2900 && eps < 40) {
+      eps *= 1.6;
+      rings = rings.map((r) => simplifyRing(r, eps));
+    }
+    const inv = kept.t.inverse();
+    const pts = ringsToPoints(rings.filter((r) => r.length >= 3), ([x, y]) => { const p = inv.transformPoint({ x, y }); return [p.x, p.y]; });
+    if (pts.length < 9) return;
+    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true });
+    this.render();
+  }
+
   /** The point of an event, a finger's pressure read from its speed. */
   felt(live, ev) {
     const p = this.point(ev);
@@ -620,7 +668,7 @@ export class InkLayer {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
         this.paint(pg, pts, s.c, s.w, brushOf(s), !!s.q);
       }
-      this.kept = { key, canvas: pic, doc: this.ink() };
+      this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -791,7 +839,10 @@ function brushPreview(brush, color, width) {
     const k = 0.16 * ratio;
     g.setTransform(k, 0, 0, k, 0, 0);
     const pts = [];
-    if (brush === "sketch") {
+    if (brush === "fill") {
+      // 채우기 shows a filled drop (a bucket's paint) rather than a line.
+      for (const [x, y, p] of [[60, 18, 100], [128, 18, 0], [176, 60, 0], [128, 92, 0], [60, 92, 0], [18, 55, 0]]) pts.push(x, y, p);
+    } else if (brush === "sketch") {
       // 스케치 shows itself when rubbed back and forth (its web of faint strokes appears).
       for (let i = 0; i <= 40; i++) {
         const t = i / 40;

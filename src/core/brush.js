@@ -38,6 +38,8 @@ export const BRUSH_LOOKS = {
   sketch: { kind: "sketch", scale: 1, alpha: 0.85, streamline: 0.35 },
   crayon: { kind: "dabs", scale: 1.7, alpha: 0.55, spacing: 0.12, crayon: true, streamline: 0.4 },
   erase: { kind: "outline", scale: 3.2, alpha: 1, thinning: 0, streamline: 0.3 },
+  // 채우기: a region's edges as rings (core/fill.js), filled even-odd; not drawn along a line.
+  fill: { kind: "fill", scale: 1, alpha: 1, streamline: 0 },
 };
 
 export function brushLook(brush) {
