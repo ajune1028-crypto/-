@@ -1011,6 +1011,49 @@ scenario("speed: typing stays quick on a sheet that already holds 10,000 charact
   assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).text().length`), await a.eval(`${TODAY}.querySelector("textarea").value.length`));
 });
 
+// 이 날 전체 잠그기 (the first description's 잠금, 5.8): the day's name opens its menu; a locked day takes
+// nothing from anyone, says who locked it, and only its locker (or the room's maker) frees it.
+scenario("이 날 전체 잠그기: the day's name locks the whole day; the friend can neither write nor remove anything on it and sees who locked it; freed, writing goes on", async ({ open, out }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("오늘은 잠글 날");
+  await sameOnAll([a, b], "오늘은 잠글 날");
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const sheet = (page) => `window.__app.session.sheet(${JSON.stringify(day)})`;
+  await a.front();
+  await click(a, ".sheet.today h2.day");
+  await a.waitFor(q("#day-lock"));
+  await click(a, "#day-lock");
+  await a.waitFor(`${sheet(a)}.dayLock() !== null`);
+  await b.waitFor(`${sheet(b)}.dayLock() !== null && !${TODAY}.querySelector(".day-lock").hidden`);
+  assert.match(await b.eval(`${TODAY}.querySelector(".day-lock").textContent`), /가람 님이 잠근 날/);
+  await b.shot(out("day-locked.png"));
+  // The friend: neither a letter at the end nor removing one.
+  await b.front();
+  await focusEnd(b);
+  await b.type("더");
+  await b.waitFor(`document.querySelector(".toast")?.textContent.includes("잠긴 날")`);
+  await b.key("Backspace");
+  await pause(200);
+  assert.equal(await b.eval(`${sheet(b)}.text()`), "오늘은 잠글 날");
+  assert.equal(await b.eval(`${TODAY}.querySelector("textarea").value`), "오늘은 잠글 날");
+  // Not theirs to free: the menu only says who locked it.
+  await click(b, ".sheet.today h2.day");
+  await b.waitFor(q("#day-menu"));
+  assert.ok(!(await b.eval(`!!document.getElementById("day-unlock")`)), "only the locker or the room's maker frees it");
+  await b.key("Escape");
+  // Its locker frees it; writing goes on.
+  await a.front();
+  await click(a, ".sheet.today h2.day");
+  await a.waitFor(q("#day-unlock"));
+  await click(a, "#day-unlock");
+  await b.waitFor(`${sheet(b)}.dayLock() === null && ${TODAY}.querySelector(".day-lock").hidden`);
+  await b.front();
+  await focusEnd(b);
+  await b.type("!");
+  await sameOnAll([a, b], "오늘은 잠글 날!");
+});
+
 // Writing that runs past the screen: the line being written stays in view as it goes down.
 scenario("text room: writing that runs past the bottom of the screen keeps the line being written in view", async ({ open }) => {
   const page = await open({ width: 390, height: 600 });

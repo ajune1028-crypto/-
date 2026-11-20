@@ -1,13 +1,13 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-import { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame } from "./dom.js";
+import { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame, closeOnOutside } from "./dom.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { watchFingers, watchFingerTaps } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
-import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps } from "../core/edit.js";
+import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps } from "../core/edit.js";
 import { MARK_COLORS, MAX_SOUND_MS } from "../core/crdt.js";
 import { fileOps } from "../core/files.js";
 import { toBase64, fromBase64 } from "../core/b64.js";
@@ -248,6 +248,7 @@ export function mountTextRoom(body, app, session) {
       editor = new SheetEditor({
         app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text),
         onReveal: (att, from) => (att.kind === "sound" ? revealSound(day, att, from) : revealPhoto(day, att, from)),
+        onDay: (ed, head) => dayMenu(ed, head),
         onSelect: (ed) => {
           const range = ed.selectionRange();
           const word = range || ed.wordAround();
@@ -453,6 +454,43 @@ export function mountTextRoom(body, app, session) {
   function markSel(c) {
     if (!sel || readOnlyNow()) return;
     commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "mark", { ch: sel.ch, to: sel.to, c, by: session.memberId }));
+  }
+
+  // ---- the day's own: 이 날 전체 잠그기 -------------------------------------------------------
+  let closeDay = null;
+  /**
+   * The day's name pressed: a small menu under it. Unlocked: 이 날 잠그기 (nobody writes, changes or
+   * removes anything that day). Locked: who locked it, and 잠금 풀기 for them and the room's maker.
+   */
+  function dayMenu(editor, head) {
+    closeDay?.();
+    if (readOnlyNow()) return;
+    const lock = editor.sheet.dayLock();
+    const mayFree = lock && (lock.by === session.memberId || isOwner());
+    const commitDay = (made, said) => {
+      if (!made.ops.length) return;
+      session.commit(editor.doc, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: editor.doc })), false);
+      editor.render();
+      toast(app.root, said, 2600);
+    };
+    const menu = h("div", { class: "day-menu", id: "day-menu", role: "menu" },
+      lock
+        ? [h("p", { class: "day-menu-who", text: `${session.room.member(lock.by)?.name || "누군가"} 님이 잠근 날이에요` }),
+          mayFree && h("button", { class: "chip", id: "day-unlock", type: "button", onclick: () => { close(); commitDay(unrangeOps(editor.sheet, session.clock, "lock", lock.id), "이 날의 잠금을 풀었어요"); } }, icon("lock"), "잠금 풀기")]
+        : [h("button", { class: "chip", id: "day-lock", type: "button", onclick: () => { close(); commitDay(dayLockOps(editor.sheet, session.clock, { by: session.memberId }), "이 날을 잠갔어요. 잠근 사람과 방장만 풀 수 있어요"); } }, icon("lock"), "이 날 잠그기"),
+          h("p", { class: "day-menu-help", text: "잠그면 아무도 이 날에 쓰거나 지울 수 없어요" })]);
+    document.body.append(menu);
+    const r = head.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.left)) + "px";
+    menu.style.top = r.bottom + 6 + "px";
+    const stop = closeOnOutside((t) => menu.contains(t) || head.contains(t), () => close(), menu);
+    function close() {
+      stop();
+      menu.remove();
+      if (closeDay === close) closeDay = null;
+    }
+    closeDay = close;
   }
 
   function lockSel() {
@@ -722,6 +760,7 @@ export function mountTextRoom(body, app, session) {
     stopSoundPickers();
     for (const input of soundInputs) input.remove();
     selFrame?.();
+    closeDay?.();
     selTools.remove();
     stopPhotoWatch();
     photoInput.remove();

@@ -143,6 +143,13 @@ export function rangeOps(sheet, clock, t, { ch, to, c, by, at = Date.now() }) {
   return { ops: [op], atoms: [{ k: "range", t, id: op.id }], id: op.id };
 }
 
+/** 이 날 전체 잠그기: nobody writes, changes or removes anything on this day until it is freed. Undoable. */
+export function dayLockOps(sheet, clock, { by, at = Date.now() }) {
+  clock.atLeast(sheet.maxN);
+  const op = { t: "lock", id: clock.next(), ch: ROOT, to: ROOT, all: true, by, at };
+  return { ops: [op], atoms: [{ k: "range", t: "lock", id: op.id }], id: op.id };
+}
+
 /** Takes a 표시, a 잠금 or a hidden photo or recording ("att") off its words. Undoable. */
 export function unrangeOps(sheet, clock, t, id) {
   const [map, type, key] = { att: [sheet.atts, "arm", "a"], mark: [sheet.markMap, "mrm", "m"], lock: [sheet.lockMap, "krm", "k"] }[t];
@@ -165,6 +172,8 @@ export function attachSoundOps(sheet, clock, { ch, to, file, dur, by, at = Date.
  * index: where the change starts; del: how many letters it removes.
  */
 export function lockedEdit(sheet, ids, index, del) {
+  // A locked day takes no change at all, not even a letter at its end.
+  if (sheet.dayLock()) return true;
   const locks = sheet.locks();
   if (!locks.length) return false;
   const at = new Map(ids.map((id, i) => [id, i]));

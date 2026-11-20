@@ -6,7 +6,7 @@
 // syllable is being composed, so every character it shows is tracked by id.
 
 import { chime, buzz } from "./chime.js";
-import { h, nextFrame } from "./dom.js";
+import { h, icon, nextFrame } from "./dom.js";
 import { MOTTO } from "./motto.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
@@ -25,8 +25,9 @@ const REVEAL_MS = 2000;
 const HOLD_SLOP_PX = 10;
 
 export class SheetEditor {
-  constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {} }) {
+  constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {}, onDay = null }) {
     this.onReveal = onReveal;
+    this.onDay = onDay;
     this.onSelect = onSelect;
     this.app = app;
     this.session = session;
@@ -56,8 +57,13 @@ export class SheetEditor {
     this.input.setAttribute("autocorrect", "off");
     this.layers = h("div", { class: "layers" }, this.draw, this.carets, this.input);
     this.paper = h("div", { class: "paper" }, this.layers);
+    // The day's name; pressed, the day's own things (이 날 잠그기). A locked day shows its lock there.
+    this.dayLock = h("span", { class: "day-lock", hidden: true });
+    this.dayHead = h("h2", { class: "day" + (onDay ? " pressable" : ""), role: onDay ? "button" : null, tabindex: onDay ? "0" : null,
+      onclick: (e) => { if (onDay) { e.stopPropagation(); onDay(this, this.dayHead); } } },
+      h("span", { class: "day-name", text: dayLabel(day) }), this.dayLock);
     this.el = h("section", { class: "sheet" + (isToday ? " today" : ""), data: { day } },
-      h("h2", { class: "day", text: dayLabel(day) }),
+      this.dayHead,
       this.paper);
 
     const ta = this.input;
@@ -123,7 +129,7 @@ export class SheetEditor {
       const caret = Math.min(index, this.snap.text.length);
       this.input.value = this.snap.text;
       this.input.setSelectionRange(caret, caret);
-      this.tell("잠긴 글이라 고칠 수 없어요");
+      this.tell(this.sheet.dayLock() ? "잠긴 날이라 쓸 수 없어요" : "잠긴 글이라 고칠 수 없어요");
       return;
     }
     const now = Date.now();
@@ -365,7 +371,21 @@ export class SheetEditor {
    * Only classes and data change (and absolutely placed marks), so the drawn words keep
    * exactly the input box's layout.
    */
+  /** The day's lock in its heading: who locked the whole day (or nothing). */
+  drawDayLock() {
+    const lock = this.sheet.dayLock();
+    this.el.classList.toggle("day-locked", !!lock);
+    this.dayLock.hidden = !lock;
+    if (!lock) return;
+    const name = this.session.room.member(lock.by)?.name || "누군가";
+    const key = lock.id + ":" + name;
+    if (this.dayLock.dataset.key === key) return;
+    this.dayLock.dataset.key = key;
+    this.dayLock.replaceChildren(icon("lock"), h("span", { text: `${name} 님이 잠근 날` }));
+  }
+
   markRanges() {
+    this.drawDayLock();
     for (const el of this.draw.querySelectorAll(".w.sparkle, .w.hl, .w.locked")) {
       el.classList.remove("sparkle", "sound", "hl", "locked", "lock-end");
       for (const k of ["att", "hl", "lock"]) delete el.dataset[k];

@@ -138,7 +138,10 @@ export class Sheet {
         return this.range(op, this.markMap, { c: op.c });
       }
       case "lock": {
-        if (!validId(op.ch) || !validId(op.to) || typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        if (typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        // 이 날 전체 잠그기: the whole day, its letters to come as well (from the root to the root, `all`).
+        if (op.all === true && op.ch === ROOT && op.to === ROOT) return this.range(op, this.lockMap, { all: true });
+        if (!validId(op.ch) || !validId(op.to)) return this.setAside(op);
         return this.range(op, this.lockMap, {});
       }
       case "arm":
@@ -288,9 +291,16 @@ export class Sheet {
     return [...this.markMap.values()].filter((m) => m.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
   }
 
-  /** 잠금 on the words, oldest first. */
+  /** 잠금 on the words, oldest first (a whole day's lock is not among them: dayLock()). */
   locks() {
-    return [...this.lockMap.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
+    return [...this.lockMap.values()].filter((l) => l.rm % 2 === 0 && !l.all).sort((p, q) => cmpId(p.id, q.id));
+  }
+
+  /** The whole day's lock (이 날 전체 잠그기), the oldest standing one, or null. */
+  dayLock() {
+    let first = null;
+    for (const l of this.lockMap.values()) if (l.all && l.rm % 2 === 0 && (!first || cmpId(l.id, first.id) < 0)) first = l;
+    return first;
   }
 
   mixLevel(id) {

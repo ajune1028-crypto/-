@@ -51,6 +51,38 @@ test("잠금: locked words cannot be changed or removed (typing at their edges i
   assert.equal(lockedEdit(s.sheet, ids, 2, 1), false);
 });
 
+test("이 날 전체 잠그기: the whole day is locked - no letter is changed, removed or added anywhere, new days are not; it is undone and freed; the same in any order", async () => {
+  const { dayLockOps } = await import("../src/core/edit.js");
+  const s = typed("가나다라마");
+  const ids = s.sheet.ids();
+  assert.equal(s.sheet.dayLock(), null);
+  const lock = run(s, dayLockOps(s.sheet, s.clock, { by: "m1", at: 5 }));
+  assert.equal(s.sheet.dayLock().by, "m1");
+  assert.equal(s.sheet.dayLock().id, lock.id);
+  for (const [index, del, what] of [[0, 0, "typing at the start"], [5, 0, "typing at the end"], [2, 0, "typing in the middle"], [4, 1, "removing 마"], [0, 5, "removing it all"]]) {
+    assert.equal(lockedEdit(s.sheet, ids, index, del), true, what);
+  }
+  // Undone (and done again) like a word lock; freed by unlocking.
+  run(s, { ops: invertOps(s.sheet, s.clock, lock.atoms, "undo") });
+  assert.equal(s.sheet.dayLock(), null);
+  assert.equal(lockedEdit(s.sheet, ids, 5, 0), false);
+  run(s, { ops: invertOps(s.sheet, s.clock, lock.atoms, "redo") });
+  assert.ok(s.sheet.dayLock());
+  run(s, unrangeOps(s.sheet, s.clock, "lock", lock.id));
+  assert.equal(s.sheet.dayLock(), null);
+  // A day lock on an empty day too, and a nonsense one is set aside.
+  const empty = new Sheet();
+  const clock = new Clock("b");
+  for (const op of dayLockOps(empty, clock, { by: "m2" }).ops) empty.apply(op);
+  assert.equal(lockedEdit(empty, [], 0, 0), true, "nothing can be written on a locked empty day");
+  assert.equal(empty.apply({ t: "lock", id: clock.next(), ch: "0", to: "0", by: "m2", at: 1 }), "unknown", "the whole day only with all");
+  for (const seed of [1, 2, 3]) {
+    const other = new Sheet();
+    for (const op of shuffle(rng(seed), s.log)) other.apply(op);
+    assert.deepEqual(other.dayLock(), s.sheet.dayLock(), "seed " + seed);
+  }
+});
+
 test("files in parts: a big file travels as several ops and is whole once every part is there, in any order", () => {
   const data = Array.from({ length: 3 * FILE_PART_CHARS + 123 }, (_, i) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[i % 64]).join("");
   const clock = new Clock("a");

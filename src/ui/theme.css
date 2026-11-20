@@ -1933,3 +1933,14 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
   .side-btn-word { font-size: 0.72rem; font-weight: 700; line-height: 1.15; word-break: keep-all; }
   #clip-delete.side-btn { color: var(--danger, #e5484d); }
 }
+
+/* 이 날 전체 잠그기: the day's name opens its own small menu; a locked day says so beside its name. */
+.sheet > h2.day.pressable { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.day-lock { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.12rem 0.55rem 0.12rem 0.4rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: var(--paper); background: var(--ink); }
+.day-lock svg { width: 0.8rem; height: 0.8rem; }
+.sheet.day-locked .draw { opacity: 0.82; }
+.day-menu { position: fixed; z-index: 70; display: grid; gap: 0.4rem; max-width: min(17rem, calc(100vw - 1rem)); padding: 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.22s var(--ease); }
+.day-menu .chip { display: inline-flex; align-items: center; gap: 0.3rem; justify-self: start; }
+.day-menu .chip svg { width: 0.95rem; height: 0.95rem; }
+.day-menu-help, .day-menu-who { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.day-menu-who { color: var(--ink); font-weight: 700; }
