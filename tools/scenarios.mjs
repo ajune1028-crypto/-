@@ -5164,3 +5164,134 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
   await a.waitFor(`document.getElementById("anim-show").hidden`);
   await a.shot(out("anim-room.png"));
 });
+
+// The owner: "친구한테 미니게임 신청하기… 친구가 수락하면 전체가 조금 불투명하게 바뀌고 가운데 3, 2, 1…
+// 카운트가 끝났을 때 미니게임이 뜨게", "그거 끄는 기능도 홈 화면에서". From the reference study §4.
+scenario("미니게임: 가위바위보 asked from the top bar; the friend's small card accepts it; both screens dim and count 3·2·1, then show the hands together; 오목 to five in a row; the tally; switched off at home, no button and no invitation", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 400, height: 860 });
+  await createRoom(a, { room: "게임 방", name: "가람" });
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 400, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await a.waitFor(`window.__app.session.peers.some((p) => !p.isMe && p.state?.m)`, 5000);
+  // 가위바위보.
+  await click(a, "#room-game");
+  await a.waitFor(`${q("#game-menu")} && !${q('[data-game="rps"]')}.disabled`);
+  assert.match(await text(a, ".game-menu-title"), /나래님과/);
+  await click(a, '[data-game="rps"]');
+  await b.waitFor(q("#game-invite"), 5000);
+  assert.match(await text(b, "#game-invite"), /가람님이 가위바위보를 신청했어요/);
+  await b.shot(out("game-invite.png"));
+  await click(b, "#game-accept");
+  await a.waitFor(`${q("#game-count")}`, 5000);
+  await b.waitFor(`${q("#game-count")}`, 5000);
+  assert.ok(["1", "2", "3"].includes(await text(a, "#game-count")), "a counts");
+  await a.shot(out("game-count.png"));
+  await click(a, '[data-hand="rock"]');
+  await click(b, '[data-hand="scissors"]');
+  await a.waitFor(`${q("#game-result")}?.textContent === "이겼어요!"`, 8000);
+  await b.waitFor(`${q("#game-result")}?.textContent === "가람님 승"`, 8000);
+  assert.equal(await text(a, "#rps-theirs"), "✌️");
+  await a.shot(out("game-rps.png"));
+  await click(a, "#game-close");
+  await click(b, "#game-close");
+  // 오목: a (black) makes five in a row.
+  await click(a, "#room-game");
+  await click(a, '[data-game="omok"]');
+  await b.waitFor(q("#game-invite"), 5000);
+  await click(b, "#game-accept");
+  await a.waitFor(q("#omok"), 8000);
+  await b.waitFor(q("#omok"), 8000);
+  const stone = async (page, x, y) => {
+    await page.waitFor(`!${q(`.omok-cell[data-x="${x}"][data-y="${y}"]`)}.disabled`, 5000);
+    await click(page, `.omok-cell[data-x="${x}"][data-y="${y}"]`);
+  };
+  for (let i = 0; i < 5; i++) {
+    await stone(a, 5 + i, 7);
+    if (i < 4) await stone(b, 5 + i, 9);
+  }
+  await a.waitFor(`document.querySelectorAll(".omok-stone.lit").length === 5`, 5000);
+  await b.waitFor(`${q("#game-result")}?.textContent === "가람님 승"`, 5000);
+  await a.shot(out("game-omok.png"));
+  await click(a, "#game-close");
+  await click(a, "#room-game");
+  await a.waitFor(q("#game-tally"));
+  assert.match(await text(a, "#game-tally"), /나 2 · 나래 0/);
+  await a.key("Escape");
+  await a.tap(5, 300);
+  // 나래 turns games off at home: back in the room, no game button and no invitation.
+  await click(b, "#game-close");
+  await click(b, "#back");
+  await b.waitFor(q("#home-settings"));
+  await click(b, "#home-settings");
+  await b.waitFor(q("#games-on"));
+  await click(b, "#games-on");
+  assert.equal(await b.eval(`window.__app.store.get("settings", {}).games`), false);
+  await b.key("Escape");
+  await b.eval(`(location.hash = "#r-${id}", true)`);
+  await b.waitFor(q("#invite"), 5000);
+  assert.equal(await b.eval(`!!document.getElementById("room-game")`), false, "no game button");
+  await a.waitFor(`window.__app.session.peers.some((p) => !p.isMe && p.state?.m)`, 5000);
+  await click(a, "#room-game");
+  await click(a, '[data-game="rps"]');
+  await pause(1500);
+  assert.equal(await b.eval(`!!document.getElementById("game-invite")`), false, "no invitation comes");
+});
+
+// From the reference study §5 (GarageBand's count-in): with a tempo set, 녹음 first counts one bar
+// (clicks and 1·2·3·4 in the middle), then the take begins; pressed again while counting, no take;
+// switched off in 박자, the take begins at once. Without a tempo, nothing changes.
+scenario("song 카운트인: with a tempo, a bar of 1·2·3·4 before the take; pressed again while counting, no take; off, the take begins at once", async ({ open, out }) => {
+  const page = await open();
+  await createSongRoom(page);
+  const song = `window.__app.session.doc("song")`;
+  await click(page, "#beat");
+  await page.waitFor(q("#beat-sheet"));
+  await fill(page, "#bpm-input", "120");
+  await page.key("Enter");
+  await page.waitFor(`${song}.tempo()?.bpm === 120`);
+  assert.equal(await page.eval(`${q("#count-in")}.checked`), true, "the count-in is on at first");
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("beat-sheet")`);
+  // Counted in, then recorded.
+  await click(page, "#record");
+  await page.waitFor(q(".count-in"), 4000);
+  assert.ok(["1", "2", "3", "4"].includes(await text(page, ".count-in-num")), "a beat's number shows");
+  assert.equal(await page.eval(`!!document.getElementById("rec-clip")`), false, "no take while counting");
+  await page.shot(out("song-count-in.png"));
+  await page.waitFor(`!document.querySelector(".count-in") && ${q("#rec-clip")}`, 6000);
+  await page.waitFor(`document.getElementById("song-clock").textContent >= "0:01.5"`, 8000);
+  await click(page, "#record");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 8000);
+  // Pressed again while counting: called off.
+  await click(page, "#record");
+  await page.waitFor(q(".count-in"), 4000);
+  await click(page, "#record");
+  await page.waitFor(`!document.querySelector(".count-in")`, 3000);
+  await pause(2400);
+  assert.equal(await page.eval(`!!document.getElementById("rec-clip")`), false, "no take after it was called off");
+  assert.equal(await page.eval(`document.querySelectorAll(".clip[data-id]").length`), 1);
+  // Off: at once.
+  await click(page, "#beat");
+  await page.waitFor(q("#beat-sheet"));
+  await click(page, 'label[for="count-in"]');
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).countIn`), false);
+  await page.key("Escape");
+  await page.waitFor(`!document.getElementById("beat-sheet")`);
+  await click(page, "#record");
+  await page.waitFor(q("#rec-clip"), 4000);
+  assert.equal(await page.eval(`!!document.querySelector(".count-in")`), false, "no count");
+  await pause(2000);
+  await click(page, "#record");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`, 8000);
+});
+
+// The empty song room's ways in once showed the word "falsefalse" (a list with false in it was
+// appended as it was). Nothing on the start card but the words and buttons meant to be there.
+scenario("song start card: the three ways in show no stray words", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await page.waitFor(q("#start-record"));
+  const words = await page.eval(`document.querySelector(".start, #song-start, .song-start")?.textContent || document.body.textContent`);
+  assert.ok(!/false|true|undefined|null/.test(words), "no stray words: " + words.slice(0, 200));
+});

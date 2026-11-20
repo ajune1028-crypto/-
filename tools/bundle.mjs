@@ -61,6 +61,9 @@ const server = serverArg.trim() ? serverFrom(serverArg) : null;
 if (serverArg.trim() && (!server || !server.startsWith("https://"))) throw new Error("--server must be the https address of a Firebase Realtime Database, got: " + serverArg);
 if (server) swap("<title>", `<meta name="hamkke-server" content="${server}">\n<title>`);
 swap('<script type="module" src="./src/main.js"></script>', `<script>\n${script}\n</script>`);
-mkdirSync(join(root, "dist"), { recursive: true });
-writeFileSync(join(root, "dist/index.html"), html);
-console.log(`dist/index.html: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}${server ? ", rooms on " + server : ""}`);
+// --out=PATH: write somewhere else than dist/index.html (the unit tests build into a file of their own).
+const outArg = process.argv.slice(2).find((a) => a.startsWith("--out="))?.slice(6) || "";
+const outFile = outArg || join(root, "dist/index.html");
+mkdirSync(dirname(outFile), { recursive: true });
+writeFileSync(outFile, html);
+console.log(`${outArg || "dist/index.html"}: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}${server ? ", rooms on " + server : ""}`);

@@ -14,6 +14,7 @@ import { textPreview, songPreview, boardPreview } from "../core/preview.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { keepRoomWords } from "../houses.js";
+import { mountGames } from "./game.js";
 import { memberColor, PALETTE } from "../core/paint.js";
 import { memberOps, makeVerifier, validPin } from "../core/room.js";
 
@@ -209,12 +210,16 @@ export function showRoom(app, roomId) {
       show(null, URL.createObjectURL(new Blob([fromBase64(file.data)], { type: file.type })));
     };
     offs.push(() => { if (bgUrl) URL.revokeObjectURL(bgUrl); });
+    // 미니게임: an invitation from the top bar, a 3·2·1 together, a short game (ui/game.js).
+    const games = mountGames(app, session);
+    offs.push(() => games.close());
     mount(root, h("div", { class: "room field " + sideOf(kind), data: { kind } },
       backdrop,
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
         getSettings(app.store).reference && iconButton("room-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, roomId })),
+        games.button,
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
       banner, top, body));

@@ -18,6 +18,7 @@ import { BoardDoc } from "../core/board.js";
 import { FileDoc } from "../core/files.js";
 import { DrawDoc } from "../core/draw.js";
 import { AnimDoc } from "../core/anim.js";
+import { GameDoc } from "../core/game.js";
 
 const SHEET = "s:";
 const ROOM = "room";
@@ -39,6 +40,7 @@ export const DOC_TYPES = [
   // 그림 방's layers (each layer's strokes are a "k:L<id>" drawing).
   { test: (doc) => doc === "draw", make: () => new DrawDoc() },
   { test: (doc) => doc === "anim", make: () => new AnimDoc() },
+  { test: (doc) => doc === "game", make: () => new GameDoc() },
 ];
 
 export class RoomSession extends Emitter {

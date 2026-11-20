@@ -22,7 +22,7 @@ import {
   packMs, noteInSeconds,
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
-import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
+import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { Analyzer, analyzeSamples } from "../audio/analyze.js";
@@ -320,11 +320,13 @@ export function mountSongRoom(body, app, session, frame) {
     playButton.replaceChildren(icon(playing ? "pause" : "play"));
     playButton.setAttribute("aria-label", playing ? "멈춤" : "재생");
     playButton.setAttribute("aria-pressed", String(playing));
-    recordButton.replaceChildren(icon(rec ? "stop" : "record"));
-    recordButton.setAttribute("aria-label", rec ? "녹음 끝내기" : "녹음");
-    recordButton.classList.toggle("on", !!rec);
+    // While counting in, the same button calls the take off.
+    const counting = busy === "count";
+    recordButton.replaceChildren(icon(rec || counting ? "stop" : "record"));
+    recordButton.setAttribute("aria-label", rec ? "녹음 끝내기" : counting ? "녹음 그만두기" : "녹음");
+    recordButton.classList.toggle("on", !!rec || counting);
     recordButton.classList.toggle("no-mic", !mic.ok);
-    recordButton.disabled = readOnly() || (!!busy && !rec);
+    recordButton.disabled = readOnly() || (!!busy && !rec && !counting);
     addButton.disabled = readOnly() || !!busy || !!rec;
     undoButton.disabled = !undo.canUndo || !!rec;
     redoButton.disabled = !undo.canRedo || !!rec;
@@ -567,6 +569,8 @@ export function mountSongRoom(body, app, session, frame) {
 
   async function toggleRecord() {
     if (rec) return stopRecording();
+    // Pressed again while counting in: no take after all.
+    if (busy === "count") return void cancelCount?.();
     if (readOnly() || busy) return;
     // Where the page may not use the microphone, say why and offer the phone's recorder.
     if (!mic.ok) return openAddSheet();
@@ -577,10 +581,11 @@ export function mountSongRoom(body, app, session, frame) {
     if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요. 다른 시간에서 녹음해 주세요");
     const recorder = new MicRecorder(ctx);
     const analyzer = new Analyzer(ctx.sampleRate);
+    let counting = false;
     busy = "mic";
     drawButtons();
     try {
-      await recorder.start((chunk) => analyzer.push(chunk));
+      await recorder.start((chunk) => { if (!counting) analyzer.push(chunk); });
     } catch (err) {
       busy = null;
       console.warn(err);
@@ -592,6 +597,20 @@ export function mountSongRoom(body, app, session, frame) {
     }
     busy = null;
     if (!alive) return void recorder.stop();
+    // 카운트인 (GarageBand's): with a tempo set, one bar of clicks and 1·2·3·4 on screen, then the take.
+    if (song.tempo() && settings().countIn !== false) {
+      counting = true;
+      busy = "count";
+      drawButtons();
+      const went = await countDown(ctx);
+      counting = false;
+      busy = null;
+      recorder.discard();
+      if (!went || !alive) {
+        await recorder.stop();
+        return void drawButtons();
+      }
+    }
     const overdub = song.layout().some((c) => !c.muted && c.start + c.length > playhead);
     rec = { recorder, analyzer, row, start: playhead, ms: 0, overdub, notes: [], lastLook: 0 };
     select(null);
@@ -605,6 +624,59 @@ export function mountSongRoom(body, app, session, frame) {
     session.setPresence(presence());
     runFrames();
     draw();
+  }
+
+  /** The count-in: its clicks on the sound clock, its numbers in the middle; false when called off. */
+  let cancelCount = null;
+  function countDown(ctx) {
+    const { clicks, total } = countIn(song.tempo());
+    const t0 = ctx.currentTime + 0.08;
+    for (const c of clicks) countClick(ctx, t0 + c.at / 1000, c.accent);
+    const num = h("span", { class: "count-in-num" });
+    const el = h("div", { class: "count-in", id: "count-in", role: "status", "aria-live": "assertive" }, num, h("span", { class: "count-in-note", text: "녹음 준비" }));
+    document.body.append(el);
+    return new Promise((resolve) => {
+      let raf = 0;
+      let timer = 0;
+      const finish = (ok) => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+        el.remove();
+        cancelCount = null;
+        resolve(ok);
+      };
+      cancelCount = () => finish(false);
+      const show = () => {
+        const ms = (ctx.currentTime - t0) * 1000;
+        const now = clicks.filter((c) => c.at <= ms).at(-1) || clicks[0];
+        if (el.dataset.label !== now.label) {
+          el.dataset.label = now.label;
+          num.textContent = now.label;
+          num.classList.remove("pop");
+          void num.offsetWidth;
+          num.classList.add("pop");
+          if (ms >= 0) buzz(app, now.accent ? 14 : 8);
+        }
+        raf = requestAnimationFrame(show);
+      };
+      show();
+      timer = setTimeout(() => finish(true), total + 80);
+    });
+  }
+
+  /** One count-in click on the sound clock: a short tick, higher on the bar's first beat. */
+  function countClick(ctx, t, accent) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = accent ? 1760 : 1320;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(accent ? 0.5 : 0.32, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.07);
+    osc.onended = () => gain.disconnect();
   }
 
   async function stopRecording() {
@@ -1314,6 +1386,7 @@ export function mountSongRoom(body, app, session, frame) {
         h("p", { class: "label", text: "박자표" }), meters,
         h("p", { class: "label", text: "격자 (옮길 때 붙는 단위, 박자 맞추기)" }), grids,
         toggle("metronome", "메트로놈: 재생하고 녹음할 때 박마다 소리", !!s.metronome, (on) => { setSetting(app.store, "metronome", on); player?.setMetronome(metronome()); }),
+        toggle("count-in", "카운트인: 녹음 전에 한 마디 세기 (1·2·3·4)", s.countIn !== false, (on) => setSetting(app.store, "countIn", on)),
         toggle("snap", "격자에 붙이기: 클립과 음을 옮길 때", s.snap !== false, (on) => setSetting(app.store, "snap", on)),
         h("button", { type: "button", class: "btn quiet small", id: "tempo-off", text: "박자 끄기", onclick: () => { live(null); close(); } })));
       onClose(() => {

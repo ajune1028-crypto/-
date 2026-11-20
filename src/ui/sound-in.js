@@ -91,7 +91,8 @@ export function waysIn({ app, roomId, root, name, prefix, mic, canRecord, onReco
     h("p", { class: "help", text: isApple() ? "아이폰·아이패드는 녹음 앱 대신 카메라가 열려요. 찍은 영상의 소리만 가져와요." : "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
     h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, "파일에서 가져오기"),
     h("p", { class: "help", text: isApple() ? "음성 메모의 녹음은 공유 → '파일에 저장'한 뒤 여기서 고르세요. m4a·mp3·wav, 영상(소리만)도 돼요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
-  ];
+    // Only what is there: a caller may append these as they are, and `false` would show as the word.
+  ].filter(Boolean);
 }
 
 /** Where this browser keeps a site's microphone permission, in steps a person can follow. */

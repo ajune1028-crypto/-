@@ -37,6 +37,20 @@ export function clicksIn(from, until, tempo) {
   return out;
 }
 
+/**
+ * 카운트인 (GarageBand's count-in): what is clicked and shown before a take. With a tempo, one bar
+ * of its beats, counted 1, 2, 3, 4 (the first one higher), the take beginning where the next bar
+ * would; without one, 3·2·1 at three quarters of a second, like the room's other countdowns.
+ * Returns { clicks: [{ at (ms from now), accent, label }], total }.
+ */
+export function countIn(tempo) {
+  if (!tempo) return { clicks: ["3", "2", "1"].map((label, i) => ({ at: i * 750, accent: i === 0, label })), total: 2250 };
+  const beat = beatMs(tempo);
+  const clicks = [];
+  for (let i = 0; i < tempo.beats; i++) clicks.push({ at: Math.round(i * beat), accent: i === 0, label: String(i + 1) });
+  return { clicks, total: Math.round(tempo.beats * beat) };
+}
+
 export function snapMs(ms, step) {
   return Math.round(ms / step) * step;
 }

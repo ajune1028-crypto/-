@@ -136,6 +136,12 @@ export class MicRecorder {
     return this.count / this.ctx.sampleRate;
   }
 
+  /** Forgets what was taken so far (the count-in before a take is not part of it). */
+  discard() {
+    this.chunks = [];
+    this.count = 0;
+  }
+
   /**
    * How late the take lands compared with what was playing: the time sound
    * takes to come out of the speaker and back in through the microphone.

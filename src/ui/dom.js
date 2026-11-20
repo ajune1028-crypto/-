@@ -35,6 +35,8 @@ const ICONS = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
   pen: '<path d="M4.5 19.5l1.2-4.4L15.6 5.2a2.1 2.1 0 013 3l-9.9 9.9z"/><path d="M13.8 7l3 3"/>',
   eraser: '<path d="M8.6 19.5h10.9"/><path d="M4.9 15.3l8.4-8.4a2 2 0 012.8 0l2.9 2.9a2 2 0 010 2.8l-6.6 6.6H8.5z"/>',
+  // 미니게임: a game pad.
+  game: '<path d="M7.2 8.5h9.6a4.4 4.4 0 014.3 5.3l-.6 3a2.4 2.4 0 01-4.1 1.1l-1.7-1.9H9.3l-1.7 1.9a2.4 2.4 0 01-4.1-1.1l-.6-3A4.4 4.4 0 017.2 8.5z"/><path d="M7.6 11.6v2.6M6.3 12.9h2.6"/><circle cx="15.6" cy="12.2" r=".6" fill="currentColor"/><circle cx="17.2" cy="13.8" r=".6" fill="currentColor"/>',
   // 애니메이션: a strip of film.
   film: '<rect x="4" y="4.5" width="16" height="15" rx="2.4"/><path d="M8.2 4.5v15M15.8 4.5v15M4 9.5h4.2M4 14.5h4.2M15.8 9.5H20M15.8 14.5H20"/>',
   // 양파 껍질: frames behind frames.
@@ -69,7 +71,8 @@ export function h(tag, props, ...children) {
     if (key === "class") el.className = value;
     else if (key === "text") el.textContent = value;
     else if (key === "data") Object.assign(el.dataset, value);
-    else if (key === "style") Object.assign(el.style, value);
+    // Custom properties ("--c") need setProperty; the rest are plain style fields.
+    else if (key === "style") for (const [k, v] of Object.entries(value)) k.startsWith("--") ? el.style.setProperty(k, String(v)) : (el.style[k] = v);
     else if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
     else if (key in el && !key.startsWith("aria")) el[key] = value;
     else el.setAttribute(key, value === true ? "" : value);

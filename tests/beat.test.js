@@ -58,3 +58,16 @@ test("tap tempo is the average gap between taps, a pause left out", () => {
   assert.equal(tapTempo([0, 600, 1200, 3800, 4400]), 100, "the pause in the middle does not count");
   assert.equal(tapTempo([0]), null);
 });
+
+test("카운트인 (GarageBand's count-in): one bar of clicks at the song's tempo before the take; without a tempo, 3·2·1", async () => {
+  const { countIn } = await import("../src/core/beat.js");
+  const bar = countIn({ bpm: 120, beats: 4, unit: 4 });
+  assert.deepEqual(bar.clicks.map((c) => [c.at, c.accent, c.label]), [[0, true, "1"], [500, false, "2"], [1000, false, "3"], [1500, false, "4"]]);
+  assert.equal(bar.total, 2000, "the take begins where the next bar would");
+  const waltz = countIn({ bpm: 90, beats: 3, unit: 4 });
+  assert.deepEqual(waltz.clicks.map((c) => c.label), ["1", "2", "3"]);
+  assert.equal(waltz.total, 2000);
+  const plain = countIn(null);
+  assert.deepEqual(plain.clicks.map((c) => [c.at, c.label]), [[0, "3"], [750, "2"], [1500, "1"]]);
+  assert.equal(plain.total, 2250);
+});

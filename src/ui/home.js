@@ -1,6 +1,6 @@
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
-import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast } from "./dom.js";
+import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast, toggle } from "./dom.js";
 import { duplicateRoom, putIntoBoard, putRoomIntoSong } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
@@ -523,6 +523,10 @@ export function showHome(app) {
       h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
         h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
           segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
+      // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
+        toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
+        h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
       h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }), diagnostics(app, null))));
   }
 

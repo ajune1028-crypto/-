@@ -56,15 +56,22 @@ test("the dev server serves index.html on the port it prints", async () => {
 });
 
 test("the build names its room server when told (--server= or HAMKKE_SERVER), and refuses an address that is not a database", async () => {
+  // Built into a file of its own (--out=): the build under test in dist/ is never changed by the
+  // unit tests (a screen run against dist/ once tested a file that changed under it).
+  const { mkdtempSync, statSync, existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const outFile = join(mkdtempSync(join(tmpdir(), "hamkke-build-")), "index.html");
+  const distFile = join(root, "dist/index.html");
+  const distBefore = existsSync(distFile) ? statSync(distFile).mtimeMs : null;
   const run = (args, env = {}) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [join(root, "tools/bundle.mjs"), ...args], { env: { ...process.env, HAMKKE_SERVER: "", ...env } });
+    const child = spawn(process.execPath, [join(root, "tools/bundle.mjs"), "--out=" + outFile, ...args], { env: { ...process.env, HAMKKE_SERVER: "", ...env } });
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
     child.on("close", (code) => resolve({ code, out }));
   });
   const { readFileSync } = await import("node:fs");
-  const built = () => readFileSync(join(root, "dist/index.html"), "utf8");
+  const built = () => readFileSync(outFile, "utf8");
   const url = "https://hamkke-test-default-rtdb.asia-southeast1.firebasedatabase.app";
   assert.equal((await run(["--server=" + url])).code, 0);
   assert.ok(built().includes(`<meta name="hamkke-server" content="${url}">`));
@@ -75,4 +82,5 @@ test("the build names its room server when told (--server= or HAMKKE_SERVER), an
   assert.match(bad.out, /server/);
   assert.equal((await run([])).code, 0);
   assert.ok(!built().includes(`<meta name="hamkke-server"`), "no server named, none written");
+  assert.equal(existsSync(distFile) ? statSync(distFile).mtimeMs : null, distBefore, "dist/index.html was left alone");
 });
