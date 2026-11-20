@@ -136,18 +136,18 @@ export function showHome(app) {
       }
       app.go("r-" + room.id);
     } },
-      // What it holds, at the top left (the owner: "안에 있는 거 좀 보여주는 거를 안에 위 왼쪽에다가"), and
-      // what kind of room it is as a round logo with only its icon ("동그라미 하나 원형으로 … 아이콘만").
+      // The name at the very top (the owner: "방이름은 맨위에"); under it the box of what it holds, with
+      // what kind of room it is as a round logo with only its icon inside the box at its top left
+      // ("무슨 방인지 알려주는 그런 동그란 아이콘은 네모 안에 왼쪽 끝에 위에").
+      h("span", { class: "room-name", text: room.name }),
       h("span", { class: "room-thumb" + (validPreview(room.preview) ? "" : " no-preview") },
-        previewOf(room),
-        h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines"))),
-      h("span", { class: "room-card-text" },
-        h("span", { class: "room-name", text: room.name }),
-        h("span", { class: "room-meta" },
-          when && h("span", { class: "room-when", text: when }),
-          // Who is behind the door: the colours of the people in it, once it is more than me.
-          room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
-            room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } }))))));
+        h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines")),
+        previewOf(room)),
+      h("span", { class: "room-meta" },
+        when && h("span", { class: "room-when", text: when }),
+        // Who is behind the door: the colours of the people in it, once it is more than me.
+        room.people?.length > 1 && h("span", { class: "room-people", role: "img", "aria-label": `${room.people.length}명이 있는 방` },
+          room.people.map((c) => h("span", { class: "dot", style: { background: memberColor(c, currentTheme()) } })))));
     if (!mine) return row;
     // 별표 (the owner: "별표 표시한 방은 맨 위에"): starred rooms lead their half.
     const star = h("button", { class: "room-star", type: "button", data: { star: room.id }, "aria-pressed": String(isStarred), "aria-label": isStarred ? "별표 빼기" : "별표 (맨 위에 두기)",
@@ -164,7 +164,8 @@ export function showHome(app) {
     const hold = () => {
       held = true;
       clearTimeout(timer);
-      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: houseDock() };
+      // With 찾기와 집 out, its own houses take the room; otherwise a row of houses rises from below.
+      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseDock() };
       row.classList.add("lifted");
       try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
       buzz(app, 10);
@@ -172,6 +173,7 @@ export function showHome(app) {
     const endLift = () => {
       row.classList.remove("lifted");
       lift?.ghost?.remove();
+      lift?.over?.classList.remove("over");
       const dock = lift?.dock;
       lift = null;
       if (dock) {
@@ -187,7 +189,7 @@ export function showHome(app) {
         document.body.append(lift.ghost);
       }
       lift.ghost.style.translate = `${x}px ${y}px`;
-      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house") || null;
+      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house, .home-panel .house-tile, .home-panel[data-drop-house]") || null;
       if (target !== lift.over) {
         lift.over?.classList.remove("over");
         target?.classList.add("over");
@@ -201,11 +203,16 @@ export function showHome(app) {
       endLift();
       if (!moved) return void roomMenu(room);
       if (!target) return;
-      const id = target.dataset.house;
-      if (id === "new") return void openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } });
+      const id = target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null);
+      if (!id) return;
+      if (id === "new") {
+        if (panelCtl?.isOpen()) return void panelCtl.show({ name: "build", room: room.id });
+        return void openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } });
+      }
       putInHouse(app.store, room.id, id);
       buzz(app, 14);
       draw();
+      panelCtl?.isOpen() && panelCtl.refresh();
       toast(root, `'${houses(app.store).find((x) => x.id === id)?.name || "집"}'에 넣었어요`);
     };
     row.addEventListener("pointerdown", (e) => {
@@ -254,11 +261,28 @@ export function showHome(app) {
   };
   /** Opens 찾기와 집 out of an edge; with no edge given, out of the one it was last thrown to. */
   async function openPanel({ edge, at, strength = 0.3, delay = 0, view } = {}) {
+    // Out at an edge already: ⋮ sends it somewhere else (tapped: the next edge round; thrown: there).
+    if (panelCtl?.isOpen() && !panelCtl.floating && !view) {
+      const order = ["right", "bottom", "left", "top"];
+      const to = edge || order[(order.indexOf(panelCtl.edge()) + 1) % order.length];
+      if (to !== panelCtl.edge()) {
+        rememberPanelEdge(app.store, { edge: to, at: at ?? 0.5 });
+        panelCtl.moveTo(to, at ?? 0.5, strength);
+      }
+      return;
+    }
     if (!edge) ({ edge, at } = lastPanelEdge(app.store));
     if (panelCtl?.isOpen()) panelCtl.close({ now: true });
     await glowEdge({ edge, at: at ?? 0.5, strength, delay, onImpact: () => buzz(app, 8) });
     if (!alive) return;
     panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw() });
+  }
+
+  /** The second way to 찾기와 집: floating on its own like 레퍼런스 (the right icon; ⋮ on its left as before). */
+  function toggleFloat() {
+    if (panelCtl?.isOpen() && panelCtl.floating) return void panelCtl.close();
+    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
+    panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw() });
   }
 
   /**
@@ -448,7 +472,9 @@ export function showHome(app) {
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
           getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
-          kebab()),
+          // ⋮ on the left comes out of an edge as before; on its right the same panel floats on its own.
+          kebab(),
+          iconButton("home-float", "float", "찾기와 집 (떠 있는 판, 머리를 끌어 옮겨요)", toggleFloat)),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.

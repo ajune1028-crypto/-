@@ -61,6 +61,8 @@ const ICONS = {
   roll: '<rect x="4" y="4.5" width="16" height="15" rx="2.2"/><path d="M7.5 9h4M10.5 12.5h5.5M13 16h3.5"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M5 15.5V6.4c0-.8.6-1.4 1.4-1.4h9.1"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
+  // A panel floating on its own (찾기와 집 like 레퍼런스).
+  float: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9.5h16"/><circle cx="7.2" cy="7.25" r="0.6" fill="currentColor" stroke="none"/><path d="M8 13.5h8M8 16h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
 };
 
@@ -348,6 +350,8 @@ export function openSheet(root, title, build) {
   document.addEventListener("keydown", onKey);
   build(panel, close, (fn) => closers.push(fn));
   root.append(scrim);
+  // Whatever lies over the screen and is not a sheet steps aside (찾기와 집 out of an edge).
+  document.dispatchEvent(new CustomEvent("sheet-open"));
   return close;
 }
 

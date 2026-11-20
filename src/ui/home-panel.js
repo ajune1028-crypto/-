@@ -20,6 +20,9 @@ import { houses, addHouse, updateHouse, removeHouse, putInHouse, takeOutOfHouse,
 const PANEL_EDGE = "homePanelEdge";
 const EDGES = ["left", "right", "top", "bottom"];
 
+// Where the floating 찾기와 집 was left (its head dragged it there): { x, y }.
+const FLOAT_KEY = "homePanelFloat";
+
 /** Where 찾기와 집 last came out (a tap on ⋮ brings it from there, the owner asked): { edge, at }. */
 export function lastPanelEdge(store) {
   const v = store.get(PANEL_EDGE, null);
@@ -60,28 +63,88 @@ function marked(text, at, len) {
  * changed(): home draws itself again (a room went into a house, a house was built or taken down).
  * view: what it opens on ({ name: "main" }, { name: "house", id }, { name: "build", room }).
  */
-export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" } }) {
-  let edge = firstEdge;
+export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" }, floating = false }) {
+  let edge = floating ? "float" : firstEdge;
   const root = app.root;
   const store = app.store;
   const max = () => getSettings(store).recentSearchMax || 5;
   let mode = "name";
   let query = "";
-  const panel = h("aside", { class: "home-panel", id: "home-panel", data: { edge }, role: "dialog", "aria-label": "찾기와 집" });
+  const panel = h("aside", { class: "home-panel" + (floating ? " floating" : ""), id: "home-panel", data: { edge }, role: "dialog", "aria-label": "찾기와 집" });
   // While the panel is still coming out, a tap beside it does not put it away (it may be a tap on
   // the part of the panel that is not shown yet).
   let entering = false;
-  const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true", onclick: () => { if (!entering) close(); } });
+  // Nothing lies over home while the panel is out (the owner: "바깥에꺼가 터치가 되게끔"): rooms can be
+  // opened, scrolled, and held and drawn into a house in the panel. A tap on an empty place puts it
+  // away (see onOutside).
+  const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true" });
   // The grip stays the same element while the views change under it (a finger on it keeps its hold).
   const grip = h("div", { class: "panel-grip", id: "panel-grip", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   // A side panel's inner edge (its 끝자락) takes the same throw.
   const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   const body = h("div", { class: "home-panel-body" });
-  panel.append(grip, body, end);
+  // Floating (like 레퍼런스, with the same head): its head moves it, where it is left it stays; its
+  // own button puts it away.
+  const head = floating && h("div", { class: "float-head", id: "float-head" },
+    h("span", { class: "float-grip", "aria-hidden": "true" }),
+    h("h2", { class: "float-title", text: "찾기와 집" }),
+    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back")));
+  if (floating) panel.append(head, body);
+  else panel.append(grip, body, end);
   root.append(scrim, panel);
+  // Home's round buttons stay above the panel (⋮ pressed again moves it); what the panel holds
+  // starts below them where they would lie over it (at the right and top edges, floating).
+  const topClear = () => {
+    const t = document.querySelector(".home-top");
+    return t ? Math.ceil(t.getBoundingClientRect().bottom + 6) : 0;
+  };
+  panel.style.setProperty("--top-clear", topClear() + "px");
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  enter(at);
-  if (!reduced && scrim.animate) scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+  if (floating) placeFloat(store.get(FLOAT_KEY, null));
+  if (floating) popIn();
+  else enter(at);
+
+  function placeFloat(spot) {
+    const w = Math.min(innerWidth - 16, 360);
+    const x = spot && Number.isFinite(spot.x) ? spot.x : innerWidth - w - 12;
+    const y = spot && Number.isFinite(spot.y) ? spot.y : topClear() || 72;
+    panel.style.width = w + "px";
+    panel.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, x))) + "px";
+    panel.style.top = Math.round(Math.max(8, Math.min(innerHeight - 120, y))) + "px";
+  }
+
+  function popIn() {
+    if (reduced || !panel.animate) return;
+    entering = true;
+    const done = () => { entering = false; };
+    panel.animate([{ opacity: 0, transform: "translateY(-8px) scale(0.96)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }).finished.then(done, done);
+  }
+
+  if (floating) {
+    let d = null;
+    head.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      const r = panel.getBoundingClientRect();
+      d = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+      try { head.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      panel.classList.add("held");
+    });
+    head.addEventListener("pointermove", (e) => {
+      if (!d || e.pointerId !== d.id) return;
+      placeFloat({ x: e.clientX - d.dx, y: e.clientY - d.dy });
+    });
+    const drop = (e) => {
+      if (!d || e.pointerId !== d.id) return;
+      d = null;
+      panel.classList.remove("held");
+      const r = panel.getBoundingClientRect();
+      store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top) });
+    };
+    head.addEventListener("pointerup", drop);
+    head.addEventListener("pointercancel", drop);
+    head.addEventListener("touchmove", (e) => { if (d) e.preventDefault(); }, { passive: false });
+  }
 
   /**
    * Comes out of the light: a sliver of glass where the edge was lit, opening along the edge and
@@ -188,14 +251,39 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     panel.style.transform = "";
     edge = to;
     panel.dataset.edge = to;
+    panel.style.setProperty("--top-clear", topClear() + "px");
     enter(spot);
   }
 
   const onKey = (e) => { if (e.key === "Escape") close(); };
   // Leaving the app and coming back finds home as it was: no search, no panel.
   const onHide = () => { if (document.visibilityState === "hidden") close({ now: true, forget: true }); };
+  // A tap on an empty place puts it away; a room, a button, a field keep working and it stays out,
+  // and a finger that moves (scrolling the rooms) leaves it out too. Floating, it stays until it is
+  // put away by its own ✕ or the icon (like 레퍼런스).
+  let tap = null;
+  const onOutside = (e) => {
+    tap = null;
+    if (floating || !open || entering || panel.contains(e.target)) return;
+    if (e.target.closest?.("button, a, input, textarea, select, label, [role='button'], .room-cell, .room-row, .home-top, .house-dock, .room-ghost, .sheet, .toast, .notice")) return;
+    tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
+  };
+  const onOutsideUp = (e) => {
+    if (!tap || e.pointerId !== tap.id) return;
+    const ok = Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 10 && e.timeStamp - tap.t < 600;
+    tap = null;
+    if (ok && open) close();
+  };
+  const onLeave = () => close({ now: true });
+  // A sheet opened from home (a room's actions, 설정) is not covered: the panel at an edge steps
+  // aside; floating, it stays like 레퍼런스.
+  const onSheet = () => { if (!floating) close({ now: true }); };
   document.addEventListener("keydown", onKey);
   document.addEventListener("visibilitychange", onHide);
+  document.addEventListener("pointerdown", onOutside, true);
+  document.addEventListener("pointerup", onOutsideUp, true);
+  document.addEventListener("sheet-open", onSheet);
+  addEventListener("hashchange", onLeave);
 
   function close({ now = false, forget = false, from = [0, 0] } = {}) {
     if (!open) return;
@@ -204,8 +292,16 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     if (!forget && query.trim()) rememberSearch(store, query, max());
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("visibilitychange", onHide);
+    document.removeEventListener("pointerdown", onOutside, true);
+    document.removeEventListener("pointerup", onOutsideUp, true);
+    document.removeEventListener("sheet-open", onSheet);
+    removeEventListener("hashchange", onLeave);
     const gone = () => { panel.remove(); scrim.remove(); };
     if (now || reduced || !panel.animate) return gone();
+    if (floating) {
+      panel.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-8px) scale(0.96)" }], { duration: 200, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" }).finished.then(gone, gone);
+      return;
+    }
     // Out the way it came, from wherever the finger left it.
     const [fx, fy] = from;
     const out = { right: `translate(105%, ${fy}px)`, left: `translate(-105%, ${fy}px)`, top: `translate(${fx}px, -105%)`, bottom: `translate(${fx}px, 105%)` }[edge];
@@ -222,6 +318,9 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
 
   function draw() {
     if (!open) return;
+    // A house open in the panel takes a room held and dropped anywhere on it.
+    if (view.name === "house") panel.dataset.dropHouse = view.id;
+    else delete panel.dataset.dropHouse;
     if (view.name === "house") return drawHouse();
     if (view.name === "build") return drawBuild();
     drawMain();
@@ -383,5 +482,11 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
 
   draw();
   // nodes: home draws itself anew by replacing what it holds; it puts these back after.
-  return { close, show: (next) => { view = next; draw(); }, isOpen: () => open, nodes: [scrim, panel] };
+  return {
+    close, show: (next) => { view = next; draw(); }, isOpen: () => open, nodes: [scrim, panel],
+    floating, edge: () => edge,
+    // Somewhere else on the screen (the owner: "그걸 눌러서 다른 위치로 그게 옮겨가게").
+    moveTo: (to, spot = 0.5, strength = 0.3) => { if (open && !floating && to !== edge) relocate({ edge: to, at: spot, strength }, [0, 0]); },
+    refresh: () => draw(),
+  };
 }
