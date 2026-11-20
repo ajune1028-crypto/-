@@ -769,6 +769,8 @@ export function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = place;
     select(clip.id);
+    // A take or a file lands where it may be off the screen (a row below, later in time): shown.
+    timeline.revealClip(clip.id);
     keepTake(app, { name, result, blob, where: takeWhere(app, session.roomId) });
   }
 
@@ -1033,6 +1035,7 @@ export function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = row;
     select(clip.id);
+    timeline.revealClip(clip.id);
   }
 
   /** 붙여넣기 of copied clips (an 올가미's): at the playhead, as they stood to each other; one undo step. */
@@ -1077,6 +1080,7 @@ export function mountSongRoom(body, app, session, frame) {
     record(atoms);
     group = new Set(placed);
     select(null);
+    if (placed.length) timeline.revealClip(placed[0]);
   }
 
   function toggleMute(id) {

@@ -1011,6 +1011,28 @@ scenario("speed: typing stays quick on a sheet that already holds 10,000 charact
   assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).text().length`), await a.eval(`${TODAY}.querySelector("textarea").value.length`));
 });
 
+// Writing that runs past the screen: the line being written stays in view as it goes down.
+scenario("text room: writing that runs past the bottom of the screen keeps the line being written in view", async ({ open }) => {
+  const page = await open({ width: 390, height: 600 });
+  await createRoom(page, { room: "긴 일기" });
+  await focusEnd(page);
+  for (let i = 1; i <= 30; i++) {
+    await page.type("오늘 " + i + "번째 줄");
+    await page.key("Enter");
+  }
+  await page.type("마지막 줄");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().includes("마지막 줄")`);
+  await pause(300);
+  const at = await page.eval(`(() => {
+    const list = document.getElementById("sheets");
+    const box = list.getBoundingClientRect();
+    const caret = ${TODAY}.querySelector(".caret.mine")?.getBoundingClientRect();
+    return { caret: caret && { top: caret.top, bottom: caret.bottom }, top: Math.max(0, box.top), bottom: Math.min(innerHeight, box.bottom), scrolled: list.scrollTop };
+  })()`);
+  assert.ok(at.caret, "my caret is drawn");
+  assert.ok(at.caret.top >= at.top - 1 && at.caret.bottom <= at.bottom + 1, "the line being written is in view: " + JSON.stringify(at));
+});
+
 // The owner: "텍스트 방에서 글자를 고르고 무언가 할 때 툭툭 끊기지 않게". Moving the chosen words (a
 // handle dragged) on a day of 10,000 characters: each move costs little, and the row of tools for
 // chosen words is brought up to date, not made again.
@@ -1513,6 +1535,32 @@ scenario("song: the microphone records a take, notes appear while singing, and t
   assert.deepEqual(notes, [67, 64, 64, 65, 62, 62], "the notes sung into the microphone");
   const blob = await page.eval(`(async () => { const src = [...window.__app.session.doc("song").sources.values()][0]; const kept = await window.__app.blobs.get(src.blob); return kept ? new Uint8Array(kept.data).length : 0; })()`);
   assert.ok(blob > 100000, "the recording itself is kept on this device: " + blob + " bytes");
+});
+
+// Rows below the screen (the owner on an iPad: rows piled up past the screen): a file or a take
+// that lands on a row below what is shown comes into view, and so does the row being sung into.
+scenario("song: a clip that lands on a row below the screen comes into view, and so does the row being sung into", async ({ open, fixtures }) => {
+  const page = await open({ width: 390, height: 600 });
+  await createSongRoom(page);
+  const inView = (sel) => page.eval(`(() => { const t = document.getElementById("timeline").getBoundingClientRect(); const ruler = document.getElementById("ruler").getBoundingClientRect(); const c = document.querySelector(${JSON.stringify(sel)})?.getBoundingClientRect(); return !!c && c.top >= ruler.bottom - 1 && c.bottom <= t.bottom + 1 && c.right > t.left && c.left < t.right; })()`);
+  for (let n = 1; n <= 6; n++) {
+    await page.setFiles("#song-file", [fixtures.doremi]);
+    await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === ${n} && ${q("#song-status")}.hidden`, 20000);
+    const last = await page.eval(`window.__app.session.doc("song").layout().sort((a, b) => b.lane - a.lane)[0].id`);
+    await page.waitFor(`(() => { const t = document.getElementById("timeline"); return t.scrollTop + t.clientHeight >= document.querySelector('.clip[data-id="${last}"]').offsetTop; })()`, 3000).catch(() => {});
+    await pause(450);
+    assert.ok(await inView(`.clip[data-id="${last}"]`), "the clip on row " + n + " is in view");
+  }
+  const scrolled = await page.eval(`document.getElementById("timeline").scrollTop`);
+  assert.ok(scrolled > 0, "the rows went past the screen and it moved down: " + scrolled);
+  // Back to the top, then a take: the row it is sung into (below) comes into view.
+  await page.eval(`(document.getElementById("timeline").scrollTop = 0, true)`);
+  await click(page, "#record");
+  await page.waitFor(q("#rec-clip"), 8000);
+  await pause(600);
+  assert.ok(await inView("#rec-clip"), "the row being sung into is in view");
+  await click(page, "#record");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 7`, 15000);
 });
 
 scenario("song: split at the playhead, copy, paste on another row, mute, delete, then undo it all", async ({ open, fixtures }) => {

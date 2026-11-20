@@ -383,14 +383,20 @@ export class Timeline {
   drawRecording(rec) {
     let el = this.lanes.querySelector(".clip.rec");
     if (!rec) return void el?.remove();
+    let fresh = false;
     if (!el) {
       el = h("div", { class: "clip rec", id: "rec-clip", "aria-label": "녹음 중" }, h("span", { class: "notes" }), h("span", { class: "rec-time" }));
       this.lanes.append(el);
+      fresh = true;
     }
     el.style.left = this.xOf(rec.start) + "px";
     el.style.top = rec.row * this.rowH + this.inset + "px";
     el.style.width = Math.max(4, (rec.ms / 1000) * this.pps) + "px";
     el.style.height = this.rowH - 2 * this.inset + "px";
+    // The row being sung into is in view (a row below the screen would be sung into unseen), and
+    // its growing end stays in view as the take goes on.
+    if (fresh) this.reveal(rec.row, rec.start);
+    else this.follow(rec.start + rec.ms);
     el.querySelector(".rec-time").textContent = timeText(rec.ms);
     const notes = el.querySelector(".notes");
     if (notes.dataset.n === String(rec.notes.length) && notes.dataset.w === String(Math.round(rec.ms / 200))) return;
@@ -435,6 +441,40 @@ export class Timeline {
     const left = this.el.scrollLeft;
     const width = this.el.clientWidth;
     if (x > left + width * 0.85 || x < left) this.el.scrollLeft = Math.max(0, x - width * 0.25);
+  }
+
+  /**
+   * Brings a row (and a moment on it) into view when it is not: the timeline scrolls just enough,
+   * under the time bar that stays on top. Gently, unless the reader asked for less motion.
+   */
+  reveal(row, ms = null) {
+    const el = this.el;
+    const top = this.lanes.offsetTop + row * this.rowH;
+    const bottom = top + this.rowH;
+    const under = this.ruler.offsetHeight;
+    let y = el.scrollTop;
+    if (top < el.scrollTop + under) y = top - under - 4;
+    else if (bottom > el.scrollTop + el.clientHeight) y = bottom - el.clientHeight + 8;
+    let x = el.scrollLeft;
+    if (ms !== null) {
+      const at = this.xOf(ms);
+      if (at < el.scrollLeft || at > el.scrollLeft + el.clientWidth * 0.85) x = at - el.clientWidth * 0.25;
+    }
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    if (Math.abs(x - el.scrollLeft) < 1 && Math.abs(y - el.scrollTop) < 1) return;
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (el.scrollTo) el.scrollTo({ left: x, top: y, behavior: calm ? "auto" : "smooth" });
+    else {
+      el.scrollLeft = x;
+      el.scrollTop = y;
+    }
+  }
+
+  /** A clip into view (one just made: a take, a file, a paste). */
+  revealClip(id) {
+    const c = this.model?.clips?.find?.((x) => x.id === id) || null;
+    if (c) this.reveal(c.lane ?? c.row ?? 0, c.start);
   }
 
   clipBox(id) {
