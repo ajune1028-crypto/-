@@ -13,7 +13,7 @@
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
 import { INK_COLORS, thinPoints, brushOf } from "../core/ink.js";
-import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn } from "../core/brush.js";
+import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
 import { currentTheme } from "./theme.js";
 import { INK } from "../core/paint.js";
@@ -402,9 +402,12 @@ export class InkLayer {
       } else {
         const first = this.point(e);
         const brush = this.tool === "eraser" ? "erase" : this.brush;
+        // A finger presses as a pen would: from the hand's speed, kept in the line (a pen gives its own).
+        const feel = e.pointerType === "touch" && brush !== "erase" ? fingerFeel(e.clientX, e.clientY, e.timeStamp) : null;
+        if (feel) first[2] = Math.round(feel.p * 100);
         const level = Math.max(0, Math.min(3, this.steady() | 0));
         const string = STEADY_PX[level] * this.unitsPerPx();
-        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2, down: [e.clientX, e.clientY] };
+        this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, feel, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2, down: [e.clientX, e.clientY] };
         // 스포이트: a finger held still where it went down picks the colour there (not a pen,
         // which often rests a moment before it draws; not the erasers).
         if (this.onPick && e.pointerType === "touch" && brush !== "erase") {
@@ -446,7 +449,7 @@ export class InkLayer {
       }
       // Every point the pen passed (not only one per frame), drawn at the next frame: the line
       // keeps up with the pen however fast it goes.
-      for (const ev of e.getCoalescedEvents?.() || [e]) this.take(live, this.point(ev));
+      for (const ev of e.getCoalescedEvents?.() || [e]) this.take(live, this.felt(live, ev));
       this.holdForShape(e);
       if (this.share && live.brush !== "erase") this.share.grow("ink", live.pts);
       this.renderSoon();
@@ -468,7 +471,7 @@ export class InkLayer {
         if (e.type === "pointerup" && live.picked) this.onPick?.(live.picked);
         return void this.render();
       }
-      if (e.type === "pointerup" && !live.erase && !live.shape) for (const ev of e.getCoalescedEvents?.() || []) this.take(live, this.point(ev));
+      if (e.type === "pointerup" && !live.erase && !live.shape) for (const ev of e.getCoalescedEvents?.() || []) this.take(live, this.felt(live, ev));
       // With 손떨림 보정 the brush trails the hand on its string: as the pen lifts, the line goes the
       // rest of the way to where it was lifted (Krita's stabiliser "finishes the line" so too).
       if (live.lazy && live.pts && !live.shape && e.type === "pointerup") {
@@ -526,6 +529,13 @@ export class InkLayer {
   }
 
   /** A point from the hand: with 손떨림 보정 the brush follows on its string, and only its moves count. */
+  /** The point of an event, a finger's pressure read from its speed. */
+  felt(live, ev) {
+    const p = this.point(ev);
+    if (live.feel) p[2] = Math.round(fingerStep(live.feel, ev.clientX, ev.clientY, ev.timeStamp) * 100);
+    return p;
+  }
+
   take(live, p) {
     if (!live.lazy) return void live.pts.push(...p);
     live.hand = [p[0], p[1]];

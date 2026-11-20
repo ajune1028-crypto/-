@@ -229,3 +229,34 @@ test("연필's tip (Klecks' chalk): ragged, darker in the middle, clear at the c
   assert.notEqual(chalkTurn(10, 20), chalkTurn(11, 20));
   assert.ok(chalkTurn(1234, 567) >= 0 && chalkTurn(1234, 567) < Math.PI * 2);
 });
+
+// A finger has no pressure; it is read from the hand's real speed on the glass (CSS px per ms), so a
+// line feels the same on a 60 Hz phone and a 240 Hz iPad, and is kept in the stroke (a friend's
+// screen and every brush draw it alike).
+test("fingerFeel: a slow finger presses, a quick one skims; it touches down light; the same at any event rate", async () => {
+  const { fingerFeel, fingerStep, FINGER_START } = await import("../src/core/brush.js");
+  /** A finger moving at `speed` px/ms for `ms`, sampled every `every` ms: the pressures it gives. */
+  const run = (speed, ms, every) => {
+    const s = fingerFeel(0, 0, 0);
+    const out = [];
+    for (let t = every; t <= ms; t += every) out.push(fingerStep(s, speed * t, 0, t));
+    return out;
+  };
+  assert.ok(FINGER_START < 0.5, "it starts light, as a pen touching down");
+  const slow = run(0.08, 400, 8);
+  const quick = run(2.5, 400, 8);
+  assert.ok(slow[0] < 0.55, "light at first: " + slow[0]);
+  assert.ok(slow.at(-1) > 0.78, "a slow hand presses: " + slow.at(-1));
+  assert.ok(quick.at(-1) < 0.42, "a quick hand skims: " + quick.at(-1));
+  for (const speed of [0.1, 0.6, 1.5]) {
+    const at60 = run(speed, 300, 16).at(-1);
+    const at240 = run(speed, 300, 4).at(-1);
+    assert.ok(Math.abs(at60 - at240) < 0.03, `speed ${speed}: 60 Hz ${at60.toFixed(3)} vs 240 Hz ${at240.toFixed(3)}`);
+  }
+  // Events at the same moment (a busy page) do not read as a leap.
+  const s = fingerFeel(0, 0, 0);
+  fingerStep(s, 2, 0, 16);
+  const before = s.p;
+  assert.equal(fingerStep(s, 40, 0, 16), before, "no time passed: no new speed");
+  assert.ok(Math.abs(fingerStep(s, 42, 0, 48) - before) < 0.2, "measured from the last point that had time between");
+});

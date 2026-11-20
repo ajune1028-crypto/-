@@ -90,6 +90,40 @@ function speedPressure(prev, d) {
   return prev + (target - prev) * 0.32;
 }
 
+// A finger, as a pen would press: read from the hand's real speed on the glass (CSS px per ms) as
+// the line is drawn, and kept in the stroke like a pen's pressure, so every brush, every screen and
+// every event rate (a 60 Hz phone, a 240 Hz iPad) draw the line alike. perfect-freehand simulates
+// pressure from the spacing of points, which changes with the event rate; time does not.
+export const FINGER_START = 0.42; // a pen touching down is light, then settles
+const FINGER_SLOW = 0.85; // a slow, deliberate hand
+const FINGER_QUICK = 0.35; // a quick one skims
+const FINGER_FAST = 2.2; // px/ms: as quick as it gets thinner
+const FINGER_SPEED_MS = 45; // the speed eases over this long…
+const FINGER_PRESS_MS = 60; // …and the pressure after it
+
+/** The finger's feel at the touch: { x, y, t (ms), v (speed), p (pressure 0..1) }. */
+export function fingerFeel(x, y, t) {
+  return { x, y, t, v: 0, p: FINGER_START };
+}
+
+/** The finger moved to (x, y) at time t: its pressure now (0..1). Changes s. */
+export function fingerStep(s, x, y, t) {
+  const dt = t - s.t;
+  // Events at the same moment (a busy page hands over several at once): measured from the last
+  // point that had time between, at the next one.
+  if (!(dt >= 1)) return s.p;
+  const step = Math.min(dt, 50);
+  const speed = Math.hypot(x - s.x, y - s.y) / dt;
+  s.v += (speed - s.v) * (1 - Math.exp(-step / FINGER_SPEED_MS));
+  const k = Math.min(1, s.v / FINGER_FAST);
+  const target = FINGER_SLOW - (FINGER_SLOW - FINGER_QUICK) * k * (2 - k);
+  s.p += (target - s.p) * (1 - Math.exp(-step / FINGER_PRESS_MS));
+  s.x = x;
+  s.y = y;
+  s.t = t;
+  return s.p;
+}
+
 const PI = Math.PI + 0.0001;
 const rot = (x, y, cx, cy, r) => {
   const s = Math.sin(r);

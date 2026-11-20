@@ -5273,6 +5273,52 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right" && !${q("#home-panel.floating")}`, 2000);
 });
 
+// The owner (20 November): "필압등 그 걍 손으로 해도 좋은 필기감". A finger has no pressure: it is read
+// from the hand's speed on the glass and kept in the line, as a pen's would be. A slow finger line is
+// heavier than a quick one; the mouse stays even (a tool, not a hand).
+scenario("finger lines press as a pen would: a slow finger line is kept heavier than a quick one, touching down light; the mouse stays even", async ({ open, out }) => {
+  const page = await open({ width: 420, height: 860 });
+  await click(page, "#add-creative");
+  await click(page, '[data-kind="creative-draw"]');
+  await fill(page, "#room-name", "손 그림");
+  await fill(page, "#my-name", "가람");
+  await click(page, "#create-room");
+  await page.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(page, "#invite-done");
+  await page.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const box = await page.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const strokes = () => page.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().map((s) => s.pts.filter((_, i) => i % 3 === 2)); })()`);
+  await page.front();
+  // Slowly, as one writes carefully.
+  const y1 = box.y + box.h * 0.3;
+  await page.touch("start", [[box.x + box.w * 0.15, y1]]);
+  for (let i = 1; i <= 30; i++) {
+    await page.touch("move", [[box.x + box.w * 0.15 + i * 6, y1 + Math.sin(i / 4) * 4]]);
+    await pause(20);
+  }
+  await page.touch("end");
+  await page.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 1; })()`);
+  // Quickly, a flick.
+  const y2 = box.y + box.h * 0.5;
+  await page.touch("start", [[box.x + box.w * 0.15, y2]]);
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[box.x + box.w * 0.15 + i * 45, y2 + i * 2]]);
+  await page.touch("end");
+  await page.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 2; })()`);
+  // The mouse.
+  const y3 = box.y + box.h * 0.7;
+  await page.press(box.x + box.w * 0.15, y3);
+  for (let i = 1; i <= 8; i++) await page.moveTo(box.x + box.w * (0.15 + 0.07 * i), y3);
+  await page.release(box.x + box.w * 0.71, y3);
+  await page.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 3; })()`);
+  const [slow, quick, mouse] = await strokes();
+  const middle = (ps) => { const m = ps.slice(Math.floor(ps.length / 3), Math.ceil((ps.length * 2) / 3)); return m.reduce((a, b) => a + b, 0) / m.length; };
+  assert.ok(slow[0] < 50, "a finger touches down light: " + slow[0]);
+  assert.ok(middle(slow) >= 62, "a slow finger presses: " + JSON.stringify(slow));
+  assert.ok(middle(quick) <= 50 && middle(slow) - middle(quick) >= 15, "a quick one skims: " + JSON.stringify(quick));
+  assert.ok(mouse.every((p) => p === 50), "the mouse stays even: " + JSON.stringify(mouse));
+  await page.shot(out("finger-feel.png"));
+});
+
 // 애니메이션 방 (reference study §3, FlipaClip · Procreate · OpenToonz): a flipbook drawn together.
 // It starts with two empty frames and the onion skin on; a frame drawn on shows faintly (red) on the
 // next; a frame copied comes next with the same drawing; held longer (×3) it is wider in the strip
