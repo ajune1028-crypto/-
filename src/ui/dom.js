@@ -62,6 +62,7 @@ const ICONS = {
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M5 15.5V6.4c0-.8.6-1.4 1.4-1.4h9.1"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
   // A panel floating on its own (찾기와 집 like 레퍼런스).
+  replay: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.4h3.4"/><path d="M10.4 9.3v5.4l4.4-2.7z" fill="currentColor" stroke-width="1.2"/>',
   float: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9.5h16"/><circle cx="7.2" cy="7.25" r="0.6" fill="currentColor" stroke="none"/><path d="M8 13.5h8M8 16h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
   // The side panel's buttons (icon above, word below).

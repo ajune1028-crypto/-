@@ -5877,6 +5877,139 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
 // everyone in the room: the asker opens it, friends join from their small card, the asker begins it
 // with who joined; a line each, the books pass on, the line is drawn, the books pass on, the drawing
 // is put into words; then the album is turned page by page, the same page on every screen.
+// 타임랩스 (the reference study: Procreate's replay; ours shows who drew each line): 그림 방's 과정.
+scenario("타임랩스: 과정 replays the page from its first line, each friend's line in turn with their name at the pen; it ends on the whole picture; the bar jumps back to the start; 영상으로 저장 records it", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "과정");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const layerDoc = `("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  const line = async (p, colour, v) => {
+    await p.front();
+    await click(p, `[data-ink="${colour}"]`);
+    await click(p, '[data-width="3"]');
+    const box = await p.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+    await p.press(box.x + box.w * 0.15, box.y + box.h * v);
+    for (let k = 1; k <= 10; k++) await p.moveTo(box.x + box.w * (0.15 + k * 0.07), box.y + box.h * v);
+    await p.release(box.x + box.w * 0.85, box.y + box.h * v);
+  };
+  await line(a, "red", 0.3);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+  await line(b, "blue", 0.6);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`, 5000);
+  await a.front();
+  await click(a, "#draw-replay");
+  await a.waitFor(q("#timelapse"));
+  assert.equal(await text(a, "#tl-count"), "선 2개");
+  // Partway: the first line (mine) is there or coming, the second not yet.
+  const pixel = (u, v) => a.eval(`(() => { const c = document.getElementById("tl-canvas"); const d = c.getContext("2d").getImageData(Math.round(c.width * ${u}), Math.round(c.height * ${v}), 1, 1).data; return [d[0], d[1], d[2]]; })()`);
+  await a.waitFor(`document.getElementById("timelapse").dataset.ended === "true"`, 8000);
+  const red = await pixel(0.5, 0.3);
+  const blue = await pixel(0.5, 0.6);
+  assert.ok(red[0] > 180 && red[2] < 140, "the red line at the end: " + red);
+  assert.ok(blue[2] > 180 && blue[0] < 140, "the blue line at the end: " + blue);
+  await a.shot(out("timelapse-end.png"));
+  // The bar's start: an empty page again.
+  const bar = await a.eval(`(() => { const r = document.getElementById("tl-bar").getBoundingClientRect(); return { x: r.left, y: r.top + r.height / 2 }; })()`);
+  await a.tap(bar.x + 1, bar.y);
+  const empty = await pixel(0.5, 0.3);
+  assert.ok(Math.abs(empty[0] - empty[2]) < 30, "nothing drawn at the start: " + empty);
+  // Played again, it stops on a tap; the name of who is drawing shows at the pen meanwhile.
+  await click(a, "#tl-play");
+  await pause(400);
+  await a.shot(out("timelapse-middle.png"));
+  await click(a, "#tl-play");
+  assert.match(await text(a, "#tl-play"), /이어 보기/);
+  // 영상으로 저장: the replay recorded.
+  if (await a.eval(`!!document.getElementById("tl-save")`)) {
+    await click(a, "#tl-save");
+    await a.waitFor(`Number(document.getElementById("timelapse")?.dataset.saved) > 0`, 15000);
+  }
+  await click(a, "#tl-close");
+  await a.waitFor(`!document.getElementById("timelapse")`);
+});
+
+// 그려서 맞히기 (the reference study §4: Skribbl's turns with 초성 hints): one draws, everyone else
+// guesses; wrong guesses show to all, a right one only as "맞혔어요"; everyone right ends the turn.
+scenario("그려서 맞히기: three friends join; the first picks a word and draws it while the others watch it come and guess (○ then 초성 hints); a wrong guess shows to all, a right one only as 맞혔어요; when both have it the answer shows and the next one picks", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 400, height: 860 });
+  await createRoom(a, { room: "그림 퀴즈", name: "가람" });
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 400, height: 860 });
+  await joinNew(b, { name: "나래" });
+  const c = await open({ dev: "c", hash: "r-" + id, width: 400, height: 860 });
+  await joinNew(c, { name: "다온" });
+  await a.waitFor(`window.__app.session.peers.filter((p) => !p.isMe && p.state?.m).length >= 2`, 6000);
+  await a.front();
+  await click(a, "#room-game");
+  await a.waitFor(`${q("#game-menu")} && !${q('[data-game="sketch"]')}.disabled`);
+  await click(a, '[data-game="sketch"]');
+  await a.waitFor(q("#sketch-gather"), 5000);
+  for (const p of [b, c]) {
+    await p.waitFor(q("#game-invite"), 6000);
+    assert.match(await text(p, "#game-invite"), /가람님이 그려서 맞히기를 열었어요/);
+    await p.front();
+    await click(p, "#game-accept");
+    await p.waitFor(q("#sketch-gather"), 5000);
+  }
+  await a.waitFor(`${q("#sketch-begin")}?.textContent === "3명이서 시작"`, 5000);
+  await a.front();
+  await click(a, "#sketch-begin");
+  // The first to draw (the one who opened it) picks one of three words; the others wait.
+  await a.waitFor(q("#sketch-word-0"), 9000);
+  await b.waitFor(`${q("#sketch-choose")}?.textContent.includes("가람님이 그릴 낱말을 고르는 중")`, 9000);
+  const word = await a.eval(`${q("#sketch-word-1")}.dataset.word`);
+  await a.front();
+  await click(a, "#sketch-word-1");
+  await a.waitFor(`${q("#sketch-secret")}?.textContent === ${JSON.stringify(word)}`, 5000);
+  for (const p of [b, c]) await p.waitFor(q("#sketch-hint"), 5000);
+  assert.equal(await text(b, "#sketch-hint"), [...word].map(() => "○").join(" "), "first, a ○ for each syllable");
+  assert.equal(await b.eval(`document.getElementById("game-layer").textContent.includes(${JSON.stringify(word)})`), false, "the word is nowhere in a guesser's game");
+  // The drawer draws; the line comes to the others.
+  const gid = await a.eval(`window.__app.session.doc("game").list().at(-1).id`);
+  const inkDoc = `"k:G" + ${JSON.stringify(gid)} + "~0"`;
+  await a.front();
+  const box = await a.eval(`(() => { const r = document.getElementById("sketch-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  await a.press(box.x + box.w * 0.2, box.y + box.h * 0.5);
+  for (let k = 1; k <= 10; k++) await a.moveTo(box.x + box.w * (0.2 + 0.06 * k), box.y + box.h * (0.5 + Math.sin(k) * 0.2));
+  await a.release(box.x + box.w * 0.8, box.y + box.h * 0.5);
+  for (const p of [b, c]) await p.waitFor(`window.__app.session.doc(${inkDoc}).strokes().length === 1`, 6000);
+  // A wrong guess shows to everyone; a right one only as 맞혔어요.
+  await b.front();
+  await fill(b, "#sketch-guess", "모르겠다");
+  await click(b, "#sketch-send");
+  await c.waitFor(`${q("#sketch-said")}?.textContent.includes("나래: 모르겠다")`, 5000);
+  await fill(b, "#sketch-guess", word);
+  await click(b, "#sketch-send");
+  await b.waitFor(`!${q("#sketch-got")}.hidden && ${q("#sketch-got")}.textContent.startsWith("맞혔어요! +")`, 5000);
+  await c.waitFor(`${q("#sketch-said")}?.textContent.includes("나래 맞혔어요")`, 5000);
+  assert.equal(await c.eval(`${q("#sketch-said")}.textContent.includes(${JSON.stringify(word)})`), false, "the right word is not shown to the others");
+  await b.shot(out("sketch-guess.png"));
+  await a.front();
+  await a.shot(out("sketch-draw.png"));
+  // The last one gets it: the answer shows everywhere, then the second person picks.
+  await c.front();
+  await fill(c, "#sketch-guess", word);
+  await click(c, "#sketch-send");
+  for (const p of [a, b, c]) await p.waitFor(`${q("#sketch-answer")}?.textContent === ${JSON.stringify(word)}`, 6000);
+  const scores = await a.eval(`window.__app.session.doc("game").game(${JSON.stringify(gid)}).scores`);
+  const names = await a.eval(`window.__app.session.doc("game").game(${JSON.stringify(gid)}).players`);
+  assert.equal(scores[names[0]], 100, "the drawer: 50 for each who got it");
+  assert.ok(scores[names[1]] > 150 && scores[names[2]] > 150, "both quick: " + JSON.stringify(scores));
+  await b.waitFor(q("#sketch-word-0"), 9000);
+  await a.waitFor(`${q("#sketch-choose")}?.textContent.includes("나래님이 그릴 낱말을 고르는 중")`, 9000);
+  await a.waitFor(q("#sketch-board"));
+});
+
 scenario("이어 그리기: three friends join, write a line each, draw the line they got, put the drawing they got into words; the album turns for everyone; 한 판 더 and 닫기", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 400, height: 860 });
   await createRoom(a, { room: "파티 방", name: "가람" });

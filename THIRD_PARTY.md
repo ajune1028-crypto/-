@@ -189,3 +189,8 @@ SOFTWARE.
 ## 문지르기 (libmypaint·Krita, 생각만)
 
 `src/ui/ink.js`의 문지르기(`smudgeAlong`)는 libmypaint(ISC)의 문지르기 붓과 Krita(GPL, 생각만)의 '번지기(smearing)' 문지르기에서 생각을 얻었다: 붓 자국마다 바로 앞 자리의 그림 한 조각을 들어 지금 자리에 일부만 내려놓는다. 코드는 옮기지 않고 캔버스 합성으로 새로 썼다(부드러운 둥근 가면, 투명함까지 섞는 `destination-out` + `lighter`). 같은 획을 같은 차례로 그리면 어느 화면에서나 같게 번진다.
+
+## 그려서 맞히기 (scribble.rs·Skribblrs.io, 생각만)
+
+`src/core/game.js`의 그려서 맞히기는 scribble.rs(BSD-3-Clause)와 Skribblrs.io(MIT)에서 스크리블류 놀이의 판 흐름(차례로 그리는 사람, 세 낱말 중 고르기, 시간이 갈수록 늘어나는 힌트, 빨리 맞힐수록 큰 점수, 맞힌 사람마다 그린 사람 점수)을 읽고 따랐다. 코드는 옮기지 않았다. 힌트는 한국어 초성으로 새로 만들었고, 낱말 목록(`src/core/words.js`)은 우리가 직접 썼다.
+

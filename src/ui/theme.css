@@ -1907,6 +1907,38 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .relay-page > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .relay-tools { margin: 0 auto; box-shadow: none; }
 .relay-input { font-size: 1.05rem; text-align: center; }
+/* 타임랩스 (그림 방's 과정) */
+.tl-layer { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--base) 50%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.tl-card { display: grid; gap: 0.7rem; width: min(32rem, 100%); padding: 0.9rem; border: 1px solid var(--glass-edge); border-radius: 1.4rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 92%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); animation: card-in 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
+.tl-stage { display: grid; place-items: center; }
+.tl-canvas { border-radius: 0.8rem; box-shadow: inset 0 0 0 1px var(--line), 0 1px 3px rgba(0, 0, 0, 0.08); }
+.tl-bar { position: relative; height: 0.6rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); cursor: pointer; touch-action: none; }
+.tl-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; background: var(--tint); }
+.tl-play { min-width: 5.6rem; }
+.tl-card .game-foot { flex-wrap: nowrap; }
+.tl-card .game-foot .chip { white-space: nowrap; }
+/* 그려서 맞히기 */
+.sketch-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+.sketch-word { padding: 0.6rem 1.1rem; font-size: 1.1rem; font-weight: 800; }
+.sketch-mine { margin: 0; text-align: center; font-size: 0.9rem; color: var(--soft); }
+.sketch-mine b { font-size: 1.25rem; color: var(--ink); letter-spacing: 0.02em; }
+.sketch-hint { margin: 0; text-align: center; font-size: 1.45rem; font-weight: 800; letter-spacing: 0.12em; color: var(--ink); min-height: 1.9rem; }
+.sketch-said { display: grid; gap: 0.2rem; max-height: 7.5rem; overflow-y: auto; overscroll-behavior: contain; padding: 0.1rem 0.2rem; }
+.sketch-said:empty { display: none; }
+.sketch-line { margin: 0; font-size: 0.88rem; overflow-wrap: anywhere; }
+.sketch-line b { color: var(--c); font-weight: 800; }
+.sketch-line.got { font-weight: 700; color: color-mix(in srgb, var(--c) 70%, var(--ink)); }
+.sketch-near { margin: 0; min-height: 0; text-align: center; font-size: 0.85rem; font-weight: 800; color: var(--accent); }
+.sketch-near:empty { display: none; }
+.sketch-got { margin: 0; text-align: center; font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+.sketch-guess { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+.sketch-guess[hidden] { display: none; }
+.sketch-answer { margin: 0; text-align: center; font-size: 1.7rem; font-weight: 900; letter-spacing: 0.04em; }
+.sketch-board { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.sketch-score { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; padding: 0.45rem 0.8rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--c) 12%, transparent); font-weight: 700; }
+.sketch-score b { font-variant-numeric: tabular-nums; }
+.sketch-score.first { background: color-mix(in srgb, var(--c) 24%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent); }
+.sketch-score.first .sketch-who::after { content: " 👑"; }
 .relay-album { display: grid; gap: 0.7rem; max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0.1rem; }
 .relay-entry { display: grid; gap: 0.3rem; }
 .relay-entry-who { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); }

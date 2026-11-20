@@ -5,6 +5,9 @@
 // Two fingers zoom and move the page; one draws.
 
 import { h, icon, iconButton, toast, closeOnOutside, flashHint } from "./dom.js";
+import { openTimelapse } from "./timelapse.js";
+import { personColor } from "../core/paint.js";
+import { currentTheme } from "./theme.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { InkLayer, drawInkTools, paintStroke, pixelAt, inkColor } from "./ink.js";
@@ -43,7 +46,8 @@ export function mountDrawRoom(body, app, session, frame) {
   const redoButton = iconButton("draw-redo", "redo", "다시하기", () => step("redo"), "다시하기");
   const layersButton = iconButton("draw-layers", "layers", "레이어", () => showPanel(panel.hidden), "레이어");
   const saveButton = iconButton("draw-save", "save", "그림을 이미지로 저장", () => saveImage(), "저장");
-  const toolbar = h("div", { class: "toolbar draw-tools", id: "draw-tools" }, undoButton, redoButton, layersButton, saveButton);
+  const replayButton = iconButton("draw-replay", "replay", "그린 과정 보기 (누가 언제 그렸는지 처음부터)", () => showReplay(), "과정");
+  const toolbar = h("div", { class: "toolbar draw-tools", id: "draw-tools" }, undoButton, redoButton, layersButton, replayButton, saveButton);
   body.append(panel);
   body.after(inkTools, toolbar);
 
@@ -338,6 +342,22 @@ export function mountDrawRoom(body, app, session, frame) {
   }
 
   // ---- 저장: the page as a picture --------------------------------------------------------------
+
+  // 타임랩스: the page made again from its first line, each line with the name of the one who drew it.
+  function showReplay() {
+    const list = doc.layers().filter((l) => l.visible).map((l) => ({ strokes: session.doc(inkDocOf(l.id)).strokes(), opacity: l.opacity, mode: l.mode }));
+    if (!list.some((l) => l.strokes.length)) return void toast(root, "아직 그린 것이 없어요");
+    openTimelapse({
+      root,
+      layers: list,
+      pageW: PAGE_W,
+      pageH: PAGE_H,
+      paper: getComputedStyle(page).backgroundColor || "#fff",
+      nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
+      colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
+      title: session.room.meta("name") || "그림",
+    });
+  }
 
   function saveImage() {
     const scale = 3; // 1080 × 1440 pixels
