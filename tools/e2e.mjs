@@ -18,7 +18,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const dist = args.includes("--dist");
 const only = args.filter((a) => !a.startsWith("--"));
-const PORT = 8123;
+// E2E_PORT / E2E_CDP_PORT let a second run go beside one already running (another checkout).
+const PORT = Number(process.env.E2E_PORT) || 8123;
 
 // Sung melodies with known notes: one to import as a file, one that Chrome plays as its microphone.
 const fixtures = { doremi: join(root, "out", "fixtures", "doremi.wav"), mic: join(root, "out", "fixtures", "mic.wav") };
@@ -97,7 +98,7 @@ const firebase = await startFakeFirebase();
 fixtures.server = firebase.url;
 fixtures.firebase = firebase;
 
-const browser = await launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + fixtures.mic, "--autoplay-policy=no-user-gesture-required"] });
+const browser = await launch({ port: Number(process.env.E2E_CDP_PORT) || 9333, args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + fixtures.mic, "--autoplay-policy=no-user-gesture-required"] });
 let seq = 0;
 let failed = 0;
 const started = Date.now();
