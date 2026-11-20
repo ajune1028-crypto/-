@@ -70,6 +70,9 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **원본 공유**: 홈 '보내기'도 원본을 올리고(`sendOriginals`), 반쯤 보낸 것은 방을 열 때 마저(`missingParts`/`partOps`), 못 찾은 원본은 다음에 다시(`ui/share-take.js`).
   - **방의 역사**: 홈에서 꾹 → 시작·최근 바뀜·들어온 사람·날마다 만든 것(방 문서 `seen`·`did`, `session.noteVisit`·`writeWork`, `roomHistory`).
   - **홈 카드**: 맨 위 이름, 아래 미리보기 네모, 그 안 왼쪽 위에 둥근 종류 로고. **찾기와 집**: 어두운 막 없음, 절반 크기, 옆의 방을 패널의 집에 끌어 넣기, 열린 채 ⋮이면 다음 변, ⋮ 오른쪽 아이콘(`#home-float`) = 레퍼런스처럼 떠 있는 판.
+  - **끊김 메우기**: 바쁜 기기가 녹음에 넣는 몇 ms의 0이 음을 둘로 가르던 것(`dsp.js`의 `concealDropouts`, 분석할 때만).
+  - **손가락 필기감**: 손가락 압력 = 유리 위 손의 실제 빠르기(`core/brush.js`의 `fingerFeel`/`fingerStep`), 획에 담김(모든 붓·화면이 같게), 마우스는 50.
+  - **이어 그리기**(미니게임 메뉴의 '여럿이', `ui/relay.js`, `core/game.js`의 `relay`·`begin`·`page`·`turn`): 방 사람 모두가 한 줄 → 그림 → 맞히기를 돌려 가며, 끝에 앨범을 모두 같이 넘김. 그림은 `k:Q<게임>~<책>~<차례>`.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 늦은 판, 10번째: 예시 녹음, 홈 녹음, 위치 선, 잇기 갈래, 올가미). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -91,7 +94,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 382개 (음 인식, SwiftF0·음 나누기·의도한 음, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 392개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 150개 남짓. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
