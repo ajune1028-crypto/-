@@ -115,6 +115,21 @@ export function applyAccent(hex) {
   for (const [name, value] of Object.entries(colors)) root.style.setProperty(name, value);
 }
 
+/**
+ * 색 세기 (the owner: "자기의 ui색유리의 색… 가라데이션 되어있는부분의 끝부분부터 색깔을 줄이면서. 원본
+ * 버전이있고… 눈안아프게끔. 검정 부분을 더 늘리고싶다거나… 다시 늘릴 수 있고"): how much of my glass
+ * colour the glass, the sky at the corners and the shadows carry, 0..1 (1 = as it was made). Less
+ * colour leaves more white in 밝게 and more black in 어둡게; the buttons keep their colour.
+ */
+export function tintAmount(value) {
+  const v = Number(value);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+}
+
+export function applyTintAmount(value) {
+  root.style.setProperty("--tint-amount", String(tintAmount(value)));
+}
+
 export function applyTextScale(scale) {
   const ok = TEXT_SIZES.some(([v]) => v === scale);
   root.style.setProperty("--text-scale", String(ok ? scale : 1));

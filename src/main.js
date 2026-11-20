@@ -5,7 +5,7 @@ import { Emitter } from "./sync/transport.js";
 import { LocalTransport } from "./sync/local.js";
 import { ClaudeTransport } from "./sync/claude.js";
 import { FirebaseTransport, serverFrom } from "./sync/firebase.js";
-import { applyTheme, applyAccent, applyTextScale, fitScale } from "./ui/theme.js";
+import { applyTheme, applyAccent, applyTextScale, applyTintAmount, fitScale } from "./ui/theme.js";
 import { showHome } from "./ui/home.js";
 import { showRoom } from "./ui/room-shell.js";
 import { roomLink } from "./core/room.js";
@@ -107,6 +107,7 @@ export function boot(root) {
   fitScale();
   applyTheme(getSettings(store).theme);
   applyAccent(getSettings(store).accent);
+  applyTintAmount(getSettings(store).tintAmount);
   applyTextScale(getSettings(store).textScale);
   app.ready = chooseTransport(app, patience, !!dev, params).then(({ transport, limited }) => {
     app.transport = transport;

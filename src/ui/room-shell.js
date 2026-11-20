@@ -5,7 +5,7 @@ import { watchPickers } from "./picker-watch.js";
 import { fileOps } from "../core/files.js";
 import { fromBase64 } from "../core/b64.js";
 import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
-import { applyTheme, applyAccent, applyTextScale, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
+import { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
@@ -26,6 +26,7 @@ export function displaySettings(app, { withColors }) {
     if (key === "theme") applyTheme(value);
     if (key === "accent") applyAccent(value);
     if (key === "textScale") applyTextScale(value);
+    if (key === "tintAmount") applyTintAmount(value);
     app.events.emit("settings");
   };
   // Your own colour: the presets, and a colour well for any colour at all.
@@ -40,10 +41,20 @@ export function displaySettings(app, { withColors }) {
     oninput: () => { change("accent", well.value); paintAccents(well.value); } });
   accents.append(h("span", { class: "swatch own", data: { accent: ACCENTS.some(([, , hex]) => hex === current) ? "" : current }, title: "직접 고르기" }, well));
   paintAccents(current);
+  // 색 세기: the glass colour's amount, from as it was made (100%) down to none; 원래대로 puts it back.
+  const amount = Math.round(tintAmount(settings.tintAmount) * 100);
+  const amountText = h("span", { class: "tint-amount-text", id: "tint-amount-text", text: amount + "%" });
+  const back = h("button", { class: "chip", id: "tint-amount-back", type: "button", text: "원래대로", hidden: amount === 100,
+    onclick: () => { slider.value = "100"; show(100); change("tintAmount", 1); } });
+  const show = (v) => { amountText.textContent = v + "%"; back.hidden = v === 100; };
+  const slider = h("input", { class: "tint-amount", id: "tint-amount", type: "range", min: "0", max: "100", step: "5", value: String(amount), "aria-label": "글라스 색 세기",
+    oninput: () => { const v = Number(slider.value); show(v); change("tintAmount", v / 100); } });
   return h("div", { class: "form" },
     h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
     h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
+      h("div", { class: "tint-amount-row" }, slider, amountText, back)),
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
     toggle("set-reference", "레퍼런스 기능 (나만 보는 메모)", settings.reference, (on) => change("reference", on)),

@@ -4860,6 +4860,41 @@ scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ and on 
   }
 });
 
+// The owner: "자기의 ui색유리의 색… 가라데이션 되어있는부분의 끝부분부터 색깔을 줄이면서. 원본 버전이있고…
+// 눈안아프게끔. 검정 부분을 더 늘리고싶다거나… 다시 늘릴 수 있고". 색 세기: less of my glass colour in the
+// glass and the sky at the corners — more white in 밝게, more black in 어둡게 — and 원래대로 brings it back.
+scenario("색 세기: the slider takes my glass colour out of the glass and the corners (white in 밝게, black in 어둡게), 원래대로 puts it back, and it is remembered", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 820 });
+  await page.waitFor(q("#home-settings"));
+  // The corners' colour as plain rgb (a mixed colour reads as "color(srgb …)").
+  const skyColour = () => page.eval(`(() => { const el = document.createElement("div"); el.style.color = "var(--sky)"; document.body.append(el); const c = getComputedStyle(el).color; el.remove();
+    const m = c.match(/color\\(srgb ([\\d.]+) ([\\d.]+) ([\\d.]+)/); return m ? "rgb(" + [m[1], m[2], m[3]].map((v) => Math.round(v * 255)).join(", ") + ")" : c; })()`);
+  const tinted = await skyColour();
+  await click(page, "#home-settings");
+  await page.waitFor(q("#tint-amount"));
+  assert.equal(await page.eval(`${q("#tint-amount")}.value`), "100", "as it was made at first");
+  assert.ok(await page.eval(`${q("#tint-amount-back")}.hidden`), "nothing to put back yet");
+  // A tap at the far left of the slider: no colour.
+  await page.eval(`(${q("#tint-amount")}.scrollIntoView({ block: "center" }), true)`);
+  await pause(300);
+  const at = await page.eval(`(() => { const r = ${q("#tint-amount")}.getBoundingClientRect(); return [r.left + 2, r.top + r.height / 2]; })()`);
+  await page.tap(at[0], at[1]);
+  await page.waitFor(`${q("#tint-amount")}.value === "0" && ${q("#tint-amount-text")}.textContent === "0%"`);
+  const light = await skyColour();
+  assert.notEqual(light, tinted, "the corners lost their colour");
+  assert.equal(light, "rgb(255, 255, 255)", "white in 밝게");
+  await page.eval(`(document.documentElement.dataset.theme = "dark", true)`);
+  assert.equal(await skyColour(), "rgb(0, 0, 0)", "black in 어둡게");
+  await page.shot(out("tint-amount-dark.png"));
+  await page.eval(`(document.documentElement.dataset.theme = "light", true)`);
+  // Remembered.
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).tintAmount`), 0);
+  // 원래대로.
+  await click(page, "#tint-amount-back");
+  await page.waitFor(`${q("#tint-amount")}.value === "100" && ${q("#tint-amount-back")}.hidden`);
+  assert.equal(await skyColour(), tinted, "the colour is back");
+});
+
 // The owner (17 November): "밝기를 어둡게 모드하고 밝게 모드를 해도 레퍼런스는 지금 안 바뀌거든".
 scenario("레퍼런스 follows 밝게/어둡게: switched while it is open, its glass, words and cards turn with the app", async ({ open, out }) => {
   const page = await open({ width: 390, height: 800 });

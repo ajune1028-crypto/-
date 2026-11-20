@@ -12,7 +12,7 @@
   --paper: #f8fafd;
   /* The glass's colour: the chosen accent (blue unless chosen), for every tint below. */
   --tint: var(--accent);
-  --base: color-mix(in srgb, var(--tint) 14%, #e6eaf0);
+  --base: color-mix(in srgb, var(--tint) calc(14% * var(--tint-amount, 1)), #e6eaf0);
   --sheet: rgb(250 252 255 / 0.92);
   /* text. --muted is for solid surfaces, --soft for text lying straight on a colour field. */
   --ink: #1b2030;
@@ -28,7 +28,7 @@
   --accent-bottom: #1d5bd0;
   --accent-ink: #1d5bd0;
   --ring: #2466dc;
-  --frame-a: color-mix(in srgb, var(--tint) 45%, #ffffff);
+  --frame-a: color-mix(in srgb, var(--tint) calc(45% * var(--tint-amount, 1)), #ffffff);
   --frame-b: color-mix(in srgb, var(--accent-2) 80%, #ffffff);
   /* A second hue for gradients, so the accent is not one flat blue. */
   --accent-2: #5b4fd6;
@@ -47,10 +47,10 @@
      orange for 일상 and periwinkle for 창작, the same in light and dark */
   --daily-b: #ffb27d;
   --creative-b: #b9c6ff;
-  --sky: color-mix(in srgb, var(--tint) 38%, #ffffff);
+  --sky: color-mix(in srgb, var(--tint) calc(38% * var(--tint-amount, 1)), #ffffff);
   --field-strength: 0.85;
   /* glass */
-  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 24%, #ffffff) 50%, transparent) 100%);
+  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(24% * var(--tint-amount, 1)), #ffffff) 50%, transparent) 100%);
   /* 모래: only on the glass buttons with colour in them, and only in their colour (theme.js draws it
      in my colour; none until then). */
   --sand-light: none;
@@ -60,13 +60,13 @@
   --card-bg: var(--card-grad);
   --glass-edge: rgb(255 255 255 / 0.85);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.35);
-  --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) 18%, transparent), 0 1px 3px rgb(38 72 140 / 0.12);
+  --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) calc(18% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(38 72 140 / 0.12);
   --glass-blur: blur(20px) saturate(170%);
-  --panel-bg: linear-gradient(180deg, rgb(248 251 255 / 0.9) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 12%, #ffffff) 84%, transparent) 100%);
+  --panel-bg: linear-gradient(180deg, rgb(248 251 255 / 0.9) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(12% * var(--tint-amount, 1)), #ffffff) 84%, transparent) 100%);
   /* Glass on coloured things (clips, cards): light from above and a bright top edge. */
   --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 55%);
   --gloss-edge: inset 0 1px 0 rgb(255 255 255 / 0.65);
-  --card-grad: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 18%, #ffffff) 42%, transparent) 100%);
+  --card-grad: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(18% * var(--tint-amount, 1)), #ffffff) 42%, transparent) 100%);
   --well: rgb(255 255 255 / 0.66);
   --split: -1px 0 0 0 rgb(255 255 255 / 0.6), -2px 0 0 0 rgb(46 78 140 / 0.1);
   --scrim: rgb(22 34 66 / 0.16);
@@ -89,12 +89,12 @@
     --danger: #ff9188;
     --accent-ink: #a7c6ff;
     --ring: #8fb8ff;
-    --frame-a: color-mix(in srgb, var(--tint) 55%, #000000);
+    --frame-a: color-mix(in srgb, var(--tint) calc(55% * var(--tint-amount, 1)), #000000);
     --frame-b: color-mix(in srgb, var(--accent-2) 55%, #000000);
     /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
-    --sky: color-mix(in srgb, var(--tint) 60%, #000000);
+    --sky: color-mix(in srgb, var(--tint) calc(60% * var(--tint-amount, 1)), #000000);
     --field-strength: 0.45;
-    --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+    --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) calc(16% * var(--tint-amount, 1)), rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
     --glass-edge: rgb(255 255 255 / 0.13);
     --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
     --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
@@ -132,12 +132,12 @@
   --danger: #ff9188;
   --accent-ink: #a7c6ff;
   --ring: #8fb8ff;
-  --frame-a: color-mix(in srgb, var(--tint) 55%, #000000);
+  --frame-a: color-mix(in srgb, var(--tint) calc(55% * var(--tint-amount, 1)), #000000);
   --frame-b: color-mix(in srgb, var(--accent-2) 55%, #000000);
   /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
-  --sky: color-mix(in srgb, var(--tint) 60%, #000000);
+  --sky: color-mix(in srgb, var(--tint) calc(60% * var(--tint-amount, 1)), #000000);
   --field-strength: 0.45;
-  --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+  --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) calc(16% * var(--tint-amount, 1)), rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
   --glass-edge: rgb(255 255 255 / 0.13);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
   --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
@@ -1353,15 +1353,15 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* Glass shadows: soft, in my glass colour, never a heavy black (the owner: "검정색이 너무 강해…
    내가 설정해둔 색깔이랑 비슷하게… 안 진하게"). */
 :root[data-theme="dark"] {
-  --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+  --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) calc(26% * var(--tint-amount, 1)), transparent), 0 2px 6px rgb(0 0 0 / 0.2);
   --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
-  --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+  --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) calc(22% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(0 0 0 / 0.2);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+    --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) calc(26% * var(--tint-amount, 1)), transparent), 0 2px 6px rgb(0 0 0 / 0.2);
     --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
-    --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+    --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) calc(22% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(0 0 0 / 0.2);
   }
 }
 
@@ -1895,3 +1895,8 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 @media (prefers-reduced-motion: reduce) { .relay-book, .relay-entry.arrived { animation: none; } }
 .game-pick.many { position: relative; }
 .game-many { margin-left: auto; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; color: var(--tint); background: color-mix(in srgb, var(--tint) 14%, transparent); }
+
+/* 색 세기: a slider beside how much it is, and 원래대로 once it is moved. */
+.tint-amount-row { display: flex; align-items: center; gap: 0.6rem; }
+.tint-amount { flex: 1; min-width: 0; accent-color: var(--accent); }
+.tint-amount-text { min-width: 2.6rem; text-align: right; font-size: 0.85rem; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
