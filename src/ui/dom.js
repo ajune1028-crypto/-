@@ -278,6 +278,28 @@ export function toggle(id, label, checked, onChange) {
   return h("div", { class: "row inline" }, h("label", { class: "label", for: id, text: label }), h("span", { class: "switch" }, input, h("span")));
 }
 
+/**
+ * Runs fn at the next frame, or after 50 ms where frames do not come (a page in the background):
+ * work that may be asked for many times a frame is done once. Returns a function that cancels it.
+ */
+export function nextFrame(fn) {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+    fn();
+  };
+  const frame = requestAnimationFrame(run);
+  const timer = setTimeout(run, 50);
+  return () => {
+    done = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+  };
+}
+
 /** Bottom sheet inside the app column. Returns a function that closes it. */
 export function openSheet(root, title, build) {
   // A close button in the head: one tap, always (the owner: "한 번 누르면 안 나가지고").

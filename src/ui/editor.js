@@ -6,7 +6,7 @@
 // syllable is being composed, so every character it shows is tracked by id.
 
 import { chime, buzz } from "./chime.js";
-import { h } from "./dom.js";
+import { h, nextFrame } from "./dom.js";
 import { MOTTO } from "./motto.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
@@ -103,6 +103,7 @@ export class SheetEditor {
   }
 
   destroy() {
+    this.caretFrame?.();
     document.removeEventListener("selectionchange", this.onSelection);
     this.el.remove();
   }
@@ -319,7 +320,9 @@ export class SheetEditor {
     const ta = this.input;
     const focused = document.activeElement === ta;
     this.onCaret(this, focused ? (ta.selectionStart > 0 ? this.snap.ids[ta.selectionStart - 1] ?? ROOT : ROOT) : null);
-    this.drawCarets();
+    // Carets are placed once a frame: a handle dragged through the words moves the selection many
+    // times between two frames, and each placing measures the page.
+    if (!this.caretFrame) this.caretFrame = nextFrame(() => { this.caretFrame = null; this.drawCarets(); });
     if (focused) this.onSelect(this);
   }
 

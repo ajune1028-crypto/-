@@ -1011,6 +1011,39 @@ scenario("speed: typing stays quick on a sheet that already holds 10,000 charact
   assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).text().length`), await a.eval(`${TODAY}.querySelector("textarea").value.length`));
 });
 
+// The owner: "텍스트 방에서 글자를 고르고 무언가 할 때 툭툭 끊기지 않게". Moving the chosen words (a
+// handle dragged) on a day of 10,000 characters: each move costs little, and the row of tools for
+// chosen words is brought up to date, not made again.
+scenario("speed: choosing words on a sheet of 10,000 characters stays quick, and the row for chosen words is not made again as the words move", async ({ open }) => {
+  const [a] = await together(open, []);
+  await writeAt(a, "가나다라 마바사 아자차카 타파하 ".repeat(588) + "\n".repeat(8), Date.now());
+  await a.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text().length >= 10000 && ${TODAY}.querySelector("textarea").value.length >= 10000`);
+  await focusEnd(a);
+  const r = await a.eval(`(async () => {
+    const ta = ${TODAY}.querySelector("textarea");
+    ta.focus();
+    ta.setSelectionRange(5000, 5004);
+    document.dispatchEvent(new Event("selectionchange"));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const row = document.querySelector("#sel-tools .sel-row");
+    const times = [];
+    for (let i = 0; i < 30; i++) {
+      ta.setSelectionRange(5000, 5005 + i);
+      const t0 = performance.now();
+      document.dispatchEvent(new Event("selectionchange"));
+      await new Promise((r) => setTimeout(r, 0));
+      times.push(performance.now() - t0);
+    }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    times.sort((x, y) => x - y);
+    return { median: times[15], same: !!row && row === document.querySelector("#sel-tools .sel-row"), shown: !document.getElementById("sel-tools").hidden };
+  })()`);
+  console.log("     median selection change " + r.median.toFixed(1) + " ms");
+  assert.ok(r.shown, "the row for chosen words is out");
+  assert.ok(r.same, "the row was brought up to date, not made again");
+  assert.ok(r.median < 8, "median selection change took " + r.median.toFixed(1) + " ms");
+});
+
 // ---- the trial host's frame ---------------------------------------------------------
 
 scenario("sandbox: inside a scripts-only frame a room can still be created and written in", async ({ open }) => {
@@ -2091,12 +2124,13 @@ scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠�
   const choose = (page, from, to) => page.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.focus(); ta.setSelectionRange(${from}, ${to}); document.dispatchEvent(new Event("selectionchange")); return true; })()`);
   // 노을이: 표시 in yellow, then 잠금.
   await choose(a, 7, 10);
-  await a.waitFor(`!${q("#sel-tools")}.hidden && ${q("#sel-lock")} && ${q('#sel-tools [data-hl="yellow"]')}`);
+  const shown = (sel) => `(${q(sel)} && !${q(sel)}.hidden)`;
+  await a.waitFor(`!${q("#sel-tools")}.hidden && ${shown("#sel-lock")} && ${q('#sel-tools [data-hl="yellow"]')}`);
   await click(a, '#sel-tools [data-hl="yellow"]');
   await a.waitFor(`${sheet(a)}.marks().length === 1`);
   await b.waitFor(`[...${TODAY}.querySelectorAll('.w.hl[data-hl="yellow"]')].map((w) => w.textContent).join("") === "노을이"`);
   await click(a, "#sel-lock");
-  await a.waitFor(`${sheet(a)}.locks().length === 1 && ${q("#sel-unlock")}`);
+  await a.waitFor(`${sheet(a)}.locks().length === 1 && ${shown("#sel-unlock")} && !${shown("#sel-lock")}`);
   await b.waitFor(`${TODAY}.querySelector(".w.locked.lock-end")?.textContent === "노을이"`);
   await a.shot(out("text-marks-locks.png"));
   // The friend cannot remove a locked letter.
@@ -2109,7 +2143,7 @@ scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠�
   // Its locker frees it.
   await a.front();
   await choose(a, 7, 10);
-  await a.waitFor(q("#sel-unlock"));
+  await a.waitFor(shown("#sel-unlock"));
   await click(a, "#sel-unlock");
   await a.waitFor(`${sheet(a)}.locks().length === 0`);
   // A recording from a file into 바다에.

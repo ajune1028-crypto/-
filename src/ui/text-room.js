@@ -1,6 +1,6 @@
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-import { h, icon, iconButton, mount, toast, openSheet, flashHint } from "./dom.js";
+import { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame } from "./dom.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { watchFingers, watchFingerTaps } from "./fingers.js";
@@ -376,7 +376,10 @@ export function mountTextRoom(body, app, session) {
   const isOwner = () => session.room.meta("createdBy") === session.memberId;
   /** The ranges (marks, locks) that share letters with the chosen words. */
   function touching(list, target) {
-    const pos = new Map(target.editor.sheet.ids().map((id, i) => [id, i]));
+    if (!list.length) return [];
+    // Where each letter stands, from the sheet's own table (kept until the sheet changes): a long
+    // day is not counted through again each time the chosen words move.
+    const pos = target.editor.sheet.view().before;
     const span = (r) => {
       const a = pos.get(r.ch);
       const b = pos.get(r.to);
@@ -390,26 +393,53 @@ export function mountTextRoom(body, app, session) {
     });
   }
 
-  function drawSel() {
-    selTools.hidden = !sel || readOnlyNow() || !!pen.tool;
-    if (selTools.hidden) return void selTools.replaceChildren();
-    const sheet = sel.editor.sheet;
-    const marks = touching(sheet.marks(), sel);
-    const locks = touching(sheet.locks(), sel);
-    const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
+  // The row for chosen words is made once and then only brought up to date: while a handle is
+  // dragged the words change many times a second (the owner: "글자를 고르고… 툭툭 끊기지 않게"), so
+  // nothing is made again, and an update waits for the next frame (one per frame at most).
+  let selRow = null;
+  let selFrame = null;
+  const marksNow = () => (sel ? touching(sel.editor.sheet.marks(), sel) : []);
+  const freeableNow = () => (sel ? touching(sel.editor.sheet.locks(), sel).filter((l) => l.by === session.memberId || isOwner()) : []);
+  function buildSel() {
+    const row = {
+      unmark: h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marksNow()) }),
+      unlock: h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeableNow()) }, icon("lock"), "잠금 풀기"),
+      lock: h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금"),
+    };
     selTools.replaceChildren(
       h("div", { class: "sel-row" },
         h("span", { class: "sel-label", text: "표시" }),
         ...MARK_COLORS.map((c) => h("button", { class: "sel-color", type: "button", data: { hl: c }, "aria-label": "표시 " + MARK_NAMES[c], onclick: () => markSel(c) })),
-        marks.length > 0 && h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marks) })),
+        row.unmark),
       h("div", { class: "sel-row" },
         h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
         h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
-        locks.length
-          ? freeable.length > 0 && h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeable) }, icon("lock"), "잠금 풀기")
-          : h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금")));
+        row.unlock, row.lock));
     // The words stay chosen while a button here is pressed.
     for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
+    return row;
+  }
+  function paintSel() {
+    const show = !!sel && !readOnlyNow() && !pen.tool;
+    if (selTools.hidden === show) selTools.hidden = !show;
+    if (!show) return;
+    selRow ||= buildSel();
+    const locks = touching(sel.editor.sheet.locks(), sel);
+    const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
+    const set = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
+    set(selRow.unmark, !marksNow().length);
+    set(selRow.lock, locks.length > 0);
+    set(selRow.unlock, !(locks.length && freeable.length));
+  }
+  function drawSel() {
+    // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
+    if (selTools.hidden || !sel || readOnlyNow() || pen.tool) {
+      selFrame?.();
+      selFrame = null;
+      return paintSel();
+    }
+    if (selFrame) return;
+    selFrame = nextFrame(() => { selFrame = null; paintSel(); });
   }
 
   function commitRange(target, made, done) {
@@ -691,6 +721,7 @@ export function mountTextRoom(body, app, session) {
     closeSound?.();
     stopSoundPickers();
     for (const input of soundInputs) input.remove();
+    selFrame?.();
     selTools.remove();
     stopPhotoWatch();
     photoInput.remove();
