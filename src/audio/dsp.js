@@ -159,3 +159,98 @@ export function louder(samples) {
   for (let i = 0; i < samples.length; i++) out[i] = samples[i] * gain;
   return { samples: out, gain };
 }
+
+// ---- dropouts ----------------------------------------------------------------------------------
+
+const DROP_EPS = 1e-4; // as good as nothing (−80 dB): what a busy phone hands over for samples it lost
+const DROP_MIN_S = 0.002;
+const DROP_MAX_S = 0.06; // longer than this, a silence is a real one
+const DROP_SMEAR_S = 0.001; // a resampler rings for about this long at each end of the gap
+const DROP_EDGE_S = 0.003; // the sound right beside the gap…
+const DROP_REACH_S = 0.04; // …against the loudest 10 ms within this much
+const DROP_ABRUPT = 0.35; // beside the gap at least this share of that: it stopped dead, it did not fade
+const DROP_SOUND = 1e-3; // and there was sound (−60 dB), not a quiet room
+
+function rmsOf(x, a, b) {
+  let e = 0;
+  for (let i = a; i < b; i++) e += x[i] * x[i];
+  return Math.sqrt(e / Math.max(1, b - a));
+}
+
+function loudest(x, a, b, win) {
+  let top = 0;
+  const hop = Math.max(1, win >> 2);
+  for (let s = a; s + win <= b; s += hop) top = Math.max(top, rmsOf(x, s, s + win));
+  return top;
+}
+
+/** Fills x[a..b) with what came just before, a period at a time, and blends it into what follows. */
+function fillGap(x, a, b, rate) {
+  const W = Math.round(0.012 * rate);
+  const lo = Math.max(1, Math.round(0.002 * rate));
+  const hi = Math.round(0.02 * rate);
+  const r = new Float64Array(hi + 1);
+  let best = 0;
+  if (a - W - hi >= 0) {
+    for (let lag = lo; lag <= hi; lag++) {
+      let num = 0, e1 = 0, e2 = 0;
+      for (let k = a - W; k < a; k++) { num += x[k] * x[k - lag]; e1 += x[k] * x[k]; e2 += x[k - lag] * x[k - lag]; }
+      r[lag] = num / Math.sqrt(e1 * e2 + 1e-12);
+      if (r[lag] > best) best = r[lag];
+    }
+  }
+  // The first peak that repeats nearly as well as the best (one period, not two); not a tone: the last 20 ms again.
+  let L = hi;
+  if (best >= 0.5) for (let lag = lo + 1; lag < hi; lag++) if (r[lag] >= 0.9 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) { L = lag; break; }
+  L = Math.min(L, a);
+  for (let k = a; k < b; k++) x[k] = x[k - L];
+  // What follows came in abruptly: the carried-on sound hands over to it within 4 ms.
+  const C = Math.min(Math.round(0.004 * rate), x.length - b);
+  const carry = new Float32Array(C);
+  for (let c = 0; c < C; c++) carry[c] = c - L < 0 ? x[b + c - L] : carry[c - L];
+  for (let c = 0; c < C; c++) {
+    const w = 1 - (c + 1) / (C + 1);
+    x[b + c] = w * carry[c] + (1 - w) * x[b + c];
+  }
+}
+
+/**
+ * Dropouts filled in, for reading the notes: where the sound stops dead for a moment inside loud
+ * sound and starts again just as abruptly (a busy phone or browser lost a few blocks of samples
+ * and handed over zeros), the gap is filled with the sound just before it, a pitch period at a
+ * time, and handed smoothly over to what follows, as a phone call hides a lost packet. Without
+ * this a held note is read as two (the stop looks like a new syllable). A stop that fades out or
+ * in (a singer's own), the silence before the first sound and a silence longer than 60 ms are
+ * left as they are. Returns { samples (a copy where anything was filled, else the same array),
+ * filled: [[from, to], …] }.
+ */
+export function concealDropouts(samples, rate) {
+  const n = samples.length;
+  const minLen = Math.max(2, Math.round(DROP_MIN_S * rate));
+  const maxLen = Math.round(DROP_MAX_S * rate);
+  const smear = Math.round(DROP_SMEAR_S * rate);
+  const edge = Math.max(2, Math.round(DROP_EDGE_S * rate));
+  const reach = Math.round(DROP_REACH_S * rate);
+  const win = Math.max(4, Math.round(0.01 * rate));
+  let out = samples;
+  const filled = [];
+  for (let i = 0; i < n;) {
+    if (Math.abs(samples[i]) >= DROP_EPS) { i++; continue; }
+    let j = i;
+    while (j < n && Math.abs(samples[j]) < DROP_EPS) j++;
+    const a = i - smear, b = j + smear;
+    i = j;
+    if (j - (a + smear) < minLen || j - (a + smear) > maxLen) continue;
+    if (a - edge - reach < 0 || b + edge + reach > n) continue;
+    const before = rmsOf(samples, a - edge, a);
+    const after = rmsOf(samples, b, b + edge);
+    const aroundBefore = loudest(samples, a - edge - reach, a - edge, win);
+    const aroundAfter = loudest(samples, b + edge, b + edge + reach, win);
+    if (aroundBefore < DROP_SOUND || aroundAfter < DROP_SOUND) continue;
+    if (before < DROP_ABRUPT * aroundBefore || after < DROP_ABRUPT * aroundAfter) continue;
+    if (out === samples) out = Float32Array.from(samples);
+    fillGap(out, a, b, rate);
+    filled.push([a, b]);
+  }
+  return { samples: out, filled };
+}

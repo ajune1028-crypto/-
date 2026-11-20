@@ -148,3 +148,36 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
+
+## SwiftF0
+
+`src/audio/swiftf0.js`는 SwiftF0(음높이 신경망)를 외부 패키지 없이 JavaScript로 옮긴 것이다: 앞단(세 가지 STFT를 128개 로그 띠로 모으기), 합성곱 신경망, 음높이와 확신도 읽기. `src/audio/swiftf0-weights.js`의 가중치는 swift-f0 0.3.0 패키지의 `model.onnx`에서 `tools/swiftf0-export.py`로 꺼냈다. `src/audio/segment.js`의 `segmentPitch`는 SwiftF0의 `segment_notes`(음과 쉼을 가장 작은 비용으로 나누는 동적 계획법)를 바탕으로 했고, 음절 시작에서 새 음을 싸게 하는 것과 배음 바로잡기는 우리가 더했다.
+https://github.com/lars76/swift-f0
+
+```
+MIT License
+
+Copyright (c) 2025-2026 Lars Nieradzik
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`src/audio/intent.js`의 조 찾기는 Krumhansl과 Kessler(1982)가 사람에게 들려 재서 낸 조성 프로필 숫자(장조·단조 각 12개)를 쓴다. 논문의 측정값이라 코드 라이선스는 없다.
+
+정확도를 잴 때만 이 컴퓨터 안에서 HumTrans(CC BY-NC 4.0)와 Vocadito(CC BY 4.0) 녹음을 썼다. 그 녹음과 정답은 저장소에 넣지 않았다(`out/`, git에 없음).

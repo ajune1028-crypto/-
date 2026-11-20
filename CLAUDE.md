@@ -65,6 +65,11 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **붓**: 손떨림 보정(lazy-brush, '보정 약·중·강·끔'), 스케치(Klecks), 크레용(Easy-Brush 다이내믹스 + 분필 끝), 연필은 Klecks 분필 끝(`chalkAlpha`, 심플렉스 잡음 `core/noise.js`). 출처 전부 `THIRD_PARTY.md`.
   - **⋮ 다시**: 레퍼런스와 자리 바꿈(위 줄 설정·레퍼런스, ⋮는 그 아래), 던진 길을 따라 실제로 닿는 변(`core/fling.js`: Flutter VelocityTracker), 놓기 전 떨어질 자리의 빛, 네온 빛(캔버스), 바·끝자락 던지기(vaul 기준), 마지막 변 기억.
   - **애니메이션 방**(`creative-anim`, `ui/anim-room.js`, `core/anim.js`): 장 띠, 양파 껍질, 재생(장/초, 반복·왕복·한 번), 길게, 복제, 친구가 있는 장 표시. 장마다 `k:F<id>`.
+- **11월 20일 오후 (사용자: 흥얼거림, 원본 공유 버그, "안 들어준 거 찾아봐", 방의 역사, 카드, ⋮ 다시)**: rulings의 '2026-11-20, 오후' 절, `specs/2026-11-20-humming-to-notes-plan.md`(조사·장단점·잰 숫자), `plans/2026-11-20-owner-requests.md`(감사 결과와 남은 것).
+  - **흥얼 → 의도한 음**: 녹음 뒤 음높이는 SwiftF0(MIT, `audio/swiftf0.js`, 가중치 `swiftf0-weights.js`), 음 나누기는 그 DP에 음절 시작을 더한 것(`audio/segment.js`), 조와 흐름으로 의도한 음(`audio/intent.js`, 비터비). 기본은 '조에 맞춰', 클립·카드마다 '부른 그대로'(노래 문서 `sung`·`scale`, `tonalOps`·`cardTonalData`). 실시간 보기는 YIN 그대로.
+  - **원본 공유**: 홈 '보내기'도 원본을 올리고(`sendOriginals`), 반쯤 보낸 것은 방을 열 때 마저(`missingParts`/`partOps`), 못 찾은 원본은 다음에 다시(`ui/share-take.js`).
+  - **방의 역사**: 홈에서 꾹 → 시작·최근 바뀜·들어온 사람·날마다 만든 것(방 문서 `seen`·`did`, `session.noteVisit`·`writeWork`, `roomHistory`).
+  - **홈 카드**: 맨 위 이름, 아래 미리보기 네모, 그 안 왼쪽 위에 둥근 종류 로고. **찾기와 집**: 어두운 막 없음, 절반 크기, 옆의 방을 패널의 집에 끌어 넣기, 열린 채 ⋮이면 다음 변, ⋮ 오른쪽 아이콘(`#home-float`) = 레퍼런스처럼 떠 있는 판.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 15일 늦은 판, 10번째: 예시 녹음, 홈 녹음, 위치 선, 잇기 갈래, 올가미). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -86,7 +91,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 328개 (음 인식, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 382개 (음 인식, SwiftF0·음 나누기·의도한 음, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 150개 남짓. --dist는 먼저 bundle을 돌려야 한다
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
@@ -104,7 +109,7 @@ node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebaseda
 `src/`는 의존 방향이 ui → sync → core, ui → audio다. core와 audio는 화면도 네트워크도 모른다(audio의 engine/recorder/decode만 브라우저 오디오를 쓴다).
 
 - `core/`: `crdt.js`(글자 목록 RGA와 시계; 글자 위의 사진·녹음 `att`, 표시 `mark`, 잠금 `lock`), `edit.js`(`rangeOps`, `lockedEdit`), **`files.js`**(방의 파일을 40,000자 조각 op로: 배경 사진, 숨긴 녹음), `paint.js`(사람 색, 섞기, 명암비, 글라스 색 계산 `accentColors`), `room.js`, `time.js`, `undo.js`, `b64.js`, **`beat.js`**(박자: 빠르기·박자표·격자·메트로놈 박·퀀타이즈·탭·빠르기 찾기), **`song.js`**(노래 문서: 소리 `src`, 클립 `clip`/`cset`/`crm`, 음 편집 `nfix`/`nadd`와 `notesOf`, 잇기, 겹침 해소, 재생할 음 계산, 되돌리기), **`ink.js`**(그림 획 `stroke`/`srm`, 붓 `b`, 부분 지우개 = `b:"erase"` 획), **`board.js`**(화이트보드: 카드 `item`/`iset`/`irm`, 순서 줄 `link`/`lrm`, `playOrder`, `boardSong`, `cardFromClip`)
-- **`audio/`**: `dsp.js`(모노, 16 kHz로 리샘플), `pitch.js`(YIN, 10ms마다 음높이), `notes.js`(음표로 묶기: 반음 0.6/60ms, 소리 크기 꺼짐(라-라), 비브라토 묶기, 80ms 미만 버림, 도레미 이름), `analyze.js`(실시간으로 먹이는 Analyzer와 파일 전체 분석), `peaks.js`(파형 요약, base64), `wav.js`, `piano.js`(직접 만드는 피아노 소리, 밝게/어둡게, 울림), `stretch.js`(WSOLA: 빠르기를 바꿔도 음높이 그대로), `engine.js`(재생 예약, 원본/피아노, 빠르기), `recorder.js`(마이크), `decode.js`(파일 읽기), **`adpcm.js`**(글자에 숨기는 녹음: 12 kHz, 4비트)
+- **`audio/`**: `dsp.js`(모노, 16 kHz로 리샘플), `pitch.js`(YIN, 10ms마다 음높이: 녹음 중 보기), **`swiftf0.js`**(녹음 뒤 음높이, SwiftF0를 옮김, 16ms), **`segment.js`**(음 나누기: SwiftF0의 DP + 음절 시작·배음 바로잡기), **`intent.js`**(조와 흐름으로 의도한 음, 비터비), `notes.js`(음표로 묶기: 반음 0.6/60ms, 소리 크기 꺼짐(라-라), 비브라토 묶기, 80ms 미만 버림, 도레미 이름), `analyze.js`(실시간으로 먹이는 Analyzer와 파일 전체 분석), `peaks.js`(파형 요약, base64), `wav.js`, `piano.js`(직접 만드는 피아노 소리, 밝게/어둡게, 울림), `stretch.js`(WSOLA: 빠르기를 바꿔도 음높이 그대로), `engine.js`(재생 예약, 원본/피아노, 빠르기), `recorder.js`(마이크), `decode.js`(파일 읽기), **`adpcm.js`**(글자에 숨기는 녹음: 12 kHz, 4비트)
 - `sync/`: `transport.js`, `local.js`, `claude.js`(시험판), **`firebase.js`**(공개 주소의 방 서버: REST와 이벤트 스트림, 규칙은 `docs/firebase-rules.json`), `session.js`(방 하나. 문서 종류는 `DOC_TYPES` 표: `room`, `s:<날짜>` 장, `song`, `k:<날짜>` 그림, `board`), **`blobs.js`**(기기에 파일 보관, IndexedDB)
 - `ui/`: `dom.js`, `home.js`, `join.js`, `room-shell.js`(공통 틀, 설정: 화면 밝기·포인트 색·글자 크기), **`kinds.js`**(방 종류 목록: 반쪽, 이름, 화면), `text-room.js`, `editor.js`, **`ink.js`**(그리기 층: 붓·지우개, 텍스트 방과 화이트보드가 같이 쓰는 도구 줄 `drawInkTools`, 보드는 `view`로 자기 좌표를 준다), **`song-room.js`**(노래 방 동작), **`song-view.js`**(타임라인 그리기와 터치·확대), **`note-editor.js`**(음 편집 피아노 롤), **`board-room.js`**(화이트보드), **`reference.js`**(레퍼런스 시트), **`fingers.js`**(두 손가락은 늘 확대: 한 손가락 동작이 비켜 준다), **`sound-in.js`**(소리 넣는 세 길: 녹음·폰 녹음 앱·파일, 노래 방·화이트보드·레퍼런스가 같이 씀), **`picker-watch.js`**(선택 창이 안 열리면 알아챈다), **`photo.js`**(사진 줄이기), **`room-actions.js`**(홈의 방 복제·화이트보드에 넣기), `theme.css`, `theme.js`(가로/세로 크기, 글라스 색, 글자 크기)
 - `identity.js`(기기 설정: 테마, 색, 노래 방 모드·음색·파형·싱크 보정·빠르기, 붓·지우개, 글라스 색, 글자 크기, 레퍼런스 켜기), **`clipboard.js`**(기기 클립보드: 방 사이 복사), **`reference.js`**(나만 보는 메모, 기기에만), `main.js`
@@ -113,7 +118,7 @@ node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebaseda
 
 ## 노래 방에서 알아 둘 것
 
-- 음 인식 정확도: 합성한 노래(포먼트·떨림·숨소리 섞음)로 채점한다. 음높이 전부 맞음, 시작 오차 평균 0.6ms·최대 12.5ms, 길이 오차 표준편차 9ms. **실제 사람 목소리로는 아직 채점하지 않았다**(사용자 녹음이 필요). 한 번, 가짜 마이크의 첫 실행에서 긴 음 하나가 두 개로 갈린 적이 있다(오디오가 순간 끊긴 것으로 보임, 4번 다시 해서 재현 안 됨). 실제 기기에서 끊김이 잦으면 `notes.js`의 꺼짐 기준(`DIP`)에 폭 조건을 더한다.
+- 음 인식 정확도: 합성한 노래(포먼트·떨림·숨소리 섞음)로 채점한다. 음높이 전부 맞음, 시작 오차 평균 0.6ms·최대 12.5ms, 길이 오차 표준편차 9ms. 11월 20일부터 실제 사람 목소리로도 잰다: 흥얼거림 HumTrans와 노래 Vocadito(이 컴퓨터의 `out/voices/`에만, 공개 저장소에 올리지 않음; 숫자는 흥얼 계획 문서 7절). 사용자 본인의 목소리로는 아직 재지 않았다. 한 번, 가짜 마이크의 첫 실행에서 긴 음 하나가 두 개로 갈린 적이 있다(오디오가 순간 끊긴 것으로 보임, 4번 다시 해서 재현 안 됨). 실제 기기에서 끊김이 잦으면 `notes.js`의 꺼짐 기준(`DIP`)에 폭 조건을 더한다.
 - 녹음 원본은 24 kHz 16비트 WAV로 그 기기의 IndexedDB에만 있다. 음표와 파형 요약은 노래 문서(op)에 들어가서 모든 기기에 간다. 그래서 친구 기기는 피아노로 바로 듣고, 원본 모드에서는 "원본은 이 기기에 없어요"가 보인다.
 - 겹쳐 녹음할 때만 기기 지연(`baseLatency+outputLatency+입력 지연`)과 설정의 "싱크 보정"만큼 클립을 앞으로 당긴다. 실제 폰 값은 아직 재 보지 않았다.
 - 피아노 소리는 `piano.js`가 키마다 한 번 계산해 버퍼로 둔다. 녹음된 피아노로 바꾸려면 `PianoVoice.buffer()`만 바꾸면 된다.

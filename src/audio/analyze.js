@@ -1,7 +1,7 @@
 // Recording in, notes out: mixes the pieces above into one step that can run
 // live while someone sings, or over a whole file. Pure computation.
 
-import { StreamResampler, resample } from "./dsp.js";
+import { StreamResampler, resample, concealDropouts } from "./dsp.js";
 import { ANALYSIS_RATE, PitchTracker } from "./pitch.js";
 import { segmentNotes } from "./notes.js";
 import { PeakCollector } from "./peaks.js";
@@ -79,9 +79,11 @@ export class Analyzer {
     const result = this.finish();
     let total = 0;
     for (const part of this.kept) total += part.length;
-    const low = new Float32Array(total);
+    const whole = new Float32Array(total);
     let at = 0;
-    for (const part of this.kept) { low.set(part, at); at += part.length; }
+    for (const part of this.kept) { whole.set(part, at); at += part.length; }
+    // Read with the moments the phone dropped filled in (the take itself is kept as it came).
+    const low = concealDropouts(whole, ANALYSIS_RATE).samples;
     const voice = await voiceNotes(low, ANALYSIS_RATE, { onProgress: (p) => onProgress(VOICE_SHARE * p) });
     const solo = { ...result, notes: voice.notes, scale: voice.scale };
     const found = await chordsOf(low, { onProgress: (p) => onProgress(VOICE_SHARE + (1 - VOICE_SHARE) * p) });
@@ -155,7 +157,8 @@ const VOICE_SHARE = 0.55; // of the rest: the voice read finely; then the look f
  * scale: { tonic, minor } or null }.
  */
 export async function voiceNotes(samples, rate, { onProgress = () => {}, periods = true, dips = true, segment = {} } = {}) {
-  const x = rate === ANALYSIS_RATE ? samples : resample(samples, rate, ANALYSIS_RATE);
+  // A moment the phone dropped (zeros) would read as a new syllable: it is filled in first.
+  const x = concealDropouts(rate === ANALYSIS_RATE ? samples : resample(samples, rate, ANALYSIS_RATE), ANALYSIS_RATE).samples;
   const frames = await swiftF0Async(x, ANALYSIS_RATE, { onProgress, pause });
   if (periods) checkPeriods(x, frames);
   if (dips) frames.dips = syllableDips(x, ANALYSIS_RATE, frames.hz.length);
