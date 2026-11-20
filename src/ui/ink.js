@@ -8,7 +8,8 @@
 // 에어브러시 (soft mist), 형광펜 (wide and see-through). Two erasers: 부분 지우개 rubs out only
 // where it passes (it is a stroke of its own that clears what lies under it), 획 지우개 removes
 // whole strokes. 모양 잡기: a line held still a moment becomes the shape it was meant to be.
-// Used by the text room and the whiteboard.
+// 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
+// Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
 import { h, iconButton } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
@@ -25,7 +26,7 @@ const COLORS = {
 /** Pixel width of each size at 1 rem = 16 px. */
 const WIDTHS = { 1: 2, 2: 4, 3: 8 };
 /** The brushes in the tools, in this order. */
-export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"], ["fill", "채우기"]];
+export const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"], ["fill", "채우기"], ["smudge", "문지르기"]];
 /** 손떨림 보정's string, in screen pixels, for 끔 · 약 · 중 · 강. */
 const STEADY_PX = [0, 6, 14, 26];
 export const STEADY_NAMES = ["끔", "약", "중", "강"];
@@ -168,6 +169,11 @@ export function paintStroke(g, pts, color, width, brush, shaped = false) {
   const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  if (look.kind === "smudge") {
+    smudgeAlong(g, points, size, look, real);
+    g.restore();
+    return;
+  }
   if (look.kind === "fill") {
     // 채우기: the region's rings, filled even-odd (its holes stay open).
     g.globalAlpha = look.alpha;
@@ -670,14 +676,16 @@ export class InkLayer {
       }
       this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
+    const live = this.live;
+    // 문지르기 being drawn is the picture itself, smudged further as the finger goes on.
+    const wet = live?.pts && live.brush === "smudge" && !live.shapeNow;
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.drawImage(this.kept.canvas, 0, 0);
+    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.width) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    const live = this.live;
     if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.width, live.brush, true);
-    else if (live?.pts) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
@@ -824,6 +832,91 @@ export class InkLayer {
   }
 }
 
+// 문지르기: at each step along the line the soft round patch just behind is lifted and laid down where
+// the finger is now, part of the way (Krita's smearing smudge; libmypaint's smudge for the idea).
+// The patch is blended in, see-through included, so colour is pulled into empty paper and empty
+// paper thins the colour it is pulled over, as a finger in wet paint. It reads the picture as it
+// stands under the line (only that layer), so the same strokes in the same order smudge the same on
+// every screen.
+// from/upto: the dabs to lay (a line still being drawn lays only its new ones each frame); it
+// returns where it stopped.
+let smudgeScratch = null;
+function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
+  if (points.length < 2 || !g.canvas) return from;
+  const t = g.getTransform();
+  const scale = Math.hypot(t.a, t.b) || 1;
+  const r = Math.max(2, Math.round((size / 2) * scale));
+  const d = r * 2;
+  const marks = dabs(points, { step: size * look.spacing });
+  const end = Math.min(upto, marks.length);
+  from = Math.max(1, from);
+  if (end <= from) return from;
+  smudgeScratch ||= document.createElement("canvas");
+  const s = smudgeScratch;
+  if (s.width !== d || s.height !== d) {
+    s.width = d;
+    s.height = d;
+  }
+  const sg = s.getContext("2d");
+  if (!sg) return from;
+  const fade = sg.createRadialGradient(r, r, 0, r, r, r);
+  fade.addColorStop(0, "rgba(0,0,0,1)");
+  fade.addColorStop(0.5, "rgba(0,0,0,0.85)");
+  fade.addColorStop(1, "rgba(0,0,0,0)");
+  const px = (m) => [Math.round(t.a * m.x + t.c * m.y + t.e - r), Math.round(t.b * m.x + t.d * m.y + t.f - r)];
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  let [fx, fy] = px(marks[from - 1]);
+  for (let i = from; i < end; i++) {
+    const [tx, ty] = px(marks[i]);
+    // The patch under where the finger was, softened to a round dab.
+    sg.globalCompositeOperation = "source-over";
+    sg.clearRect(0, 0, d, d);
+    sg.drawImage(g.canvas, fx, fy, d, d, 0, 0, d, d);
+    sg.globalCompositeOperation = "destination-in";
+    sg.fillStyle = fade;
+    sg.fillRect(0, 0, d, d);
+    // Where it is now: what is there gives way by the dab's share, and the patch fills that share
+    // (a blend that carries see-through as well as colour). Harder pressed, more of it.
+    const a = look.alpha * (real ? 0.45 + 0.55 * marks[i].p : 0.85);
+    g.globalAlpha = a;
+    g.globalCompositeOperation = "destination-out";
+    g.fillStyle = fade;
+    g.translate(tx, ty);
+    g.fillRect(0, 0, d, d);
+    g.globalCompositeOperation = "lighter";
+    g.drawImage(s, 0, 0);
+    g.translate(-tx, -ty);
+    fx = tx;
+    fy = ty;
+  }
+  g.restore();
+  return end;
+}
+
+/** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
+function wetPicture(live, kept, color, width) {
+  if (!live.wet || live.wet.key !== kept.key) {
+    const c = live.wet?.canvas || document.createElement("canvas");
+    c.width = kept.canvas.width;
+    c.height = kept.canvas.height;
+    const wg = c.getContext("2d");
+    wg.drawImage(kept.canvas, 0, 0);
+    live.wet = { key: kept.key, canvas: c, done: 1 };
+  }
+  const pts = thinPoints(live.pts);
+  if (pts.length < 6) return live.wet.canvas;
+  const look = brushLook("smudge");
+  const size = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
+  const points = strokePoints(pts, { streamline: look.streamline });
+  // Only up to the line's last settled point: its very end still moves as the hand goes on.
+  const settled = points.length > 2 ? Math.floor(points[points.length - 2].run / Math.max(1, size * look.spacing)) + 1 : 1;
+  const wg = live.wet.canvas.getContext("2d");
+  wg.setTransform(kept.t);
+  live.wet.done = smudgeAlong(wg, points, size, look, hasPressure(pts), live.wet.done, settled);
+  return live.wet.canvas;
+}
+
 /** A small line drawn with the brush, as it will look (pressure rising and falling, as a hand does). */
 function brushPreview(brush, color, width) {
   const canvas = h("canvas", { class: "ink-preview", "aria-hidden": "true" });
@@ -839,7 +932,11 @@ function brushPreview(brush, color, width) {
     const k = 0.16 * ratio;
     g.setTransform(k, 0, 0, k, 0, 0);
     const pts = [];
-    if (brush === "fill") {
+    if (brush === "smudge") {
+      // 문지르기 shows itself pulling three bars of the colour along to the right.
+      for (const x of [40, 78, 116]) paintStroke(g, [x, 10, 60, x, 50, 60, x, 90, 60], color, 2, "marker");
+      for (let i = 0; i <= 12; i++) pts.push(Math.round(24 + i * 13), 50, 70);
+    } else if (brush === "fill") {
       // 채우기 shows a filled drop (a bucket's paint) rather than a line.
       for (const [x, y, p] of [[60, 18, 100], [128, 18, 0], [176, 60, 0], [128, 92, 0], [60, 92, 0], [18, 55, 0]]) pts.push(x, y, p);
     } else if (brush === "sketch") {

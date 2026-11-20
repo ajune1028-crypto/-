@@ -40,6 +40,8 @@ export const BRUSH_LOOKS = {
   erase: { kind: "outline", scale: 3.2, alpha: 1, thinning: 0, streamline: 0.3 },
   // 채우기: a region's edges as rings (core/fill.js), filled even-odd; not drawn along a line.
   fill: { kind: "fill", scale: 1, alpha: 1, streamline: 0 },
+  // 문지르기: the colour under the finger is carried a little along the line (a finger in wet paint).
+  smudge: { kind: "smudge", scale: 4, alpha: 0.45, spacing: 0.08, streamline: 0.45 },
 };
 
 export function brushLook(brush) {

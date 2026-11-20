@@ -4828,7 +4828,7 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
 // Every tool is in view on a 360-wide phone (the 형광펜 was cut off at the edge and could not be
 // tapped). Nine brushes no longer fit in one row there: the brush row slides sideways, fades at its
 // end to say so, and every brush can be brought into view and pressed; the rest stays in view.
-scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all ten brushes (채우기 among them) can be reached and pressed", async ({ open, out }) => {
+scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the colours, the widths, 모양 잡기 and 보정 are in view; all eleven brushes (채우기 and 문지르기 among them) can be reached and pressed", async ({ open, out }) => {
   const page = await open({ width: 360, height: 760 });
   await createRoom(page, { name: "가람" });
   await page.waitFor(TODAY);
@@ -4844,7 +4844,7 @@ scenario("brushes fit: on a 360-wide phone the 가리키기, the eraser, the col
     return out;
   })()`);
   assert.ok(seen.length === 1 + 1 + 8 + 3 + 2 && seen.every(([, ok]) => ok), "all in view and pressable: " + JSON.stringify(seen.filter(([, ok]) => !ok)));
-  assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 10);
+  assert.equal(await page.eval(`document.querySelectorAll("#ink-tools .ink-brush").length`), 11);
   assert.ok(await page.eval(`${q("#ink-tools .ink-brushes")}.classList.contains("more")`), "the row says there is more");
   await page.shot(out("brushes-360.png"));
   for (const brush of ["highlighter", "crayon", "sketch", "pen"]) {
@@ -5369,6 +5369,75 @@ scenario("채우기: a tap inside a drawn square fills it up to the line in the 
   await a.front();
   await click(a, "#draw-undo");
   await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+});
+
+// 문지르기 (libmypaint's smudge for the idea, Krita's smearing): a finger through wet paint pulls
+// the colour along into the empty paper beside it; where it did not pass stays as it was.
+scenario("문지르기: dragged out of a red bar, the red is pulled into the empty paper to its right (only along the finger's way); kept as a smudge; the friend's screen smudges the same", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "문지르기");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const layerDoc = `("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  await a.front();
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const drag = async (from, to, steps) => {
+    await a.press(from[0], from[1]);
+    for (let k = 1; k <= steps; k++) await a.moveTo(from[0] + ((to[0] - from[0]) * k) / steps, from[1] + ((to[1] - from[1]) * k) / steps);
+    await a.release(to[0], to[1]);
+  };
+  // A thick red bar, top to bottom.
+  await click(a, '[data-brush="marker"]');
+  await click(a, '[data-ink="red"]');
+  await click(a, '[data-width="3"]');
+  const barX = box.x + box.w * 0.35;
+  await drag([barX, box.y + box.h * 0.2], [barX, box.y + box.h * 0.7], 12);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 1`);
+  // Alpha along a row of the layer, in screen px.
+  const row = (page, y) => page.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; const c = document.querySelector('.draw-layer[data-layer="' + l.id + '"] canvas'); const r = c.getBoundingClientRect(); const g = c.getContext("2d"); const yy = Math.round((${y} - r.top) * c.height / r.height); const d = g.getImageData(0, yy, c.width, 1).data; const out = []; for (let x = Math.ceil(r.left); x < r.right; x++) { const i = Math.round((x - r.left) * c.width / r.width) * 4; out.push([x, d[i], d[i + 3]]); } return out; })()`);
+  const plain = box.y + box.h * 0.3;
+  const through = box.y + box.h * 0.5;
+  const before = await row(a, through);
+  const barRight = Math.max(...before.filter(([, , al]) => al > 128).map(([x]) => x));
+  assert.ok(barRight > barX && barRight < barX + 40, "the bar's right edge: " + barRight);
+  const near = barRight + 8;
+  assert.equal(before.find(([x]) => x === near)[2], 0, "clear paper beside the bar before");
+  // 문지르기, slowly out of the bar to the right.
+  await click(a, '[data-brush="smudge"]');
+  assert.equal(await a.eval(`${q('[data-brush="smudge"]')}.getAttribute("aria-pressed")`), "true");
+  // While the finger is still down the paper already shows the smudge (laid as it goes).
+  const endX = box.x + box.w * 0.75;
+  await a.press(barX - 6, through);
+  for (let k = 1; k <= 30; k++) await a.moveTo(barX - 6 + ((endX - barX + 6) * k) / 30, through);
+  await pause(120);
+  const during = (await row(a, through)).find(([x]) => x === near);
+  assert.ok(during[2] > 30 && during[1] > 150, "smudged while drawing: " + during);
+  await a.release(endX, through);
+  await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
+  assert.deepEqual(await a.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => s.s || s.b)`), ["marker", "smudge"]);
+  await pause(150);
+  const after = await row(a, through);
+  const pulled = after.find(([x]) => x === near);
+  assert.ok(pulled[2] > 30 && pulled[1] > 150, "red pulled into the paper beside the bar: " + pulled);
+  assert.ok(Math.abs(pulled[2] - during[2]) < 40, "as kept, as it looked while drawing: " + pulled + " / " + during);
+  const untouched = (await row(a, plain)).find(([x]) => x === near);
+  assert.equal(untouched[2], 0, "where the finger did not pass stays clear: " + untouched);
+  await a.shot(out("smudge.png"));
+  // The friend's screen smudges the same.
+  await b.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
+  await b.front();
+  await pause(300);
+  const theirs = (await row(b, through)).find(([x]) => x === near);
+  assert.ok(theirs[2] > 30 && Math.abs(theirs[2] - pulled[2]) < 40, "the friend sees it smudged alike: " + theirs + " / " + pulled);
 });
 
 scenario("brush sheet: all nine brushes drawn on one page, each kept as its own brush", async ({ open, out }) => {
