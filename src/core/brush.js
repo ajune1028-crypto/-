@@ -54,12 +54,63 @@ export function hasPressure(pts) {
   return false;
 }
 
+// Between two points the hand gave, the line goes on a curve through them (a centripetal Catmull-Rom
+// spline: it never loops or overshoots where the points come unevenly), cut into steps this long
+// (stroke units: 2 px at 1 rem = 16 px). A finger at 60-120 Hz gives a point every few pixels, and
+// a small quick letter drawn with straight lines between them came out a polygon (the owner, 21
+// November: "브러쉬가 너무 안 매끄러워"). Eased along even steps, the smoothing is the same at any rate.
+const CURVE_GAP = 12;
+
 /**
- * The line as the brush follows it: each point eased toward the hand by `streamline` (0 follows
- * exactly), the last one where the hand is. Each point: { x, y, p (0..1), vx, vy (the unit step
- * back to the point before), d (that step's length), run (length so far) }.
+ * The points [x, y, p, …] with more between them along a curve through them, at most `gap` apart.
+ * Its `hand` holds, for each point, how far the hand went between the two points it lies between
+ * (how quick it was: what simulated pressure reads).
  */
-export function strokePoints(pts, { streamline = 0.5 } = {}) {
+export function throughCurve(pts, gap = CURVE_GAP) {
+  const n = Math.floor(pts.length / 3);
+  if (n < 3) return pts;
+  const hand = [0];
+  const at = (i) => {
+    if (i < 0) return [2 * pts[0] - pts[3], 2 * pts[1] - pts[4], pts[2]];
+    if (i >= n) return [2 * pts[3 * n - 3] - pts[3 * n - 6], 2 * pts[3 * n - 2] - pts[3 * n - 5], pts[3 * n - 1]];
+    return [pts[3 * i], pts[3 * i + 1], pts[3 * i + 2]];
+  };
+  const knot = (a, b) => Math.max(1e-4, Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])));
+  const out = [pts[0], pts[1], pts[2]];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    const k = Math.max(1, Math.ceil(len / gap));
+    const t1 = knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3);
+    for (let j = 1; j <= k; j++) {
+      hand.push(len);
+      if (j === k) { out.push(p2[0], p2[1], p2[2]); break; }
+      const t = t1 + ((t2 - t1) * j) / k;
+      const mix = (a, b, ta, tb) => (a * (tb - t) + b * (t - ta)) / (tb - ta);
+      const pt = [0, 1].map((c) => {
+        const a1 = mix(p0[c], p1[c], 0, t1);
+        const a2 = mix(p1[c], p2[c], t1, t2);
+        const a3 = mix(p2[c], p3[c], t2, t3);
+        const b1 = mix(a1, a2, 0, t2);
+        const b2 = mix(a2, a3, t1, t3);
+        return mix(b1, b2, t1, t2);
+      });
+      out.push(pt[0], pt[1], p1[2] + ((p2[2] - p1[2]) * j) / k);
+    }
+  }
+  out.hand = hand;
+  return out;
+}
+
+/**
+ * The line as the brush follows it: on a curve through the hand's points (not for a shape made
+ * exact: `exact`), each point eased toward the hand by `streamline` (0 follows exactly), the last one
+ * where the hand is. Each point: { x, y, p (0..1), vx, vy (the unit step back to the point before),
+ * d (that step's length), run (length so far) }.
+ */
+export function strokePoints(input, { streamline = 0.5, exact = false } = {}) {
+  const pts = exact ? input : throughCurve(input);
+  const hand = pts.hand;
   const n = Math.floor(pts.length / 3);
   if (!n) return [];
   const t = 0.15 + (1 - streamline) * 0.85;
@@ -75,7 +126,7 @@ export function strokePoints(pts, { streamline = 0.5 } = {}) {
     if (x === px && y === py) continue;
     const d = Math.hypot(x - px, y - py);
     run += d;
-    out.push({ x, y, p: pts[i * 3 + 2] / 100, vx: (px - x) / d, vy: (py - y) / d, d, run });
+    out.push({ x, y, p: pts[i * 3 + 2] / 100, vx: (px - x) / d, vy: (py - y) / d, d, run, sd: hand ? hand[i] : d });
     px = x;
     py = y;
   }
@@ -161,7 +212,7 @@ export function outline(points, { size, thinning = 0.5, smoothing = 0.5, simulat
   const left = [];
   const right = [];
   let prevPressure = simulate ? 0.6 : points[0].p;
-  if (simulate) for (const pt of points.slice(0, 6)) prevPressure = speedPressure(prevPressure, pt.d || 26);
+  if (simulate) for (const pt of points.slice(0, 6)) prevPressure = speedPressure(prevPressure, pt.sd || pt.d || 26);
   let radius = size / 2;
   let prevVx = points[0].vx;
   let prevVy = points[0].vy;
@@ -175,7 +226,7 @@ export function outline(points, { size, thinning = 0.5, smoothing = 0.5, simulat
     if (!last && total - pt.run < 3) continue;
     let pressure = pt.p;
     if (thinning) {
-      if (simulate) pressure = speedPressure(prevPressure, pt.d);
+      if (simulate) pressure = speedPressure(prevPressure, pt.sd ?? pt.d);
       radius = radiusAt(pressure);
     } else radius = size / 2;
     if (nib) radius *= nibWidth(pt.vx, pt.vy);

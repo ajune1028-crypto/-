@@ -167,7 +167,8 @@ export function paintStroke(g, pts, color, px, brush, shaped = false) {
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
   const real = hasPressure(pts);
-  const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
+  // A shape made exact keeps its corners; a fill is its region's rings.
+  const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline, exact: shaped || look.kind === "fill" });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
   if (look.kind === "smudge") {
@@ -1219,7 +1220,8 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     const { el, kind } = pop;
     if (kind === "brush") {
       const shapes = getSettings(store).inkShapes !== false;
-      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
+      // 손떨림 보정 is off at first: it pulls a quick small letter round (6 px off at '약'); who wants it turns it on.
+      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 0));
       el.replaceChildren(
         h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
           ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,

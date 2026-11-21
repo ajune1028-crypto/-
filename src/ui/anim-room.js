@@ -54,7 +54,7 @@ export function mountAnimRoom(body, app, session) {
     maxPixels: MAX_PIXELS,
     ink: () => session.doc(curDoc()),
     share,
-    steady: () => getSettings(app.store).inkSteady ?? 1,
+    steady: () => getSettings(app.store).inkSteady ?? 0,
     blocked: () => view.pinching || !!playing,
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),

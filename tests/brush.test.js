@@ -13,10 +13,12 @@ function widthAt(poly, x) {
   return near.length ? Math.max(...near) - Math.min(...near) : 0;
 }
 
-test("strokePoints: streamline 0 follows the hand exactly; the last point is always where the hand is", () => {
+test("strokePoints: streamline 0 follows the hand exactly (through every point it gave, on a curve between them); the last point is always where the hand is", () => {
   const pts = flat([[0, 0], [30, 10], [60, 0], [90, 15]]);
   const exact = strokePoints(pts, { streamline: 0 });
-  assert.deepEqual(exact.map((p) => [p.x, p.y]), [[0, 0], [30, 10], [60, 0], [90, 15]]);
+  const at = [[0, 0], [30, 10], [60, 0], [90, 15]].map(([x, y]) => exact.findIndex((p) => Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9));
+  assert.ok(at.every((i, k) => i >= 0 && (k === 0 || i > at[k - 1])), "every point of the hand, in order: " + at);
+  assert.deepEqual(strokePoints(pts, { streamline: 0, exact: true }).map((p) => [p.x, p.y]), [[0, 0], [30, 10], [60, 0], [90, 15]], "exact: only them");
   const smooth = strokePoints(pts, { streamline: 0.8 });
   assert.deepEqual([smooth.at(-1).x, smooth.at(-1).y], [90, 15]);
   assert.ok(Math.abs(smooth[1].y) < 10, "a middle point is eased toward the line");
@@ -175,7 +177,12 @@ test("스케치 (Klecks' sketchy brush): near points of the line are joined by f
   assert.deepEqual(a, b, "the same line draws the same strokes");
   assert.ok(a.length > 40, "there are strokes: " + a.length / 4);
   for (let i = 0; i < a.length; i += 4) assert.ok(Math.hypot(a[i + 2] - a[i], a[i + 3] - a[i + 1]) <= 0.4 * 280 * Math.SQRT2 + 1e-6, "each stroke is short");
-  const fewer = sketchLines(strokePoints(pts.slice(0, 120), { streamline: 0 }), { reach: 280, seed: 4242 });
+  // While drawing, what is drawn stays as the line grows (all but the newest stretch, whose curve
+  // waits for the next point of the hand).
+  const part = strokePoints(pts.slice(0, 120), { streamline: 0 });
+  const settled = part.slice(0, part.findIndex((p) => Math.abs(p.x - pts[114]) < 1e-9 && Math.abs(p.y - pts[115]) < 1e-9) + 1);
+  const fewer = sketchLines(settled, { reach: 280, seed: 4242 });
+  assert.ok(fewer.length > 0);
   assert.deepEqual(a.slice(0, fewer.length), fewer, "while drawing, what is drawn stays as the line grows");
   assert.notDeepEqual(sketchLines(points, { reach: 280, seed: 7 }), a, "another line, other strokes");
   assert.deepEqual(sketchLines(points.slice(0, 1), { reach: 280, seed: 1 }), [], "one point: nothing to join");
@@ -259,4 +266,31 @@ test("fingerFeel: a slow finger presses, a quick one skims; it touches down ligh
   const before = s.p;
   assert.equal(fingerStep(s, 40, 0, 16), before, "no time passed: no new speed");
   assert.ok(Math.abs(fingerStep(s, 42, 0, 48) - before) < 0.2, "measured from the last point that had time between");
+});
+
+// The owner (21 November): "브러쉬가 너무 안 매끄러워 손이나 펜으로". A finger at 60-120 Hz gives a point every
+// few pixels; a small fast letter came out a polygon (each corner up to 76°) and up to 6 px off the hand.
+test("a fast small curve drawn from few points comes out round: the line follows a curve through the hand's points, not straight lines between them", () => {
+  const U = 100 / 16;
+  const R = 12; // a 24 px circle, drawn at 1.2 px per ms by a finger at 120 Hz: a point every 10 px
+  const pts = [];
+  for (let s = 0; s <= 2 * Math.PI * R * 1.05; s += 10) pts.push(Math.round(R * Math.cos(s / R) * U), Math.round(R * Math.sin(s / R) * U), 50);
+  const line = strokePoints(pts, { streamline: 0.45 });
+  let worst = 0;
+  let turn = 0;
+  for (let i = 0; i < line.length; i++) {
+    worst = Math.max(worst, Math.abs(Math.hypot(line[i].x, line[i].y) / U - R));
+    if (i >= 2) {
+      const a = Math.atan2(line[i - 1].y - line[i - 2].y, line[i - 1].x - line[i - 2].x);
+      const b = Math.atan2(line[i].y - line[i - 1].y, line[i].x - line[i - 1].x);
+      let d = (Math.abs(b - a) * 180) / Math.PI;
+      if (d > 180) d = 360 - d;
+      turn = Math.max(turn, d);
+    }
+  }
+  assert.ok(worst < 1.2, "stays near the hand's circle: " + worst.toFixed(2) + " px");
+  assert.ok(turn < 20, "no corners: " + turn.toFixed(0) + "°");
+  // A shape made exact (a triangle) keeps its corners.
+  const tri = strokePoints([0, 0, 50, 600, 0, 50, 300, 500, 50, 0, 0, 50], { streamline: 0, exact: true });
+  assert.equal(tri.length, 4);
 });

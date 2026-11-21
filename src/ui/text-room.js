@@ -289,7 +289,7 @@ export function mountTextRoom(body, app, session) {
         },
         host: editor.paper,
         share: liveInk.on(inkDoc),
-        steady: () => getSettings(app.store).inkSteady ?? 1,
+        steady: () => getSettings(app.store).inkSteady ?? 0,
         onPick: (color) => { pen.color = color; setTool(pen.tool); },
         blocked: () => fingers.pinching,
         shapes: () => getSettings(app.store).inkShapes !== false,

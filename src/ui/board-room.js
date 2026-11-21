@@ -289,7 +289,7 @@ export function mountBoardRoom(body, app, session, frame) {
     host: surface,
     ink: () => session.doc(INK_DOC),
     share: liveInk.on(INK_DOC),
-    steady: () => getSettings(app.store).inkSteady ?? 1,
+    steady: () => getSettings(app.store).inkSteady ?? 0,
     onPick: (color) => { pen.color = color; setPen(pen.tool); },
     blocked: () => fingers.pinching,
     shapes: () => getSettings(app.store).inkShapes !== false,

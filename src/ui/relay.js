@@ -218,7 +218,7 @@ export function relayScreen(ctx) {
         ink: () => session.doc(name),
         grow: false,
         maxPixels: 2.4e6,
-        steady: () => getSettings(app.store).inkSteady ?? 1,
+        steady: () => getSettings(app.store).inkSteady ?? 0,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
         onStroke: ({ pts, color, width, size, brush, shape }) => {

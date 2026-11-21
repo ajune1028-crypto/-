@@ -120,7 +120,7 @@ export function sketchScreen(ctx) {
       share: live.on(name),
       grow: false,
       maxPixels: 2.4e6,
-      steady: () => getSettings(app.store).inkSteady ?? 1,
+      steady: () => getSettings(app.store).inkSteady ?? 0,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
       onStroke: editable

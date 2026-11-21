@@ -147,7 +147,11 @@ function distToSegment(px, py, ax, ay, bx, by) {
 }
 
 /** Drops points closer than `min` to the last kept one; keeps the ends. */
-export function thinPoints(pts, min = 25) {
+// A point is kept when it is this far (stroke units, 0.6 px at 1 rem = 16 px) from the last one kept:
+// the hand's fine detail stays (it was 25, 4 px, and small letters came out in straight pieces).
+export const THIN_UNITS = 4;
+
+export function thinPoints(pts, min = THIN_UNITS) {
   if (pts.length <= 6) return pts.slice();
   const out = pts.slice(0, 3);
   for (let i = 3; i < pts.length - 3; i += 3) {
@@ -156,6 +160,17 @@ export function thinPoints(pts, min = 25) {
   }
   out.push(...pts.slice(-3));
   return out;
+}
+
+/** The points thinned as little as fits a stroke (MAX_POINTS): a very long line more, never cut short. */
+function thinToFit(pts) {
+  let min = THIN_UNITS;
+  let kept = thinPoints(pts, min);
+  while (kept.length > MAX_POINTS * 3) {
+    min *= 1.5;
+    kept = thinPoints(pts, min);
+  }
+  return kept;
 }
 
 /** The brush a stroke is drawn with: its style where it has one. */
@@ -176,7 +191,7 @@ export function nearestWidth(px) {
 export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
-  const op = { t: "stroke", id: clock.next(), pts: (shape ? pts.slice() : thinPoints(pts)).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
+  const op = { t: "stroke", id: clock.next(), pts: shape ? pts.slice(0, MAX_POINTS * 3) : thinToFit(pts), c: color, w: width, by, at };
   if (Number.isFinite(size)) {
     op.z = Math.round(Math.max(SIZE_MIN, Math.min(SIZE_MAX, size)) * 10);
     op.w = nearestWidth(op.z / 10);

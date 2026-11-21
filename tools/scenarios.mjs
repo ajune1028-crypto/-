@@ -5561,17 +5561,18 @@ scenario("같이 그리기: a friend's line shows while it is drawn, with their 
   await a.release(...at(0.62, 0.44));
   await b.waitFor(`(window.__app.session.liveInk?.lightsOn(${JSON.stringify(doc)}) || []).length === 0`, 6000);
   assert.equal(await a.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length`), 1, "the light kept nothing");
-  // 손떨림 보정: 약 → 중 → 강 → 끔 → 약, remembered on this device.
+  // 손떨림 보정: 끔 → 약 → 중 → 강 → 끔, remembered on this device.
   await click(a, "#ink-laser");
   await click(a, "#ink-brush-now");
   const steady = () => a.eval(`${q("#ink-pop #ink-steady")}.textContent`);
-  assert.equal(await steady(), "보정 약");
-  for (const next of ["보정 중", "보정 강", "보정 끔", "보정 약"]) {
+  // Off at first (the owner, 21 November: "너무 안 매끄러워" - at '약' a quick small letter came out 6 px off).
+  assert.equal(await steady(), "보정 끔");
+  for (const next of ["보정 약", "보정 중", "보정 강", "보정 끔"]) {
     await click(a, "#ink-pop #ink-steady");
     assert.equal(await steady(), next);
   }
   await click(a, "#ink-brush-now");
-  assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkSteady`), 1);
+  assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkSteady`), 0, "back round to 끔, remembered");
 });
 
 // From the reference study (Procreate's gestures, 하던 대로): two fingers tapped together 되돌리기,

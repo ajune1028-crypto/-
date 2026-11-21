@@ -83,7 +83,7 @@ export function mountDrawRoom(body, app, session, frame) {
       host: el,
       ink: () => session.doc(name),
       share: liveInk.on(name),
-      steady: () => getSettings(app.store).inkSteady ?? 1,
+      steady: () => getSettings(app.store).inkSteady ?? 0,
       onPick: (color) => { pen.color = color; setTool(pen.tool); },
       pick: (x, y) => colorAt(x, y),
       blocked: () => view.pinching,

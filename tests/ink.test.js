@@ -213,3 +213,21 @@ test("a lasso holds the strokes mostly inside it", () => {
   assert.deepEqual(strokesWithinLoop([inside, half, most, out], loop), ["1@a", "3@a"]);
   assert.deepEqual(strokesWithinLoop([inside], [0, 0, 10, 0]), [], "no loop, nothing");
 });
+
+// The owner (21 November): "브러쉬가 너무 안 매끄러워". A line kept only a point every 4 px (25 units), so a
+// small letter's curve was cut into a few straight pieces. Now it keeps the hand's fine detail; a very
+// long line is thinned more (never cut short) to stay within a stroke's points.
+test("a stroke keeps the hand's detail to 0.6 px, and a very long one is kept whole", async () => {
+  const { strokeOps, InkDoc, thinPoints } = await import("../src/core/ink.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const pts = [];
+  for (let i = 0; i <= 40; i++) pts.push(i * 6, Math.round(Math.sin(i / 3) * 40), 50); // a point a little under 1 px apart
+  assert.equal(thinPoints(pts).length, pts.length, "every point a finger gives on a small curve stays");
+  const long = [];
+  for (let i = 0; i < 9000; i++) long.push(i * 5, Math.round(Math.sin(i / 50) * 400), 50);
+  const ink = new InkDoc();
+  const made = strokeOps(new Clock("a"), ink, { pts: long, color: "black", width: 2, by: "m1" });
+  const kept = made.ops[0].pts;
+  assert.ok(kept.length / 3 <= 3000, "within a stroke's points: " + kept.length / 3);
+  assert.deepEqual(kept.slice(-3), long.slice(-3), "its end is where the hand lifted");
+});
