@@ -12,7 +12,7 @@ import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
-import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
+import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
 import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
@@ -23,6 +23,8 @@ export const PAGE_W = 2250;
 export const PAGE_H = 3000;
 const BLEND_NAMES = { "source-over": "보통", multiply: "곱하기", screen: "스크린", overlay: "오버레이", darken: "어둡게", lighten: "밝게", "color-dodge": "닷지", "color-burn": "번", "hard-light": "하드 라이트", "soft-light": "소프트 라이트", difference: "차이", exclusion: "제외", hue: "색조", saturation: "채도", color: "색", luminosity: "광도" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A paper's colour (null for 투명). */
+const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
 
 export function mountDrawRoom(body, app, session, frame) {
   const root = app.root;
@@ -127,6 +129,10 @@ export function mountDrawRoom(body, app, session, frame) {
 
   /** The page as the layers are now: order, shown or hidden, opacity, blend; only mine takes the pen. */
   function drawLayers() {
+    // 종이 under them all (the owner, 21 November: "종이의 개념이고 뒷배경을 투명하게 할 수도").
+    const paper = doc.paper();
+    page.dataset.paper = paper;
+    page.style.setProperty("--paper-c", paperColour(paper) || "transparent");
     const list = doc.layers();
     if (active && !list.some((l) => l.id === active)) active = null;
     if (!active && list.length) active = list[list.length - 1].id;
@@ -213,7 +219,20 @@ export function mountDrawRoom(body, app, session, frame) {
             onclick: () => change(layer.id, { visible: !layer.visible }) }, icon(layer.visible ? "eye" : "eyeOff")));
         if (on && can) row.append(layerControls(layer, list));
         return row;
-      })));
+      })),
+      // 종이 at the bottom, under every layer (as Procreate's background colour lies under its layers).
+      paperRow(can));
+  }
+
+  function paperRow(can) {
+    const paper = doc.paper();
+    const [, colour, name] = PAPERS.find(([k]) => k === paper) || PAPERS[0];
+    return h("div", { class: "paper-row", id: "paper-row" },
+      h("span", { class: "paper-swatch" + (colour ? "" : " clear"), style: colour ? { background: colour } : {}, "aria-hidden": "true" }),
+      h("span", { class: "layer-name", text: "종이 · " + name }),
+      can && h("div", { class: "paper-choices", role: "group", "aria-label": "종이" },
+        PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === paper), "aria-label": label, title: label,
+          style: c ? { background: c } : {}, onclick: () => { if (k !== paper) apply(paperOps(session.clock, doc, k)); } }))));
   }
 
   function layerControls(layer, list) {
@@ -305,7 +324,7 @@ export function mountDrawRoom(body, app, session, frame) {
       layers: list,
       pageW: PAGE_W,
       pageH: PAGE_H,
-      paper: getComputedStyle(page).backgroundColor || "#fff",
+      paper: paperColour(doc.paper()) || "rgba(0, 0, 0, 0)",
       nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
       colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
       title: session.room.meta("name") || "그림",
@@ -321,8 +340,12 @@ export function mountDrawRoom(body, app, session, frame) {
     out.height = hgt;
     const g = out.getContext("2d");
     if (!g) return;
-    g.fillStyle = getComputedStyle(page).backgroundColor || "#fff";
-    g.fillRect(0, 0, w, hgt);
+    // A clear paper stays clear in the image (a PNG with nothing behind the drawing).
+    const paper = paperColour(doc.paper());
+    if (paper) {
+      g.fillStyle = paper;
+      g.fillRect(0, 0, w, hgt);
+    }
     for (const layer of doc.layers()) {
       if (!layer.visible) continue;
       const one = document.createElement("canvas");

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock } from "../src/core/crdt.js";
-import { DrawDoc, addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../src/core/draw.js";
+import { DrawDoc, addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, paperOps, PAPERS } from "../src/core/draw.js";
 import { shuffle, rng } from "./helpers.js";
 
 const apply = (doc, made) => { for (const op of made.ops) doc.apply(op); return made; };
@@ -91,4 +91,27 @@ test("ops that make no sense are set aside; a change that comes before its layer
   assert.equal(doc.apply({ t: "lset", id: "9@x", l: "8@x", f: { name: "먼저 온 이름" } }), "pending");
   assert.equal(doc.apply({ t: "layer", id: "8@x", name: "늦게 온 층", by: "m", at: 1 }), "applied");
   assert.equal(doc.layers()[0].name, "먼저 온 이름");
+});
+
+// 종이 (the owner, 21 November: "손그림 그거는 종이의 개념이고 뒷배경을 투명하게 할 수도"): the page's
+// paper is one for everyone in the room, any of a few or none at all (see-through); undo puts it back.
+test("the paper: white to begin with, one of a few or clear, the latest change wins, undone with one step", () => {
+  const doc = new DrawDoc();
+  const a = new Clock("a");
+  const b = new Clock("b");
+  assert.equal(doc.paper(), "white");
+  assert.ok(PAPERS.some(([k]) => k === "clear"), "see-through is one of them");
+  const toCream = apply(doc, paperOps(a, doc, "cream"));
+  assert.equal(doc.paper(), "cream");
+  const other = new DrawDoc();
+  const toClear = paperOps(b, other, "clear");
+  for (const op of [...toClear.ops, ...toCream.ops]) other.apply(op);
+  for (const op of toClear.ops) doc.apply(op);
+  assert.equal(doc.paper(), other.paper(), "both screens agree whatever the order");
+  assert.equal(doc.apply({ t: "paper", id: a.next(), v: "plaid" }), "unknown", "only the papers there are");
+  // Undo of my own change brings back what was before it.
+  const mine = apply(doc, paperOps(a, doc, "black"));
+  assert.equal(doc.paper(), "black");
+  for (const op of invertDrawOps(doc, a, mine.atoms, "undo")) doc.apply(op);
+  assert.equal(doc.paper(), other.paper());
 });

@@ -4604,6 +4604,10 @@ scenario("song 옆 패널 again: the actions are a grid of buttons with the word
   await page.tap(muteAt[0], muteAt[1]);
   await pause(300);
   assert.equal(await page.eval(`window.__app.session.doc("song").layout()[0].muted || false`), false, "locked: the tap did nothing");
+  // Locked, it steps back: its glass thins and what it holds fades, its lock stays clear.
+  await pause(400);
+  const look = await page.eval(`(() => { const side = document.querySelector(".song-side"); const body = [...side.children].find((c) => !c.classList.contains("side-head")); return { held: Number(getComputedStyle(body).opacity), lock: Number(getComputedStyle(document.getElementById("side-lock")).opacity) }; })()`);
+  assert.ok(look.held < 0.6 && look.lock > 0.9, "locked: see-through, the lock clear: " + JSON.stringify(look));
   await page.shot(out("song-side-locked.png"));
   await click(page, "#side-lock");
   await page.waitFor(`${q("#side-lock")}.getAttribute("aria-pressed") === "false"`);
@@ -5262,7 +5266,8 @@ scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden
   // The panel covers part of the page: a tap on the page only puts it away and draws nothing.
   {
     const p = await pageBox(a);
-    await a.tap(p.x + p.w * 0.12, p.y + p.h * 0.85);
+    // (Clear of the tools' rail at the left edge.)
+    await a.tap(p.x + p.w * 0.5, p.y + p.h * 0.85);
     await a.waitFor(`document.getElementById("layers-panel").hidden`);
     await pause(150);
     assert.equal(await strokesOn(a, 1), 0, "the tap that put the panel away drew nothing");
@@ -6031,6 +6036,37 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
 // everyone in the room: the asker opens it, friends join from their small card, the asker begins it
 // with who joined; a line each, the books pass on, the line is drawn, the books pass on, the drawing
 // is put into words; then the album is turned page by page, the same page on every screen.
+// 종이 (the owner, 21 November: "손그림 그거는 종이의 개념이고 뒷배경을 투명하게 할 수도"): the page's paper
+// under every layer, one for the room, see-through when wanted; undone with one step.
+scenario("그림 방 종이: under the layers the paper is chosen for everyone (a colour, or 투명 shown as a checkerboard); undo puts it back", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "종이");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const id = await a.eval("location.hash.slice(3)");
+  const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 860 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`${q("#draw-page")}?.dataset.paper === "white"`);
+  await a.front();
+  await click(a, "#draw-layers");
+  await a.waitFor(q("#paper-row"));
+  await click(a, '#paper-row [data-paper="sky"]');
+  await a.waitFor(`${q("#draw-page")}.dataset.paper === "sky" && getComputedStyle(${q("#draw-page")}).backgroundColor === "rgb(230, 240, 251)"`);
+  await b.waitFor(`${q("#draw-page")}.dataset.paper === "sky"`, 5000);
+  await click(a, '#paper-row [data-paper="clear"]');
+  await a.waitFor(`${q("#draw-page")}.dataset.paper === "clear" && getComputedStyle(${q("#draw-page")}).backgroundImage.includes("conic-gradient")`);
+  await b.waitFor(`${q("#draw-page")}.dataset.paper === "clear"`, 5000);
+  await a.shot(out("draw-paper-clear.png"));
+  await click(a, "#draw-undo");
+  await a.waitFor(`${q("#draw-page")}.dataset.paper === "sky"`);
+  await b.waitFor(`${q("#draw-page")}.dataset.paper === "sky"`, 5000);
+});
+
 // 타임랩스 (the reference study: Procreate's replay; ours shows who drew each line): 그림 방's 과정.
 scenario("타임랩스: 과정 replays the page from its first line, each friend's line in turn with their name at the pen; it ends on the whole picture; the bar jumps back to the start; 영상으로 저장 records it", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 420, height: 860 });

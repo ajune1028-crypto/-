@@ -1785,7 +1785,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* ---- 그림 방 ------------------------------------------------------------------------------- */
 .draw-body { position: relative; overflow: hidden; }
 .draw-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: #fffdf8; box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
+.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: var(--paper-c, #fffdf8); box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
 .draw-layer { position: absolute; inset: 0; pointer-events: none; }
 .draw-layer.active { pointer-events: auto; }
 .draw-layer[hidden] { display: none; }
@@ -1859,6 +1859,14 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
 .home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
 .home-panel.held { transition: none; }
+/* 투명 종이: the checkerboard every drawing app shows for nothing behind (ArtCraft's paint page too). */
+.draw-page[data-paper="clear"], .paper-swatch.clear, .paper-pick.clear { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
+.paper-swatch.clear, .paper-pick.clear { background-size: 10px 10px; }
+.paper-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.45rem 0.6rem; margin-top: 0.55rem; padding: 0.55rem 0.35rem 0.15rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.paper-swatch { width: 2.8rem; height: 2rem; border-radius: 0.4rem; box-shadow: inset 0 0 0 1px var(--line); }
+.paper-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.paper-pick { width: 1.75rem; height: 1.75rem; padding: 0; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.paper-pick[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .draw-page.fitting { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
 
 /* 애니메이션 방: the onion skin and the frame playing lie over the page; the strip of frames below. */
@@ -2035,8 +2043,12 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
   .side-lock svg, .side-hide svg { width: 0.95rem; height: 0.95rem; }
   .side-lock:hover, .side-hide:hover { opacity: 0.85; }
   .side-lock[aria-pressed="true"] { opacity: 1; color: var(--paper); background: var(--ink); }
-  .song-side.locked > :not(.side-head) { pointer-events: none; }
-  .song-side.locked { box-shadow: var(--glass-shine), var(--glass-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent); }
+  /* Locked (the owner, 21 November: "잠금하면 좀 불투명하게… 진짜 잘 만든 디자인처럼"): the glass thins
+     and what it holds steps back (a resting hand presses nothing); only its lock stays clear. */
+  .song-side { transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease), -webkit-backdrop-filter 0.3s var(--ease), backdrop-filter 0.3s var(--ease); }
+  .song-side > :not(.side-head) { transition: opacity 0.3s var(--ease), filter 0.3s var(--ease); }
+  .song-side.locked > :not(.side-head) { pointer-events: none; opacity: 0.4; filter: saturate(0.6); }
+  .song-side.locked { background: color-mix(in srgb, var(--paper) 18%, transparent); -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1); box-shadow: var(--glass-shine), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 20%, transparent); }
   .side-edge { position: absolute; top: 0.4rem; bottom: 0.65rem; right: calc(var(--side-w) + 0.6rem); z-index: 7; display: grid; place-items: center; width: 1rem; translate: 50% 0; cursor: ew-resize; touch-action: none; }
   .side-edge .grip-bar { width: 0.26rem; height: 2.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); transition: background 0.15s var(--ease), height 0.15s var(--ease); }
   .side-edge:hover .grip-bar, .song-side.resizing ~ .side-edge .grip-bar { height: 3.6rem; background: var(--tint); }
