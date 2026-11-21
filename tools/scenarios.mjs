@@ -6290,9 +6290,17 @@ scenario("애니메이션 방 with the other rooms' tools: on a 360-wide phone t
   await click(a, '#anim-paper-menu [data-paper="clear"]');
   await a.waitFor(`window.__app.session.doc("anim").settings().paper === "clear" && ${q("#anim-page")}.dataset.paper === "clear"`);
   await a.shot(out("anim-together.png"));
-  // 영상으로 저장: recorded once through.
+  // 영상으로 저장: recorded once through, and handed over as a file.
+  await a.eval(`(() => { window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; })()`);
   await click(a, "#anim-save");
-  await a.waitFor(`Number(${q("#anim-tools")}.dataset.saved || 0) > 0`, 15000);
+  await a.waitFor(`Number(${q("#anim-tools")}.dataset.saved || 0) > 0 && window.__downloads.length === 1`, 15000);
+  assert.match(await a.eval(`window.__downloads[0]`), /^연동 플립북\.(mp4|webm)$/);
+  // Leaving the room part way through a save hands over no half a video.
+  await click(a, "#anim-save");
+  await a.waitFor(`${q("#anim-save")}.dataset.cap === "저장 중…"`, 3000);
+  await click(a, "#back");
+  await pause(1500);
+  assert.equal(await a.eval(`window.__downloads.length`), 1, "no second file");
 });
 
 scenario("애니메이션 방: two frames to start; the onion skin shows the frame before; 복제 copies a frame; ×3 holds it; ▶ plays the frames in turn; the friend sees the frames and where each one is", async ({ open, out }) => {

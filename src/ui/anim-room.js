@@ -603,6 +603,7 @@ export function mountAnimRoom(body, app, session) {
     await stopped;
     canvas.remove();
     saving = false;
+    if (!alive) return; // left the room part way: no half a video
     saveButton.disabled = false;
     saveButton.dataset.cap = "저장";
     const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
