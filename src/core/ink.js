@@ -219,6 +219,52 @@ export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
   return { ops, atoms };
 }
 
+/** Inside a closed loop [x, y, x, y, …] (even-odd). */
+function insidePolygon(loop, x, y) {
+  let inside = false;
+  for (let i = 0, j = loop.length - 2; i < loop.length; j = i, i += 2) {
+    const xi = loop[i], yi = loop[i + 1], xj = loop[j], yj = loop[j + 1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * The strokes a lasso holds (the text room's and 그림 방's 올가미; loop in stroke units): more than half
+ * of a stroke's points inside the loop, or its middle — as GoodNotes' lasso takes handwriting, and
+ * ArtCraft's moodboard lasso takes what it mostly surrounds.
+ */
+export function strokesWithinLoop(strokes, loop) {
+  if (!loop || loop.length < 6) return [];
+  const out = [];
+  for (const s of strokes) {
+    let n = 0, inside = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i + 1 < s.pts.length; i += 3) {
+      const x = s.pts[i], y = s.pts[i + 1];
+      n++;
+      if (insidePolygon(loop, x, y)) inside++;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    if (n && (inside * 2 > n || insidePolygon(loop, (x0 + x1) / 2, (y0 + y1) / 2))) out.push(s.id);
+  }
+  return out;
+}
+
+/** Copies of strokes moved by (dx, dy) (the 올가미's 복제); the originals stay. */
+export function copyStrokesOps(clock, ink, ids, dx, dy, by) {
+  const ops = [];
+  const atoms = [];
+  for (const id of ids) {
+    const s = ink.get(id);
+    if (!s || s.rm % 2 === 1) continue;
+    const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    ops.push(...made.ops);
+    atoms.push(...made.atoms);
+  }
+  return { ops, atoms };
+}
+
 /** Strokes in another colour (the 올가미's 색 on 그림): each goes and comes back the same but for its colour. */
 export function recolorStrokesOps(clock, ink, ids, color, by) {
   const ops = [];

@@ -296,6 +296,9 @@ h1, h2, p { margin: 0; }
   box-shadow: var(--glass-shine), 0 6px 16px rgb(38 72 140 / 0.1);
 }
 .room-name { font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
+/* The house a room is in, small beside its name. */
+.room-house { display: inline-block; width: 1.15rem; height: 1.15rem; margin-left: 0.3rem; vertical-align: -0.18rem; }
+.room-house .house-shape { display: block; width: 100%; height: 100%; }
 /* Pressed: a small sink instead of the browser's blue flash. */
 /* `scale` rather than `transform`, so it stacks on a transform the element already has (.add is centred by one). */
 .room-row, .btn, label.btn, .icon-btn, .chip, .add, .swatch, .seg button { transition: scale 0.09s var(--ease); }
@@ -643,7 +646,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   pointer-events: none;
 }
 /* Above the drawing tools or the chosen words' row while they are out. */
-#app:has(.sel-tools:not([hidden])) .toast, #app:has(.ink-tools:not([hidden])) .toast { bottom: 11.4rem; }
+#app:has(.sel-tools:not([hidden])) .toast { bottom: 11.4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -967,6 +970,41 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools .icon-btn { width: 1.9rem; height: 1.9rem; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+/* The tools' rail (ArtCraft's paint page side toolbar; Procreate's and ibisPaint's size bar): slim glass
+   at the left edge, the middle of the screen, icons only; it fades while a line is drawn. */
+.ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
+.ink-tools.rail::-webkit-scrollbar { display: none; }
+.room[data-kind] > .ink-tools.rail { position: fixed; }
+.ink-tools.rail .icon-btn { width: 2.35rem; height: 2.35rem; }
+.ink-tools.rail .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+.ink-tools.row { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+.ink-tool { display: grid; place-items: center; width: 2.35rem; min-height: 2.35rem; padding: 0.15rem 0; border-radius: 0.8rem; color: var(--muted); }
+.ink-tool[aria-pressed="true"], .ink-tool[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
+.ink-brush-now .ink-preview { width: 30px; height: 14px; }
+.ink-tool-name { font-size: 0.5rem; font-weight: 800; line-height: 1; white-space: nowrap; letter-spacing: -0.03em; }
+.ink-color-now .ink-dot { display: block; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px color-mix(in srgb, var(--ink) 30%, transparent); }
+.ink-sep { flex: none; width: 1.4rem; height: 1px; margin: 0.1rem auto; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ink-tools.row .ink-sep { width: 1px; height: 1.4rem; margin: 0 0.1rem; }
+.ink-widths { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; }
+.ink-tools.row .ink-widths { flex-direction: row; }
+.ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* 올가미 on drawings: its few actions beside what it holds (faded while it is carried). */
+.lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
+.lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
+.lasso-menu .chip { height: 1.9rem; padding: 0 0.7rem; font-size: 0.8rem; }
+.lasso-menu .icon-btn { width: 1.9rem; height: 1.9rem; }
+.lasso-menu .ink-color { width: 1.5rem; height: 1.5rem; }
+.lasso-count { padding: 0 0.3rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.paper canvas.ink[data-tool="lasso"] { cursor: crosshair; }
+/* The small window beside the rail: every brush, the colours, or the eraser's way. */
+.ink-pop { position: fixed; z-index: 71; display: grid; gap: 0.5rem; max-width: min(19rem, calc(100vw - 4.5rem)); padding: 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.2s var(--ease); }
+.ink-pop .ink-brushes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.15rem; overflow: visible; max-width: none; -webkit-mask-image: none; mask-image: none; }
+.ink-pop .ink-brush { min-width: 0; padding: 0.3rem 0.1rem 0.25rem; }
+.ink-pop-row { display: flex; justify-content: center; gap: 0.35rem; }
+.ink-colors { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; max-width: 12.5rem; }
+.ink-colors .ink-color { width: 1.75rem; height: 1.75rem; }
+.ink-colors.recent { padding-top: 0.4rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.ink-colors.recent .ink-color { width: 1.35rem; height: 1.35rem; }
 
 /* ---- song room: ways in, speed, friends, note editor ---------------------------- */
 
@@ -1588,9 +1626,38 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="top"] .panel-grip { order: 2; }
 .home-panel[data-edge="left"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel[data-edge="right"] .panel-grip { margin-top: max(env(safe-area-inset-top), var(--top-clear, 0px)); }
+/* Its lock (top left) and the way between edge and window (top right), on the grip's row. */
+.home-panel:not(.floating) .panel-grip { height: 2.15rem; }
+.panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
+.panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
+.panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+.home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
+.home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
+.home-panel[data-edge="bottom"] .panel-ctrl { right: 2rem; }
+.home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
+/* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
+.panel-sizer { position: absolute; z-index: 4; width: 1.75rem; height: 1.75rem; touch-action: none; }
+.panel-sizer::before { content: ""; position: absolute; inset: 0.45rem; border: 0 solid color-mix(in srgb, var(--ink) 38%, transparent); border-right-width: 3px; border-bottom-width: 3px; border-bottom-right-radius: 0.4rem; }
+.home-panel.floating .panel-sizer, .home-panel[data-edge="left"] .panel-sizer, .home-panel[data-edge="top"] .panel-sizer { right: 0.05rem; bottom: 0.05rem; cursor: nwse-resize; }
+.home-panel[data-edge="left"] .panel-sizer { bottom: calc(0.05rem + env(safe-area-inset-bottom)); }
+.home-panel[data-edge="right"] .panel-sizer { left: 0.05rem; bottom: calc(0.05rem + env(safe-area-inset-bottom)); cursor: nesw-resize; }
+.home-panel[data-edge="right"] .panel-sizer::before { border-right-width: 0; border-left-width: 3px; border-bottom-right-radius: 0; border-bottom-left-radius: 0.4rem; }
+.home-panel[data-edge="bottom"] .panel-sizer { right: 0.05rem; top: 0.05rem; cursor: nesw-resize; }
+.home-panel[data-edge="bottom"] .panel-sizer::before { border-bottom-width: 0; border-top-width: 3px; border-bottom-right-radius: 0; border-top-right-radius: 0.4rem; }
+.home-panel.sizing { transition: none; }
+.home-panel.sizing .panel-sizer::before { border-color: var(--tint); }
+/* Small: only the houses, in a column when tall, in a row when wide; rooms still go in. */
+.home-panel.compact .search-row, .home-panel.compact .search-results, .home-panel.compact .houses-title, .home-panel.compact .houses > .help, .home-panel.compact .house-new { display: none; }
+.home-panel.compact .home-panel-body { gap: 0.4rem; padding: 0.35rem 0.5rem 0.6rem; }
+.home-panel.compact.tall .house-grid { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+.home-panel.compact.wide .home-panel-body { overflow-y: hidden; overflow-x: auto; overscroll-behavior-x: contain; }
+.home-panel.compact.wide .house-grid { display: flex; flex-direction: row; gap: 0.6rem; width: max-content; }
+.home-panel.compact.wide .house-tile { width: 4.6rem; flex: none; }
+.home-panel.floating.compact .float-title { display: none; }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
 .home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
-.home-panel[data-edge="top"] .home-panel-body { padding-top: max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)); padding-bottom: 0.3rem; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)) + 1.7rem); padding-bottom: 0.3rem; }
 .search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
 .search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
@@ -1718,7 +1785,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* ---- 그림 방 ------------------------------------------------------------------------------- */
 .draw-body { position: relative; overflow: hidden; }
 .draw-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: #fffdf8; box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
+.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: var(--paper-c, #fffdf8); box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
 .draw-layer { position: absolute; inset: 0; pointer-events: none; }
 .draw-layer.active { pointer-events: auto; }
 .draw-layer[hidden] { display: none; }
@@ -1792,6 +1859,14 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
 .home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
 .home-panel.held { transition: none; }
+/* 투명 종이: the checkerboard every drawing app shows for nothing behind (ArtCraft's paint page too). */
+.draw-page[data-paper="clear"], .paper-swatch.clear, .paper-pick.clear { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
+.paper-swatch.clear, .paper-pick.clear { background-size: 10px 10px; }
+.paper-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.45rem 0.6rem; margin-top: 0.55rem; padding: 0.55rem 0.35rem 0.15rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.paper-swatch { width: 2.8rem; height: 2rem; border-radius: 0.4rem; box-shadow: inset 0 0 0 1px var(--line); }
+.paper-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.paper-pick { width: 1.75rem; height: 1.75rem; padding: 0; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.paper-pick[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .draw-page.fitting { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
 
 /* 애니메이션 방: the onion skin and the frame playing lie over the page; the strip of frames below. */
@@ -1968,8 +2043,12 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
   .side-lock svg, .side-hide svg { width: 0.95rem; height: 0.95rem; }
   .side-lock:hover, .side-hide:hover { opacity: 0.85; }
   .side-lock[aria-pressed="true"] { opacity: 1; color: var(--paper); background: var(--ink); }
-  .song-side.locked > :not(.side-head) { pointer-events: none; }
-  .song-side.locked { box-shadow: var(--glass-shine), var(--glass-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent); }
+  /* Locked (the owner, 21 November: "잠금하면 좀 불투명하게… 진짜 잘 만든 디자인처럼"): the glass thins
+     and what it holds steps back (a resting hand presses nothing); only its lock stays clear. */
+  .song-side { transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease), -webkit-backdrop-filter 0.3s var(--ease), backdrop-filter 0.3s var(--ease); }
+  .song-side > :not(.side-head) { transition: opacity 0.3s var(--ease), filter 0.3s var(--ease); }
+  .song-side.locked > :not(.side-head) { pointer-events: none; opacity: 0.4; filter: saturate(0.6); }
+  .song-side.locked { background: color-mix(in srgb, var(--paper) 18%, transparent); -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1); box-shadow: var(--glass-shine), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 20%, transparent); }
   .side-edge { position: absolute; top: 0.4rem; bottom: 0.65rem; right: calc(var(--side-w) + 0.6rem); z-index: 7; display: grid; place-items: center; width: 1rem; translate: 50% 0; cursor: ew-resize; touch-action: none; }
   .side-edge .grip-bar { width: 0.26rem; height: 2.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); transition: background 0.15s var(--ease), height 0.15s var(--ease); }
   .side-edge:hover .grip-bar, .song-side.resizing ~ .side-edge .grip-bar { height: 3.6rem; background: var(--tint); }

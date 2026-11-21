@@ -14,6 +14,9 @@ import { refSounds } from "../reference.js";
 import { getSettings, setSetting } from "../identity.js";
 import { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } from "../houses.js";
 import { openHomePanel, houseShape, lastPanelEdge, rememberPanelEdge } from "./home-panel.js";
+
+// Whether 찾기와 집 opens at its edge or as a window of its own (its top-right button chooses).
+const PANEL_MODE = "homePanelMode";
 import { glowEdge, aimMarker } from "./edge-glow.js";
 import { VelocityTracker, throwOf } from "../core/fling.js";
 import { buzz } from "./chime.js";
@@ -124,6 +127,7 @@ export function showHome(app) {
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
   function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
+    const house = mine ? houseOf(app.store, room.id) : null;
     const isStarred = mine && starred(app.store).has(room.id);
     let held = false;
     let timer = null;
@@ -139,7 +143,7 @@ export function showHome(app) {
       // The name at the very top (the owner: "방이름은 맨위에"); under it the box of what it holds, with
       // what kind of room it is as a round logo with only its icon inside the box at its top left
       // ("무슨 방인지 알려주는 그런 동그란 아이콘은 네모 안에 왼쪽 끝에 위에").
-      h("span", { class: "room-name", text: room.name }),
+      h("span", { class: "room-name" }, room.name, house && h("span", { class: "room-house", role: "img", "aria-label": `${house.name}에 있어요`, title: house.name }, houseShape(house))),
       h("span", { class: "room-thumb" + (validPreview(room.preview) ? "" : " no-preview") },
         h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines")),
         previewOf(room)),
@@ -259,30 +263,55 @@ export function showHome(app) {
     const remembered = app.store.get("rooms", []);
     return [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))];
   };
-  /** Opens 찾기와 집 out of an edge; with no edge given, out of the one it was last thrown to. */
-  async function openPanel({ edge, at, strength = 0.3, delay = 0, view } = {}) {
-    // Out at an edge already: ⋮ sends it somewhere else (tapped: the next edge round; thrown: there).
-    if (panelCtl?.isOpen() && !panelCtl.floating && !view) {
-      const order = ["right", "bottom", "left", "top"];
-      const to = edge || order[(order.indexOf(panelCtl.edge()) + 1) % order.length];
-      if (to !== panelCtl.edge()) {
-        rememberPanelEdge(app.store, { edge: to, at: at ?? 0.5 });
-        panelCtl.moveTo(to, at ?? 0.5, strength);
+  /**
+   * Opens 찾기와 집: tapped, where it was last (at its edge, or floating if it was left floating);
+   * thrown (`thrown`), out of the edge it was thrown to. Out already, a tap puts it away, and a throw
+   * sends it to that edge (the owner, 21 November: "이미 거기 방향이면은 안 눌러주고 그걸 스와이프해서
+   * 그쪽으로 보내야지만"); 설정's "다시 누르면 다른 쪽으로" brings back the tap that sends it round the
+   * edges. Locked, it stays.
+   */
+  async function openPanel({ edge, at, strength = 0.3, delay = 0, view, thrown = false } = {}) {
+    if (panelCtl?.isOpen() && !view) {
+      if (panelCtl.locked()) return void panelCtl.nudge();
+      if (!thrown) {
+        if (!panelCtl.floating && getSettings(app.store).panelCycle) {
+          const order = ["right", "bottom", "left", "top"];
+          const to = order[(order.indexOf(panelCtl.edge()) + 1) % order.length];
+          rememberPanelEdge(app.store, { edge: to, at: 0.5 });
+          return void panelCtl.moveTo(to, 0.5, strength);
+        }
+        return void panelCtl.close();
       }
+      if (!panelCtl.floating) {
+        if (edge !== panelCtl.edge()) {
+          rememberPanelEdge(app.store, { edge, at: at ?? 0.5 });
+          panelCtl.moveTo(edge, at ?? 0.5, strength);
+        }
+        return;
+      }
+      // Floating and thrown: it comes down to that edge.
+      app.store.set(PANEL_MODE, "dock");
+    }
+    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
+    if (!thrown && !view && app.store.get(PANEL_MODE, "dock") === "float") {
+      panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw(), swap });
       return;
     }
     if (!edge) ({ edge, at } = lastPanelEdge(app.store));
-    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
     await glowEdge({ edge, at: at ?? 0.5, strength, delay, onImpact: () => buzz(app, 8) });
     if (!alive) return;
-    panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw() });
+    panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw(), swap });
   }
 
-  /** The second way to 찾기와 집: floating on its own like 레퍼런스 (the right icon; ⋮ on its left as before). */
-  function toggleFloat() {
-    if (panelCtl?.isOpen() && panelCtl.floating) return void panelCtl.close();
-    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
-    panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw() });
+  /** The panel's own top-right button: from its edge to a window of its own, and back (remembered). */
+  function swap(toFloat) {
+    app.store.set(PANEL_MODE, toFloat ? "float" : "dock");
+    panelCtl?.close({ now: true });
+    if (toFloat) panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw(), swap });
+    else {
+      const { edge, at } = lastPanelEdge(app.store);
+      panelCtl = openHomePanel(app, { edge, at, rooms: allRooms, changed: () => draw(), swap });
+    }
   }
 
   /**
@@ -291,8 +320,10 @@ export function showHome(app) {
    * shows where while aiming), lights it in my colour and the panel comes out there.
    */
   function kebab() {
-    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 끝에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
-      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("kebab"));
+    // Its look is the window's (the owner: "점3개 세로 아이콘 그걸 너가 새로 만든 그거 아이콘 디자인으로…
+    // 기능은 점 3개 세로인 걸로").
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 자리에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
+      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("float"));
     let g = null;
     const aim = aimMarker();
     const reset = () => {
@@ -333,8 +364,9 @@ export function showHome(app) {
       // The invisible ball takes a moment to fly from the finger to the edge: further and softer, longer.
       const flight = Math.hypot(hit.x - e.clientX, hit.y - e.clientY);
       const delay = Math.round(Math.max(40, Math.min(190, flight / Math.max(0.9, hit.speed * 1.3))));
+      if (panelCtl?.isOpen() && panelCtl.locked()) return void panelCtl.nudge();
       rememberPanelEdge(app.store, hit);
-      openPanel({ edge: hit.edge, at: hit.at, strength: hit.strength, delay });
+      openPanel({ edge: hit.edge, at: hit.at, strength: hit.strength, delay, thrown: true });
     });
     return btn;
   }
@@ -431,10 +463,10 @@ export function showHome(app) {
 
   function half(side, title, note, emptyText) {
     const stars = starred(app.store);
-    const housed = new Set(houses(app.store).flatMap((x) => x.rooms || []));
+    // Rooms in a house stay here too, the house beside their name (the owner, 21 November: "집에 넣어
+    // 놓은 방은… 그냥 똑같이 있는데 이름 옆에다가 자그만하게 그 집의 아이콘").
     const all = app.store.get("rooms", []).filter((r) => sideOf(r.kind) === side);
-    const mine = all.filter((r) => !housed.has(r.id)).sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
-    const inHouses = all.length - mine.length;
+    const mine = all.slice().sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
     const known = new Set(app.store.get("rooms", []).map((r) => r.id));
     const elsewhere = others.filter((r) => sideOf(r.kind) === side && !known.has(r.id));
     return h("section", { class: "half field " + side, data: { side } },
@@ -443,8 +475,7 @@ export function showHome(app) {
         h("p", { class: "half-note", text: note }),
         mine.length
           ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
-          : h("p", { class: "empty", text: inHouses ? "방은 모두 집에 있어요." : emptyText }),
-        inHouses > 0 && h("button", { class: "in-houses", id: "in-houses-" + side, type: "button", onclick: () => openPanel() }, icon("home"), `집에 둔 방 ${inHouses}개`),
+          : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
           h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r))),
@@ -472,9 +503,8 @@ export function showHome(app) {
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
           getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
-          // ⋮ on the left comes out of an edge as before; on its right the same panel floats on its own.
-          kebab(),
-          iconButton("home-float", "float", "찾기와 집 (떠 있는 판, 머리를 끌어 옮겨요)", toggleFloat)),
+          // ⋮: 찾기와 집 (its own top-right button turns it into a window of its own and back).
+          kebab()),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
@@ -615,6 +645,11 @@ export function showHome(app) {
       h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
         h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
           segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
+      // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
+      // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기와 집" }),
+        toggle("panel-cycle", "열린 채 ⋮을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 ⋮이나 위쪽 바를 그쪽으로 던져요." })),
       // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
       h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
         toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),

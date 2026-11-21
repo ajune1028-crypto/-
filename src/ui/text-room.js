@@ -21,9 +21,9 @@ import { soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
-import { InkLayer, inkColor, drawInkTools as drawInkToolsInto } from "./ink.js";
+import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
-import { INK_COLORS, strokeOps, eraseOps, invertInkOps } from "../core/ink.js";
+import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } from "../core/ink.js";
 
 const FIRST_SHEETS = 7;
 const PRESENCE_EVERY_MS = 80;
@@ -158,13 +158,21 @@ export function mountTextRoom(body, app, session) {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
   });
+  // Two fingers also carry the page (the owner, 21 November: "그림 모드일 때 두 손으로 아래 넘기기도"):
+  // moved together they scroll it, spread or pinched they zoom it, both at once as in Procreate.
   let pinch = null;
   const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom }; };
+  const middle = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom, m: middle(e.touches) }; };
   const onTouchMove = (e) => {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
-    setPageZoom(pinch.z * (spread(e.touches) / pinch.d), (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
+    const m = middle(e.touches);
+    setPageZoom(pinch.z * (spread(e.touches) / pinch.d), m[0], m[1]);
+    body.scrollLeft -= m[0] - pinch.m[0];
+    body.scrollTop -= m[1] - pinch.m[1];
+    pinch.m = m;
+    repaintSoon();
   };
   const onTouchEnd = (e) => { if (e.touches.length < 2) pinch = null; };
   const onWheel = (e) => {
@@ -190,7 +198,7 @@ export function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    drawInkToolsInto(inkTools, { pen, setTool, store: app.store });
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
   }
 
   function buttons() {
@@ -261,7 +269,20 @@ export function mountTextRoom(body, app, session) {
       editor.setReadOnly(!!app.transport.readOnly);
       editors.set(day, editor);
       const inkDoc = "k:" + day;
+      const keepInk = (made) => {
+        session.commit(inkDoc, made.ops);
+        record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
+      };
+      let lasso = null;
       editor.ink = new InkLayer({
+        // 올가미 (the owner, 21 November: "아무 데나 이동 가능하게… 올가미도… 텍스트에서 좋을 것만"): lines
+        // drawn round are held, taken anywhere on the page, recoloured, copied or rubbed out.
+        onLasso: (info) => lasso?.show(info),
+        onLassoMove: (ids, dx, dy) => {
+          const made = moveStrokesOps(session.clock, session.doc(inkDoc), ids, dx, dy, session.memberId);
+          keepInk(made);
+          return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+        },
         host: editor.paper,
         share: liveInk.on(inkDoc),
         steady: () => getSettings(app.store).inkSteady ?? 1,
@@ -273,8 +294,8 @@ export function mountTextRoom(body, app, session) {
         // already reaches the bottom of the screen; a long one grows past its last line).
         room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, shape, by: session.memberId });
+        onStroke: ({ pts, color, width, size, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, size, brush, shape, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
           return made.ops[0]?.id;
@@ -285,6 +306,7 @@ export function mountTextRoom(body, app, session) {
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
         },
       });
+      lasso = lassoActions({ ink: editor.ink, doc: () => session.doc(inkDoc), clock: session.clock, by: session.memberId, commit: keepInk });
       editor.ink.setTool(pen.tool);
       editor.ink.setStyle(pen);
       session.load(inkDoc).then(() => editor.ink?.render());

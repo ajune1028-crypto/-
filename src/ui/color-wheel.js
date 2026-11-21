@@ -117,13 +117,20 @@ export function openColorWheel({ anchor, color, recent = [], onPick, onRecent = 
   // Above the tools it came from, over the button (below them when there is no room above), inside
   // the screen: the brushes and colours stay in view beneath it.
   const a = anchor.getBoundingClientRect();
-  const tools = anchor.closest(".ink-tools")?.getBoundingClientRect() || a;
+  const toolsEl = anchor.closest(".ink-tools");
+  const tools = toolsEl?.getBoundingClientRect() || a;
   const w = box.offsetWidth;
   const ht = box.offsetHeight;
-  box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
-  box.style.top = (tools.top - ht - 10 >= 8 ? tools.top - ht - 10 : Math.min(innerHeight - ht - 8, tools.bottom + 10)) + "px";
+  if (toolsEl?.classList.contains("rail")) {
+    // Beside the tools' rail, at the colour's height.
+    box.style.left = Math.min(innerWidth - w - 8, tools.right + 8) + "px";
+    box.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
+  } else {
+    box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+    box.style.top = (tools.top - ht - 10 >= 8 ? tools.top - ht - 10 : Math.min(innerHeight - ht - 8, tools.bottom + 10)) + "px";
+  }
 
-  const stop = closeOnOutside((t) => box.contains(t) || !!t.closest?.("#ink-more"), () => close(), box);
+  const stop = closeOnOutside((t) => box.contains(t) || !!t.closest?.("#ink-more, #ink-color-now"), () => close(), box);
   // Its tools gone (the pen put away, another room) take it away too.
   const watch = setInterval(() => { if (!alive()) close(); }, 400);
   // The colour it was put away with joins the last colours (not each turn of the ring on the way).

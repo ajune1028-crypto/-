@@ -11,9 +11,10 @@
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-import { h, iconButton } from "./dom.js";
+import { h, icon, iconButton, closeOnOutside } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
+import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
 import { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } from "../core/fill.js";
@@ -310,8 +311,15 @@ export class InkLayer {
    * as in Procreate); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare
    * paper), by default from this layer's own picture.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null }) {
+  /**
+   * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
+   * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null }) {
     this.host = host;
+    this.onLasso = onLasso;
+    this.onLassoMove = onLassoMove;
+    this.selection = null; // the 올가미's: { ids: Set, loop: [x, y, …] } in stroke units
     this.onPick = onPick;
     this.pickAt = pick;
     this.share = share;
@@ -354,6 +362,7 @@ export class InkLayer {
   }
 
   setTool(tool) {
+    if (tool !== "lasso" && this.selection) this.clearSelection();
     this.tool = tool;
     this.canvas.classList.toggle("on", !!tool);
     this.host.classList.toggle("inking", !!tool);
@@ -366,6 +375,69 @@ export class InkLayer {
     if (width) this.width = width;
     if (brush) this.brush = brush;
     if (size !== undefined) this.size = size;
+  }
+
+  // ---- 올가미 on drawings ------------------------------------------------------------------
+
+  /** A point in stroke units on the screen. */
+  toClient(x, y) {
+    const r = this.host.getBoundingClientRect();
+    if (this.view) {
+      const [a, b, c, d, e, f] = this.view.matrix();
+      return [r.left + a * x + c * y + e, r.top + b * x + d * y + f];
+    }
+    const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
+    const rem = remPx() * zoom;
+    return [r.left + (x / 100) * rem, r.top + (y / 100) * rem];
+  }
+
+  /** What the 올가미 holds, with where it lies on the screen. */
+  selectionInfo() {
+    const sel = this.selection;
+    if (!sel) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < sel.loop.length; i += 2) {
+      const [x, y] = this.toClient(sel.loop[i], sel.loop[i + 1]);
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { ids: sel.ids, loop: sel.loop, rect: { left: x0, top: y0, right: x1, bottom: y1 } };
+  }
+
+  /** Holds these strokes (after a change made new ones of them), keeping the loop. */
+  setSelection(ids, loop = this.selection?.loop) {
+    this.selection = ids.length && loop ? { ids: new Set(ids), loop } : null;
+    this.onLasso?.(this.selectionInfo());
+    this.render();
+  }
+
+  clearSelection() {
+    if (!this.selection) return;
+    this.selection = null;
+    this.onLasso?.(null);
+    this.render();
+  }
+
+  /** The loop being drawn or held: dashed in my accent, a faint fill when closed. */
+  paintLoop(g, loop, closed) {
+    if (!loop || loop.length < 4) return;
+    const unit = this.unitsPerPx();
+    const shift = closed && this.shift ? this.shift : { dx: 0, dy: 0 };
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2f7bf0";
+    g.save();
+    g.beginPath();
+    for (let i = 0; i < loop.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, loop[i] + shift.dx, loop[i + 1] + shift.dy);
+    if (closed) {
+      g.closePath();
+      g.globalAlpha = 0.07;
+      g.fillStyle = accent;
+      g.fill();
+    }
+    g.globalAlpha = 0.95;
+    g.strokeStyle = accent;
+    g.lineWidth = 1.8 * unit;
+    g.setLineDash([7 * unit, 5 * unit]);
+    g.stroke();
+    g.restore();
   }
 
   /** The pen's width in px now. */
@@ -416,6 +488,20 @@ export class InkLayer {
       if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
+      if (this.tool === "lasso") {
+        // 올가미: inside what it holds, the finger takes it anywhere; elsewhere a new loop is drawn.
+        const [x, y] = this.point(e);
+        const sel = this.selection;
+        if (sel && loopHas(sel.loop, x, y)) {
+          this.live = { pointer: e.pointerId, kind: e.pointerType, moving: true, x0: x, y0: y };
+          this.shift = { dx: 0, dy: 0, ids: sel.ids };
+          this.onLasso?.({ moving: true });
+        } else {
+          if (sel) this.clearSelection();
+          this.live = { pointer: e.pointerId, kind: e.pointerType, loop: [x, y] };
+        }
+        return void this.renderSoon();
+      }
       if (this.tool === "eraser-stroke") {
         this.live = { pointer: e.pointerId, kind: e.pointerType, erase: new Set() };
         this.eraseAt(e);
@@ -457,6 +543,19 @@ export class InkLayer {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
+      if (live.moving) {
+        const [x, y] = this.point(e);
+        this.shift = { dx: x - live.x0, dy: y - live.y0, ids: this.selection.ids };
+        return void this.renderSoon();
+      }
+      if (live.loop) {
+        for (const ev of e.getCoalescedEvents?.() || [e]) {
+          const [x, y] = this.point(ev);
+          const n = live.loop.length;
+          if (Math.hypot(x - live.loop[n - 2], y - live.loop[n - 1]) >= 6) live.loop.push(x, y);
+        }
+        return void this.renderSoon();
+      }
       if (live.shape) {
         // Still held after it became a shape: a line's end follows, any other shape grows or shrinks.
         const [x, y] = this.point(e);
@@ -488,6 +587,29 @@ export class InkLayer {
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       const live = this.live;
+      if (live.moving) {
+        this.live = null;
+        const { dx, dy } = this.shift || { dx: 0, dy: 0 };
+        this.shift = null;
+        const sel = this.selection;
+        if (sel && e.type === "pointerup" && Math.hypot(dx, dy) >= 2) {
+          const moved = this.onLassoMove?.([...sel.ids], Math.round(dx), Math.round(dy));
+          sel.loop = sel.loop.map((v, i) => Math.round(v + (i % 2 ? dy : dx)));
+          if (moved?.length) sel.ids = new Set(moved);
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
+      if (live.loop) {
+        this.live = null;
+        if (live.loop.length >= 6) {
+          const loop = closeLoop(live.loop).map(Math.round);
+          const ids = strokesWithinLoop(this.ink().strokes().filter((s) => s.b !== "erase"), loop);
+          this.selection = ids.length ? { ids: new Set(ids), loop } : null;
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
       if (live.light) {
         this.live = null;
         if (this.light) this.light.ended = performance.now();
@@ -697,6 +819,9 @@ export class InkLayer {
     else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
+    // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
+    if (live?.loop) this.paintLoop(g, live.loop, false);
+    else if (this.selection) this.paintLoop(g, this.selection.loop, true);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
@@ -969,64 +1094,171 @@ function brushPreview(brush, color, width) {
 }
 
 /**
- * The drawing tools (펜·만년필·붓펜·연필·마커·에어브러시·형광펜, 지우개 부분/획, eight colours, three widths,
- * 모양 잡기), the same in the text room and on the whiteboard. pen: { tool, brush, color, width };
- * setTool(tool) applies a change. Hidden while no tool is on. Each brush shows a little line of
- * itself in the chosen colour, its name beneath.
+ * The drawing tools, the same in every room that draws, laid out as ArtCraft's paint page lays its
+ * side toolbar (MIT/Apache; read for the layout) and as Procreate and ibisPaint keep the size on a
+ * side bar: a slim glass rail at the left edge — the brush (a little line of itself in the colour),
+ * the eraser, 가리키기, the colour, and the size (a bar, fine at the bottom, bold at the top, with
+ * three quick sizes). A tap on the brush, the colour or the eraser (when it is on) opens a small window
+ * beside the rail: every brush with 모양 잡기 and 보정; the eight colours, 색 원판 and the last colours;
+ * 부분 or 획. Choosing in it closes it, so the next touch draws. In a card (the games) the same tools
+ * lie in one row. pen: { tool, brush, color, width, size }; setTool(tool) applies a change;
+ * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
-export function drawInkTools(panel, { pen, setTool, store }) {
+export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false }) {
   panel.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
-  if (!pen.tool) return;
+  if (!pen.tool) return void closeInkPop();
+  const rail = layout === "rail";
+  panel.classList.toggle("rail", rail);
+  panel.classList.toggle("row", !rail);
   const erasing = pen.tool === "eraser" || pen.tool === "eraser-stroke";
   const pointing = pen.tool === "laser";
-  const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
   const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
-  const shapes = getSettings(store).inkShapes !== false;
-  const brushes = h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
-    ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
-      onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } },
-      brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name }))));
-  panel.replaceChildren(
-    h("div", { class: "ink-row ink-row-brushes" },
-      brushes,
-      iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser")),
-      iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
-      erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
-        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
-          onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
-    h("div", { class: "ink-row" },
-      ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-        style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-      // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from
-      // the drawing (스포이트), fills it while it is the pen's.
-      inkWell(),
-      // A size of my own (그림 방's size bar) leaves all three unchosen; one of them takes it back.
-      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
-        onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
-      h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
-        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
-      h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
-        onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); setTool(pen.tool); } }, "보정 " + STEADY_NAMES[steady])));
+  const own = typeof pen.color === "string" && pen.color.startsWith("#");
+  const brushName = BRUSH_NAMES.find(([b]) => b === pen.brush)?.[1] || "펜";
+  const brushNow = h("button", { class: "ink-tool ink-brush-now", id: "ink-brush-now", type: "button", "aria-label": `붓: ${brushName} (눌러서 붓 고르기)`,
+    "aria-pressed": String(pen.tool === "pen"), "aria-expanded": String(inkPop?.kind === "brush"),
+    onclick: () => (pen.tool !== "pen" ? setTool("pen") : togglePop("brush", brushNow)) },
+    brushPreview(pen.brush, pen.color, pen.width), h("span", { class: "ink-tool-name", text: brushName }));
+  const eraserButton = iconButton("eraser", "eraser", "지우개 (다시 누르면 부분·획)", () => (erasing ? togglePop("erase", eraserButton) : setTool(eraserKind())));
+  eraserButton.setAttribute("aria-pressed", String(erasing));
+  const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
+  laserButton.setAttribute("aria-pressed", String(pointing));
+  // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
+  const lassoButton = lasso && iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
+  lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
+  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
+    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
+  const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
+    ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
+      onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
+  const parts = [brushNow, eraserButton, lassoButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow].filter(Boolean);
+  if (rail && !pointing) parts.push(h("span", { class: "ink-sep", "aria-hidden": "true" }), sizeBar(), widths);
+  else if (!pointing) parts.push(widths);
+  panel.replaceChildren(...parts);
+
+  /** The size bar: 0.5 to 40 px on a doubling scale; while a finger is on it a dot shows the brush. */
+  function sizeBar() {
+    const px = () => pen.size || WIDTH_PX[pen.width] || 4;
+    const t = (v) => Math.log(v / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
+    const from = (k) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** Math.max(0, Math.min(1, k)) * 10) / 10;
+    const peek = h("span", { class: "size-peek", "aria-hidden": "true" });
+    const bar = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
+      "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), h("span", { class: "size-thumb" }), peek);
+    const paint = () => {
+      const v = px();
+      bar.style.setProperty("--t", t(v).toFixed(4));
+      bar.setAttribute("aria-valuenow", String(v));
+      bar.setAttribute("aria-valuetext", v + "px");
+      const look = brushLook(erasing ? "erase" : pen.brush);
+      const d = Math.max(2, Math.min(220, (v * (100 / 16) * (look.scale || 1)) / (units?.() || 100 / 16)));
+      peek.style.width = peek.style.height = d.toFixed(1) + "px";
+      peek.style.background = erasing ? "transparent" : inkColor(pen.color);
+      peek.classList.toggle("erase", erasing);
+    };
+    const set = (v) => {
+      pen.size = v;
+      paint();
+    };
+    let drag = null;
+    const at = (e) => {
+      const r = bar.getBoundingClientRect();
+      const pad = 9;
+      set(from(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
+    };
+    bar.addEventListener("pointerdown", (e) => {
+      if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      drag = { id: e.pointerId };
+      bar.setPointerCapture?.(e.pointerId);
+      bar.classList.add("sizing");
+      at(e);
+    });
+    bar.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag.id) at(e); });
+    const done = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag = null;
+      bar.classList.remove("sizing");
+      setTool(pen.tool); // the layers take the size; the quick sizes let go of their choice
+    };
+    bar.addEventListener("pointerup", done);
+    bar.addEventListener("pointercancel", done);
+    bar.addEventListener("keydown", (e) => {
+      const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      set(from(t(px()) + step / 24));
+      setTool(pen.tool);
+    });
+    paint();
+    return bar;
+  }
+
+  /** A small window beside the rail (above the row): the brushes, the colours or the eraser's way. */
+  function togglePop(kind, anchor) {
+    if (inkPop?.kind === kind) return void closeInkPop();
+    closeInkPop();
+    closeColorWheel();
+    const el = h("div", { class: "ink-pop", id: "ink-pop", role: "dialog", data: { kind }, "aria-label": { brush: "붓", color: "색", erase: "지우개" }[kind] });
+    document.body.append(el);
+    const stop = closeOnOutside((t) => el.contains(t), () => closeInkPop(), el);
+    const pop = { kind, el, anchor, panel, close: () => { stop(); el.remove(); }, fill: () => fillPop(pop) };
+    inkPop = pop;
+    pop.fill();
+    place(pop);
+    for (const b of panel.querySelectorAll("[aria-expanded]")) b.setAttribute("aria-expanded", String(b === anchor));
+  }
+
+  function fillPop(pop) {
+    const { el, kind } = pop;
+    if (kind === "brush") {
+      const shapes = getSettings(store).inkShapes !== false;
+      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
+      el.replaceChildren(
+        h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
+          ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
+            onclick: () => { setSetting(store, "inkBrush", b); closeInkPop(); choose({ brush: b }); } },
+            brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name })))),
+        h("div", { class: "ink-pop-row" },
+          h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
+            onclick: () => { setSetting(store, "inkShapes", !shapes); pop.fill(); } }, "모양 잡기"),
+          h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
+            onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); pop.fill(); } }, "보정 " + STEADY_NAMES[steady])));
+    } else if (kind === "color") {
+      const recent = (getSettings(store).inkRecent || []).slice(0, 8);
+      el.replaceChildren(
+        h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
+          ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
+            style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
+          inkWell()),
+        recent.length ? h("div", { class: "ink-colors recent", role: "group", "aria-label": "최근 색" },
+          ...recent.map((c) => h("button", { class: "ink-color", type: "button", data: { recent: c }, "aria-label": "최근 색 " + c, "aria-pressed": String(pen.color === c),
+            style: { background: c }, onclick: () => { closeInkPop(); choose({ color: c }); } }))) : null);
+    } else {
+      el.replaceChildren(h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
+        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([way, name]) => h("button", { type: "button", data: { erase: way }, "aria-pressed": String(pen.tool === way), text: name,
+          onclick: () => { setSetting(store, "inkEraser", way === "eraser-stroke" ? "stroke" : "area"); closeInkPop(); setTool(way); } }))));
+    }
+  }
+
+  // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from the
+  // drawing (스포이트), fills it while it is the pen's.
   function inkWell() {
-    const own = typeof pen.color === "string" && pen.color.startsWith("#");
     const well = h("button", { class: "ink-color more" + (own ? " has" : ""), id: "ink-more", type: "button", "aria-label": own ? "고른 색 " + pen.color + " · 색 원판" : "색 더 고르기 (색 원판)",
-      "aria-pressed": String(own && !erasing), "aria-expanded": String(colorWheelOpen()), style: own ? { "--well": pen.color } : {},
+      "aria-pressed": String(own && !erasing), style: own ? { "--well": pen.color } : {},
       onclick: () => {
-        if (colorWheelOpen()) return void closeColorWheel();
-        well.setAttribute("aria-expanded", "true");
+        const anchor = colorNow.isConnected ? colorNow : panel.querySelector("#ink-color-now") || well;
+        closeInkPop();
         openColorWheel({
-          anchor: well,
+          anchor,
           color: own ? pen.color : inkColor(pen.color),
           recent: getSettings(store).inkRecent || [],
-          // While the finger moves only the pen and this well change; the lift chooses it.
+          // While the finger moves only the pen and the colour dot change; the lift chooses it.
           onPick: (hex, done) => {
             if (done) return void choose({ color: hex });
             pen.color = hex;
-            const now = panel.querySelector("#ink-more");
-            now?.classList.add("has");
-            now?.style.setProperty("--well", hex);
+            panel.querySelector("#ink-color-now")?.style.setProperty("--c", hex);
           },
           onRecent: (list) => setSetting(store, "inkRecent", list),
           alive: () => panel.isConnected && !panel.hidden && pen.tool === "pen",
@@ -1034,16 +1266,93 @@ export function drawInkTools(panel, { pen, setTool, store }) {
       } });
     return well;
   }
-  panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
-  panel.querySelector("#ink-laser").setAttribute("aria-pressed", String(pointing));
-  // The chosen brush in view (the row slides sideways on a narrow screen, and says so). Done at
-  // once, not a frame later: a frame later it could slide the row away under a finger already
-  // reaching for another brush.
-  brushes.classList.toggle("more", brushes.scrollWidth > brushes.clientWidth + 1);
-  const chosen = brushes.querySelector('[aria-pressed="true"]');
-  if (chosen) {
-    const r = chosen.getBoundingClientRect();
-    const box = brushes.getBoundingClientRect();
-    if (r.left < box.left || r.right > box.right) chosen.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+
+  // Beside the rail at its button's height (inside the screen); above the row in a card.
+  function place(pop) {
+    const a = pop.anchor.getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const w = pop.el.offsetWidth;
+    const ht = pop.el.offsetHeight;
+    if (rail) {
+      pop.el.style.left = Math.min(innerWidth - w - 8, box.right + 8) + "px";
+      pop.el.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
+    } else {
+      pop.el.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+      pop.el.style.top = Math.max(8, box.top - ht - 8) + "px";
+    }
   }
+
+  // An open window keeps up with the tools (the brush in the new colour, what is chosen).
+  if (inkPop && inkPop.panel === panel) {
+    const anchor = panel.querySelector(inkPop.kind === "brush" ? "#ink-brush-now" : inkPop.kind === "color" ? "#ink-color-now" : "#eraser");
+    if (!anchor || (inkPop.kind === "erase" && !erasing)) closeInkPop();
+    else {
+      inkPop.anchor = anchor;
+      anchor.setAttribute("aria-expanded", "true");
+      inkPop.fill();
+    }
+  }
+}
+
+/**
+ * The 올가미's few actions beside what it holds (the text room, 그림 방; the whiteboard's 올가미 for the
+ * idea, kept to what drawings on a page want): 색, 복제 (beside it, held), 지우기, and ✕ to let go. What it
+ * holds is moved by drawing it anywhere. commit(made) keeps a change ({ ops, atoms }, one undo).
+ */
+let lassoMenuNow = null;
+export function lassoActions({ ink, doc, clock, by, commit }) {
+  let colours = false;
+  const hide = () => {
+    if (lassoMenuNow?.ink === ink) {
+      lassoMenuNow.el.remove();
+      lassoMenuNow = null;
+    }
+    colours = false;
+  };
+  function show(info) {
+    if (!info) return hide();
+    if (info.moving) return void (lassoMenuNow?.ink === ink && lassoMenuNow.el.classList.add("moving"));
+    const ids = [...info.ids];
+    const keep = (made, select) => {
+      if (!made.ops.length) return;
+      commit(made);
+      const fresh = made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      if (select && fresh.length) {
+        // A copy is held where it lies (beside the first), ready to be taken where it should go.
+        const shiftBy = made.copied ? (v, i) => v + 300 : (v) => v;
+        ink.setSelection(fresh, info.loop.map(shiftBy));
+      } else ink.clearSelection();
+    };
+    const chip = (id, text, fn) => h("button", { class: "chip", id, type: "button", text, onclick: fn });
+    const el = h("div", { class: "lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미로 고른 그림" },
+      colours
+        ? INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { lassoInk: c }, "aria-label": c, style: { background: inkColor(c) },
+            onclick: () => { colours = false; keep(recolorStrokesOps(clock, doc(), ids, c, by), true); } }))
+        : [h("span", { class: "lasso-count", text: `그림 ${ids.length}` }),
+          chip("lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
+          chip("lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
+          chip("lasso-delete", "지우기", () => {
+            const all = ids.map((id) => eraseOps(clock, doc(), id));
+            keep({ ops: all.flatMap((m) => m.ops), atoms: all.flatMap((m) => m.atoms) }, false);
+          }),
+          h("button", { class: "icon-btn", id: "lasso-off", type: "button", "aria-label": "올가미 풀기", onclick: () => ink.clearSelection() }, icon("close"))]);
+    lassoMenuNow?.el.remove();
+    lassoMenuNow = { ink, el };
+    document.body.append(el);
+    const r = info.rect;
+    const w = el.offsetWidth;
+    const ht = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(innerWidth - w - 8, (r.left + r.right) / 2 - w / 2)) + "px";
+    el.style.top = (r.top - ht - 10 >= 8 ? r.top - ht - 10 : Math.min(innerHeight - ht - 8, r.bottom + 10)) + "px";
+  }
+  return { show, hide };
+}
+
+/** The one small tools window open now (brushes, colours or the eraser's way). */
+let inkPop = null;
+export function closeInkPop() {
+  const pop = inkPop;
+  inkPop = null;
+  pop?.close();
+  for (const b of pop?.panel?.querySelectorAll("[aria-expanded]") || []) b.setAttribute("aria-expanded", "false");
 }

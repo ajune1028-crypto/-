@@ -212,8 +212,8 @@ export function sketchScreen(ctx) {
       const setTool = (tool) => {
         pen.tool = tool;
         sheet.ink.setTool(tool);
-        sheet.ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-        drawInkTools(tools, { pen, setTool, store: app.store });
+        sheet.ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+        drawInkTools(tools, { pen, setTool, store: app.store, layout: "row" });
       };
       setTool(pen.tool === "pen" || pen.tool?.startsWith("eraser") ? pen.tool : "pen");
       parts.push(tools, h("div", { class: "game-foot" }, h("button", { class: "chip", id: "sketch-undo", type: "button", text: "되돌리기", onclick: () => sheet.undo() })), said);

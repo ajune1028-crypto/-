@@ -10,11 +10,10 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, inkColor } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
-import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX } from "../core/ink.js";
-import { brushLook } from "../core/brush.js";
+import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -24,6 +23,8 @@ export const PAGE_W = 2250;
 export const PAGE_H = 3000;
 const BLEND_NAMES = { "source-over": "보통", multiply: "곱하기", screen: "스크린", overlay: "오버레이", darken: "어둡게", lighten: "밝게", "color-dodge": "닷지", "color-burn": "번", "hard-light": "하드 라이트", "soft-light": "소프트 라이트", difference: "차이", exclusion: "제외", hue: "색조", saturation: "채도", color: "색", luminosity: "광도" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A paper's colour (null for 투명). */
+const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
 
 export function mountDrawRoom(body, app, session, frame) {
   const root = app.root;
@@ -51,66 +52,7 @@ export function mountDrawRoom(body, app, session, frame) {
   body.append(panel);
   body.after(inkTools, toolbar);
 
-  // 붓 크기 막대 (Procreate's sidebar): a thin bar at the left edge, fine at the bottom and bold at the
-  // top (0.5 to 40 px, a doubling every eighth of the way); while it moves, a dot beside it shows the
-  // brush as big as it will draw on the page now. A width chosen in the tools goes back to that width.
-  const sizeThumb = h("span", { class: "size-thumb" });
-  const sizePeek = h("span", { class: "size-peek", "aria-hidden": "true" });
-  const sizeRail = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
-    "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), sizeThumb, sizePeek);
-  body.append(sizeRail);
-  const penPx = () => pen.size || WIDTH_PX[pen.width] || 4;
-  const sizeT = (px) => Math.log(px / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
-  const sizeFrom = (t) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** clamp(t, 0, 1) * 10) / 10;
-  function paintRail() {
-    const px = penPx();
-    sizeRail.hidden = readOnly() || !(pen.tool === "pen" || pen.tool === "eraser");
-    sizeRail.style.setProperty("--t", sizeT(px).toFixed(4));
-    sizeRail.setAttribute("aria-valuenow", String(px));
-    sizeRail.setAttribute("aria-valuetext", px + "px");
-    // The brush on the page now: its width in stroke units over the units in a screen pixel.
-    const unit = hosts.get(active)?.ink.unitsPerPx() || 1;
-    const look = brushLook(pen.tool === "eraser" ? "erase" : pen.brush);
-    const d = Math.max(2, Math.min(220, (px * (100 / 16) * (look.scale || 1)) / unit));
-    sizePeek.style.width = sizePeek.style.height = d.toFixed(1) + "px";
-    sizePeek.style.background = pen.tool === "eraser" ? "transparent" : inkColor(pen.color);
-    sizePeek.classList.toggle("erase", pen.tool === "eraser");
-  }
-  function setSize(px) {
-    pen.size = px;
-    for (const { ink } of hosts.values()) ink.setStyle({ size: px });
-    paintRail();
-  }
-  let sizing = null;
-  const sizeAt = (e) => {
-    const r = sizeRail.getBoundingClientRect();
-    const pad = 11;
-    setSize(sizeFrom(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
-  };
-  sizeRail.addEventListener("pointerdown", (e) => {
-    if (sizing || (e.pointerType === "mouse" && e.button !== 0)) return;
-    e.preventDefault();
-    sizing = { id: e.pointerId };
-    sizeRail.setPointerCapture?.(e.pointerId);
-    sizeRail.classList.add("sizing");
-    sizeAt(e);
-  });
-  sizeRail.addEventListener("pointermove", (e) => { if (sizing && e.pointerId === sizing.id) sizeAt(e); });
-  const sizeDone = (e) => {
-    if (!sizing || e.pointerId !== sizing.id) return;
-    sizing = null;
-    sizeRail.classList.remove("sizing");
-    drawLayers(); // the widths in the tools let go of their choice
-  };
-  sizeRail.addEventListener("pointerup", sizeDone);
-  sizeRail.addEventListener("pointercancel", sizeDone);
-  sizeRail.addEventListener("keydown", (e) => {
-    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    setSize(sizeFrom(sizeT(penPx()) + step / 24));
-    drawLayers();
-  });
+  // The brush's size is on the tools' rail (ui/ink.js), as in every room that draws.
 
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
   const stopTaps = watchFingerTaps(stage, {
@@ -124,7 +66,20 @@ export function mountDrawRoom(body, app, session, frame) {
     if (entry) return entry;
     const el = h("div", { class: "draw-layer", data: { layer: layer.id } });
     const name = inkDocOf(layer.id);
+    const keepInk = (made) => {
+      session.commit(name, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+      thumbSoon(layer.id);
+    };
+    let lasso = null;
     const ink = new InkLayer({
+      // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
+      onLasso: (info) => lasso?.show(info),
+      onLassoMove: (ids, dx, dy) => {
+        const made = moveStrokesOps(session.clock, session.doc(name), ids, dx, dy, session.memberId);
+        keepInk(made);
+        return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      },
       host: el,
       ink: () => session.doc(name),
       share: liveInk.on(name),
@@ -151,6 +106,7 @@ export function mountDrawRoom(body, app, session, frame) {
         thumbSoon(layer.id);
       },
     });
+    lasso = lassoActions({ ink, doc: () => session.doc(name), clock: session.clock, by: session.memberId, commit: keepInk });
     entry = { el, ink };
     hosts.set(layer.id, entry);
     session.load(name).then(() => { if (alive) { ink.render(); thumbSoon(layer.id); } });
@@ -173,6 +129,10 @@ export function mountDrawRoom(body, app, session, frame) {
 
   /** The page as the layers are now: order, shown or hidden, opacity, blend; only mine takes the pen. */
   function drawLayers() {
+    // 종이 under them all (the owner, 21 November: "종이의 개념이고 뒷배경을 투명하게 할 수도").
+    const paper = doc.paper();
+    page.dataset.paper = paper;
+    page.style.setProperty("--paper-c", paperColour(paper) || "transparent");
     const list = doc.layers();
     if (active && !list.some((l) => l.id === active)) active = null;
     if (!active && list.length) active = list[list.length - 1].id;
@@ -194,8 +154,7 @@ export function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store });
-    paintRail();
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -260,7 +219,20 @@ export function mountDrawRoom(body, app, session, frame) {
             onclick: () => change(layer.id, { visible: !layer.visible }) }, icon(layer.visible ? "eye" : "eyeOff")));
         if (on && can) row.append(layerControls(layer, list));
         return row;
-      })));
+      })),
+      // 종이 at the bottom, under every layer (as Procreate's background colour lies under its layers).
+      paperRow(can));
+  }
+
+  function paperRow(can) {
+    const paper = doc.paper();
+    const [, colour, name] = PAPERS.find(([k]) => k === paper) || PAPERS[0];
+    return h("div", { class: "paper-row", id: "paper-row" },
+      h("span", { class: "paper-swatch" + (colour ? "" : " clear"), style: colour ? { background: colour } : {}, "aria-hidden": "true" }),
+      h("span", { class: "layer-name", text: "종이 · " + name }),
+      can && h("div", { class: "paper-choices", role: "group", "aria-label": "종이" },
+        PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === paper), "aria-label": label, title: label,
+          style: c ? { background: c } : {}, onclick: () => { if (k !== paper) apply(paperOps(session.clock, doc, k)); } }))));
   }
 
   function layerControls(layer, list) {
@@ -352,7 +324,7 @@ export function mountDrawRoom(body, app, session, frame) {
       layers: list,
       pageW: PAGE_W,
       pageH: PAGE_H,
-      paper: getComputedStyle(page).backgroundColor || "#fff",
+      paper: paperColour(doc.paper()) || "rgba(0, 0, 0, 0)",
       nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
       colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
       title: session.room.meta("name") || "그림",
@@ -368,8 +340,12 @@ export function mountDrawRoom(body, app, session, frame) {
     out.height = hgt;
     const g = out.getContext("2d");
     if (!g) return;
-    g.fillStyle = getComputedStyle(page).backgroundColor || "#fff";
-    g.fillRect(0, 0, w, hgt);
+    // A clear paper stays clear in the image (a PNG with nothing behind the drawing).
+    const paper = paperColour(doc.paper());
+    if (paper) {
+      g.fillStyle = paper;
+      g.fillRect(0, 0, w, hgt);
+    }
     for (const layer of doc.layers()) {
       if (!layer.visible) continue;
       const one = document.createElement("canvas");

@@ -221,8 +221,8 @@ export function relayScreen(ctx) {
         steady: () => getSettings(app.store).inkSteady ?? 1,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
-        onStroke: ({ pts, color, width, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: me() });
+        onStroke: ({ pts, color, width, size, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: me() });
           session.commit(name, made.ops);
           if (made.ops[0]) mineIds.push(made.ops[0].id);
           return made.ops[0]?.id;
@@ -232,8 +232,8 @@ export function relayScreen(ctx) {
       const setTool = (tool) => {
         pen.tool = tool;
         ink.setTool(tool);
-        ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-        drawInkTools(tools, { pen, setTool, store: app.store });
+        ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+        drawInkTools(tools, { pen, setTool, store: app.store, layout: "row" });
       };
       const undo = h("button", { class: "chip", id: "relay-undo", type: "button", text: "되돌리기",
         onclick: () => { const id = mineIds.pop(); if (id) session.commit(name, eraseOps(session.clock, session.doc(name), id).ops); } });

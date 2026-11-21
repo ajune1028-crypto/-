@@ -14,6 +14,9 @@ import { cmpId, validId } from "./crdt.js";
 
 export const BLEND_MODES = ["source-over", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"];
 export const MAX_LAYERS = 16;
+// 종이: the page under every layer, one for everyone in the room ([key, colour, name]); "clear" is none
+// at all (see-through, shown as a checkerboard and kept so in a saved image).
+export const PAPERS = [["white", "#fffdf8", "흰 종이"], ["cream", "#fbf6e9", "미색"], ["grey", "#e9eaee", "회색"], ["sky", "#e6f0fb", "하늘"], ["pink", "#fbe9ef", "분홍"], ["black", "#17181c", "검정"], ["clear", null, "투명"]];
 const MAX_UNKNOWN = 300;
 const FIELDS = ["name", "opacity", "visible", "mode", "order"];
 
@@ -40,11 +43,17 @@ export class DrawDoc {
     this.seen = new Set();
     this.unknown = [];
     this.maxN = 0;
+    this.paperSet = null; // { v, at: op id }: the latest wins
   }
 
   apply(op) {
     if (!op || typeof op !== "object" || !validId(op.id)) return this.setAside(op);
     if (this.seen.has(op.id)) return "dup";
+    if (op.t === "paper") {
+      if (!PAPERS.some(([k]) => k === op.v)) return this.setAside(op);
+      if (!this.paperSet || cmpId(op.id, this.paperSet.at) > 0) this.paperSet = { v: op.v, at: op.id };
+      return this.done(op);
+    }
     if (op.t === "layer") {
       if (!nameOk(op.name) || typeof op.by !== "string" || op.by.length > 40 || !Number.isFinite(op.at)) return this.setAside(op);
       this.byId.set(op.id, { id: op.id, name: op.name, by: op.by, at: op.at, rm: 0, rmBy: "", fields: new Map() });
@@ -98,6 +107,11 @@ export class DrawDoc {
   setAside(op) {
     if (this.unknown.length < MAX_UNKNOWN) this.unknown.push(op);
     return "unknown";
+  }
+
+  /** The page's paper (a key of PAPERS). */
+  paper() {
+    return this.paperSet?.v || "white";
   }
 
   /** A layer as shown: its fields with their defaults, or null. */
@@ -160,6 +174,13 @@ export function moveLayerOps(clock, doc, id, delta) {
   return setLayerOps(clock, doc, id, { order });
 }
 
+/** The paper for everyone. */
+export function paperOps(clock, doc, v) {
+  clock.atLeast(doc.maxN);
+  const before = doc.paper();
+  return { ops: [{ t: "paper", id: clock.next(), v }], atoms: [{ k: "paper", before, after: v }] };
+}
+
 /** Undo or redo of layer changes, judged against the layers as they are now. */
 export function invertDrawOps(doc, clock, atoms, dir) {
   const ops = [];
@@ -173,7 +194,10 @@ export function invertDrawOps(doc, clock, atoms, dir) {
   for (const atom of list) {
     if (atom.k === "lay+") flip(atom.l, dir === "undo");
     else if (atom.k === "lay-") flip(atom.l, dir !== "undo");
-    else if (atom.k === "lset") {
+    else if (atom.k === "paper") {
+      clock.atLeast(doc.maxN);
+      ops.push({ t: "paper", id: clock.next(), v: dir === "undo" ? atom.before : atom.after });
+    } else if (atom.k === "lset") {
       const fields = dir === "undo" ? atom.before : atom.after;
       clock.atLeast(doc.maxN);
       const now = doc.layer(atom.l);

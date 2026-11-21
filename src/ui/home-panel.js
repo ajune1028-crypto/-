@@ -19,9 +19,17 @@ import { houses, addHouse, updateHouse, removeHouse, putInHouse, takeOutOfHouse,
 
 const PANEL_EDGE = "homePanelEdge";
 const EDGES = ["left", "right", "top", "bottom"];
+const MIN_SIDE = 120; // the smallest it is drawn to, either way (px)
 
-// Where the floating 찾기와 집 was left (its head dragged it there): { x, y }.
+// Where the floating 찾기와 집 was left (its head dragged it there) and its size: { x, y, w?, h? }.
 const FLOAT_KEY = "homePanelFloat";
+// Its size at each edge (the ┘ corner drawn): { bottom: height, top: height, left: width, right: width }.
+const SIZE_KEY = "homePanelSize";
+// Locked where it is (the owner, 21 November: "잠금… 아무리 눌러도 그 위치가 고정"): ⋮ and swipes leave
+// it; only its bar drawn back to its own edge puts it away.
+const LOCK_KEY = "homePanelLocked";
+
+export const panelLocked = (store) => store.get(LOCK_KEY, false) === true;
 
 /** Where 찾기와 집 last came out (a tap on ⋮ brings it from there, the owner asked): { edge, at }. */
 export function lastPanelEdge(store) {
@@ -63,7 +71,7 @@ function marked(text, at, len) {
  * changed(): home draws itself again (a room went into a house, a house was built or taken down).
  * view: what it opens on ({ name: "main" }, { name: "house", id }, { name: "build", room }).
  */
-export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" }, floating = false }) {
+export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" }, floating = false, swap = null }) {
   let edge = floating ? "float" : firstEdge;
   const root = app.root;
   const store = app.store;
@@ -83,14 +91,36 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   // A side panel's inner edge (its 끝자락) takes the same throw.
   const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   const body = h("div", { class: "home-panel-body" });
+  // At its top left a lock, at its top right the way between an edge and a window of its own (the
+  // owner: "점3개… 거기 누르면 나오는 곳에서 위쪽 오른쪽에다가 그거 따로 독단적 창 나오게 하는 걸 버튼").
+  let locked = panelLocked(store);
+  const lockBtn = h("button", { class: "icon-btn panel-lock", id: "panel-lock", type: "button", onclick: () => setLocked(!locked) }, icon("lock"));
+  const floatBtn = h("button", { class: "icon-btn panel-float", id: "panel-float", type: "button", "aria-label": floating ? "가장자리에 붙이기" : "따로 떠 있는 창으로",
+    onclick: () => swap?.(!floating) }, icon(floating ? "dock" : "float"));
+  const paintLock = () => {
+    lockBtn.setAttribute("aria-pressed", String(locked));
+    lockBtn.setAttribute("aria-label", locked ? "잠금 풀기 (지금 이 자리에 고정돼 있어요)" : "이 자리에 잠그기");
+    panel.classList.toggle("locked", locked);
+  };
+  function setLocked(on) {
+    locked = on;
+    store.set(LOCK_KEY, on);
+    paintLock();
+    toast(root, on ? "이 자리에 고정했어요. 바를 제자리로 밀면 닫혀요" : "잠금을 풀었어요", 2000);
+  }
+  // Its ┘ corner draws it bigger or smaller (the owner: "'ㄴ'을 반대로 한 거… 스와이프하면 그대로 크기가 그만큼
+  // 작아지고"); small, only the houses stay, in a column when tall and a row when wide.
+  const sizer = h("div", { class: "panel-sizer", id: "panel-sizer", role: "separator", "aria-label": "크기 바꾸기 (끌어서)" });
   // Floating (like 레퍼런스, with the same head): its head moves it, where it is left it stays; its
   // own button puts it away.
   const head = floating && h("div", { class: "float-head", id: "float-head" },
-    h("span", { class: "float-grip", "aria-hidden": "true" }),
+    lockBtn,
     h("h2", { class: "float-title", text: "찾기와 집" }),
-    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back")));
-  if (floating) panel.append(head, body);
-  else panel.append(grip, body, end);
+    floatBtn,
+    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
+  if (floating) panel.append(head, body, sizer);
+  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn, floatBtn), body, end, sizer);
+  paintLock();
   root.append(scrim, panel);
   // Home's round buttons stay above the panel (⋮ pressed again moves it); what the panel holds
   // starts below them where they would lie over it (at the right and top edges, floating).
@@ -105,12 +135,84 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   else enter(at);
 
   function placeFloat(spot) {
-    const w = Math.min(innerWidth - 16, 360);
+    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : 360));
     const x = spot && Number.isFinite(spot.x) ? spot.x : innerWidth - w - 12;
     const y = spot && Number.isFinite(spot.y) ? spot.y : topClear() || 72;
     panel.style.width = w + "px";
+    if (spot && Number.isFinite(spot.h)) {
+      panel.style.height = Math.round(Math.min(innerHeight - 16, Math.max(MIN_SIDE, spot.h))) + "px";
+      panel.style.maxHeight = "none";
+    }
     panel.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, x))) + "px";
     panel.style.top = Math.round(Math.max(8, Math.min(innerHeight - 120, y))) + "px";
+  }
+
+  // The size it was last drawn to at this edge (or floating, in placeFloat).
+  function sizeAtEdge() {
+    if (floating) return;
+    const saved = store.get(SIZE_KEY, {})?.[edge];
+    panel.style.width = "";
+    panel.style.height = "";
+    if (!Number.isFinite(saved)) return;
+    if (edge === "left" || edge === "right") panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth * 0.92, saved))) + "px";
+    else panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight * 0.9, saved))) + "px";
+  }
+  sizeAtEdge();
+
+  // Small enough, it keeps only the houses (the search goes), laid along its longer side.
+  const shape = () => {
+    const w = panel.clientWidth;
+    // A floating one not drawn to a size takes the height of what it holds (which is less when small).
+    const ht = floating && !panel.style.height ? Infinity : panel.clientHeight;
+    const compact = w < 170 || ht < 240;
+    const tall = ht > w * 1.15;
+    panel.classList.toggle("compact", compact);
+    panel.classList.toggle("tall", compact && tall);
+    panel.classList.toggle("wide", compact && !tall);
+  };
+  const shapeWatch = typeof ResizeObserver === "function" ? new ResizeObserver(() => shape()) : null;
+  shapeWatch?.observe(panel);
+  shape();
+
+  {
+    let s = null;
+    sizer.addEventListener("pointerdown", (e) => {
+      if (!open || s || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = panel.getBoundingClientRect();
+      s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, w: r.width, h: r.height };
+      try { sizer.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      for (const a of panel.getAnimations()) a.cancel();
+      panel.classList.add("sizing");
+    });
+    sizer.addEventListener("pointermove", (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x0;
+      const dy = e.clientY - s.y0;
+      if (floating) {
+        const r = panel.getBoundingClientRect();
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth - r.left - 8, s.w + dx))) + "px";
+        panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight - r.top - 8, s.h + dy))) + "px";
+        panel.style.maxHeight = "none";
+      } else if (edge === "left" || edge === "right") {
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth * 0.92, s.w + (edge === "left" ? dx : -dx)))) + "px";
+      } else {
+        panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight * 0.9, s.h + (edge === "top" ? dy : -dy)))) + "px";
+      }
+      shape();
+    });
+    const doneSizing = (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      s = null;
+      panel.classList.remove("sizing");
+      const r = panel.getBoundingClientRect();
+      if (floating) store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+      else store.set(SIZE_KEY, { ...(store.get(SIZE_KEY, {}) || {}), [edge]: Math.round(edge === "left" || edge === "right" ? r.width : r.height) });
+    };
+    sizer.addEventListener("pointerup", doneSizing);
+    sizer.addEventListener("pointercancel", doneSizing);
+    sizer.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
   }
 
   function popIn() {
@@ -123,7 +225,8 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   if (floating) {
     let d = null;
     head.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
+      // Locked, it stays where it is.
+      if (locked || e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
       e.preventDefault();
       const r = panel.getBoundingClientRect();
       d = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
@@ -139,7 +242,8 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       d = null;
       panel.classList.remove("held");
       const r = panel.getBoundingClientRect();
-      store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top) });
+      const was = store.get(FLOAT_KEY, null) || {};
+      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w, h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
     };
     head.addEventListener("pointerup", drop);
     head.addEventListener("pointercancel", drop);
@@ -197,9 +301,10 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       const dy = g.y - g.y0;
       panel.style.transform = `translate(${dx}px, ${dy}px)`;
       const now = judge(g, e.timeStamp);
-      // Toward its own edge it fades as it goes; toward another, a light shows where it will land.
+      // Toward its own edge it fades as it goes; toward another, a light shows where it will land
+      // (locked, it goes nowhere else).
       panel.style.opacity = now.act === "close" ? "0.75" : "";
-      aim.show(now.act === "move" ? spotOn(now) : null);
+      aim.show(now.act === "move" && !locked ? spotOn(now) : null);
     });
     const letGo = (e) => {
       if (!g || e.pointerId !== g.id) return;
@@ -213,11 +318,66 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       panel.classList.remove("held");
       panel.style.opacity = "";
       if (now.act === "close") return close({ from });
-      if (now.act === "move") return relocate(now, from);
+      if (now.act === "move" && !locked) return relocate(now, from);
       settle(from);
     };
     handle.addEventListener("pointerup", letGo);
     handle.addEventListener("pointercancel", letGo);
+  }
+
+  // A swipe anywhere on it toward its own edge puts it away (the owner: "그냥 스와이프해도 되게 없애는
+  // 거는"); moving it elsewhere stays with its bar. Not while locked, and not while what it holds can
+  // still scroll that way.
+  if (!floating) {
+    let sw = null;
+    body.addEventListener("pointerdown", (e) => {
+      if (!open || locked || sw || (e.pointerType === "mouse" && e.button !== 0) || e.target.closest?.("input, textarea")) return;
+      sw = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, track: new VelocityTracker() };
+      sw.track.add(e.timeStamp, e.clientX, e.clientY);
+    });
+    body.addEventListener("pointermove", (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      for (const one of e.getCoalescedEvents?.() || [e]) sw.track.add(one.timeStamp, one.clientX, one.clientY);
+      sw.x = e.clientX;
+      sw.y = e.clientY;
+      const dx = sw.x - sw.x0;
+      const dy = sw.y - sw.y0;
+      if (!sw.on) {
+        if (Math.hypot(dx, dy) < 10) return;
+        const toward = {
+          bottom: dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.2 && body.scrollTop <= 0,
+          top: dy < 0 && Math.abs(dy) > Math.abs(dx) * 1.2 && body.scrollTop + body.clientHeight >= body.scrollHeight - 1,
+          left: dx < 0 && Math.abs(dx) > Math.abs(dy) * 1.2,
+          right: dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2,
+        }[edge];
+        if (!toward) { sw = null; return; }
+        sw.on = true;
+        try { body.setPointerCapture(sw.id); } catch { /* fine */ }
+        for (const a of panel.getAnimations()) a.cancel();
+        panel.classList.add("held");
+      }
+      panel.style.transform = edge === "left" ? `translate(${Math.min(0, dx)}px, 0px)` : edge === "right" ? `translate(${Math.max(0, dx)}px, 0px)`
+        : edge === "top" ? `translate(0px, ${Math.min(0, dy)}px)` : `translate(0px, ${Math.max(0, dy)}px)`;
+    });
+    const swEnd = (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      const was = sw;
+      sw = null;
+      if (!was.on) return;
+      panel.classList.remove("held");
+      const side = edge === "left" || edge === "right";
+      const sign = edge === "right" || edge === "bottom" ? 1 : -1;
+      const d = Math.max(0, (side ? was.x - was.x0 : was.y - was.y0) * sign) * sign;
+      const v = was.track.velocity(e.timeStamp);
+      const speed = (side ? v.vx : v.vy) * sign;
+      const size = side ? panel.offsetWidth : panel.offsetHeight;
+      const from = side ? [d, 0] : [0, d];
+      if (e.type === "pointerup" && (Math.abs(d) > size * 0.25 || speed > 0.45)) return close({ from });
+      settle(from);
+    };
+    body.addEventListener("pointerup", swEnd);
+    body.addEventListener("pointercancel", swEnd);
+    body.addEventListener("touchmove", (e) => { if (sw?.on) e.preventDefault(); }, { passive: false });
   }
 
   function judge(g, time) {
@@ -252,6 +412,8 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     edge = to;
     panel.dataset.edge = to;
     panel.style.setProperty("--top-clear", topClear() + "px");
+    sizeAtEdge();
+    shape();
     enter(spot);
   }
 
@@ -289,6 +451,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     if (!open) return;
     open = false;
     aim.hide();
+    shapeWatch?.disconnect();
     if (!forget && query.trim()) rememberSearch(store, query, max());
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("visibilitychange", onHide);
@@ -484,7 +647,12 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   // nodes: home draws itself anew by replacing what it holds; it puts these back after.
   return {
     close, show: (next) => { view = next; draw(); }, isOpen: () => open, nodes: [scrim, panel],
-    floating, edge: () => edge,
+    floating, edge: () => edge, locked: () => locked,
+    // Locked and ⋮ pressed: it stays, with a small shake to say so.
+    nudge: () => {
+      toast(root, "잠겨 있어요. 왼쪽 위 자물쇠로 풀어요", 1600);
+      if (!reduced && panel.animate) panel.animate([{ translate: "0 0" }, { translate: "-5px 0" }, { translate: "5px 0" }, { translate: "0 0" }], { duration: 260 });
+    },
     // Somewhere else on the screen (the owner: "그걸 눌러서 다른 위치로 그게 옮겨가게").
     moveTo: (to, spot = 0.5, strength = 0.3) => { if (open && !floating && to !== edge) relocate({ edge: to, at: spot, strength }, [0, 0]); },
     refresh: () => draw(),
