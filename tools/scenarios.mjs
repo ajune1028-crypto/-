@@ -2108,7 +2108,13 @@ scenario("song: a friend's device shows the same clips, plays them as piano, and
   await click(b, "#mode-original");
   await b.waitFor(`!document.querySelector(".clip[data-id] .clip-note")`);
   await click(b, "#play");
-  await b.waitFor(`window.__app.player?.playing && !!window.__app.player.audioFor([...window.__app.session.doc("song").sources.keys()][0])`, 8000);
+  // ▶ waits only a moment for a recording still being read (that play is piano, by design); once it
+  // is read, the next ▶ plays the voice itself.
+  const source = `[...window.__app.session.doc("song").sources.keys()][0]`;
+  await b.waitFor(`!!window.__app.player?.audioFor(${source})`, 10000);
+  if (await b.eval("window.__app.player.playing")) await click(b, "#play");
+  await click(b, "#play");
+  await b.waitFor(`window.__app.player?.playing && !!window.__app.player.audioFor(${source})`, 4000);
   const heard = await b.eval(`(() => { const buf = window.__app.player.audioFor([...window.__app.session.doc("song").sources.keys()][0]); const x = buf.getChannelData(0); let e = 0; for (const v of x) e += v * v; return { seconds: buf.duration, rms: Math.sqrt(e / x.length) }; })()`);
   assert.ok(heard.seconds > 2 && heard.rms > 0.01, "the voice itself, whole: " + JSON.stringify(heard));
   await click(b, "#play");
