@@ -959,6 +959,11 @@ export class InkLayer {
   }
 
   destroy() {
+    // What the 올가미 held lets go (its small menu goes with the room).
+    if (this.selection) {
+      this.selection = null;
+      this.onLasso?.(null);
+    }
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.share?.detach(this);
@@ -1126,7 +1131,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
   laserButton.setAttribute("aria-pressed", String(pointing));
   // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
-  const lassoButton = lasso && iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
+  const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
   lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
   const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
     "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
@@ -1324,18 +1329,18 @@ export function lassoActions({ ink, doc, clock, by, commit }) {
       } else ink.clearSelection();
     };
     const chip = (id, text, fn) => h("button", { class: "chip", id, type: "button", text, onclick: fn });
-    const el = h("div", { class: "lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미로 고른 그림" },
+    const el = h("div", { class: "ink-lasso-menu", id: "ink-lasso-menu", role: "toolbar", "aria-label": "올가미로 고른 그림" },
       colours
         ? INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { lassoInk: c }, "aria-label": c, style: { background: inkColor(c) },
             onclick: () => { colours = false; keep(recolorStrokesOps(clock, doc(), ids, c, by), true); } }))
-        : [h("span", { class: "lasso-count", text: `그림 ${ids.length}` }),
-          chip("lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
-          chip("lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
-          chip("lasso-delete", "지우기", () => {
+        : [h("span", { class: "ink-lasso-count", text: `그림 ${ids.length}` }),
+          chip("ink-lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
+          chip("ink-lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
+          chip("ink-lasso-delete", "지우기", () => {
             const all = ids.map((id) => eraseOps(clock, doc(), id));
             keep({ ops: all.flatMap((m) => m.ops), atoms: all.flatMap((m) => m.atoms) }, false);
           }),
-          h("button", { class: "icon-btn", id: "lasso-off", type: "button", "aria-label": "올가미 풀기", onclick: () => ink.clearSelection() }, icon("close"))]);
+          h("button", { class: "icon-btn", id: "ink-lasso-off", type: "button", "aria-label": "올가미 풀기", onclick: () => ink.clearSelection() }, icon("close"))]);
     lassoMenuNow?.el.remove();
     lassoMenuNow = { ink, el };
     document.body.append(el);

@@ -2316,6 +2316,54 @@ scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠�
   await a.waitFor(`!${sheet(a)}.attachments().some((x) => x.kind === "sound")`);
 });
 
+scenario("text room 옮기기: chosen words are lifted and go where the next tap puts the caret; they keep their writer's colour on both screens; one undo puts them back; locked words cannot be lifted", async ({ open, out }) => {
+  const [a, b] = await together(open);
+  await focusEnd(a);
+  await a.type("바다에 갔어");
+  await sameOnAll([a, b], "바다에 갔어");
+  await b.front();
+  await focusEnd(b);
+  await b.type(" 노을이 예뻤어");
+  await sameOnAll([a, b], "바다에 갔어 노을이 예뻤어");
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const sheet = `window.__app.session.sheet(${JSON.stringify(day)})`;
+  const friend = await b.eval("window.__app.session.memberId");
+  const choose = (page, from, to) => page.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.focus(); ta.setSelectionRange(${from}, ${to}); document.dispatchEvent(new Event("selectionchange")); return true; })()`);
+  const shown = (sel) => `(${q(sel)} && !${q(sel)}.hidden)`;
+  // The friend's "노을이 " (with its space), lifted on my screen.
+  await a.front();
+  await choose(a, 7, 11);
+  await a.waitFor(shown("#sel-move"));
+  await click(a, "#sel-move");
+  await a.waitFor(`${shown("#move-chip")} && ${q("#sel-tools")}.hidden`);
+  assert.equal(await text(a, "#move-what"), "‘노을이’");
+  await a.shot(out("text-move-lifted.png"));
+  // A real tap at the very start of the writing puts them there.
+  const [x, y] = await a.eval(`(() => { const r = ${TODAY}.querySelector(".draw .w").getBoundingClientRect(); return [r.left + 2, r.top + r.height / 2]; })()`);
+  await a.tap(x, y);
+  await sameOnAll([a, b], "노을이 바다에 갔어 예뻤어");
+  assert.ok(await a.eval(`${sheet}.chars().slice(0, 3).every((c) => c.by === ${JSON.stringify(friend)})`), "the moved letters are still the friend's");
+  assert.ok(await a.eval(`!${shown("#move-chip")} && ${TODAY}.querySelector("textarea").selectionStart === 0 && ${TODAY}.querySelector("textarea").selectionEnd === 4`), "chosen again where they went");
+  // Their colour is the friend's on both screens.
+  for (const p of [a, b]) {
+    const ws = await words(p);
+    const mine = ws.find((w) => w.text === "바다에");
+    const theirs = ws.find((w) => w.text === "노을이");
+    assert.ok(theirs && mine && theirs.color !== mine.color, "two writers, two colours");
+  }
+  await a.shot(out("text-move-put.png"));
+  // One undo: back where they were, on both screens.
+  await click(a, "#undo");
+  await sameOnAll([a, b], "바다에 갔어 노을이 예뻤어");
+  // Locked words: no 옮기기.
+  await choose(a, 0, 3);
+  await a.waitFor(shown("#sel-lock"));
+  await click(a, "#sel-lock");
+  await a.waitFor(`${sheet}.locks().length === 1`);
+  await choose(a, 0, 3);
+  await a.waitFor(`${shown("#sel-unlock")} && !${shown("#sel-move")}`);
+});
+
 scenario("room 배경: a gradient from 방 설정 lies behind the room for the friend too; my own photo becomes the background on both screens; the paper turns to glass; 없음 takes it away", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
@@ -2461,7 +2509,7 @@ scenario("text room drawing: two fingers moved together scroll the page; 올가�
   await a.press(...ring[0]);
   for (let k = 1; k < ring.length; k++) for (let j = 1; j <= 5; j++) await a.moveTo(ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * j) / 5, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * j) / 5);
   await a.release(...ring.at(-1));
-  await a.waitFor(`${q("#lasso-menu")}?.textContent.includes("그림 1")`, 2000);
+  await a.waitFor(`${q("#ink-lasso-menu")}?.textContent.includes("그림 1")`, 2000);
   await a.shot(out("text-lasso.png"));
   // Taken anywhere: down below the blue line and to the right.
   const before = (await strokes()).find((s) => s.c === "red");
@@ -2471,15 +2519,15 @@ scenario("text room drawing: two fingers moved together scroll the page; 올가�
   await a.waitFor(`(() => { const s = window.__app.session.doc("k:${day}").strokes().find((s) => s.c === "red"); return s && s.pts[1] > ${before.y + 1000}; })()`, 3000);
   assert.equal((await strokes()).length, 2, "moved, not copied");
   // 색: green.
-  await click(a, "#lasso-color");
-  await click(a, '#lasso-menu [data-lasso-ink="green"]');
+  await click(a, "#ink-lasso-color");
+  await click(a, '#ink-lasso-menu [data-lasso-ink="green"]');
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().some((s) => s.c === "green")`, 2000);
   assert.ok(!(await strokes()).some((s) => s.c === "red"), "the red line is green now");
   // 복제: a copy beside it, held; 지우기 rubs the copy out.
-  await click(a, "#lasso-copy");
+  await click(a, "#ink-lasso-copy");
   await a.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.c === "green").length === 2`, 2000);
-  await click(a, "#lasso-delete");
-  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.c === "green").length === 1 && !${q("#lasso-menu")}`, 2000);
+  await click(a, "#ink-lasso-delete");
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.c === "green").length === 1 && !${q("#ink-lasso-menu")}`, 2000);
   // Back to the pen; zoomed in, two fingers moved together up carry the page down.
   await pickBrush(a, "pen");
   const mid = [box.x + box.w / 2, box.y + 300];
@@ -3015,9 +3063,11 @@ scenario("whiteboard 올가미 closing and kinds: drawn, its line is neon and wh
   // A drawing beside them.
   await click(page, "#board-pen");
   const v = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); const c = [...document.querySelectorAll(".card")].map((e) => e.getBoundingClientRect()); return { l: Math.min(...c.map((r) => r.left)), t: Math.min(...c.map((r) => r.top)), r: Math.max(...c.map((r) => r.right)), b: Math.max(...c.map((r) => r.bottom)), bottom: r.bottom }; })()`);
-  await page.press(v.l + 10, v.b + 30);
-  for (let i = 1; i <= 6; i++) await page.moveTo(v.l + 10 + i * 15, v.b + 30 + (i % 2) * 8);
-  await page.release(v.l + 100, v.b + 30);
+  // Beside the tools' rail at the left edge (a press on the rail is the rail's).
+  const from = Math.max(v.l + 10, (await page.eval(`${q("#board-ink-tools")}.getBoundingClientRect().right`)) + 12);
+  await page.press(from, v.b + 30);
+  for (let i = 1; i <= 6; i++) await page.moveTo(from + i * 15, v.b + 30 + (i % 2) * 8);
+  await page.release(from + 90, v.b + 30);
   await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
   await click(page, "#board-pen");
   await click(page, "#mode-lasso");
@@ -5685,9 +5735,10 @@ scenario("brush sheet: all nine brushes drawn on one page, each kept as its own 
     await pickBrush(a, brushes[i]);
     await pickColor(a, colours[i]);
     const y = box.y + box.h * (0.07 + i * 0.1);
-    await a.press(box.x + box.w * 0.12, y);
-    for (let k = 1; k <= 16; k++) await a.moveTo(box.x + box.w * (0.12 + 0.048 * k), y + Math.sin(k / 2.2) * box.h * 0.025);
-    await a.release(box.x + box.w * 0.88, y);
+    // From beside the tools' rail at the left edge to near the right.
+    await a.press(box.x + box.w * 0.2, y);
+    for (let k = 1; k <= 16; k++) await a.moveTo(box.x + box.w * (0.2 + 0.043 * k), y + Math.sin(k / 2.2) * box.h * 0.025);
+    await a.release(box.x + box.w * 0.89, y);
     await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === ${i + 1}`);
   }
   const kept = await a.eval(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().map((s) => s.s || s.b || "pen")`);

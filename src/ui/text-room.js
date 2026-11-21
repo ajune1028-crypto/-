@@ -7,8 +7,8 @@ import { watchFingers, watchFingerTaps } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
-import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps } from "../core/edit.js";
-import { MARK_COLORS, MAX_SOUND_MS } from "../core/crdt.js";
+import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps, moveTextOps, lockedEdit } from "../core/edit.js";
+import { MARK_COLORS, MAX_SOUND_MS, ROOT } from "../core/crdt.js";
 import { fileOps } from "../core/files.js";
 import { toBase64, fromBase64 } from "../core/b64.js";
 import { encodeAdpcm, decodeAdpcm } from "../audio/adpcm.js";
@@ -90,6 +90,8 @@ export function mountTextRoom(body, app, session) {
   // a photo or a recording hidden in them, 잠금.
   const selTools = h("div", { class: "sel-tools", id: "sel-tools", hidden: true, role: "toolbar", "aria-label": "고른 글자" });
   let sel = null; // { editor, ch, to } while words are chosen
+  // 옮기기: while chosen words are lifted, what they are and where to put them down.
+  const moveChip = h("div", { class: "sel-tools move-chip", id: "move-chip", hidden: true, role: "status", "aria-live": "polite" });
   const mic = micSupport();
   let closeSound = null;
   let soundTarget = null;
@@ -99,7 +101,7 @@ export function mountTextRoom(body, app, session) {
   });
   body.append(photoInput, ...soundInputs);
   body.append(list);
-  body.after(selTools, inkTools, toolbar);
+  body.after(selTools, moveChip, inkTools, toolbar);
 
   // Two fingers zoom the page, words and drawings together; Ctrl+wheel or a trackpad
   // pinch on a computer. The page keeps its width while zoomed, so nothing reflows and
@@ -187,6 +189,7 @@ export function mountTextRoom(body, app, session) {
 
   function setTool(tool) {
     pen.tool = tool;
+    if (tool) dropLifted();
     for (const editor of editors.values()) {
       editor.ink?.setTool(tool);
       editor.ink?.setStyle(pen);
@@ -428,6 +431,7 @@ export function mountTextRoom(body, app, session) {
       unmark: h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marksNow()) }),
       unlock: h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeableNow()) }, icon("lock"), "잠금 풀기"),
       lock: h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금"),
+      move: h("button", { class: "chip", id: "sel-move", type: "button", onclick: () => liftSel() }, icon("move"), "옮기기"),
     };
     selTools.replaceChildren(
       h("div", { class: "sel-row" },
@@ -437,7 +441,7 @@ export function mountTextRoom(body, app, session) {
       h("div", { class: "sel-row" },
         h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
         h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
-        row.unlock, row.lock));
+        row.move, row.unlock, row.lock));
     // The words stay chosen while a button here is pressed.
     for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
     return row;
@@ -453,6 +457,7 @@ export function mountTextRoom(body, app, session) {
     set(selRow.unmark, !marksNow().length);
     set(selRow.lock, locks.length > 0);
     set(selRow.unlock, !(locks.length && freeable.length));
+    set(selRow.move, locks.length > 0 || !!sel.editor.sheet.dayLock());
   }
   function drawSel() {
     // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
@@ -519,6 +524,71 @@ export function mountTextRoom(body, app, session) {
     if (!sel || readOnlyNow()) return;
     commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "lock", { ch: sel.ch, to: sel.to, by: session.memberId }), "잠갔어요. 잠근 사람과 방장만 풀 수 있어요");
   }
+
+  // ---- 옮기기: chosen words lifted and put down wherever the next tap lands -----------------
+  // (the owner, 21 November: "그 글자나 그린 거를 이동할 수 있… 아무데나 이동 가능하게"). Written words
+  // are one flow, so they go to any place in the writing (this day or another), not to a point on
+  // the paper; drawings go anywhere with the 올가미. The words keep who wrote them (their colour) and
+  // their 표시, photos and recordings; one undo puts them back.
+  let lifted = null; // { editor, ids }
+  function liftSel() {
+    if (!sel || readOnlyNow()) return;
+    const ed = sel.editor;
+    const ta = ed.input;
+    const a = Math.min(ta.selectionStart, ta.selectionEnd);
+    const b = Math.max(ta.selectionStart, ta.selectionEnd);
+    if (a === b) return;
+    if (lockedEdit(ed.sheet, ed.snap.ids, a, b - a)) return void toast(app.root, ed.sheet.dayLock() ? "잠긴 날이라 옮길 수 없어요" : "잠긴 글이라 옮길 수 없어요", 2600);
+    const words = ed.snap.text.slice(a, b).replace(/\s+/g, " ").trim();
+    lifted = { editor: ed, ids: ed.snap.ids.slice(a, b) };
+    moveChip.replaceChildren(h("div", { class: "sel-row" },
+      icon("move"),
+      h("span", { class: "move-what", id: "move-what", text: "‘" + (words.length > 14 ? words.slice(0, 13) + "…" : words) + "’" }),
+      h("span", { class: "sel-label", text: "놓을 곳을 누르세요" }),
+      h("button", { class: "chip", id: "move-cancel", type: "button", text: "그만", onclick: () => dropLifted() })));
+    moveChip.hidden = false;
+    // The next tap in the writing places the caret, which is where they go; until then nothing is chosen.
+    ta.setSelectionRange(b, b);
+    sel = null;
+    drawSel();
+  }
+  function dropLifted() {
+    lifted = null;
+    moveChip.hidden = true;
+  }
+  /** Puts the lifted words down at `index` of `ed`'s writing. */
+  function putDown(ed, index) {
+    const from = lifted.editor;
+    if (readOnlyNow()) return void dropLifted();
+    if (lockedEdit(ed.sheet, ed.snap.ids, index, 0)) return void toast(app.root, ed.sheet.dayLock() ? "잠긴 날에는 놓을 수 없어요" : "잠긴 글 사이에는 놓을 수 없어요", 2600);
+    const made = moveTextOps(from.sheet, ed.sheet, session.clock, { ids: lifted.ids, after: index > 0 ? ed.snap.ids[index - 1] ?? ROOT : ROOT });
+    dropLifted();
+    if (!made.ids.length) return void toast(app.root, "그 자리 그대로예요", 1600);
+    if (from === ed) session.commit(ed.doc, [...made.to.ops, ...made.from.ops]);
+    else {
+      session.commit(ed.doc, made.to.ops);
+      session.commit(from.doc, made.from.ops);
+    }
+    record([...made.from.atoms.map((atom) => ({ ...atom, doc: from.doc })), ...made.to.atoms.map((atom) => ({ ...atom, doc: ed.doc }))], false);
+    // Chosen again where they now are, so it shows where they went (and they can go on).
+    const at = ed.sheet.ids().indexOf(made.ids[0]);
+    if (at >= 0 && document.activeElement === ed.input) {
+      ed.input.setSelectionRange(at, at + made.ids.length);
+      ed.caretMoved();
+    }
+    buzz(app);
+    toast(app.root, "옮겼어요", 1600);
+  }
+  // A tap that puts the caret in the writing while words are lifted (the caret is placed by then).
+  const onPlace = (e) => {
+    if (!lifted || !e.target.classList?.contains("typing")) return;
+    const ed = [...editors.values()].find((x) => x.input === e.target);
+    if (!ed || ed.input.selectionStart !== ed.input.selectionEnd) return;
+    putDown(ed, ed.input.selectionStart);
+  };
+  list.addEventListener("click", onPlace);
+  const onEscape = (e) => { if (e.key === "Escape" && lifted) dropLifted(); };
+  document.addEventListener("keydown", onEscape);
 
   function undoRanges(t, list) {
     if (!sel || readOnlyNow()) return;
@@ -784,6 +854,8 @@ export function mountTextRoom(body, app, session) {
     selFrame?.();
     closeDay?.();
     selTools.remove();
+    moveChip.remove();
+    document.removeEventListener("keydown", onEscape);
     stopPhotoWatch();
     photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);

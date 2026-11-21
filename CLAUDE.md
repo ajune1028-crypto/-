@@ -85,7 +85,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 - **11월 21일 (사용자: 그리기 도구가 아래에만 있어 비효율적, ⋮을 말한 대로, 텍스트 방 두 손가락·올가미, 종이 투명, "아트크래프트 코드를 가져와라")**: rulings의 같은 날 줄들, `specs/2026-11-20-reference-study.md` 10절(아트크래프트를 실제로 읽은 것과 옮긴 곳).
   - **그리기 도구 막대**(`ui/ink.js` `drawInkTools`, 아트크래프트 pagedraw의 SideToolbar): 모든 그리기 방에서 왼쪽 가장자리의 얇은 유리 막대(붓·지우개·올가미·가리키기·색·크기 막대·빠른 굵기). 붓·색·켜진 지우개를 누르면 옆에 작은 창(`#ink-pop`), 고르면 닫힘. 게임 카드 안은 한 줄(`layout: "row"`). 크기는 모든 방의 획에 `z`.
   - **⋮ 찾기와 집 다시**: 홈 아이콘 하나(⋮ 모양은 창 아이콘), 창 오른쪽 위 따로 창↔붙이기(`#panel-float`, 기억), 왼쪽 위 잠금(`#panel-lock`), 다시 누르면 닫힘(설정 `panelCycle`로 예전처럼), 스와이프로 닫기, ┘ 크기 조절(`#panel-sizer`, 작으면 집만), 집에 넣은 방도 홈에(이름 옆 작은 집).
-  - **텍스트 방**: 두 손가락 = 스크롤 + 확대. **그림 올가미**(텍스트 방·그림 방, `InkLayer`의 `lasso` 도구, `lassoActions`): 둘러 잡고 아무 데나 옮기기·색·복제·지우기.
+  - **텍스트 방**: 두 손가락 = 스크롤 + 확대. **그림 올가미**(텍스트 방·그림 방, `InkLayer`의 `lasso` 도구, `lassoActions`, 메뉴는 `#ink-lasso-menu`: 화이트보드 올가미의 `#lasso-menu`와 이름을 섞지 않는다): 둘러 잡고 아무 데나 옮기기·색·복제·지우기. **글자 옮기기**: 글자를 고르고 선택 도구의 '옮기기'(`#sel-move`) → 다음에 누른 글 속 자리로(다른 날도). 쓴 사람·쓴 때를 그대로 가져가 색이 안 바뀌고, 얹힌 표시·사진·녹음·색 섞기도 같이(`core/edit.js` `moveTextOps`), 되돌리기 한 번.
   - 그림 방 **종이**(`core/draw.js` `PAPERS`, `paper` op): 레이어 창 맨 아래, 투명은 체커보드와 투명 PNG. 노래 방 옆 패널은 잠그면 반투명.
   - 그 전(11월 20일 밤): 색 원판, 그려서 맞히기(`ui/sketch.js`, 초성 힌트), 타임랩스(`ui/timelapse.js`, `core/timelapse.js`), 저장 공간 버그(시나리오마다 localStorage 비우기, '이 기기만' 방은 원본 사본을 안 만듦).
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
@@ -109,7 +109,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 416개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 420개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 190개 남짓. --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다

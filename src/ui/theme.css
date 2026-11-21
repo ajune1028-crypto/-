@@ -989,12 +989,12 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools.row .ink-widths { flex-direction: row; }
 .ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* 올가미 on drawings: its few actions beside what it holds (faded while it is carried). */
-.lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
-.lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
-.lasso-menu .chip { height: 1.9rem; padding: 0 0.7rem; font-size: 0.8rem; }
-.lasso-menu .icon-btn { width: 1.9rem; height: 1.9rem; }
-.lasso-menu .ink-color { width: 1.5rem; height: 1.5rem; }
-.lasso-count { padding: 0 0.3rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.ink-lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
+.ink-lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
+.ink-lasso-menu .chip { height: 1.9rem; padding: 0 0.7rem; font-size: 0.8rem; }
+.ink-lasso-menu .icon-btn { width: 1.9rem; height: 1.9rem; }
+.ink-lasso-menu .ink-color { width: 1.5rem; height: 1.5rem; }
+.ink-lasso-count { padding: 0 0.3rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
 .paper canvas.ink[data-tool="lasso"] { cursor: crosshair; }
 /* The small window beside the rail: every brush, the colours, or the eraser's way. */
 .ink-pop { position: fixed; z-index: 71; display: grid; gap: 0.5rem; max-width: min(19rem, calc(100vw - 4.5rem)); padding: 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.2s var(--ease); }
@@ -1129,6 +1129,13 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
    무한적으로"); the bars float over it as glass. The room body stays the part in view. */
 .room-body.board-body { position: relative; overflow: visible; z-index: 0; } /* its own layer: nothing of the board rises over the bars */
 .room[data-kind="creative-board"] > :is(.bar, .banner, .room-top, .toolbar, .ink-tools) { position: relative; z-index: 2; }
+/* The drawing tools' rail floats at the left edge over the board too, out of the way of the board's
+   own bars: beside the mode column when that stands at the left, and on the other side from the
+   helper rail when that was put at the left (as the helper rail itself steps beside the modes). */
+.room[data-kind="creative-board"] > .ink-tools.rail { position: fixed; z-index: 30; }
+.room[data-kind="creative-board"][data-modes-at="left"] > .ink-tools.rail { left: 5.6rem; }
+.room[data-kind="creative-board"][data-rail-at="left"] > .ink-tools.rail { left: auto; right: max(0.45rem, env(safe-area-inset-right)); }
+.room[data-kind="creative-board"][data-rail-at="left"][data-modes-at="right"] > .ink-tools.rail { right: 5.6rem; }
 /* 그리기 on the whiteboard: a screen-sized canvas beneath the cards, drawn in the board's own frame;
    while the pen is on, the cards let every touch through to it. */
 .board > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -1285,6 +1292,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .sel-color { width: 1.45rem; height: 1.45rem; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
 .sel-tools .chip { display: inline-flex; align-items: center; gap: 0.25rem; }
 .sel-tools .chip svg { width: 0.95rem; height: 0.95rem; }
+/* 옮기기: the lifted words and where they go, where the chosen words' row was. */
+.move-chip .sel-row { flex-wrap: nowrap; }
+.move-chip .sel-row > svg { flex: none; width: 1.05rem; height: 1.05rem; color: var(--accent); }
+.move-what { min-width: 0; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
 .sel-color[data-hl="red"], .w.hl[data-hl="red"] { --hl: rgb(255 99 99 / 0.55); }
 .sel-color[data-hl="orange"], .w.hl[data-hl="orange"] { --hl: rgb(255 160 60 / 0.55); }
 .sel-color[data-hl="yellow"], .w.hl[data-hl="yellow"] { --hl: rgb(255 214 40 / 0.6); }

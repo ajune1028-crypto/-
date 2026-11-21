@@ -167,6 +167,54 @@ export function attachSoundOps(sheet, clock, { ch, to, file, dur, by, at = Date.
 }
 
 /**
+ * 옮기기: the letters `ids` of `from` (in order) put after `after` in `to` — the same sheet or another
+ * day's. Each new letter keeps who wrote it and when, so its colour stays; the 표시, photos and
+ * recordings lying wholly on the moved letters, and their colour mixing, go with them. Put down
+ * among the moved letters or where they already are, nothing moves. Returns
+ * { from: { ops, atoms }, to: { ops, atoms }, ids } (ids: the letters at their new place); one undo
+ * takes both back.
+ */
+export function moveTextOps(from, to, clock, { ids, after }) {
+  const out = { from: { ops: [], atoms: [] }, to: { ops: [], atoms: [] }, ids: [] };
+  const moving = (ids || []).filter((id) => from.isVisible(id));
+  if (!moving.length || (after !== ROOT && !to.get(after))) return out;
+  if (from === to && (moving.includes(after) || from.indexAfter(after) === from.indexAfter(moving[0]) - 1)) return out;
+  clock.atLeast(from.maxN);
+  clock.atLeast(to.maxN);
+  const moved = new Map();
+  let prev = after;
+  for (const id of moving) {
+    const node = from.get(id);
+    const nid = clock.next();
+    out.to.ops.push({ t: "ins", id: nid, after: prev, v: node.v, by: node.by, at: node.at });
+    moved.set(id, nid);
+    out.ids.push(nid);
+    prev = nid;
+  }
+  out.to.atoms.push({ k: "ins", ids: out.ids.slice() });
+  for (const id of moving) out.from.ops.push({ t: "vis", id: clock.next(), ch: id, n: from.get(id).rm + 1 });
+  out.from.atoms.push({ k: "del", ids: moving.slice() });
+  for (const id of moving) {
+    const lv = from.mixLevel(id);
+    if (lv) out.to.ops.push({ t: "mix", id: clock.next(), ch: moved.get(id), lv });
+  }
+  for (const [t, list, type, key] of [["mark", from.marks(), "mrm", "m"], ["att", from.attachments(), "arm", "a"]]) {
+    for (const r of list) {
+      if (!moved.has(r.ch) || !moved.has(r.to)) continue;
+      out.from.ops.push({ t: type, id: clock.next(), [key]: r.id, n: r.rm + 1 });
+      out.from.atoms.push({ k: "unrange", t, id: r.id });
+      const op = { t, id: clock.next(), ch: moved.get(r.ch), to: moved.get(r.to), by: r.by, at: r.at };
+      if (t === "mark") op.c = r.c;
+      else if (r.kind === "photo") Object.assign(op, { kind: "photo", data: r.data, w: r.w, h: r.h });
+      else Object.assign(op, { kind: "sound", file: r.file, dur: r.dur });
+      out.to.ops.push(op);
+      out.to.atoms.push({ k: "range", t, id: op.id });
+    }
+  }
+  return out;
+}
+
+/**
  * Whether a change on screen touches locked words: removing any locked letter, or
  * typing between two letters of one lock. ids: the letters on screen in order;
  * index: where the change starts; del: how many letters it removes.
