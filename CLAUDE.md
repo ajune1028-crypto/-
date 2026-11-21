@@ -82,9 +82,15 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **내 색 직접 고르기**: 팔레트 여덟 옆에 내 색(색상은 그대로, 밝기만 종이마다 4.5:1로: `personColor`, 방 사람의 `hex`). 옛 기기는 팔레트 색.
   - **채우기**(`core/fill.js`, Klecks의 생각): 누른 곳과 이어진 같은 색을 그 층에서 찾아 윤곽 고리 획 하나로(`s:"fill"`, 친구 화면·되돌리기가 다른 획과 같음).
   - **문지르기**(`ui/ink.js`의 `smudgeAlong`, libmypaint·Krita의 생각): 바로 앞 자리 그림 조각을 지금 자리에 섞음(투명함까지), 그리는 동안은 새로 지나간 곳만. 붓 표가 다 됐다(펜·만년필·붓펜·연필·스케치·크레용·마커·에어브러시·형광펜·채우기·문지르기).
+- **11월 21일 (사용자: 그리기 도구가 아래에만 있어 비효율적, ⋮을 말한 대로, 텍스트 방 두 손가락·올가미, 종이 투명, "아트크래프트 코드를 가져와라")**: rulings의 같은 날 줄들, `specs/2026-11-20-reference-study.md` 10절(아트크래프트를 실제로 읽은 것과 옮긴 곳).
+  - **그리기 도구 막대**(`ui/ink.js` `drawInkTools`, 아트크래프트 pagedraw의 SideToolbar): 모든 그리기 방에서 왼쪽 가장자리의 얇은 유리 막대(붓·지우개·올가미·가리키기·색·크기 막대·빠른 굵기). 붓·색·켜진 지우개를 누르면 옆에 작은 창(`#ink-pop`), 고르면 닫힘. 게임 카드 안은 한 줄(`layout: "row"`). 크기는 모든 방의 획에 `z`.
+  - **⋮ 찾기와 집 다시**: 홈 아이콘 하나(⋮ 모양은 창 아이콘), 창 오른쪽 위 따로 창↔붙이기(`#panel-float`, 기억), 왼쪽 위 잠금(`#panel-lock`), 다시 누르면 닫힘(설정 `panelCycle`로 예전처럼), 스와이프로 닫기, ┘ 크기 조절(`#panel-sizer`, 작으면 집만), 집에 넣은 방도 홈에(이름 옆 작은 집).
+  - **텍스트 방**: 두 손가락 = 스크롤 + 확대. **그림 올가미**(텍스트 방·그림 방, `InkLayer`의 `lasso` 도구, `lassoActions`): 둘러 잡고 아무 데나 옮기기·색·복제·지우기.
+  - 그림 방 **종이**(`core/draw.js` `PAPERS`, `paper` op): 레이어 창 맨 아래, 투명은 체커보드와 투명 PNG. 노래 방 옆 패널은 잠그면 반투명.
+  - 그 전(11월 20일 밤): 색 원판, 그려서 맞히기(`ui/sketch.js`, 초성 힌트), 타임랩스(`ui/timelapse.js`, `core/timelapse.js`), 저장 공간 버그(시나리오마다 localStorage 비우기, '이 기기만' 방은 원본 사본을 안 만듦).
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
-- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 20일 저녁 판: 위의 11월 20일 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
+- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 21일 판: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
 - **GitHub**: 11월 15일부터 올리기가 된다(사용자가 GitHub를 연결함). 작업 브랜치를 올리고, 확인된 상태를 `main`에 합친다(허락받음).
 - **다음 (본질 순, 본질 문서 8절)**: ① 서버 켜기(사용자)와 실제 두 기기 시험 ② 노래 원본을 방으로(친구가 내 목소리를 듣는다: 방의 `files`, ADPCM) ③ 홈에 "새로 온 것"(서버가 방마다 마지막 변경을 알려 줘야 함) ④ 사진 방(셀로그), 통합 방 ⑤ 노래 잇기 창, 그림 필압 ⑥ 글쓰기 방(A4·스크롤) ⑦ 방 비밀번호. 실제 목소리 채점도 남아 있다.
 - **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소), 작업 브랜치 `claude/voice-piano-conversion-scaffold-fnjrk8`. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
@@ -103,9 +109,9 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 398개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 416개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 150개 남짓. --dist는 먼저 bundle을 돌려야 한다
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 190개 남짓. --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
 ```
 
