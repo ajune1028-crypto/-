@@ -1,6 +1,7 @@
 // Scores the singing → notes path on real recordings (the owner: "사람들의 목소리로 테스트해봐").
 //
-//   node tools/voices.mjs [name part…] [--roll]       every take under out/voices/
+//   node tools/voices.mjs [name part…] [--roll] [--meant]   every take under out/voices/ (--meant: the keys
+//                                                     meant, 음 다듬기; else what plays, what was sung)
 //   node tools/voices.mjs --mixes [name part…]        real takes sung together and over a piano
 //
 // Reads out/voices/<set>/<name>_m.wav (mono 16-bit, any rate) and, when it is there, the reference
@@ -243,7 +244,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const t0 = performance.now();
     const result = await analyzeSamples(samples, rate, { chunkSeconds: 5 });
     const ms = performance.now() - t0;
-    const est = result.notes;
+    // --meant scores the keys meant in the take's key (음 다듬기); by default what plays: what was sung.
+    const est = args.includes("--meant") ? result.notes : result.notes.map((n) => (n.s === undefined ? n : { ...n, p: n.s }));
     const kind = result.chords ? `  several pitches (${est.filter((n) => n.h).length} harmony notes; agrees ${(100 * result.agree).toFixed(0)}%)` : "";
     if (take.ref) {
       const ref = loadRefNotes(take.ref);

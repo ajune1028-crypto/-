@@ -320,13 +320,13 @@ export class Timeline {
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
-    el.classList.toggle("no-notes", model.mode === "piano" && !!source && !notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
+    el.classList.toggle("no-notes", model.mode !== "original" && !!source && !notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
   }
 
   clipInside(clip, source, model, hasAudio, notes) {
     if (!source) return [];
     const parts = [];
-    const piano = model.mode === "piano";
+    const piano = model.mode !== "original";
     const lo = clip.offset;
     const hi = clip.offset + clip.length;
     if (!piano || model.showWave) {

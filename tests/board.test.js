@@ -453,20 +453,27 @@ test("a card's speed never changes its size: the halves of a cut card are as wid
   assert.equal(r.x, l.x + 180 + 24);
 });
 
-test("a song card keeps what was sung and its key, and switches 부른 그대로 ↔ 조에 맞춰 in its own data", async () => {
-  const { songCardData, cardTonalState, cardTonalData, cardNotes, cardScale, cardFromClip } = await import("../src/core/board.js");
+test("a song card plays what was sung (its keys meant kept beside); a card made the old way plays what was sung too; into a song room it keeps both", async () => {
+  const { songCardData, cardNotes, cardScale, cardFromClip } = await import("../src/core/board.js");
   const notes = [{ t: 0, d: 0.3, p: 57, v: 0.8 }, { t: 0.4, d: 0.3, p: 60, v: 0.8, s: 59 }, { t: 0.8, d: 0.3, p: 64, v: 0.8 }];
   const d = songCardData({ duration: 1.2, notes, peaks: "", scale: { tonic: 9, minor: true } });
-  assert.deepEqual(d.sung, [[1, 59]]);
   assert.deepEqual(cardScale(d), { tonic: 9, minor: true });
-  assert.equal(cardTonalState(d), "tonal");
-  const sung = cardTonalData(d, false);
-  assert.deepEqual(sung.notes.map((n) => n[2]), [57, 59, 64]);
-  assert.equal(cardTonalState(sung), "sung");
-  const back = cardTonalData(sung, true);
-  assert.deepEqual(back.notes.map((n) => n[2]), [57, 60, 64]);
-  assert.deepEqual(back.sung, [[1, 59]]);
-  assert.deepEqual(cardNotes(back).map((n) => n.s ?? null), [null, 59, null], "a card's notes into a song room keep the choice");
+  // On the board: what was sung, with the key meant kept as `meant`.
+  const board = new BoardDoc();
+  const clock = new Clock("a");
+  const made = addItemOps(clock, board, { kind: "song", x: 0, y: 0, data: d, by: "m1" });
+  board.applyAll(made.ops);
+  const card = board.item(made.id);
+  assert.deepEqual(card.data.notes.map((n) => n[2]), [57, 59, 64], "what was sung plays");
+  assert.deepEqual(card.data.meant, [[1, 60]]);
+  assert.equal(card.data.sung, undefined);
+  assert.deepEqual(board.items().find((i) => i.id === made.id).data.notes.map((n) => n[2]), [57, 59, 64], "the list of cards too");
+  // Into a song room: the keys meant with what was sung beside them (so it plays what was sung there too).
+  for (const data of [card.data, d]) assert.deepEqual(cardNotes(data).map((n) => [n.p, n.s ?? null]), [[57, null], [60, 59], [64, null]]);
+  // A card's own song (the board's ▶) plays what was sung.
+  const one = cardsSong([card]);
+  const src = [...one.sources.keys()][0];
+  assert.deepEqual(one.notesOf(src).map((n) => n.p), [57, 59, 64]);
   // From a song clip (the clipboard's source): the part's notes keep theirs.
   const part = cardFromClip({ source: { duration: 1.2, notes, peaks: "", scale: { tonic: 9, minor: true } }, offset: 300, length: 900 });
   assert.deepEqual(part.sung, [[0, 59]]);

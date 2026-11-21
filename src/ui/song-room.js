@@ -19,9 +19,8 @@ import { memberColor, personColor, INK, PALETTE } from "../core/paint.js";
 import {
   MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan,
   joinClipOps, joinWithSourceOps, combinedSource,
-  packMs, noteInSeconds, tonalOps,
+  packMs, noteInSeconds,
 } from "../core/song.js";
-import { keyName } from "../audio/intent.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
 import { copyItem, clipboardItem } from "../clipboard.js";
@@ -120,7 +119,7 @@ export function mountSongRoom(body, app, session, frame) {
     lassoButton.setAttribute("aria-pressed", String(!!on));
     if (on) toast(root, "클립들을 손가락으로 둘러 그리세요", 1800);
   }
-  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"]], settings().songMode, (mode) => setMode(mode), "mode");
+  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "같이", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
   // They lie straight on the room's background: they read it (white, black or a deeper black).
   for (const el of [zoomOut, zoomIn, lassoButton, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
@@ -479,7 +478,7 @@ export function mountSongRoom(body, app, session, frame) {
     }
     makePlayer(ctx);
     // ▶ does not wait long for the recordings: one not read in a moment plays as piano this time.
-    if (settings().songMode === "original") await Promise.race([loadRecordings(ctx), new Promise((resolve) => setTimeout(resolve, 350))]);
+    if (hearsOriginal()) await Promise.race([loadRecordings(ctx), new Promise((resolve) => setTimeout(resolve, 350))]);
     return ctx;
   }
 
@@ -587,10 +586,13 @@ export function mountSongRoom(body, app, session, frame) {
     if (alive) placeMenu();
   }
 
+  /** 원본 or 같이: the recordings are heard, so they are read ahead. */
+  function hearsOriginal() { return settings().songMode === "original" || settings().songMode === "both"; }
+
   function setMode(mode) {
     setSetting(app.store, "songMode", mode);
     player?.setMode(mode);
-    if (mode === "original") warmRecordings();
+    if (hearsOriginal()) warmRecordings();
     app.events.emit("settings");
     draw();
   }
@@ -607,7 +609,7 @@ export function mountSongRoom(body, app, session, frame) {
     const now = settings().songSpeed || 1;
     const speed = SPEEDS[(SPEEDS.indexOf(now) + 1) % SPEEDS.length];
     setSetting(app.store, "songSpeed", speed);
-    if (player && settings().songMode === "original" && speed !== 1) showStatus("빠르기를 맞추는 중…");
+    if (player && hearsOriginal() && speed !== 1) showStatus("빠르기를 맞추는 중…");
     // Stretching a long recording takes a moment; let the words show first.
     setTimeout(() => {
       player?.setSpeed(speed);
@@ -848,18 +850,6 @@ export function mountSongRoom(body, app, session, frame) {
     session.commit("song", made.ops);
     record(made.atoms);
     return true;
-  }
-
-  /** The clip menu's 조에 맞춰 / 부른 그대로 (the other one than what plays now), or nothing. */
-  function tonalItem(clip) {
-    const state = song.tonalState(clip.src);
-    if (!state || readOnly() || clip.locked) return null;
-    const scale = song.scaleOf(clip.src);
-    const toTonal = state === "sung";
-    const label = toTonal ? "조에 맞춰" + (scale ? " · " + keyName(scale.tonic, scale.minor) : "") : "부른 그대로";
-    const onclick = (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); };
-    if (wideSide.matches) return h("button", { type: "button", id: "clip-tonal", class: "side-btn", "aria-label": label, onclick }, icon("fork"), h("span", { class: "side-btn-word", text: toTonal ? "조에 맞춰" : "부른 그대로" }));
-    return h("button", { type: "button", id: "clip-tonal", text: label, onclick });
   }
 
   function step(dir) {
@@ -1277,8 +1267,6 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
       item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
-      // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
-      tonalItem(clip),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
       item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly(), "speed"),
       !locked && h("button", { type: "button", id: "clip-tint", class: docked ? "side-btn" : null, onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
@@ -1548,7 +1536,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!alive) return;
     roomFiles = files;
     shareMine();
-    if (settings().songMode === "original") warmRecordings();
+    if (hearsOriginal()) warmRecordings();
     draw();
   });
   draw();

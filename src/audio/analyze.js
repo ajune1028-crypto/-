@@ -172,7 +172,29 @@ export async function voiceNotes(samples, rate, { onProgress = () => {}, periods
     if (sung[i] !== keys[i]) note.s = sung[i];
     return note;
   });
-  return { notes, scale: tonic === null ? null : { tonic, minor } };
+  return { notes: withoutStrays(notes), scale: tonic === null ? null : { tonic, minor } };
+}
+
+const STRAY_MS = 0.12; // seconds: shorter than this…
+const STRAY_UNDER = 7; // …and this many semitones under every note sung near it…
+const STRAY_NEAR = 1; // …within this many seconds
+/**
+ * The notes without the breaths: a very short note far under every note sung near it (a breath, or
+ * the voice creaking as a phrase starts; the owner's own take had four, 50-110 ms, about an octave
+ * under the tune) jumps out as a low piano key. A note alone, a long low note and a quick note a
+ * fourth or a fifth down stay. Pitches as sung plainly (`s`, else `p`).
+ */
+export function withoutStrays(notes) {
+  const key = (n) => n.s ?? n.p;
+  return notes.filter((n, i) => {
+    if (n.d >= STRAY_MS) return true;
+    const near = [];
+    const prev = notes[i - 1];
+    const next = notes[i + 1];
+    if (prev && n.t - (prev.t + prev.d) <= STRAY_NEAR) near.push(key(prev));
+    if (next && next.t - (n.t + n.d) <= STRAY_NEAR) near.push(key(next));
+    return !near.length || near.some((q) => q - key(n) < STRAY_UNDER);
+  });
 }
 
 /**

@@ -7,10 +7,10 @@
 // zooms the rows. Edits lie over the recording's notes, so they reach every
 // clip cut from the same recording, and each one can be undone.
 
-import { h, openSheet } from "./dom.js";
+import { h, openSheet, toast } from "./dom.js";
 import { watchFingers } from "./fingers.js";
 import { noteLabel, solfege } from "../audio/notes.js";
-import { noteSetOps, noteAddOps } from "../core/song.js";
+import { noteSetOps, noteAddOps, tonalOps } from "../core/song.js";
 import { snapMs, quantizeNotes } from "../core/beat.js";
 import { timeText } from "./song-view.js";
 
@@ -52,6 +52,10 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
         h("button", { type: "button", class: "chip", id: "roll-row-out", text: "높이 −", onclick: () => zoom(1, 1 / 1.25) }),
         h("button", { type: "button", class: "chip", id: "roll-row-in", text: "높이 +", onclick: () => zoom(1, 1.25) }),
         h("button", { type: "button", class: "chip", id: "quantize", text: "박자 맞추기", onclick: () => quantize() }),
+        // 음 다듬기: the notes sung a little off moved to the ones that fit the song (the keys meant in
+        // the take's key), and back. What was sung plays at first (the owner, 21 November: "조에 맞춰
+        // 내림다장조… 뭔 기능이고?"): this is a tool for whoever wants it, in plain words.
+        h("button", { type: "button", class: "chip", id: "note-tidy", text: "음 다듬기", hidden: true, title: "살짝 빗나간 음을 노래에 어울리는 음으로", onclick: () => tidy() }),
         part, noHarmony,
         del),
       roll, info, list);
@@ -104,6 +108,10 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
         grid.style.setProperty("--bar-x", phase(b.bar));
       }
       panel.querySelector("#quantize").hidden = !b || !canEdit();
+      const state = song.tonalState(c.src);
+      const tidyBtn = panel.querySelector("#note-tidy");
+      tidyBtn.hidden = !state || !canEdit();
+      tidyBtn.setAttribute("aria-pressed", String(state === "tonal"));
       keys.style.height = grid.style.height;
       // Rows: one per key, the black keys a shade darker, every 도 named.
       const pitches = range2(hi, lo);
@@ -174,6 +182,18 @@ export function openNoteEditor(root, { song, clipId, clock, commit, preview, can
     function choose(n) {
       chosen = n.key;
       preview(n.p, Math.min(1.2, (n.e - n.s) / 1000));
+      draw();
+    }
+
+    /** 음 다듬기 on or off for the whole take, as one step to undo. */
+    function tidy() {
+      const c = layout?.c;
+      if (!c || !canEdit()) return;
+      const on = song.tonalState(c.src) !== "tonal";
+      const made = tonalOps(...ctx().slice(0, 2), c.src, on);
+      if (!made.ops.length) return;
+      commit(made);
+      toast(root, on ? `살짝 빗나간 음 ${made.ops.length}개를 노래에 어울리는 음으로 바꿨어요` : "부른 그대로 돌렸어요", 2600);
       draw();
     }
 

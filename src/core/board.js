@@ -109,41 +109,43 @@ export function songCardData({ duration, notes, peaks, name, blob, scale }) {
   return data;
 }
 
-/** A song card's notes in seconds, each that plays the key meant with what was sung as `s`. */
+/**
+ * A song card's notes in seconds as a song room keeps a take's: the keys meant, with what was sung
+ * as `s` where it differs (so there, too, what was sung plays and 음 다듬기 can reach the keys meant).
+ */
 export function cardNotes(d) {
   const notes = d.notes.map(unpackNote);
   for (const [i, k] of d.sung || []) if (notes[i]) notes[i].s = k;
+  for (const [i, k] of d.meant || []) if (notes[i] && notes[i].p !== k) { notes[i].s = notes[i].p; notes[i].p = k; }
   return notes;
+}
+
+/**
+ * A song card's data as it plays: what was sung (the owner's own take: 81 of 83 notes are the voice's
+ * own sung plainly, 51 in the take's key), the keys meant kept as `meant` pairs. Cards kept the other
+ * way (the keys meant, what was sung as `sung`) are read so too.
+ */
+const sungData = new WeakMap();
+export function playsSung(d) {
+  if (!d || !Array.isArray(d.sung) || !d.sung.length) return d;
+  let out = sungData.get(d);
+  if (out) return out;
+  const notes = d.notes.map((n) => n.slice());
+  const meant = [];
+  for (const [i, k] of d.sung) {
+    if (!notes[i]) continue;
+    meant.push([i, notes[i][2]]);
+    notes[i][2] = k;
+  }
+  out = { ...d, notes, meant };
+  delete out.sung;
+  sungData.set(d, out);
+  return out;
 }
 
 /** A song card's key ({ tonic, minor }) or null. */
 export const cardScale = (d) => (Array.isArray(d.scale) ? { tonic: d.scale[0], minor: d.scale[1] === 1 } : null);
 
-/** "tonal" (plays the keys meant, can switch to 부른 그대로), "sung" (the other way), or null. */
-export function cardTonalState(d) {
-  if (d.meant && d.meant.length) return "sung";
-  if (d.sung && d.sung.length) return "tonal";
-  return null;
-}
-
-/** The card's data switched to 조에 맞춰 (toTonal) or 부른 그대로; the other keys kept for switching back. */
-export function cardTonalData(d, toTonal) {
-  const from = toTonal ? d.meant : d.sung;
-  if (!from || !from.length) return d;
-  const notes = d.notes.map((n) => n.slice());
-  const other = [];
-  for (const [i, k] of from) {
-    if (!notes[i]) continue;
-    other.push([i, notes[i][2]]);
-    notes[i][2] = k;
-  }
-  const out = { ...d, notes };
-  delete out.sung;
-  delete out.meant;
-  if (toTonal) out.sung = other;
-  else out.meant = other;
-  return out;
-}
 
 /**
  * A song card's data for the part of a sound a clip plays: the clipboard's
@@ -298,7 +300,7 @@ export class BoardDoc {
   item(id) {
     const it = this.byId.get(id);
     if (!it) return null;
-    const out = { id: it.id, kind: it.kind, data: it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
+    const out = { id: it.id, kind: it.kind, data: it.kind === "song" ? playsSung(it.data) : it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
     for (const [k, { v }] of it.fields) out[k] = v;
     return out;
   }

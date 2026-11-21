@@ -94,6 +94,16 @@ test("in original mode a clip whose recording is not on this device plays as pia
   assert.deepEqual(pianoKeys(w.player, w.ctx).map(([, k]) => k), [60, 64, 67]);
 });
 
+test("같이 plays the recording and its piano at once (to hear whether they agree)", () => {
+  const w = world({ audio: true });
+  w.commit(addClipOps(w.clock, w.song, { src: w.src, row: 0, start: 0, length: 1500, by: "m", at: 1 }).ops);
+  w.player.setMode("both");
+  w.player.play(0);
+  w.run(2);
+  assert.equal(w.ctx.started.filter((s) => s.buffer === w.recording).length, 1, "the recording");
+  assert.deepEqual(pianoKeys(w.player, w.ctx).map(([, k]) => k), [60, 64, 67], "and every note as piano");
+});
+
 test("the player stops by itself after the last clip and says so", () => {
   const w = world();
   w.commit(addClipOps(w.clock, w.song, { src: w.src, row: 0, start: 0, length: 1500, by: "m", at: 1 }).ops);

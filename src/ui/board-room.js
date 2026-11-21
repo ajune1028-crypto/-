@@ -31,9 +31,8 @@ import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
-  tintLassoOps, rowLayout, boxLoop, strokesInLoop, cardTonalState, cardTonalData, cardScale,
+  tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
-import { keyName } from "../audio/intent.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
@@ -1142,7 +1141,7 @@ export function mountBoardRoom(body, app, session, frame) {
         railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
         // With a loop in hand: only its part (pressed), or the whole board.
         !!focusLoop && railButton("song-focus", "fit", "올가미만", () => { focusOff = !focusOff; draw(); }, { pressed: !focusOff }),
       ],
@@ -1150,7 +1149,7 @@ export function mountBoardRoom(body, app, session, frame) {
       lasso: [
         railButton("board-fit", "fit", "모두 보기", () => fitAll()),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
         can && railButton("lasso-clear", "eraser", "모두 풀기", () => removeAllLassos()),
       ],
     }[mode];
@@ -1215,12 +1214,6 @@ export function mountBoardRoom(body, app, session, frame) {
         }),
         // 화음: the harmony found under the tune, left out or brought back (only when there is some).
         can && item.data.notes.some((n) => n[4] === 1) && one("card-chords", item.chords === false ? "화음 켜기" : "화음 끄기", () => apply(setItemOps(session.clock, board, item.id, { chords: item.chords === false }))),
-        // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
-        can && cardTonalState(item.data) && (() => {
-          const toTonal = cardTonalState(item.data) === "sung";
-          const sc = cardScale(item.data);
-          return one("card-tonal", toTonal ? "조에 맞춰" + (sc ? " · " + keyName(sc.tonic, sc.minor) : "") : "부른 그대로", () => apply(setItemOps(session.clock, board, item.id, { data: cardTonalData(item.data, toTonal) })));
-        })(),
         tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
@@ -2139,7 +2132,7 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   function toggleSoundMode() {
-    const next = settings().songMode === "original" ? "piano" : "original";
+    const next = { original: "piano", piano: "both", both: "original" }[settings().songMode] || "piano";
     setSetting(app.store, "songMode", next);
     player?.setMode(next);
     draw();
@@ -2714,7 +2707,7 @@ export function mountBoardRoom(body, app, session, frame) {
     return reading.get(key);
   }
   async function recordingsOf(song, ctx, waitMs = 350) {
-    const original = settings().songMode === "original";
+    const original = settings().songMode === "original" || settings().songMode === "both";
     const wanted = [...song.sources.values()].filter((src) => src.blob && (original || !src.notes?.length));
     const audio = new Map();
     const done = Promise.all(wanted.map((src) => soundOf(src.blob, ctx).then((buf) => { if (buf) audio.set(src.id, buf); })));
@@ -2916,7 +2909,7 @@ export function mountBoardRoom(body, app, session, frame) {
     roomFiles = files;
     shareMine();
     // In 원본 the cards' recordings are read ahead (no tap needed to read), so ▶ finds them ready.
-    if (settings().songMode === "original") {
+    if (settings().songMode === "original" || settings().songMode === "both") {
       audioContext({ wake: false }).then((ctx) => {
         if (!ctx || !alive) return;
         for (const item of board.items()) if (item.kind === "song" && item.data?.blob) soundOf(item.data.blob, ctx);

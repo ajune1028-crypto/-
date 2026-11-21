@@ -19,7 +19,8 @@
 // the harmony (화음) and not to the tune: a clip may leave those out (`chords: false`).
 // A sound may keep, beside its notes (the keys meant, read in the take's key), what was sung plainly
 // where that differs (`sung`: [note index, key] pairs) and the key it was read in (`scale`: [tonic
-// 0-11, minor 0/1]). 부른 그대로 and 조에 맞춰 switch a sound's notes between the two with note edits.
+// 0-11, minor 0/1]). What was sung plays; 음 다듬기 switches a sound's notes to the keys meant (and
+// back) with note edits.
 // A sound's own notes never change; edits lie over them, so every device
 // agrees and every edit can be undone. notesOf(src) gives the result.
 //
@@ -123,8 +124,12 @@ export function unpackNote([t, d, p, v, h]) {
 export function noteInSeconds(n) {
   const out = { t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v };
   if (n.h) out.h = true;
-  // A copy keeps 부른 그대로 for the notes that now play the key meant.
-  if (n.sung !== undefined && n.p === n.meant) out.s = n.sung;
+  // A copy plays what this one plays: sung plainly, it keeps the key meant beside it (as a take
+  // keeps it); tidied (음 다듬기), it is the key meant alone.
+  if (n.sung !== undefined && n.p === n.sung) {
+    out.p = n.meant;
+    out.s = n.sung;
+  }
   return out;
 }
 /** A song's note (milliseconds) as it is stored. */
@@ -322,7 +327,9 @@ export class SongDoc {
     if (!src) return [];
     const list = src.notes.map((n, i) => {
       const note = { key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false, h: !!n.h };
-      if (src.sung && src.sung.has(i)) { note.sung = src.sung.get(i); note.meant = n.p; }
+      // What was sung plays (the owner's own take: 81 of 83 notes are the voice's own sung plainly,
+      // 51 read in the take's key); the key meant stays beside it for 음 다듬기.
+      if (src.sung && src.sung.has(i)) { note.sung = src.sung.get(i); note.meant = n.p; note.p = note.sung; }
       return note;
     });
     for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false, h: false });

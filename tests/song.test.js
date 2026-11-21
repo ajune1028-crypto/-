@@ -379,8 +379,10 @@ test("a note marked with anything but 1 is not taken; older four-number notes st
   assert.notEqual(song.apply(bad), "applied");
 });
 
-test("a take keeps what was sung where the key meant differs, and its key; 부른 그대로 and 조에 맞춰 switch between them, for everyone, one undo step", async () => {
-  const { SongDoc, sourceOp, tonalOps, invertSongOps } = await import("../src/core/song.js");
+test("a take plays what was sung (부른 그대로) and keeps the keys meant beside it; 음 다듬기 moves to them and back, for everyone, one undo step", async () => {
+  // The owner's own take (21 November): sung plainly, 81 of 83 notes are the voice's own; the keys
+  // meant in the take's key, 51. So what was sung plays, and the keys meant are a tool (음 다듬기).
+  const { SongDoc, sourceOp, tonalOps, invertSongOps, noteInSeconds } = await import("../src/core/song.js");
   const { Clock } = await import("../src/core/crdt.js");
   const song = new SongDoc();
   const clock = new Clock("a");
@@ -394,24 +396,31 @@ test("a take keeps what was sung where the key meant differs, and its key; 부�
   assert.deepEqual(src.sung, [[1, 59], [2, 61]], "only the notes that differ");
   assert.deepEqual(src.scale, [9, 1]);
   song.apply(src);
-  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 60, 62, 64], "the keys meant play first");
-  assert.deepEqual(song.notesOf(src.id).map((n) => n.sung ?? null), [null, 59, 61, null]);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 59, 61, 64], "what was sung plays first");
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.meant ?? null), [null, 60, 62, null]);
   assert.deepEqual(song.scaleOf(src.id), { tonic: 9, minor: true });
-  assert.equal(song.tonalState(src.id), "tonal");
-  const toSung = tonalOps(clock, song, src.id, false);
-  song.applyAll(toSung.ops);
-  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 59, 61, 64], "부른 그대로");
   assert.equal(song.tonalState(src.id), "sung");
+  const tidy = tonalOps(clock, song, src.id, true);
+  song.applyAll(tidy.ops);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 60, 62, 64], "음 다듬기: the keys meant");
+  assert.equal(song.tonalState(src.id), "tonal");
   // A note edited by hand is left as it is by the switch.
   song.applyAll([{ t: "nfix", id: clock.next(), src: src.id, n: "2", f: { p: 65 } }]);
-  song.applyAll(tonalOps(clock, song, src.id, true).ops);
-  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 60, 65, 64], "조에 맞춰, the hand edit kept");
-  // Undo of the first switch, on a fresh copy: one step back to the keys meant.
+  song.applyAll(tonalOps(clock, song, src.id, false).ops);
+  assert.deepEqual(song.notesOf(src.id).map((n) => n.p), [57, 59, 65, 64], "back to what was sung, the hand edit kept");
+  // Undo of 음 다듬기, on a fresh copy: one step back to what was sung.
   const other = new SongDoc();
   other.apply(src);
-  other.applyAll(toSung.ops);
-  other.applyAll(invertSongOps(other, clock, toSung.atoms, "undo"));
-  assert.deepEqual(other.notesOf(src.id).map((n) => n.p), [57, 60, 62, 64]);
+  other.applyAll(tidy.ops);
+  other.applyAll(invertSongOps(other, clock, tidy.atoms, "undo"));
+  assert.deepEqual(other.notesOf(src.id).map((n) => n.p), [57, 59, 61, 64]);
+  // A copy (the clipboard) plays what was sung too and keeps the keys meant for 음 다듬기; a tidied copy stays tidied.
+  const copy = other.notesOf(src.id).map(noteInSeconds);
+  assert.deepEqual(copy.map((n) => [n.p, n.s ?? null]), [[57, null], [60, 59], [62, 61], [64, null]]);
+  const third = new SongDoc();
+  third.apply(src);
+  third.applyAll(tonalOps(clock, third, src.id, true).ops);
+  assert.deepEqual(third.notesOf(src.id).map(noteInSeconds).map((n) => [n.p, n.s ?? null]), [[57, null], [60, null], [62, null], [64, null]], "a tidied copy plays tidied");
   // Nonsense in the new fields sets the op aside; an old take without them is as before.
   const bad = new SongDoc();
   assert.equal(bad.apply({ ...src, id: "77@z", sung: [[9, 59]] }), "unknown", "an index past the notes");

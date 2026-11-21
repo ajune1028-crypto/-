@@ -2816,6 +2816,37 @@ scenario("song: 잇기 joins the two halves of a split back into one, and two ta
   await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 2`);
 });
 
+// The owner (21 November): "조에 맞춰 내림다장조… 그게 뭔 개소리야? 뭔 기능이고?" — and their own take matched
+// its voice in 81 of 83 notes sung plainly, 51 in the take's key. What was sung plays; the menu has no
+// key names; 음 다듬기 in 음 편집 moves the notes sung a little off to the ones that fit, and back.
+scenario("song: what was sung plays first; no key names in the clip menu; 음 다듬기 in 음 편집 moves the off notes to the ones that fit and back", async ({ open }) => {
+  const page = await open();
+  await createSongRoom(page);
+  await page.eval(`(() => {
+    const s = window.__app.session;
+    const src = { t: "src", id: s.clock.next(), dur: 1600, notes: [[0, 300, 57, 80], [400, 300, 60, 80], [800, 300, 62, 80], [1200, 300, 64, 80]], peaks: "", by: s.memberId, at: 1, sung: [[1, 59], [2, 61]], scale: [9, 1] };
+    const clip = { t: "clip", id: s.clock.next(), src: src.id, row: 0, start: 0, offset: 0, length: 1600, by: s.memberId, at: 1 };
+    s.commit("song", [src, clip]);
+    return true;
+  })()`);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id] .note").length === 4`);
+  const keys = () => page.eval(`(() => { const s = window.__app.session.doc("song"); const src = [...s.sources.keys()][0]; return s.notesOf(src).map((n) => n.p); })()`);
+  assert.deepEqual(await keys(), [57, 59, 61, 64], "what was sung plays");
+  await choose(page, ".clip[data-id]");
+  await page.waitFor(q("#clip-notes"));
+  assert.ok(!(await page.eval(`/조에 맞춰|장조|단조/.test(document.body.textContent)`)), "no key names anywhere");
+  await click(page, "#clip-notes");
+  await page.waitFor(`${q("#note-tidy")} && !${q("#note-tidy")}.hidden`);
+  assert.equal(await page.eval(`${q("#note-tidy")}.getAttribute("aria-pressed")`), "false");
+  await click(page, "#note-tidy");
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("노래에 어울리는 음")`);
+  assert.deepEqual(await keys(), [57, 60, 62, 64], "음 다듬기");
+  assert.equal(await page.eval(`${q("#note-tidy")}.getAttribute("aria-pressed")`), "true");
+  await click(page, "#note-tidy");
+  await page.waitFor(`${q("#note-tidy")}.getAttribute("aria-pressed") === "false"`);
+  assert.deepEqual(await keys(), [57, 59, 61, 64], "back to what was sung");
+});
+
 scenario("song: 음 편집 moves a note up a step, adds one, removes one, and undo puts each back", async ({ open, out, fixtures }) => {
   const page = await open();
   await createSongRoom(page);

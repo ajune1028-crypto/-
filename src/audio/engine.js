@@ -239,7 +239,15 @@ export class SongPlayer {
     if (until <= this.booked) return;
     const from = this.booked;
     const opts = { ongoing: first };
-    if (this.mode === "original") {
+    if (this.mode === "both") {
+      // 같이: the recording and its piano at once, so one hears whether they agree (the owner, 21
+      // November: "그거랑 내가 준 원본이랑 맞는지"). A clip without its recording here plays as piano alone.
+      for (const ev of song.noteEvents(from, until, opts)) this.playNote(ev);
+      for (const seg of song.audioSegments(from, until, opts)) {
+        const buf = this.audioFor(seg.src);
+        if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
+      }
+    } else if (this.mode === "original") {
       for (const seg of song.audioSegments(from, until, opts)) {
         const buf = this.audioFor(seg.src);
         if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
