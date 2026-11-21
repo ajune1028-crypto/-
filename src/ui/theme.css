@@ -268,9 +268,12 @@ h1, h2, p { margin: 0; }
 .home {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* One row exactly the screen's height (not as tall as the rooms): each half's rooms scroll inside
+     it, and its + stays in view however many rooms there are (the owner, 21 November). */
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
-.half { position: relative; min-width: 0; height: 100%; }
+.half { position: relative; min-width: 0; min-height: 0; height: 100%; }
 .half-scroll {
   display: flex;
   flex-direction: column;

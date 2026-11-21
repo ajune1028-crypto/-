@@ -123,6 +123,55 @@ scenario("home: both halves fit a 360-wide screen", async ({ open, out }) => {
   }
 });
 
+// The owner (21 November, a screenshot of a home with many rooms): "방이 많아 지면… 스크롤 할 수 있게끔
+// 해줘… 플러스 버튼이랑 그런게 다 아래로 내려갔기 때문에". Each half's rooms scroll inside it; its + and the
+// 녹음 / 코드로 들어가기 buttons stay in view and pressable, and the last room scrolls up clear of them.
+scenario("home with many rooms: each half's rooms scroll by a finger, its + and the bottom buttons stay in view, the last room comes clear of them", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 760 });
+  await page.waitFor(q("#home"));
+  await page.eval(`(() => {
+    const rooms = [];
+    for (let i = 0; i < 9; i++) rooms.push({ id: "aaaaaaaaaa" + "bcdefghij"[i] + "2", kind: "daily-text", name: "일상 방 " + (i + 1), memberId: "m1", at: Date.now() - i * 60000, local: true, preview: { kind: "text", text: "오늘 있었던 일 " + (i + 1) } });
+    for (let i = 0; i < 9; i++) rooms.push({ id: "cccccccccc" + "bcdefghij"[i] + "3", kind: "creative-song", name: "노래 방 " + (i + 1), memberId: "m1", at: Date.now() - i * 60000, local: true });
+    window.__app.store.set("rooms", rooms);
+    setTimeout(() => location.reload(), 50);
+    return true;
+  })()`);
+  await pause(400);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll('.half[data-side="daily"] .room-row').length === 9 && document.querySelectorAll('.half[data-side="creative"] .room-row').length === 9`);
+  await settled(page);
+  for (const side of ["daily", "creative"]) {
+    const m = await page.eval(`(() => {
+      const half = document.querySelector('.half[data-side="${side}"]');
+      const add = half.querySelector(".add").getBoundingClientRect();
+      const hit = document.elementFromPoint(add.left + add.width / 2, add.top + add.height / 2);
+      const list = half.querySelector(".half-scroll");
+      return { addTop: add.top, addBottom: add.bottom, h: innerHeight, pressable: !!hit && half.querySelector(".add").contains(hit), scrolls: list.scrollHeight > list.clientHeight + 20, halfH: half.getBoundingClientRect().height, docH: document.documentElement.scrollHeight };
+    })()`);
+    assert.ok(m.addBottom <= m.h && m.addTop >= 0 && m.pressable, side + ": + in view and pressable: " + JSON.stringify(m));
+    assert.ok(m.scrolls && m.halfH <= m.h + 1 && m.docH <= m.h + 1, side + ": the rooms scroll inside the half, not the page: " + JSON.stringify(m));
+  }
+  // A finger drawn up the daily rooms scrolls them (not a long press, not a drag into a house).
+  const at = await page.eval(`(() => { const r = document.querySelectorAll('.half[data-side="daily"] .room-row')[1].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.touch("start", [at]);
+  for (let k = 1; k <= 10; k++) await page.touch("move", [[at[0], at[1] - k * 30]]);
+  await page.touch("end");
+  await settled(page);
+  assert.ok(await page.eval(`document.querySelector('.half[data-side="daily"] .half-scroll').scrollTop > 100`), "the daily rooms moved up under the finger");
+  // At the end, the last room lies above the + and the 녹음 / 코드로 들어가기 buttons.
+  const end = await page.eval(`(() => {
+    const half = document.querySelector('.half[data-side="daily"]');
+    const list = half.querySelector(".half-scroll");
+    list.scrollTop = list.scrollHeight;
+    const rows = half.querySelectorAll(".room-row");
+    const last = rows[rows.length - 1].getBoundingClientRect();
+    const add = half.querySelector(".add").getBoundingClientRect();
+    return { lastBottom: last.bottom, addTop: add.top };
+  })()`);
+  assert.ok(end.lastBottom <= end.addTop + 1, "the last room scrolls clear of the +: " + JSON.stringify(end));
+  await page.shot(out("home-many-rooms.png"));
+});
+
 scenario("create: a text room opens and is listed on home afterwards", async ({ open, out }) => {
   const page = await open();
   const id = await createRoom(page, { room: "우리 둘", name: "가람" });
