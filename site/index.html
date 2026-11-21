@@ -22,7 +22,7 @@
   --paper: #f8fafd;
   /* The glass's colour: the chosen accent (blue unless chosen), for every tint below. */
   --tint: var(--accent);
-  --base: color-mix(in srgb, var(--tint) 14%, #e6eaf0);
+  --base: color-mix(in srgb, var(--tint) calc(14% * var(--tint-amount, 1)), #e6eaf0);
   --sheet: rgb(250 252 255 / 0.92);
   /* text. --muted is for solid surfaces, --soft for text lying straight on a colour field. */
   --ink: #1b2030;
@@ -38,7 +38,7 @@
   --accent-bottom: #1d5bd0;
   --accent-ink: #1d5bd0;
   --ring: #2466dc;
-  --frame-a: color-mix(in srgb, var(--tint) 45%, #ffffff);
+  --frame-a: color-mix(in srgb, var(--tint) calc(45% * var(--tint-amount, 1)), #ffffff);
   --frame-b: color-mix(in srgb, var(--accent-2) 80%, #ffffff);
   /* A second hue for gradients, so the accent is not one flat blue. */
   --accent-2: #5b4fd6;
@@ -57,10 +57,10 @@
      orange for 일상 and periwinkle for 창작, the same in light and dark */
   --daily-b: #ffb27d;
   --creative-b: #b9c6ff;
-  --sky: color-mix(in srgb, var(--tint) 38%, #ffffff);
+  --sky: color-mix(in srgb, var(--tint) calc(38% * var(--tint-amount, 1)), #ffffff);
   --field-strength: 0.85;
   /* glass */
-  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 24%, #ffffff) 50%, transparent) 100%);
+  --glass-grad: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(24% * var(--tint-amount, 1)), #ffffff) 50%, transparent) 100%);
   /* 모래: only on the glass buttons with colour in them, and only in their colour (theme.js draws it
      in my colour; none until then). */
   --sand-light: none;
@@ -70,13 +70,13 @@
   --card-bg: var(--card-grad);
   --glass-edge: rgb(255 255 255 / 0.85);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.35);
-  --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) 18%, transparent), 0 1px 3px rgb(38 72 140 / 0.12);
+  --glass-shadow: 0 10px 28px color-mix(in srgb, var(--tint) calc(18% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(38 72 140 / 0.12);
   --glass-blur: blur(20px) saturate(170%);
-  --panel-bg: linear-gradient(180deg, rgb(248 251 255 / 0.9) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 12%, #ffffff) 84%, transparent) 100%);
+  --panel-bg: linear-gradient(180deg, rgb(248 251 255 / 0.9) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(12% * var(--tint-amount, 1)), #ffffff) 84%, transparent) 100%);
   /* Glass on coloured things (clips, cards): light from above and a bright top edge. */
   --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 55%);
   --gloss-edge: inset 0 1px 0 rgb(255 255 255 / 0.65);
-  --card-grad: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) 18%, #ffffff) 42%, transparent) 100%);
+  --card-grad: linear-gradient(180deg, rgb(255 255 255 / 0.66) 0%, color-mix(in srgb, color-mix(in srgb, var(--tint) calc(18% * var(--tint-amount, 1)), #ffffff) 42%, transparent) 100%);
   --well: rgb(255 255 255 / 0.66);
   --split: -1px 0 0 0 rgb(255 255 255 / 0.6), -2px 0 0 0 rgb(46 78 140 / 0.1);
   --scrim: rgb(22 34 66 / 0.16);
@@ -99,12 +99,12 @@
     --danger: #ff9188;
     --accent-ink: #a7c6ff;
     --ring: #8fb8ff;
-    --frame-a: color-mix(in srgb, var(--tint) 55%, #000000);
+    --frame-a: color-mix(in srgb, var(--tint) calc(55% * var(--tint-amount, 1)), #000000);
     --frame-b: color-mix(in srgb, var(--accent-2) 55%, #000000);
     /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
-    --sky: color-mix(in srgb, var(--tint) 60%, #000000);
+    --sky: color-mix(in srgb, var(--tint) calc(60% * var(--tint-amount, 1)), #000000);
     --field-strength: 0.45;
-    --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+    --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) calc(16% * var(--tint-amount, 1)), rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
     --glass-edge: rgb(255 255 255 / 0.13);
     --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
     --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
@@ -142,12 +142,12 @@
   --danger: #ff9188;
   --accent-ink: #a7c6ff;
   --ring: #8fb8ff;
-  --frame-a: color-mix(in srgb, var(--tint) 55%, #000000);
+  --frame-a: color-mix(in srgb, var(--tint) calc(55% * var(--tint-amount, 1)), #000000);
   --frame-b: color-mix(in srgb, var(--accent-2) 55%, #000000);
   /* The middle keeps the light-mode colours; on near-black they glow at half strength so text on them reads (4.5:1). */
-  --sky: color-mix(in srgb, var(--tint) 60%, #000000);
+  --sky: color-mix(in srgb, var(--tint) calc(60% * var(--tint-amount, 1)), #000000);
   --field-strength: 0.45;
-  --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) 16%, rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
+  --glass-grad: linear-gradient(180deg, color-mix(in srgb, var(--tint) calc(16% * var(--tint-amount, 1)), rgb(255 255 255 / 0.08)) 0%, rgb(255 255 255 / 0.035) 100%);
   --glass-edge: rgb(255 255 255 / 0.13);
   --glass-shine: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(255 255 255 / 0.03);
   --glass-shadow: 0 14px 34px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.5);
@@ -1363,15 +1363,15 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* Glass shadows: soft, in my glass colour, never a heavy black (the owner: "검정색이 너무 강해…
    내가 설정해둔 색깔이랑 비슷하게… 안 진하게"). */
 :root[data-theme="dark"] {
-  --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+  --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) calc(26% * var(--tint-amount, 1)), transparent), 0 2px 6px rgb(0 0 0 / 0.2);
   --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
-  --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+  --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) calc(22% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(0 0 0 / 0.2);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) 26%, transparent), 0 2px 6px rgb(0 0 0 / 0.2);
+    --glass-shadow: 0 10px 26px color-mix(in srgb, var(--tint) calc(26% * var(--tint-amount, 1)), transparent), 0 2px 6px rgb(0 0 0 / 0.2);
     --btn-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent), 0 2px 5px rgb(0 0 0 / 0.22);
-    --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) 22%, transparent), 0 1px 3px rgb(0 0 0 / 0.2);
+    --btn2-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 6px 16px color-mix(in srgb, var(--tint) calc(22% * var(--tint-amount, 1)), transparent), 0 1px 3px rgb(0 0 0 / 0.2);
   }
 }
 
@@ -1735,6 +1735,16 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .draw-layer > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .draw-layer > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .layers-panel { position: absolute; top: 0.6rem; right: 0.6rem; z-index: 5; width: min(17rem, calc(100% - 1.2rem)); max-height: calc(100% - 1.2rem); overflow-y: auto; padding: 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+/* 붓 크기 막대 (그림 방): thin glass at the left edge; a wedge from fine (bottom) to bold (top). */
+.size-rail { position: absolute; left: 0.45rem; top: 50%; z-index: 4; width: 1.5rem; height: min(13rem, 46%); transform: translateY(-50%); border-radius: 999px; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 55%, transparent); box-shadow: var(--glass-shine); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); touch-action: none; cursor: ns-resize; opacity: 0.88; }
+.size-rail[hidden] { display: none; }
+.size-rail:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.size-track { position: absolute; left: 0.3rem; right: 0.3rem; top: 0.7rem; bottom: 0.7rem; background: color-mix(in srgb, var(--ink) 18%, transparent); clip-path: polygon(0 0, 100% 0, 56% 100%, 44% 100%); }
+.size-thumb { position: absolute; left: 50%; bottom: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); width: 1.15rem; height: 1.15rem; margin: 0 0 -0.575rem -0.575rem; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1.5px var(--ink), 0 2px 6px rgba(0, 0, 0, 0.2); pointer-events: none; }
+.size-peek { position: absolute; left: calc(100% + 0.9rem); bottom: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateY(50%); border-radius: 50%; opacity: 0; transition: opacity 0.15s var(--ease); pointer-events: none; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--paper) 85%, transparent), 0 1px 4px rgba(0, 0, 0, 0.25); }
+.size-peek.erase { box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 3px color-mix(in srgb, var(--paper) 85%, transparent); }
+.size-rail.sizing { opacity: 1; }
+.size-rail.sizing .size-peek { opacity: 1; }
 .layers-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
 .layers-title { font-size: 0.95rem; font-weight: 800; }
 .layers-head .chip { display: inline-flex; align-items: center; gap: 0.2rem; height: 1.9rem; }
@@ -1768,7 +1778,21 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .loupe { position: fixed; z-index: 92; width: 4.2rem; height: 4.2rem; translate: -50% -50%; border-radius: 50%; pointer-events: none; background: linear-gradient(180deg, var(--pick, transparent) 50%, var(--cur, #000) 50%); -webkit-mask-image: radial-gradient(circle, transparent 46%, #000 47%); mask-image: radial-gradient(circle, transparent 46%, #000 47%); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 8px 22px rgb(0 0 0 / 0.25); }
 .loupe::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.18); }
 .loupe.bare { background: linear-gradient(180deg, color-mix(in srgb, var(--paper) 92%, transparent) 50%, var(--cur, #000) 50%); }
-.ink-color.custom { outline: 2px dashed color-mix(in srgb, var(--ink) 35%, transparent); outline-offset: 1px; }
+/* 색 원판: the well at the end of the colours (a rainbow rim; the chosen colour of my own inside, or a +). */
+.ink-color.more { position: relative; padding: 0; background: conic-gradient(from 0deg, #ff4d4d, #ffb33b, #f4e04d, #45d36b, #3bc1ff, #4d6bff, #b44dff, #ff4d4d); }
+.ink-color.more::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--well, var(--paper)); }
+.ink-color.more:not(.has)::before { content: ""; position: absolute; z-index: 1; left: 50%; top: 50%; width: 0.6rem; height: 0.6rem; transform: translate(-50%, -50%); opacity: 0.75;
+  background: linear-gradient(var(--ink), var(--ink)) center / 100% 2px no-repeat, linear-gradient(var(--ink), var(--ink)) center / 2px 100% no-repeat; }
+.color-wheel { position: fixed; z-index: 72; display: grid; justify-items: center; gap: 0.6rem; padding: 0.75rem; border: 1px solid var(--glass-edge); border-radius: 1.3rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.22s var(--ease); touch-action: none; user-select: none; -webkit-user-select: none; }
+.cw-disc { position: relative; touch-action: none; }
+.cw-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 22px), #000 calc(100% - 21px)); mask: radial-gradient(circle closest-side, transparent calc(100% - 22px), #000 calc(100% - 21px)); }
+.cw-square { position: absolute; left: 44px; top: 44px; width: 84px; height: 84px; border-radius: 6px; background: linear-gradient(to top, #000, rgba(0, 0, 0, 0)), linear-gradient(to right, #fff, var(--hue, #f00)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent); }
+.cw-knob { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25); pointer-events: none; }
+.cw-foot { display: flex; align-items: center; gap: 0.5rem; }
+.cw-now { flex: none; width: 1.6rem; height: 1.6rem; border-radius: 50%; box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--line); }
+.cw-recent { display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: 8.6rem; }
+.cw-swatch { width: 1.05rem; height: 1.05rem; padding: 0; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
 
 /* A side panel's inner edge (끝자락): a strip that takes the same throw as the grip, its small bar a hint. */
 .panel-end { display: none; position: absolute; top: 0; bottom: 0; width: 1.15rem; touch-action: none; cursor: grab; place-items: center; }
@@ -1893,6 +1917,38 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .relay-page > canvas.ink.on { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .relay-tools { margin: 0 auto; box-shadow: none; }
 .relay-input { font-size: 1.05rem; text-align: center; }
+/* 타임랩스 (그림 방's 과정) */
+.tl-layer { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--base) 50%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.tl-card { display: grid; gap: 0.7rem; width: min(32rem, 100%); padding: 0.9rem; border: 1px solid var(--glass-edge); border-radius: 1.4rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 92%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); animation: card-in 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
+.tl-stage { display: grid; place-items: center; }
+.tl-canvas { border-radius: 0.8rem; box-shadow: inset 0 0 0 1px var(--line), 0 1px 3px rgba(0, 0, 0, 0.08); }
+.tl-bar { position: relative; height: 0.6rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); cursor: pointer; touch-action: none; }
+.tl-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; background: var(--tint); }
+.tl-play { min-width: 5.6rem; }
+.tl-card .game-foot { flex-wrap: nowrap; }
+.tl-card .game-foot .chip { white-space: nowrap; }
+/* 그려서 맞히기 */
+.sketch-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+.sketch-word { padding: 0.6rem 1.1rem; font-size: 1.1rem; font-weight: 800; }
+.sketch-mine { margin: 0; text-align: center; font-size: 0.9rem; color: var(--soft); }
+.sketch-mine b { font-size: 1.25rem; color: var(--ink); letter-spacing: 0.02em; }
+.sketch-hint { margin: 0; text-align: center; font-size: 1.45rem; font-weight: 800; letter-spacing: 0.12em; color: var(--ink); min-height: 1.9rem; }
+.sketch-said { display: grid; gap: 0.2rem; max-height: 7.5rem; overflow-y: auto; overscroll-behavior: contain; padding: 0.1rem 0.2rem; }
+.sketch-said:empty { display: none; }
+.sketch-line { margin: 0; font-size: 0.88rem; overflow-wrap: anywhere; }
+.sketch-line b { color: var(--c); font-weight: 800; }
+.sketch-line.got { font-weight: 700; color: color-mix(in srgb, var(--c) 70%, var(--ink)); }
+.sketch-near { margin: 0; min-height: 0; text-align: center; font-size: 0.85rem; font-weight: 800; color: var(--accent); }
+.sketch-near:empty { display: none; }
+.sketch-got { margin: 0; text-align: center; font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+.sketch-guess { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+.sketch-guess[hidden] { display: none; }
+.sketch-answer { margin: 0; text-align: center; font-size: 1.7rem; font-weight: 900; letter-spacing: 0.04em; }
+.sketch-board { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.sketch-score { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; padding: 0.45rem 0.8rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--c) 12%, transparent); font-weight: 700; }
+.sketch-score b { font-variant-numeric: tabular-nums; }
+.sketch-score.first { background: color-mix(in srgb, var(--c) 24%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent); }
+.sketch-score.first .sketch-who::after { content: " 👑"; }
 .relay-album { display: grid; gap: 0.7rem; max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0.1rem; }
 .relay-entry { display: grid; gap: 0.3rem; }
 .relay-entry-who { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
@@ -1905,6 +1961,55 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 @media (prefers-reduced-motion: reduce) { .relay-book, .relay-entry.arrived { animation: none; } }
 .game-pick.many { position: relative; }
 .game-many { margin-left: auto; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; color: var(--tint); background: color-mix(in srgb, var(--tint) 14%, transparent); }
+
+/* 색 세기: a slider beside how much it is, and 원래대로 once it is moved. */
+.tint-amount-row { display: flex; align-items: center; gap: 0.6rem; }
+.tint-amount { flex: 1; min-width: 0; accent-color: var(--accent); }
+.tint-amount-text { min-width: 2.6rem; text-align: right; font-size: 0.85rem; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 옆 패널 again (the owner on an iPad): its width by its inner edge like a split screen, a small dark
+   lock against a resting hand, hidden to a tab at the edge and shown again; its actions a tidy grid
+   of buttons with the word under the icon. */
+.side-edge, .side-tab { display: none; }
+@media (min-width: 1000px) and (min-height: 600px) and (orientation: landscape) {
+  .song-side { padding-top: 0.35rem; }
+  .side-head { display: flex; justify-content: flex-end; gap: 0.2rem; margin: 0 -0.35rem -0.1rem 0; }
+  .side-lock, .side-hide { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; color: var(--ink); opacity: 0.5; transition: opacity 0.15s var(--ease), background 0.15s var(--ease); }
+  .side-lock svg, .side-hide svg { width: 0.95rem; height: 0.95rem; }
+  .side-lock:hover, .side-hide:hover { opacity: 0.85; }
+  .side-lock[aria-pressed="true"] { opacity: 1; color: var(--paper); background: var(--ink); }
+  .song-side.locked > :not(.side-head) { pointer-events: none; }
+  .song-side.locked { box-shadow: var(--glass-shine), var(--glass-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent); }
+  .side-edge { position: absolute; top: 0.4rem; bottom: 0.65rem; right: calc(var(--side-w) + 0.6rem); z-index: 7; display: grid; place-items: center; width: 1rem; translate: 50% 0; cursor: ew-resize; touch-action: none; }
+  .side-edge .grip-bar { width: 0.26rem; height: 2.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); transition: background 0.15s var(--ease), height 0.15s var(--ease); }
+  .side-edge:hover .grip-bar, .song-side.resizing ~ .side-edge .grip-bar { height: 3.6rem; background: var(--tint); }
+  .room-body.song-body:has(.song-side.locked) .side-edge { pointer-events: none; opacity: 0.3; }
+  .room-body.song-body.side-hidden .timeline { margin-right: 2.7rem; }
+  .room-body.song-body.side-hidden .song-side, .room-body.song-body.side-hidden .side-edge { display: none; }
+  .room-body.song-body.side-hidden .side-tab { display: grid; place-items: center; position: absolute; right: 0.6rem; top: 50%; translate: 0 -50%; z-index: 6; width: 1.8rem; height: 4.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; color: var(--ink); background: var(--glass-bg); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+  .side-tab svg { width: 1rem; height: 1rem; }
+  .song-side .clip-menu.side:not(.tints) { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); gap: 0.35rem; }
+  .song-side .clip-menu.side:not(.tints) > .menu-info { grid-column: 1 / -1; }
+  .song-side .clip-menu.side:not(.tints) > button:not(.side-btn) { grid-column: 1 / -1; }
+  .song-side .clip-menu.side .side-btn { display: grid; justify-items: center; justify-content: center; align-content: center; gap: 0.28rem; min-height: 3.9rem; padding: 0.5rem 0.2rem 0.45rem; border-radius: 0.95rem; text-align: center; background: color-mix(in srgb, var(--ink) 5%, transparent); transition: scale 0.1s var(--ease), background 0.15s var(--ease); }
+  .song-side .clip-menu.side .side-btn:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+  .song-side .clip-menu.side .side-btn:active { scale: 0.95; }
+  .side-btn svg { width: 1.3rem; height: 1.3rem; }
+  .side-btn .menu-swatch { width: 1.25rem; height: 1.25rem; margin: 0; }
+  .side-btn-word { font-size: 0.72rem; font-weight: 700; line-height: 1.15; word-break: keep-all; }
+  #clip-delete.side-btn { color: var(--danger, #e5484d); }
+}
+
+/* 이 날 전체 잠그기: the day's name opens its own small menu; a locked day says so beside its name. */
+.sheet > h2.day.pressable { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.day-lock { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.12rem 0.55rem 0.12rem 0.4rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: var(--paper); background: var(--ink); }
+.day-lock svg { width: 0.8rem; height: 0.8rem; }
+.sheet.day-locked .draw { opacity: 0.82; }
+.day-menu { position: fixed; z-index: 70; display: grid; gap: 0.4rem; max-width: min(17rem, calc(100vw - 1rem)); padding: 0.6rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.22s var(--ease); }
+.day-menu .chip { display: inline-flex; align-items: center; gap: 0.3rem; justify-self: start; }
+.day-menu .chip svg { width: 0.95rem; height: 0.95rem; }
+.day-menu-help, .day-menu-who { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.day-menu-who { color: var(--ink); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -2054,7 +2159,10 @@ class Sheet {
         return this.range(op, this.markMap, { c: op.c });
       }
       case "lock": {
-        if (!validId(op.ch) || !validId(op.to) || typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        if (typeof op.by !== "string" || op.by.length > 40) return this.setAside(op);
+        // 이 날 전체 잠그기: the whole day, its letters to come as well (from the root to the root, `all`).
+        if (op.all === true && op.ch === ROOT && op.to === ROOT) return this.range(op, this.lockMap, { all: true });
+        if (!validId(op.ch) || !validId(op.to)) return this.setAside(op);
         return this.range(op, this.lockMap, {});
       }
       case "arm":
@@ -2204,9 +2312,16 @@ class Sheet {
     return [...this.markMap.values()].filter((m) => m.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
   }
 
-  /** 잠금 on the words, oldest first. */
+  /** 잠금 on the words, oldest first (a whole day's lock is not among them: dayLock()). */
   locks() {
-    return [...this.lockMap.values()].filter((l) => l.rm % 2 === 0).sort((p, q) => cmpId(p.id, q.id));
+    return [...this.lockMap.values()].filter((l) => l.rm % 2 === 0 && !l.all).sort((p, q) => cmpId(p.id, q.id));
+  }
+
+  /** The whole day's lock (이 날 전체 잠그기), the oldest standing one, or null. */
+  dayLock() {
+    let first = null;
+    for (const l of this.lockMap.values()) if (l.all && l.rm % 2 === 0 && (!first || cmpId(l.id, first.id) < 0)) first = l;
+    return first;
   }
 
   mixLevel(id) {
@@ -2998,8 +3113,10 @@ __m["src/core/ink.js"] = (() => {
 // left, with pressure 0..100: the same place on every screen size, because
 // the whole layout is measured in rem.
 //
-//   stroke  { id, pts: [x, y, p, x, y, p, …], c: colour, w: width, b?: brush, s?: style, q?: 1, by, at }
+//   stroke  { id, pts: [x, y, p, x, y, p, …], c: colour, w: width, z?: size, b?: brush, s?: style, q?: 1, by, at }
 //
+// `w` is one of three widths (2, 4, 8 px at 1 rem = 16 px); `z` a size of its own in tenths of a px
+// (그림 방's size slider, 0.5 to 40 px), with `w` its nearest width for a device from before.
 // `b` is a brush every device knows; `s` names a newer brush (만년필, 붓펜, 에어브러시) that a
 // device from before draws as its `b`. `q: 1` is a shape made straight (its points are exact).
 //   srm     { id, s: stroke id, n: removes counter }
@@ -3012,6 +3129,11 @@ const { cmpId, validId } = __m["src/core/crdt.js"];
 /** Pen colours: 빨주노초파남보 and 검정 (drawn white in the dark theme). */
 const INK_COLORS = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black"];
 const INK_WIDTHS = [1, 2, 3];
+/** Each width in px at 1 rem = 16 px. */
+const WIDTH_PX = { 1: 2, 2: 4, 3: 8 };
+/** A size of one's own (그림 방): 0.5 to 40 px. */
+const SIZE_MIN = 0.5;
+const SIZE_MAX = 40;
 /**
  * How a stroke is laid down. "erase" rubs out the strokes under it (an area
  * eraser); whole strokes are hidden with srm instead (the stroke eraser).
@@ -3019,7 +3141,7 @@ const INK_WIDTHS = [1, 2, 3];
  */
 const BRUSHES = ["pen", "pencil", "marker", "highlighter", "erase"];
 /** Newer brushes, each with the older brush a device from before draws it as. */
-const STYLES = { fountain: "pen", brushpen: "pen", airbrush: "highlighter", sketch: "pencil", crayon: "pencil" };
+const STYLES = { fountain: "pen", brushpen: "pen", airbrush: "highlighter", sketch: "pencil", crayon: "pencil", fill: "marker", smudge: "highlighter" };
 const MAX_POINTS = 3000;
 const MAX_UNKNOWN = 300;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -3046,9 +3168,11 @@ class InkDoc {
         (op.b === undefined || BRUSHES.includes(op.b)) &&
         // A style is a name; one this version does not know is drawn as its brush.
         (op.s === undefined || (typeof op.s === "string" && /^[a-z]{1,20}$/.test(op.s))) &&
-        (op.q === undefined || op.q === 1);
+        (op.q === undefined || op.q === 1) &&
+        (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10));
       if (!ok) return this.setAside(op);
       const stroke = { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 };
+      if (op.z) stroke.z = op.z;
       if (op.s) stroke.s = op.s;
       if (op.q) stroke.q = 1;
       this.byId.set(op.id, stroke);
@@ -3108,7 +3232,7 @@ class InkDoc {
     for (let i = list.length - 1; i >= 0; i--) {
       if (list[i].b === "erase") continue;
       const pts = list[i].pts;
-      const reach = radius + list[i].w * 12;
+      const reach = radius + (list[i].z ? (list[i].z / 10) * 6 : list[i].w * 12);
       for (let j = 0; j < pts.length; j += 3) {
         const x2 = pts[j + 3] ?? pts[j];
         const y2 = pts[j + 4] ?? pts[j + 1];
@@ -3144,10 +3268,24 @@ function brushOf(stroke) {
   return stroke.s || stroke.b || "pen";
 }
 
-function strokeOps(clock, ink, { pts, color, width, by, at = Date.now(), brush = "pen", style, shape = false }) {
+/** A stroke's width in px at 1 rem = 16 px: its own size, or its width's. */
+function widthOf(stroke) {
+  return stroke.z ? stroke.z / 10 : WIDTH_PX[stroke.w] || 4;
+}
+
+/** Of the three widths, the one that looks nearest to `px` (halfway between them on a doubling scale). */
+function nearestWidth(px) {
+  return px < 2 * Math.SQRT2 ? 1 : px < 4 * Math.SQRT2 ? 2 : 3;
+}
+
+function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
   const op = { t: "stroke", id: clock.next(), pts: (shape ? pts.slice() : thinPoints(pts)).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
+  if (Number.isFinite(size)) {
+    op.z = Math.round(Math.max(SIZE_MIN, Math.min(SIZE_MAX, size)) * 10);
+    op.w = nearestWidth(op.z / 10);
+  }
   // Pen strokes leave `b` out, so devices from before brushes draw them as they always did; a
   // newer brush goes as its style, with the older brush it falls back to.
   if (style === undefined && STYLES[brush]) {
@@ -3179,7 +3317,7 @@ function moveStrokesOps(clock, ink, ids, dx, dy, by) {
     if (!s || s.rm % 2 === 1) continue;
     const gone = eraseOps(clock, ink, id);
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -3195,7 +3333,7 @@ function recolorStrokesOps(clock, ink, ids, color, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
     const gone = eraseOps(clock, ink, id);
-    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -3221,7 +3359,7 @@ function invertInkOps(ink, clock, atoms, dir) {
   return ops;
 }
 
-return { INK_COLORS, INK_WIDTHS, BRUSHES, STYLES, InkDoc, thinPoints, brushOf, strokeOps, eraseOps, moveStrokesOps, recolorStrokesOps, invertInkOps };
+return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, recolorStrokesOps, invertInkOps };
 })();
 __m["src/core/board.js"] = (() => {
 // The whiteboard: cards on a big surface, and 잇기 lines that say in which
@@ -5513,6 +5651,23 @@ function memberColor(index, theme) {
   return cache.get(key);
 }
 
+/**
+ * A person's colour on a paper: their own colour (hex, roadmap 7) with its hue and strength kept and
+ * only its lightness moved as far as the words need to read (4.5:1), else their palette colour.
+ */
+function personColor(member, theme) {
+  const hex = member?.hex;
+  if (typeof hex === "string" && /^#[0-9a-f]{6}$/i.test(hex)) {
+    const key = theme + hex.toLowerCase();
+    if (!cache.has(key)) {
+      const { l, c, h } = hexToOklch(hex.toLowerCase());
+      cache.set(key, legible(l, c, h, theme));
+    }
+    return cache.get(key);
+  }
+  return memberColor(member?.color ?? 0, theme);
+}
+
 // ---- colour space ----------------------------------------------------------
 
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -5574,6 +5729,42 @@ function luminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+
+/** 색 원판: hue (degrees), saturation and brightness (0..1) as #rrggbb. */
+function hsvToHex(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const f = (n) => {
+    const k = (n + h / 60) % 6;
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  return "#" + [f(5), f(3), f(1)].map((c) => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
+}
+
+/** #rrggbb as { h, s, v } (a grey's hue is 0). */
+function hexToHsv(hex) {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const v = Math.max(r, g, b);
+  const d = v - Math.min(r, g, b);
+  const s = v ? d / v : 0;
+  let h = 0;
+  if (d) {
+    if (v === r) h = ((g - b) / d) % 6;
+    else if (v === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return { h, s, v };
+}
+
+/** The last colours chosen (newest first, at most eight, each once); only #rrggbb is kept. */
+function rememberColor(list, color) {
+  if (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color)) return list.slice(0, 8);
+  const c = color.toLowerCase();
+  return [c, ...list.filter((x) => x !== c)].slice(0, 8);
+}
 /** WCAG contrast ratio between two colours. */
 function contrast(a, b) {
   const la = luminance(a);
@@ -5585,7 +5776,7 @@ function contrast(a, b) {
 function legible(l, c, h, theme) {
   const step = theme === "light" ? -0.01 : 0.01;
   let hex = oklchToHex(l, c, h);
-  for (let i = 0; i < 40 && contrast(hex, PAPER[theme]) < MIN_CONTRAST; i++) {
+  for (let i = 0; i < 100 && contrast(hex, PAPER[theme]) < MIN_CONTRAST; i++) {
     l += step;
     hex = oklchToHex(l, c, h);
   }
@@ -5775,7 +5966,7 @@ function filmImage(tint, second, dark = false, strength = 1) {
   return `url("data:image/svg+xml;utf8,${svg}")`;
 }
 
-return { PALETTE, INK, PAPER, nearestPeopleColor, memberColor, hexToOklch, oklchToHex, contrast, mixColors, splitWords, paintFor, paintCss, accentColors, filmImage };
+return { PALETTE, INK, PAPER, nearestPeopleColor, memberColor, personColor, hexToOklch, oklchToHex, hsvToHex, hexToHsv, rememberColor, contrast, mixColors, splitWords, paintFor, paintCss, accentColors, filmImage };
 })();
 __m["src/ui/theme.js"] = (() => {
 // Light and dark, and the scale that keeps the layout at a 360-wide column.
@@ -5895,6 +6086,21 @@ function applyAccent(hex) {
   for (const [name, value] of Object.entries(colors)) root.style.setProperty(name, value);
 }
 
+/**
+ * 색 세기 (the owner: "자기의 ui색유리의 색… 가라데이션 되어있는부분의 끝부분부터 색깔을 줄이면서. 원본
+ * 버전이있고… 눈안아프게끔. 검정 부분을 더 늘리고싶다거나… 다시 늘릴 수 있고"): how much of my glass
+ * colour the glass, the sky at the corners and the shadows carry, 0..1 (1 = as it was made). Less
+ * colour leaves more white in 밝게 and more black in 어둡게; the buttons keep their colour.
+ */
+function tintAmount(value) {
+  const v = Number(value);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+}
+
+function applyTintAmount(value) {
+  root.style.setProperty("--tint-amount", String(tintAmount(value)));
+}
+
 function applyTextScale(scale) {
   const ok = TEXT_SIZES.some(([v]) => v === scale);
   root.style.setProperty("--text-scale", String(ok ? scale : 1));
@@ -5916,7 +6122,7 @@ function myPeopleColor(settings, room = null) {
   return nearestPeopleColor(glassHex(settings), taken);
 }
 
-return { applyTheme, currentTheme, onThemeChange, fitScale, reducedMotion, ACCENTS, TEXT_SIZES, applyAccent, applyTextScale, glassHex, myPeopleColor };
+return { applyTheme, currentTheme, onThemeChange, fitScale, reducedMotion, ACCENTS, TEXT_SIZES, applyAccent, tintAmount, applyTintAmount, applyTextScale, glassHex, myPeopleColor };
 })();
 __m["src/ui/dom.js"] = (() => {
 // Small helpers for building the screens. Text always goes in as text, never as markup.
@@ -5983,8 +6189,19 @@ const ICONS = {
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M5 15.5V6.4c0-.8.6-1.4 1.4-1.4h9.1"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
   // A panel floating on its own (찾기와 집 like 레퍼런스).
+  replay: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.4h3.4"/><path d="M10.4 9.3v5.4l4.4-2.7z" fill="currentColor" stroke-width="1.2"/>',
   float: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9.5h16"/><circle cx="7.2" cy="7.25" r="0.6" fill="currentColor" stroke="none"/><path d="M8 13.5h8M8 16h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
+  // The side panel's buttons (icon above, word below).
+  trash: '<path d="M4.5 7h15M9.5 7V5h5v2"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 11v5M14 11v5"/>',
+  paste: '<rect x="5.5" y="5" width="13" height="15" rx="2.2"/><path d="M9 5V3.8h6V5"/><path d="M9 11h6M9 14.5h4"/>',
+  join: '<path d="M10 14l4-4"/><path d="M8.6 16.4l-1.2 1.2a3 3 0 01-4.2-4.2l3-3a3 3 0 014.2 0"/><path d="M15.4 7.6l1.2-1.2a3 3 0 014.2 4.2l-3 3a3 3 0 01-4.2 0"/>',
+  speed: '<path d="M4 17.5a8 8 0 1116 0"/><path d="M12 17.5l4.2-5.2"/><circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>',
+  fork: '<path d="M9 3.5v7.5a3 3 0 006 0V3.5"/><path d="M12 14v6.5"/>',
+  chords: '<circle cx="8" cy="17.5" r="2.3"/><circle cx="8" cy="11" r="2.3"/><path d="M10.3 17.5V5h6.2M10.3 11V8.5"/>',
+  send: '<path d="M4.5 12l15-7-4.5 15-3-6z"/><path d="M12 14l7.5-9"/>',
+  hideRight: '<path d="M9 6l6 6-6 6"/>',
+  showLeft: '<path d="M15 6l-6 6 6 6"/>',
 };
 
 function h(tag, props, ...children) {
@@ -6199,6 +6416,28 @@ function toggle(id, label, checked, onChange) {
   return h("div", { class: "row inline" }, h("label", { class: "label", for: id, text: label }), h("span", { class: "switch" }, input, h("span")));
 }
 
+/**
+ * Runs fn at the next frame, or after 50 ms where frames do not come (a page in the background):
+ * work that may be asked for many times a frame is done once. Returns a function that cancels it.
+ */
+function nextFrame(fn) {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+    fn();
+  };
+  const frame = requestAnimationFrame(run);
+  const timer = setTimeout(run, 50);
+  return () => {
+    done = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+  };
+}
+
 /** Bottom sheet inside the app column. Returns a function that closes it. */
 function openSheet(root, title, build) {
   // A close button in the head: one tap, always (the owner: "한 번 누르면 안 나가지고").
@@ -6375,7 +6614,7 @@ function toast(root, text, ms = 2600) {
   toastTimer = setTimeout(() => el.remove(), ms);
 }
 
-return { h, icon, flashHint, iconButton, swallowPress, closeOnOutside, mount, inputRow, formBox, segmented, toggle, openSheet, openFloat, toast };
+return { h, icon, flashHint, iconButton, swallowPress, closeOnOutside, mount, inputRow, formBox, segmented, toggle, nextFrame, openSheet, openFloat, toast };
 })();
 __m["src/core/time.js"] = (() => {
 // Day sheets and time stamps, always in the room's time zone.
@@ -6563,6 +6802,8 @@ class Attempts {
 const FIELD_OK = {
   name: (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 20,
   color: (v) => Number.isInteger(v) && v >= 0 && v < PALETTE.length,
+  // A colour of one's own beside the palette's (roadmap 7); null goes back to the palette colour.
+  hex: (v) => v === null || (typeof v === "string" && /^#[0-9a-f]{6}$/.test(v)),
   pin: (v) => v === null || validVerifier(v),
   joinedAt: (v) => Number.isFinite(v),
 };
@@ -6643,6 +6884,7 @@ class RoomState {
       id,
       name,
       color: fields.get("color")?.v ?? 0,
+      hex: fields.get("hex")?.v ?? null,
       pin: fields.get("pin")?.v ?? null,
       joinedAt: fields.get("joinedAt")?.v ?? 0,
     };
@@ -6713,7 +6955,7 @@ function didOps(clock, memberId, counts, now = Date.now()) {
 
 /** Ops that set fields of one person. */
 function memberOps(clock, memberId, fields) {
-  return Object.entries(fields).map(([k, v]) => ({ t: "mem", id: clock.next(), m: memberId, k, v }));
+  return Object.entries(fields).map(([k, v]) => ({ t: "mem", id: clock.next(), m: memberId, k, v: k === "hex" && typeof v === "string" ? v.toLowerCase() : v }));
 }
 
 function createRoomOps(clock, { kind, name, tz, now, memberId, memberName, pin, color = 0 }) {
@@ -7292,6 +7534,153 @@ function frameAt(doc, tick) {
 
 return { FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD, frameDocOf, AnimDoc, addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, timeline, frameAt };
 })();
+__m["src/core/words.js"] = (() => {
+// 그려서 맞히기's words: things anyone can draw in a minute and anyone can name, in plain Korean
+// (the reference study: "한국어 단어 목록은 우리가 직접 만든다"). Grouped only to keep it readable.
+
+const SKETCH_WORDS = [
+  // 동물
+  "고양이", "강아지", "토끼", "거북이", "기린", "코끼리", "사자", "호랑이", "펭귄", "문어", "고래", "상어", "돌고래",
+  "원숭이", "판다", "곰", "여우", "다람쥐", "햄스터", "병아리", "닭", "오리", "부엉이", "앵무새", "나비", "벌", "개미",
+  "거미", "달팽이", "개구리", "뱀", "악어", "공룡", "낙타", "하마", "얼룩말", "캥거루", "고슴도치", "해파리", "불가사리",
+  "게", "새우", "오징어", "물고기", "공작새",
+  // 먹을 것
+  "사과", "바나나", "수박", "딸기", "포도", "복숭아", "파인애플", "당근", "옥수수", "감자", "브로콜리", "버섯", "피자",
+  "햄버거", "라면", "김밥", "떡볶이", "아이스크림", "케이크", "도넛", "식빵", "치즈", "달걀", "우유", "커피", "초밥",
+  "만두", "핫도그", "팝콘", "사탕", "초콜릿", "쿠키", "솜사탕", "수박화채",
+  // 물건
+  "우산", "안경", "모자", "가방", "시계", "연필", "지우개", "가위", "열쇠", "자물쇠", "전화기", "텔레비전", "컴퓨터",
+  "카메라", "기타", "피아노", "드럼", "마이크", "헤드폰", "풍선", "선물", "촛불", "전구", "의자", "침대", "소파", "거울",
+  "칫솔", "양말", "신발", "장갑", "목도리", "넥타이", "반지", "왕관", "망치", "사다리", "바구니", "컵", "숟가락",
+  "젓가락", "냄비", "냉장고", "선풍기", "책", "편지", "달력", "지도", "연", "부채",
+  // 자연
+  "해", "달", "별", "구름", "비", "눈사람", "무지개", "번개", "바다", "산", "섬", "화산", "폭포", "나무", "꽃", "선인장",
+  "해바라기", "장미", "단풍잎", "눈송이", "파도", "모래성", "사막", "조개",
+  // 탈것
+  "자동차", "버스", "기차", "비행기", "배", "자전거", "오토바이", "헬리콥터", "로켓", "잠수함", "트럭", "소방차",
+  "구급차", "택시", "열기구", "스케이트보드", "유모차",
+  // 곳
+  "집", "학교", "병원", "성", "등대", "다리", "놀이터", "미끄럼틀", "그네", "텐트", "피라미드", "우체통", "신호등",
+  "분수", "놀이공원", "캠핑",
+  // 사람과 이야기
+  "눈", "코", "입", "귀", "손", "발", "하트", "눈물", "공주", "해적", "마법사", "유령", "로봇", "외계인", "천사", "산타",
+  "요리사", "의사", "소방관", "축구공", "야구", "수영", "줄넘기", "낚시", "생일", "크리스마스트리", "눈싸움", "인어",
+  "허수아비", "닌자", "우주인", "잠꾸러기", "방귀",
+];
+
+return { SKETCH_WORDS };
+})();
+__m["src/core/search.js"] = (() => {
+// Finding rooms (and what they hold) by a few typed letters, the way Korean is typed.
+//
+// The owner: "쇼타로면 ㅅ만 쳐도 앞 초성이 ㅅ인 것부터 다 나오고, 그 다음 ㅅ이 뒤에 나오는 것, 쇼를 치면
+// 앞에 쇼가 있는 것 먼저, 다음에 쇼가 어디 들어가는 것. 아닌 것은 다 안 보이게."
+//
+// So: a lone consonant (초성) stands for any syllable that begins with it; the last character of
+// the query may still be on its way (쇼 is on the way to 숀, 소 to 솨, 숕 to 쇼타 — while typing
+// 쇼타 the ㅌ sits as a 받침 until the vowel comes); everything else must be as typed. Matches that
+// begin earlier come first.
+
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
+const JONG = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ", "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+/** A 받침 of two consonants, as the two typed one after the other. */
+const TWO = { ㄳ: ["ㄱ", "ㅅ"], ㄵ: ["ㄴ", "ㅈ"], ㄶ: ["ㄴ", "ㅎ"], ㄺ: ["ㄹ", "ㄱ"], ㄻ: ["ㄹ", "ㅁ"], ㄼ: ["ㄹ", "ㅂ"], ㄽ: ["ㄹ", "ㅅ"], ㄾ: ["ㄹ", "ㅌ"], ㄿ: ["ㄹ", "ㅍ"], ㅀ: ["ㄹ", "ㅎ"], ㅄ: ["ㅂ", "ㅅ"] };
+/** A vowel typed in two strokes, by its first stroke (소 is on the way to 솨). */
+const FIRST_STROKE = { ㅘ: "ㅗ", ㅙ: "ㅗ", ㅚ: "ㅗ", ㅝ: "ㅜ", ㅞ: "ㅜ", ㅟ: "ㅜ", ㅢ: "ㅡ" };
+
+function parts(ch) {
+  if (!ch) return null;
+  const c = ch.charCodeAt(0) - 0xac00;
+  if (ch.length !== 1 || c < 0 || c > 11171) return null;
+  return { cho: CHO[Math.floor(c / 588)], jung: JUNG[Math.floor((c % 588) / 28)], jong: JONG[c % 28] };
+}
+
+const isConsonant = (ch) => ch.length === 1 && CHO.includes(ch);
+
+/** A syllable's first sound (초성): 고 → ㄱ; anything else stays as it is. */
+function initialOf(ch) {
+  return parts(ch)?.cho ?? ch;
+}
+
+/** How many characters of `text` from i the query character q takes (0: it does not match). */
+function step(q, last, text, i) {
+  const c = text[i];
+  if (c === undefined) return 0;
+  if (isConsonant(q)) {
+    if (c === q) return 1;
+    return parts(c)?.cho === q ? 1 : 0;
+  }
+  const pq = parts(q);
+  if (!pq) return c.toLowerCase() === q.toLowerCase() ? 1 : 0;
+  if (c === q) return 1;
+  if (!last) return 0;
+  const pc = parts(c);
+  if (!pc || pc.cho !== pq.cho) return 0;
+  if (!pq.jong) return pc.jung === pq.jung || FIRST_STROKE[pc.jung] === pq.jung ? 1 : 0;
+  if (pc.jung !== pq.jung) return 0;
+  // 달 on its way to 닭.
+  if (TWO[pc.jong]?.[0] === pq.jong) return 1;
+  // 숕 on its way to 쇼타: the 받침 begins the next syllable.
+  const [first, second] = TWO[pq.jong] || [pq.jong, ""];
+  const next = text[i + 1];
+  const nextCho = parts(next)?.cho || next;
+  if (!second && !pc.jong && nextCho === first) return 2;
+  if (second && pc.jong === first && nextCho === second) return 2;
+  return 0;
+}
+
+/** Where the query first appears in the text: { at, len } in characters, or null. */
+function findMatch(text, query) {
+  const t = [...String(text || "")];
+  const q = [...String(query || "")];
+  if (!q.length) return null;
+  for (let i = 0; i < t.length; i++) {
+    let j = i;
+    let ok = true;
+    for (let k = 0; k < q.length; k++) {
+      const n = step(q[k], k === q.length - 1, t, j);
+      if (!n) {
+        ok = false;
+        break;
+      }
+      j += n;
+    }
+    if (ok) return { at: i, len: j - i };
+  }
+  return null;
+}
+
+/**
+ * Things whose name holds the query, those where it comes earliest first (then the most recent):
+ * [{ item, at, len }]. The rest are left out.
+ */
+function rankByName(items, query, nameOf = (x) => x.name) {
+  const found = [];
+  for (const item of items) {
+    const m = findMatch(nameOf(item), query);
+    if (m) found.push({ item, ...m });
+  }
+  return found.sort((a, b) => a.at - b.at || (b.item.at || 0) - (a.item.at || 0));
+}
+
+/** The words around the first match: { before, match, after, at }, or null. */
+function snippet(text, query, around = 24) {
+  const m = findMatch(text, query);
+  if (!m) return null;
+  const t = [...String(text)];
+  const from = Math.max(0, m.at - around);
+  const to = Math.min(t.length, m.at + m.len + around * 2);
+  return {
+    before: (from > 0 ? "…" : "") + t.slice(from, m.at).join(""),
+    match: t.slice(m.at, m.at + m.len).join(""),
+    after: t.slice(m.at + m.len, to).join("") + (to < t.length ? "…" : ""),
+    at: m.at,
+  };
+}
+
+return { initialOf, findMatch, rankByName, snippet };
+})();
 __m["src/core/game.js"] = (() => {
 // 미니게임: short games with a friend inside a room (the owner: "미니게임 신청… 친구가 수락하면 전체가
 // 조금 어두워지고 가운데 3, 2, 1… 카운트가 끝났을 때 미니게임이 뜨게"). One document per room
@@ -7316,11 +7705,25 @@ __m["src/core/game.js"] = (() => {
 //   page   { id, g, by, r, text?, at }               a round's page from the one whose turn it is
 //                                                  (the first counts; a drawing is in relayDoc)
 //   turn   { id, g, by, n }                          the album shown up to page n, for everyone
+//
+// 그려서 맞히기 ("sketch", for any number of people; the reference study §4: Skribbl's turns as
+// scribble.rs (BSD-3) and Skribblrs.io (MIT) run them, read for the flow and the scoring, with Korean
+// 초성 for hints): everyone who says yes plays, and the asker begins it (begin, as 이어 그리기). Each
+// in turn picks one of three words and draws it (live, in sketchDoc) while the others type guesses;
+// the hint grows from blanks to 초성 to one syllable shown. A right guess scores more the sooner it
+// comes, and the one drawing scores for each who got it; a turn ends when everyone has it or its time
+// is up, the answer shows, and the next one draws. At the end, everyone's points.
+//   word   { id, g, by, n (the turn), w, at }       the drawer's pick of the three (the first counts)
+//   try    { id, g, by, n, text, at }               a guess
 // Whatever order they arrive in, every screen derives the same game.
 
 const { cmpId, validId } = __m["src/core/crdt.js"];
+const { SKETCH_WORDS } = __m["src/core/words.js"];
+const { initialOf } = __m["src/core/search.js"];
 
-const KINDS = ["rps", "omok", "relay"];
+const KINDS = ["rps", "omok", "relay", "sketch"];
+/** The games for everyone in the room (gathered, then begun by the asker). */
+const MANY = ["relay", "sketch"];
 const RPS = ["rock", "paper", "scissors"];
 const OMOK_SIZE = 15;
 const COUNTDOWN_MS = 3600;
@@ -7328,6 +7731,10 @@ const MAX_UNKNOWN = 300;
 // 이어 그리기's times (ms): a line to write, a drawing, a guess; the pause as the books pass on; how
 // late a page may come (a slow network, a clock a little behind); words kept short.
 const RELAY = { write: 45000, draw: 90000, guess: 40000, gap: 1600, grace: 3000, maxText: 60, maxPlayers: 10, maxRounds: 8 };
+// 그려서 맞히기's times (ms) and points: picking a word, drawing it, the answer shown; how late a
+// guess may come; a guess's points (from most, at once, to least, at the end); the drawer's for each
+// who got it.
+const SKETCH = { choose: 12000, draw: 80000, reveal: 4000, grace: 3000, maxTry: 30, maxTurns: 20, most: 200, least: 40, drawerPoints: 50 };
 
 const counterOf = (id) => Number(id.slice(0, id.indexOf("@")));
 const who = (v) => typeof v === "string" && v.length > 0 && v.length <= 40;
@@ -7354,7 +7761,7 @@ class GameDoc {
     if (this.seen.has(op.id)) return "dup";
     if (op.t === "ask") {
       if (!KINDS.includes(op.kind) || !who(op.by) || !Number.isFinite(op.at)) return this.setAside(op);
-      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [], begins: [], pages: [], turns: [] });
+      this.games.set(op.id, { id: op.id, kind: op.kind, by: op.by, at: op.at, replies: [], picks: [], stones: [], quits: [], begins: [], pages: [], turns: [], words: [], tries: [] });
       this.done(op);
       for (const later of this.waiting.get(op.id) || []) this.apply(later);
       this.waiting.delete(op.id);
@@ -7385,6 +7792,12 @@ class GameDoc {
     } else if (op.t === "turn") {
       if (!Number.isInteger(op.n) || op.n < 0 || op.n > RELAY.maxPlayers * RELAY.maxRounds) return this.setAside(op);
       list = "turns";
+    } else if (op.t === "word") {
+      if (!Number.isInteger(op.n) || op.n < 0 || op.n >= SKETCH.maxTurns || typeof op.w !== "string" || op.w.length > 20 || !Number.isFinite(op.at)) return this.setAside(op);
+      list = "words";
+    } else if (op.t === "try") {
+      if (!Number.isInteger(op.n) || op.n < 0 || op.n >= SKETCH.maxTurns || typeof op.text !== "string" || op.text.length > 60 || !Number.isFinite(op.at)) return this.setAside(op);
+      list = "tries";
     } else return this.setAside(op);
     const game = this.games.get(op.g);
     if (!game) {
@@ -7423,6 +7836,7 @@ class GameDoc {
     const g = this.games.get(id);
     if (!g) return null;
     if (g.kind === "relay") return this.relay(g);
+    if (g.kind === "sketch") return this.sketch(g);
     const byId = (a, b) => cmpId(a.id, b.id);
     const out = { id: g.id, kind: g.kind, by: g.by, at: g.at, state: "asked", players: [g.by], start: null, picks: {}, stones: [], winner: null, draw: false, line: [] };
     const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
@@ -7497,19 +7911,28 @@ class GameDoc {
    * turn (the album shown up to this page; −1 none) }. Book b is player b's; in round r it is with
    * player (b + r). A round ends when every page is in (at the last one's moment) or at its time.
    */
+  /**
+   * A game for everyone (이어 그리기, 그려서 맞히기) before it begins: who has joined (each person's last
+   * answer counts; they stand in the order they first said yes), or cancelled by the asker. Returns the
+   * asker's begin once there is one.
+   */
+  gather(g, out) {
+    const byId = (a, b) => cmpId(a.id, b.id);
+    const begin = g.begins.filter((b) => b.by === g.by && b.players[0] === g.by).sort(byId)[0];
+    if (begin) return begin;
+    const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
+    const last = new Map();
+    for (const r of replies) last.set(r.by, r.yes);
+    for (const r of replies) if (last.get(r.by) && !out.players.includes(r.by)) out.players.push(r.by);
+    if (g.quits.some((q) => q.by === g.by)) out.state = "cancelled";
+    return null;
+  }
+
   relay(g) {
     const byId = (a, b) => cmpId(a.id, b.id);
     const out = { id: g.id, kind: "relay", by: g.by, at: g.at, state: "gathering", players: [g.by], start: null, rounds: 0, schedule: [], albumAt: null, pages: {}, turn: -1 };
-    const begin = g.begins.filter((b) => b.by === g.by && b.players[0] === g.by).sort(byId)[0];
-    if (!begin) {
-      // Each person's last answer counts; they stand in the order they first said yes.
-      const replies = g.replies.filter((r) => r.by !== g.by).sort(byId);
-      const last = new Map();
-      for (const r of replies) last.set(r.by, r.yes);
-      for (const r of replies) if (last.get(r.by) && !out.players.includes(r.by)) out.players.push(r.by);
-      if (g.quits.some((q) => q.by === g.by)) out.state = "cancelled";
-      return out;
-    }
+    const begin = this.gather(g, out);
+    if (!begin) return out;
     const players = begin.players.slice();
     const P = players.length;
     const R = Math.max(3, Math.min(RELAY.maxRounds, P));
@@ -7536,6 +7959,58 @@ class GameDoc {
     out.albumAt = at;
     for (const t of g.turns) if (players.includes(t.by) && t.n > out.turn) out.turn = Math.min(t.n, P * R);
     if (out.turn >= P * R) out.state = "done";
+    return out;
+  }
+
+  /**
+   * 그려서 맞히기 as it stands: { id, kind, by, at, state: "gathering" | "cancelled" | "playing", players,
+   * start, turns, schedule: [{ n, drawer, options, word, chosen, start, chosenAt, deadline, end,
+   * correct: [{ by, at, points }], said: [{ by, at, text? , got? }] }], scores: { member: points }, endAt }.
+   * Everyone draws in turn (twice round for two or three people). A turn's word is the drawer's pick, or
+   * the first of the three when the picking time runs out; it ends when every guesser has it (at the
+   * last one's moment) or at its time, and the next begins after the answer has shown.
+   */
+  sketch(g) {
+    const byId = (a, b) => cmpId(a.id, b.id);
+    const out = { id: g.id, kind: "sketch", by: g.by, at: g.at, state: "gathering", players: [g.by], start: null, turns: 0, schedule: [], scores: {}, endAt: null };
+    const begin = this.gather(g, out);
+    if (!begin) return out;
+    const players = begin.players.slice();
+    const P = players.length;
+    const T = Math.min(SKETCH.maxTurns, P <= 3 ? P * 2 : P);
+    Object.assign(out, { state: "playing", players, start: begin.at + COUNTDOWN_MS, turns: T });
+    for (const p of players) out.scores[p] = 0;
+    const words = g.words.slice().sort(byId);
+    const tries = g.tries.slice().sort((a, b) => a.at - b.at || cmpId(a.id, b.id));
+    let at = out.start;
+    for (let n = 0; n < T; n++) {
+      const drawer = players[n % P];
+      const options = wordsFor(g.id, n);
+      const pick = words.find((w) => w.n === n && w.by === drawer && options.includes(w.w) && w.at <= at + SKETCH.choose + SKETCH.grace);
+      const chosenAt = pick ? Math.min(Math.max(pick.at, at), at + SKETCH.choose) : at + SKETCH.choose;
+      const word = pick ? pick.w : options[0];
+      const deadline = chosenAt + SKETCH.draw;
+      const correct = [];
+      const said = [];
+      const got = new Set();
+      for (const t of tries) {
+        if (t.n !== n || t.by === drawer || !players.includes(t.by) || got.has(t.by)) continue;
+        if (t.at < at - SKETCH.grace || t.at > deadline + SKETCH.grace) continue;
+        if (sameWord(word, t.text)) {
+          const when = Math.min(deadline, Math.max(chosenAt, t.at));
+          const points = Math.round(SKETCH.least + (SKETCH.most - SKETCH.least) * ((deadline - when) / SKETCH.draw));
+          got.add(t.by);
+          correct.push({ by: t.by, at: when, points });
+          said.push({ by: t.by, at: t.at, got: true });
+          out.scores[t.by] += points;
+          out.scores[drawer] += SKETCH.drawerPoints;
+        } else said.push({ by: t.by, at: t.at, text: cleanTry(t.text) });
+      }
+      const end = P > 1 && got.size === P - 1 ? Math.min(deadline, Math.max(chosenAt, ...correct.map((x) => x.at))) : deadline;
+      out.schedule.push({ n, drawer, options, word, chosen: !!pick, start: at, chosenAt, deadline, end, correct, said: said.filter((x) => x.at <= end + SKETCH.grace) });
+      at = end + SKETCH.reveal;
+    }
+    out.endAt = at;
     return out;
   }
 
@@ -7642,10 +8117,10 @@ function relayAlbum(g) {
   return out;
 }
 
-/** The asker begins 이어 그리기 with those who have joined. */
+/** The asker begins 이어 그리기 or 그려서 맞히기 with those who have joined. */
 function beginOps(clock, doc, g, { by, at = Date.now() }) {
   const now = doc.game(g);
-  if (!now || now.kind !== "relay") return { ops: [] };
+  if (!now || !MANY.includes(now.kind)) return { ops: [] };
   clock.atLeast(doc.maxN);
   return { ops: [{ t: "begin", id: clock.next(), g, by, at, players: now.players.slice(0, RELAY.maxPlayers) }] };
 }
@@ -7669,7 +8144,115 @@ function quitOps(clock, doc, g, { by }) {
   return { ops: [{ t: "quit", id: clock.next(), g, by }] };
 }
 
-return { KINDS, RPS, OMOK_SIZE, COUNTDOWN_MS, RELAY, rpsWinner, GameDoc, askOps, replyOps, pickOps, stoneOps, relayAt, relayTask, relayDoc, relayAlbum, beginOps, pageOps, turnOps, quitOps };
+// ---- 그려서 맞히기 ------------------------------------------------------------------------------------
+
+const cleanTry = (text) => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, SKETCH.maxTry);
+/** A word as it is compared: no spaces, no marks, one case. */
+const plain = (text) => String(text ?? "").normalize("NFC").toLowerCase().replace(/[\s.,!?~'"`·…\-_]/g, "");
+
+/** A guess that is the word (spaces, marks and case aside). */
+function sameWord(word, text) {
+  const w = plain(word);
+  return w.length > 0 && w === plain(text);
+}
+
+/** A guess one syllable off (one wrong, missing or extra): "거의 맞았어요", told only to the one guessing. */
+function nearWord(word, text) {
+  const a = [...plain(word)];
+  const b = [...plain(text)];
+  if (a.length < 2 || !b.length || a.join("") === b.join("")) return false;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  // Levenshtein distance, rows kept.
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = row;
+  }
+  return prev[b.length] === 1;
+}
+
+// The words of a game: the list shuffled by the game's id (the same on every screen), three a turn.
+const decks = new Map();
+function seedOf(text) {
+  let h = 2166136261;
+  for (const ch of text) {
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+function deckOf(id) {
+  let deck = decks.get(id);
+  if (deck) return deck;
+  let a = seedOf(id);
+  const random = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  deck = SKETCH_WORDS.slice();
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  decks.set(id, deck);
+  return deck;
+}
+
+/** The three words offered in turn n (none met before in the same game). */
+function wordsFor(id, n) {
+  const deck = deckOf(id);
+  const k = (n * 3) % (deck.length - 2);
+  return deck.slice(k, k + 3);
+}
+
+/** The drawing of turn n (an ink document; no dots, so a database path takes it). */
+function sketchDoc(id, n) {
+  return `k:G${id}~${n}`;
+}
+
+/**
+ * The hint as the drawing goes on (f: how far into the drawing time, 0..1): a ○ for each syllable,
+ * then each syllable's first sound (초성), then one syllable shown — never the whole of a one-syllable word.
+ */
+function sketchHint(word, f) {
+  const syl = [...word];
+  if (f < 1 / 3) return syl.map((ch) => (/\s/.test(ch) ? "" : "○")).join(" ");
+  const cho = syl.map((ch) => initialOf(ch));
+  if (f < 2 / 3 || syl.length < 2) return cho.join(" ");
+  const k = syl.reduce((sum, ch) => sum + ch.codePointAt(0), 0) % syl.length;
+  return cho.map((c, i) => (i === k ? syl[i] : c)).join(" ");
+}
+
+/** Where a 그려서 맞히기 is at a moment: countdown, a word being picked, drawing (how far in), the answer, the scores. */
+function sketchAt(g, now) {
+  if (!g || g.kind !== "sketch") return { phase: "none" };
+  if (g.state !== "playing") return { phase: g.state };
+  if (now < g.start) return { phase: "countdown", left: g.start - now };
+  for (const s of g.schedule) {
+    if (now < s.chosenAt) return { phase: "choose", n: s.n, s, left: s.chosenAt - now, until: s.chosenAt };
+    if (now < s.end) return { phase: "draw", n: s.n, s, left: s.end - now, until: s.end, f: (now - s.chosenAt) / SKETCH.draw };
+    if (now < s.end + SKETCH.reveal) return { phase: "reveal", n: s.n, s, until: s.end + SKETCH.reveal };
+  }
+  return { phase: "scores" };
+}
+
+/** The drawer's pick of the three words for turn n. */
+function wordOps(clock, doc, g, { by, n, w, at = Date.now() }) {
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "word", id: clock.next(), g, by, n, w: String(w).slice(0, 20), at }] };
+}
+
+/** A guess in turn n. */
+function tryOps(clock, doc, g, { by, n, text, at = Date.now() }) {
+  clock.atLeast(doc.maxN);
+  return { ops: [{ t: "try", id: clock.next(), g, by, n, text: String(text ?? "").slice(0, 60), at }] };
+}
+
+
+return { KINDS, MANY, RPS, OMOK_SIZE, COUNTDOWN_MS, RELAY, SKETCH, rpsWinner, GameDoc, askOps, replyOps, pickOps, stoneOps, relayAt, relayTask, relayDoc, relayAlbum, beginOps, pageOps, turnOps, quitOps, sameWord, nearWord, wordsFor, sketchDoc, sketchHint, sketchAt, wordOps, tryOps };
 })();
 __m["src/sync/session.js"] = (() => {
 // One open room on this screen.
@@ -8477,6 +9060,10 @@ const MAX_SHARED_SECONDS = Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 -
  */
 function shareTake(app, session, key) {
   if (!key || !session || session.transport?.readOnly || app.transport?.readOnly) return;
+  // A room kept on this device only has nobody to send it to, and the take is already here: a copy
+  // in its files would only fill the device's small store (localStorage) until nothing more fits.
+  const local = app.local?.();
+  if (local && session.transport === local && (app.limited || app.transport !== local)) return;
   let q = queues.get(session);
   if (!q) queues.set(session, (q = { busy: false, waiting: [], sent: new Set(), done: Promise.resolve() }));
   if (q.sent.has(key) || q.waiting.includes(key)) return;
@@ -10115,6 +10702,13 @@ function rangeOps(sheet, clock, t, { ch, to, c, by, at = Date.now() }) {
   return { ops: [op], atoms: [{ k: "range", t, id: op.id }], id: op.id };
 }
 
+/** 이 날 전체 잠그기: nobody writes, changes or removes anything on this day until it is freed. Undoable. */
+function dayLockOps(sheet, clock, { by, at = Date.now() }) {
+  clock.atLeast(sheet.maxN);
+  const op = { t: "lock", id: clock.next(), ch: ROOT, to: ROOT, all: true, by, at };
+  return { ops: [op], atoms: [{ k: "range", t: "lock", id: op.id }], id: op.id };
+}
+
 /** Takes a 표시, a 잠금 or a hidden photo or recording ("att") off its words. Undoable. */
 function unrangeOps(sheet, clock, t, id) {
   const [map, type, key] = { att: [sheet.atts, "arm", "a"], mark: [sheet.markMap, "mrm", "m"], lock: [sheet.lockMap, "krm", "k"] }[t];
@@ -10137,6 +10731,8 @@ function attachSoundOps(sheet, clock, { ch, to, file, dur, by, at = Date.now() }
  * index: where the change starts; del: how many letters it removes.
  */
 function lockedEdit(sheet, ids, index, del) {
+  // A locked day takes no change at all, not even a letter at its end.
+  if (sheet.dayLock()) return true;
   const locks = sheet.locks();
   if (!locks.length) return false;
   const at = new Map(ids.map((id, i) => [id, i]));
@@ -10150,7 +10746,7 @@ function lockedEdit(sheet, ids, index, del) {
   return false;
 }
 
-return { diffText, spliceOps, mixOps, invertOps, attachOps, detachOps, rangeOps, unrangeOps, attachSoundOps, lockedEdit };
+return { diffText, spliceOps, mixOps, invertOps, attachOps, detachOps, rangeOps, dayLockOps, unrangeOps, attachSoundOps, lockedEdit };
 })();
 __m["src/ui/editor.js"] = (() => {
 // One day's sheet: a drawn layer under a transparent input box.
@@ -10161,12 +10757,12 @@ __m["src/ui/editor.js"] = (() => {
 // syllable is being composed, so every character it shows is tracked by id.
 
 const { chime, buzz } = __m["src/ui/chime.js"];
-const { h } = __m["src/ui/dom.js"];
+const { h, icon, nextFrame } = __m["src/ui/dom.js"];
 const { MOTTO } = __m["src/ui/motto.js"];
 const { currentTheme, reducedMotion } = __m["src/ui/theme.js"];
 const { ROOT } = __m["src/core/crdt.js"];
 const { diffText, spliceOps, mixOps, lockedEdit } = __m["src/core/edit.js"];
-const { memberColor, INK, splitWords, paintFor, paintCss } = __m["src/core/paint.js"];
+const { memberColor, personColor, INK, splitWords, paintFor, paintCss } = __m["src/core/paint.js"];
 const { dayKey, dayLabel } = __m["src/core/time.js"];
 const { getSettings } = __m["src/identity.js"];
 
@@ -10180,8 +10776,9 @@ const REVEAL_MS = 2000;
 const HOLD_SLOP_PX = 10;
 
 class SheetEditor {
-  constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {} }) {
+  constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {}, onDay = null }) {
     this.onReveal = onReveal;
+    this.onDay = onDay;
     this.onSelect = onSelect;
     this.app = app;
     this.session = session;
@@ -10211,8 +10808,13 @@ class SheetEditor {
     this.input.setAttribute("autocorrect", "off");
     this.layers = h("div", { class: "layers" }, this.draw, this.carets, this.input);
     this.paper = h("div", { class: "paper" }, this.layers);
+    // The day's name; pressed, the day's own things (이 날 잠그기). A locked day shows its lock there.
+    this.dayLock = h("span", { class: "day-lock", hidden: true });
+    this.dayHead = h("h2", { class: "day" + (onDay ? " pressable" : ""), role: onDay ? "button" : null, tabindex: onDay ? "0" : null,
+      onclick: (e) => { if (onDay) { e.stopPropagation(); onDay(this, this.dayHead); } } },
+      h("span", { class: "day-name", text: dayLabel(day) }), this.dayLock);
     this.el = h("section", { class: "sheet" + (isToday ? " today" : ""), data: { day } },
-      h("h2", { class: "day", text: dayLabel(day) }),
+      this.dayHead,
       this.paper);
 
     const ta = this.input;
@@ -10258,6 +10860,7 @@ class SheetEditor {
   }
 
   destroy() {
+    this.caretFrame?.();
     document.removeEventListener("selectionchange", this.onSelection);
     this.el.remove();
   }
@@ -10277,7 +10880,7 @@ class SheetEditor {
       const caret = Math.min(index, this.snap.text.length);
       this.input.value = this.snap.text;
       this.input.setSelectionRange(caret, caret);
-      this.tell("잠긴 글이라 고칠 수 없어요");
+      this.tell(this.sheet.dayLock() ? "잠긴 날이라 쓸 수 없어요" : "잠긴 글이라 고칠 수 없어요");
       return;
     }
     const now = Date.now();
@@ -10354,7 +10957,7 @@ class SheetEditor {
     const texts = this.sheet.text().split("\n");
     const words = splitWords(chars);
     const options = {
-      color: (by) => { const m = room.member(by); return m ? memberColor(m.color, theme) : INK[theme]; },
+      color: (by) => { const m = room.member(by); return m ? personColor(m, theme) : INK[theme]; },
       colors: settings.colors, mixing: settings.mixing, ink: INK[theme], theme,
     };
 
@@ -10474,7 +11077,9 @@ class SheetEditor {
     const ta = this.input;
     const focused = document.activeElement === ta;
     this.onCaret(this, focused ? (ta.selectionStart > 0 ? this.snap.ids[ta.selectionStart - 1] ?? ROOT : ROOT) : null);
-    this.drawCarets();
+    // Carets are placed once a frame: a handle dragged through the words moves the selection many
+    // times between two frames, and each placing measures the page.
+    if (!this.caretFrame) this.caretFrame = nextFrame(() => { this.caretFrame = null; this.drawCarets(); });
     if (focused) this.onSelect(this);
   }
 
@@ -10517,7 +11122,21 @@ class SheetEditor {
    * Only classes and data change (and absolutely placed marks), so the drawn words keep
    * exactly the input box's layout.
    */
+  /** The day's lock in its heading: who locked the whole day (or nothing). */
+  drawDayLock() {
+    const lock = this.sheet.dayLock();
+    this.el.classList.toggle("day-locked", !!lock);
+    this.dayLock.hidden = !lock;
+    if (!lock) return;
+    const name = this.session.room.member(lock.by)?.name || "누군가";
+    const key = lock.id + ":" + name;
+    if (this.dayLock.dataset.key === key) return;
+    this.dayLock.dataset.key = key;
+    this.dayLock.replaceChildren(icon("lock"), h("span", { text: `${name} 님이 잠근 날` }));
+  }
+
   markRanges() {
+    this.drawDayLock();
     for (const el of this.draw.querySelectorAll(".w.sparkle, .w.hl, .w.locked")) {
       el.classList.remove("sparkle", "sound", "hl", "locked", "lock-end");
       for (const k of ["att", "hl", "lock"]) delete el.dataset[k];
@@ -10592,7 +11211,7 @@ class SheetEditor {
       if (peer.isMe || !s || s.d !== this.day || typeof s.i !== "string") continue;
       const member = this.session.room.member(s.m);
       if (!member) continue;
-      wanted.set(peer.key, { index: this.sheet.indexAfter(s.i), color: memberColor(member.color, theme), name: member.name });
+      wanted.set(peer.key, { index: this.sheet.indexAfter(s.i), color: personColor(member, theme), name: member.name });
     }
     for (const [key, el] of this.caretEls) {
       if (wanted.has(key)) continue;
@@ -13836,6 +14455,10 @@ const BRUSH_LOOKS = {
   sketch: { kind: "sketch", scale: 1, alpha: 0.85, streamline: 0.35 },
   crayon: { kind: "dabs", scale: 1.7, alpha: 0.55, spacing: 0.12, crayon: true, streamline: 0.4 },
   erase: { kind: "outline", scale: 3.2, alpha: 1, thinning: 0, streamline: 0.3 },
+  // 채우기: a region's edges as rings (core/fill.js), filled even-odd; not drawn along a line.
+  fill: { kind: "fill", scale: 1, alpha: 1, streamline: 0 },
+  // 문지르기: the colour under the finger is carried a little along the line (a finger in wet paint).
+  smudge: { kind: "smudge", scale: 4, alpha: 0.45, spacing: 0.08, streamline: 0.45 },
 };
 
 function brushLook(brush) {
@@ -14507,7 +15130,7 @@ __m["src/ui/live-ink.js"] = (() => {
 // Nothing of this is kept. Each drawing layer asks for what lies on its own document.
 
 const { liveTail, mergeLive } = __m["src/core/live.js"];
-const { memberColor } = __m["src/core/paint.js"];
+const { memberColor, personColor } = __m["src/core/paint.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 
 const SEND_MS = 66; // at most about fifteen pieces a second
@@ -14546,7 +15169,7 @@ class LiveInk {
       const ink = s.ink;
       const had = this.lines.get(p.key);
       if (ink && typeof ink.d === "string" && ink.id) {
-        const line = had && had.id === ink.id ? had : { m: s.m, d: ink.d, id: ink.id, c: ink.c, w: ink.w, b: ink.b, state: null, done: null, ended: 0 };
+        const line = had && had.id === ink.id ? had : { m: s.m, d: ink.d, id: ink.id, c: ink.c, w: ink.w, z: ink.z, b: ink.b, state: null, done: null, ended: 0 };
         if (had && had !== line) touched.add(had.d);
         line.state = mergeLive(line.state, ink);
         line.m = s.m;
@@ -14609,7 +15232,7 @@ class LiveInk {
     for (const [key, line] of this.lines) {
       if (line.d !== doc || !line.state?.pts.length) continue;
       if (line.ended && now - line.ended > DONE_HOLD_MS) { this.lines.delete(key); continue; }
-      out.push({ ...this.who(line.m), pts: line.state.pts, c: line.c, w: line.w, b: line.b, live: !line.done });
+      out.push({ ...this.who(line.m), pts: line.state.pts, c: line.c, w: line.w, z: line.z, b: line.b, live: !line.done });
     }
     return out;
   }
@@ -14629,7 +15252,7 @@ class LiveInk {
 
   who(m) {
     const member = m ? this.session.room.member(m) : null;
-    return { color: member ? memberColor(member.color, currentTheme()) : "#8c919c", name: member?.name || "" };
+    return { color: member ? personColor(member, currentTheme()) : "#8c919c", name: member?.name || "" };
   }
 
   // ---- what this screen sends -----------------------------------------------------------------
@@ -14716,6 +15339,329 @@ class LiveInk {
 
 return { LIGHT_MS, LiveInk };
 })();
+__m["src/core/fill.js"] = (() => {
+// 채우기 (the paint bucket): the region a tap starts in, found on a layer's own pixels, kept as the
+// rings of its edge (the outer edge and the edges of its holes) to be filled with the even-odd rule.
+// As Klecks fills (MIT; read for the idea, written here): a colour is the same within a tolerance,
+// and the region is grown a pixel or two so the soft edge of a line is filled under, with no pale
+// fringe between the line and the colour. Kept as a shape, a fill is the same on every screen.
+// Pure computation.
+
+/**
+ * The region of pixels joined to (x0, y0) that look like it: { RGBA data, w, h } → a mask (1 inside).
+ * tolerance: how far (0..255) a channel may be from the tapped pixel's; on see-through paper only
+ * the see-through counts. grow: pixels added all round afterwards (under the line's soft edge).
+ */
+function fillMask(data, w, h, x0, y0, { tolerance = 48, grow = 1 } = {}) {
+  const mask = new Uint8Array(w * h);
+  x0 = Math.floor(x0);
+  y0 = Math.floor(y0);
+  if (x0 < 0 || y0 < 0 || x0 >= w || y0 >= h) return mask;
+  const s = (y0 * w + x0) * 4;
+  const r0 = data[s], g0 = data[s + 1], b0 = data[s + 2], a0 = data[s + 3];
+  const clear = a0 < 8;
+  const same = (p) => {
+    const i = p * 4;
+    const a = data[i + 3];
+    if (clear) return a <= tolerance;
+    return Math.abs(a - a0) <= tolerance && Math.abs(data[i] - r0) <= tolerance && Math.abs(data[i + 1] - g0) <= tolerance && Math.abs(data[i + 2] - b0) <= tolerance;
+  };
+  // Scanline flood fill: each run is filled at once and the rows above and below are seeded.
+  const stack = [y0 * w + x0];
+  while (stack.length) {
+    const p = stack.pop();
+    if (mask[p]) continue;
+    const y = Math.floor(p / w);
+    let left = p - y * w;
+    let right = left;
+    while (left > 0 && !mask[y * w + left - 1] && same(y * w + left - 1)) left--;
+    while (right < w - 1 && !mask[y * w + right + 1] && same(y * w + right + 1)) right++;
+    for (let x = left; x <= right; x++) mask[y * w + x] = 1;
+    for (const ny of [y - 1, y + 1]) {
+      if (ny < 0 || ny >= h) continue;
+      let open = false;
+      for (let x = left; x <= right; x++) {
+        const q = ny * w + x;
+        const ok = !mask[q] && same(q);
+        if (ok && !open) stack.push(q);
+        open = ok;
+      }
+    }
+  }
+  for (let k = 0; k < grow; k++) dilate(mask, w, h);
+  return mask;
+}
+
+/** One pixel more all round (the 8 neighbours). */
+function dilate(mask, w, h) {
+  const was = mask.slice();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (was[y * w + x]) continue;
+      let near = false;
+      for (let dy = -1; dy <= 1 && !near; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx >= 0 && xx < w && was[yy * w + xx]) { near = true; break; }
+        }
+      }
+      if (near) mask[y * w + x] = 1;
+    }
+  }
+}
+
+/**
+ * The edges of a mask as closed rings of pixel corners ([x, y], with straight runs as two points).
+ * Every edge between inside and outside is used once, so filled even-odd the rings are the mask.
+ */
+function maskRings(mask, w, h) {
+  const W = w + 1;
+  const out = new Map(); // corner → corners its edges go to
+  const add = (x1, y1, x2, y2) => {
+    const k = y1 * W + x1;
+    if (!out.has(k)) out.set(k, []);
+    out.get(k).push(y2 * W + x2);
+  };
+  const at = (x, y) => x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x] === 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      if (!at(x, y - 1)) add(x, y, x + 1, y);
+      if (!at(x + 1, y)) add(x + 1, y, x + 1, y + 1);
+      if (!at(x, y + 1)) add(x + 1, y + 1, x, y + 1);
+      if (!at(x - 1, y)) add(x, y + 1, x, y);
+    }
+  }
+  const rings = [];
+  for (const start of out.keys()) {
+    while (out.get(start)?.length) {
+      const ring = [];
+      let k = start;
+      do {
+        ring.push([k % W, Math.floor(k / W)]);
+        const next = out.get(k);
+        const n = next.pop();
+        if (!next.length) out.delete(k);
+        k = n;
+      } while (k !== start && out.has(k));
+      rings.push(straighten(ring));
+    }
+  }
+  return rings.filter((r) => r.length >= 3);
+}
+
+/** Points in the middle of a straight run go. */
+function straighten(ring) {
+  const n = ring.length;
+  const keep = [];
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = ring[(i - 1 + n) % n];
+    const [bx, by] = ring[i];
+    const [cx, cy] = ring[(i + 1) % n];
+    if ((bx - ax) * (cy - by) - (by - ay) * (cx - bx) !== 0) keep.push(ring[i]);
+  }
+  return keep;
+}
+
+/** Ramer–Douglas–Peucker on a closed ring: points that stray less than eps from the line go. */
+function simplifyRing(ring, eps = 0.75) {
+  if (ring.length <= 4) return ring.slice();
+  // Split at the point farthest from the first, simplify both halves.
+  let far = 0, best = -1;
+  for (let i = 1; i < ring.length; i++) {
+    const d = (ring[i][0] - ring[0][0]) ** 2 + (ring[i][1] - ring[0][1]) ** 2;
+    if (d > best) { best = d; far = i; }
+  }
+  const a = rdp(ring.slice(0, far + 1), eps);
+  const b = rdp([...ring.slice(far), ring[0]], eps);
+  return [...a.slice(0, -1), ...b.slice(0, -1)];
+}
+
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts;
+  const [x1, y1] = pts[0];
+  const [x2, y2] = pts[pts.length - 1];
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  let far = 0, best = -1;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((x2 - x1) * (y1 - pts[i][1]) - (x1 - pts[i][0]) * (y2 - y1)) / len;
+    if (d > best) { best = d; far = i; }
+  }
+  if (best <= eps) return [pts[0], pts[pts.length - 1]];
+  return [...rdp(pts.slice(0, far + 1), eps).slice(0, -1), ...rdp(pts.slice(far), eps)];
+}
+
+/** Rings into a stroke's points [x, y, p, …]: p 100 starts a ring, 0 goes on along it. */
+function ringsToPoints(rings, toUnits = (p) => p) {
+  const pts = [];
+  for (const ring of rings) {
+    ring.forEach((p, i) => {
+      const [x, y] = toUnits(p);
+      pts.push(Math.round(x), Math.round(y), i === 0 ? 100 : 0);
+    });
+  }
+  return pts;
+}
+
+/** A fill stroke's points back into rings. */
+function pointsToRings(pts) {
+  const rings = [];
+  for (let i = 0; i + 2 < pts.length; i += 3) {
+    if (pts[i + 2] === 100 || !rings.length) rings.push([]);
+    rings[rings.length - 1].push([pts[i], pts[i + 1]]);
+  }
+  return rings;
+}
+
+return { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings };
+})();
+__m["src/ui/color-wheel.js"] = (() => {
+// 색 원판: any colour for drawing, from a small wheel — a hue ring round a square of saturation
+// (left to right) and brightness (top to bottom) — and the last eight colours chosen. As
+// Procreate's colour disc and Krita's ring-and-square selector are laid out (no code taken).
+// It floats above the drawing tools, covers little, and a press outside only puts it away.
+
+const { h, closeOnOutside } = __m["src/ui/dom.js"];
+const { hsvToHex, hexToHsv, rememberColor } = __m["src/core/paint.js"];
+
+const RING = 172; // the ring's outer size, CSS px
+const BAND = 22; // the ring's thickness
+const SQUARE = 84; // the square inside it
+
+let current = null;
+
+/** Puts the wheel away if it is out. */
+function closeColorWheel() {
+  current?.close();
+}
+
+function colorWheelOpen() {
+  return !!current;
+}
+
+/**
+ * Opens the wheel above `anchor` showing `color` (#rrggbb). onPick(hex, done): while a finger moves
+ * on it (done false) and when it lifts or a recent colour is tapped (done true). recent: the last
+ * colours; onRecent(list) keeps the new list. alive(): false once the tools it belongs to are gone.
+ */
+function openColorWheel({ anchor, color, recent = [], onPick, onRecent = () => {}, alive = () => true }) {
+  closeColorWheel();
+  let { h: hue, s: sat, v: val } = hexToHsv(/^#[0-9a-f]{6}$/i.test(color || "") ? color : "#2f7bf0");
+  // A grey or black keeps the hue it was last turned to (its own hue is no hue).
+  const ring = h("div", { class: "cw-ring" });
+  const ringKnob = h("span", { class: "cw-knob cw-ring-knob" });
+  const square = h("div", { class: "cw-square" });
+  const squareKnob = h("span", { class: "cw-knob cw-sq-knob" });
+  const disc = h("div", { class: "cw-disc", id: "cw-disc", role: "group", "aria-label": "색 원판: 바깥 고리는 색, 가운데 네모는 진하기와 밝기",
+    style: { width: RING + "px", height: RING + "px" } }, ring, ringKnob, square, squareKnob);
+  const now = h("span", { class: "cw-now", id: "cw-now", "aria-hidden": "true" });
+  const recentRow = h("div", { class: "cw-recent", id: "cw-recent", role: "group", "aria-label": "최근 색" });
+  const box = h("div", { class: "color-wheel", id: "color-wheel" }, disc, h("div", { class: "cw-foot" }, now, recentRow));
+  const hex = () => hsvToHex(hue, sat, val);
+
+  function paint() {
+    const mid = RING / 2 - BAND / 2;
+    const a = (hue * Math.PI) / 180;
+    ringKnob.style.left = RING / 2 + mid * Math.sin(a) + "px";
+    ringKnob.style.top = RING / 2 - mid * Math.cos(a) + "px";
+    ringKnob.style.background = hsvToHex(hue, 1, 1);
+    square.style.setProperty("--hue", hsvToHex(hue, 1, 1));
+    const left = (RING - SQUARE) / 2;
+    squareKnob.style.left = left + sat * SQUARE + "px";
+    squareKnob.style.top = left + (1 - val) * SQUARE + "px";
+    squareKnob.style.background = hex();
+    now.style.background = hex();
+    box.dataset.color = hex();
+  }
+
+  function paintRecent() {
+    recentRow.replaceChildren(...recent.map((c) => h("button", { class: "cw-swatch", type: "button", data: { color: c }, "aria-label": "최근 색 " + c, style: { background: c },
+      onclick: () => {
+        const k = hexToHsv(c);
+        if (k.s) hue = k.h;
+        sat = k.s;
+        val = k.v;
+        paint();
+        done();
+      } })));
+  }
+
+  function done() {
+    onPick(hex(), true);
+  }
+
+  // One finger turns the ring or moves in the square (whichever it pressed first), to the lift.
+  let drag = null;
+  const where = (e) => {
+    const r = disc.getBoundingClientRect();
+    return [e.clientX - r.left - RING / 2, e.clientY - r.top - RING / 2];
+  };
+  const move = (e) => {
+    const [x, y] = where(e);
+    if (drag.part === "ring") {
+      hue = ((Math.atan2(x, -y) * 180) / Math.PI + 360) % 360;
+    } else {
+      sat = Math.max(0, Math.min(1, (x + SQUARE / 2) / SQUARE));
+      val = Math.max(0, Math.min(1, 1 - (y + SQUARE / 2) / SQUARE));
+    }
+    paint();
+    onPick(hex(), false);
+  };
+  disc.addEventListener("pointerdown", (e) => {
+    if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const [x, y] = where(e);
+    const r = Math.hypot(x, y);
+    const part = r >= RING / 2 - BAND - 8 ? "ring" : Math.abs(x) <= SQUARE / 2 + 10 && Math.abs(y) <= SQUARE / 2 + 10 ? "square" : null;
+    if (!part) return;
+    e.preventDefault();
+    drag = { id: e.pointerId, part };
+    disc.setPointerCapture?.(e.pointerId);
+    move(e);
+  });
+  disc.addEventListener("pointermove", (e) => {
+    if (drag && e.pointerId === drag.id) move(e);
+  });
+  const lift = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag = null;
+    done();
+  };
+  disc.addEventListener("pointerup", lift);
+  disc.addEventListener("pointercancel", lift);
+
+  document.body.append(box);
+  paint();
+  paintRecent();
+  // Above the tools it came from, over the button (below them when there is no room above), inside
+  // the screen: the brushes and colours stay in view beneath it.
+  const a = anchor.getBoundingClientRect();
+  const tools = anchor.closest(".ink-tools")?.getBoundingClientRect() || a;
+  const w = box.offsetWidth;
+  const ht = box.offsetHeight;
+  box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+  box.style.top = (tools.top - ht - 10 >= 8 ? tools.top - ht - 10 : Math.min(innerHeight - ht - 8, tools.bottom + 10)) + "px";
+
+  const stop = closeOnOutside((t) => box.contains(t) || !!t.closest?.("#ink-more"), () => close(), box);
+  // Its tools gone (the pen put away, another room) take it away too.
+  const watch = setInterval(() => { if (!alive()) close(); }, 400);
+  // The colour it was put away with joins the last colours (not each turn of the ring on the way).
+  const first = hex();
+  function close() {
+    stop();
+    clearInterval(watch);
+    box.remove();
+    if (current === handle) current = null;
+    if (hex() !== first || recent[0] !== hex()) onRecent(rememberColor(recent, hex()));
+  }
+  const handle = { close, box };
+  current = handle;
+  return handle;
+}
+
+return { closeColorWheel, colorWheelOpen, openColorWheel };
+})();
 __m["src/ui/ink.js"] = (() => {
 // A drawing layer over any surface: a canvas that shows an InkDoc's strokes
 // and, while a tool is on, turns the finger or pen into strokes.
@@ -14727,23 +15673,24 @@ __m["src/ui/ink.js"] = (() => {
 // 에어브러시 (soft mist), 형광펜 (wide and see-through). Two erasers: 부분 지우개 rubs out only
 // where it passes (it is a stroke of its own that clears what lies under it), 획 지우개 removes
 // whole strokes. 모양 잡기: a line held still a moment becomes the shape it was meant to be.
-// Used by the text room and the whiteboard.
+// 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
+// Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
 const { h, iconButton } = __m["src/ui/dom.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
-const { INK_COLORS, thinPoints, brushOf } = __m["src/core/ink.js"];
+const { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX } = __m["src/core/ink.js"];
 const { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } = __m["src/core/brush.js"];
 const { LIGHT_MS } = __m["src/ui/live-ink.js"];
+const { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } = __m["src/core/fill.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 const { INK } = __m["src/core/paint.js"];
+const { openColorWheel, closeColorWheel, colorWheelOpen } = __m["src/ui/color-wheel.js"];
 
 const COLORS = {
   red: "#e5484d", orange: "#f2802a", yellow: "#e8b422", green: "#2f9e5b", blue: "#2f7bf0", indigo: "#4b4fd8", violet: "#9a4fd8",
 };
-/** Pixel width of each size at 1 rem = 16 px. */
-const WIDTHS = { 1: 2, 2: 4, 3: 8 };
 /** The brushes in the tools, in this order. */
-const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"]];
+const BRUSH_NAMES = [["pen", "펜"], ["fountain", "만년필"], ["brushpen", "붓펜"], ["pencil", "연필"], ["sketch", "스케치"], ["crayon", "크레용"], ["marker", "마커"], ["airbrush", "에어브러시"], ["highlighter", "형광펜"], ["fill", "채우기"], ["smudge", "문지르기"]];
 /** 손떨림 보정's string, in screen pixels, for 끔 · 약 · 중 · 강. */
 const STEADY_PX = [0, 6, 14, 26];
 const STEADY_NAMES = ["끔", "약", "중", "강"];
@@ -14876,16 +15823,35 @@ function fillOutline(g, poly) {
  * Paints one stroke: points [x, y, p, …] in stroke units on a context already set to them.
  * shaped: a shape made straight (followed exactly, no pressure).
  */
-function paintStroke(g, pts, color, width, brush, shaped = false) {
+/** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
+function paintStroke(g, pts, color, px, brush, shaped = false) {
   if (!pts || pts.length < 3) return;
   const look = brushLook(brush);
-  const size = (WIDTHS[width] || 4) * (100 / 16) * look.scale;
+  const size = (px || 4) * (100 / 16) * look.scale;
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
   const real = hasPressure(pts);
   const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  if (look.kind === "smudge") {
+    smudgeAlong(g, points, size, look, real);
+    g.restore();
+    return;
+  }
+  if (look.kind === "fill") {
+    // 채우기: the region's rings, filled even-odd (its holes stay open).
+    g.globalAlpha = look.alpha;
+    g.fillStyle = ink;
+    g.beginPath();
+    for (const ring of pointsToRings(pts)) {
+      ring.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.closePath();
+    }
+    g.fill("evenodd");
+    g.restore();
+    return;
+  }
   if (look.kind === "sketch") {
     // 스케치: the line itself, fine and pencil-dark, then faint strokes joining its near points.
     const poly = outline(points, { size: size * 0.55, thinning: real ? 0.5 : 0, taperStart: 0, taperEnd: size * 1.5 });
@@ -15029,6 +15995,7 @@ class InkLayer {
     this.tool = null; // null, "pen", "eraser" (부분) or "eraser-stroke" (획)
     this.color = "black";
     this.width = 2;
+    this.size = null;
     this.brush = "pen";
     this.live = null;
     this.canvas = h("canvas", { class: "ink", "aria-hidden": "true" });
@@ -15058,10 +16025,17 @@ class InkLayer {
     this.canvas.dataset.tool = tool || "";
   }
 
-  setStyle({ color, width, brush }) {
+  /** size: a width of my own in px (그림 방's slider), null for the width's. */
+  setStyle({ color, width, brush, size }) {
     if (color) this.color = color;
     if (width) this.width = width;
     if (brush) this.brush = brush;
+    if (size !== undefined) this.size = size;
+  }
+
+  /** The pen's width in px now. */
+  px() {
+    return this.size || WIDTH_PX[this.width] || 4;
   }
 
   /** Points in hundredths of a rem from the host's top left. */
@@ -15118,6 +16092,9 @@ class InkLayer {
         this.share?.begin("laser", {});
         this.share?.grow("laser", this.light.pts);
         this.renderSoon();
+      } else if (this.tool === "pen" && this.brush === "fill") {
+        // 채우기: a tap, not a line.
+        this.fillAt(e);
       } else {
         const first = this.point(e);
         const brush = this.tool === "eraser" ? "erase" : this.brush;
@@ -15135,7 +16112,7 @@ class InkLayer {
         }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
-          this.share.begin("ink", { c: this.color, w: this.width, b: brush });
+          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}) });
           this.share.grow("ink", this.live.pts);
         }
         this.render();
@@ -15203,8 +16180,9 @@ class InkLayer {
       const shape = live?.shapeNow || live?.shape;
       let opId = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
-      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, brush: live.brush, shape: true });
-      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, brush: live.brush });
+      const size = this.size || undefined;
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush });
       if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
@@ -15248,6 +16226,37 @@ class InkLayer {
   }
 
   /** A point from the hand: with 손떨림 보정 the brush follows on its string, and only its moves count. */
+  /**
+   * 채우기 at a tap: the region joined to it on this layer's own picture (what is drawn here, not the
+   * layers above or below), grown a little under the soft edges of its lines, kept as a shape (its
+   * edge and its holes) in my colour. Too thin a sliver to see is not kept.
+   */
+  fillAt(e) {
+    if (!this.kept) this.render();
+    const kept = this.kept;
+    if (!kept?.canvas || !kept.t) return;
+    const c = kept.canvas;
+    const box = this.canvas.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const sx = c.width / box.width;
+    const sy = c.height / box.height;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    const img = g.getImageData(0, 0, c.width, c.height);
+    const mask = fillMask(img.data, c.width, c.height, (e.clientX - box.left) * sx, (e.clientY - box.top) * sy, { tolerance: 48, grow: Math.max(1, Math.round(sx)) });
+    let eps = 0.75 * sx;
+    let rings = maskRings(mask, c.width, c.height).map((r) => simplifyRing(r, eps));
+    // A stroke holds at most 3000 points: a very ragged region is simplified more.
+    while (rings.reduce((n, r) => n + r.length, 0) > 2900 && eps < 40) {
+      eps *= 1.6;
+      rings = rings.map((r) => simplifyRing(r, eps));
+    }
+    const inv = kept.t.inverse();
+    const pts = ringsToPoints(rings.filter((r) => r.length >= 3), ([x, y]) => { const p = inv.transformPoint({ x, y }); return [p.x, p.y]; });
+    if (pts.length < 9) return;
+    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true });
+    this.render();
+  }
+
   /** The point of an event, a finger's pressure read from its speed. */
   felt(live, ev) {
     const p = this.point(ev);
@@ -15337,24 +16346,26 @@ class InkLayer {
       pg.setTransform(t);
       for (const s of this.ink().strokes()) {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, s.w, brushOf(s), !!s.q);
+        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q);
       }
-      this.kept = { key, canvas: pic, doc: this.ink() };
+      this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
+    const live = this.live;
+    // 문지르기 being drawn is the picture itself, smudged further as the finger goes on.
+    const wet = live?.pts && live.brush === "smudge" && !live.shapeNow;
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.drawImage(this.kept.canvas, 0, 0);
+    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px()) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    const live = this.live;
-    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.width, live.brush, true);
-    else if (live?.pts) this.paint(g, thinPoints(live.pts), this.color, this.width, live.brush);
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
-      this.paint(g, line.pts, line.c, line.w, line.b);
+      this.paint(g, line.pts, line.c, widthOf(line), line.b);
       if (line.live) tips.push(line);
     }
     // Pointer lights: friends' and mine; while one still glows, the next frame comes.
@@ -15483,8 +16494,8 @@ class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, width, brush, shaped = false) {
-    paintStroke(g, pts, color, width, brush, shaped);
+  paint(g, pts, color, px, brush, shaped = false) {
+    paintStroke(g, pts, color, px, brush, shaped);
   }
 
   destroy() {
@@ -15493,6 +16504,91 @@ class InkLayer {
     this.share?.detach(this);
     this.canvas.remove();
   }
+}
+
+// 문지르기: at each step along the line the soft round patch just behind is lifted and laid down where
+// the finger is now, part of the way (Krita's smearing smudge; libmypaint's smudge for the idea).
+// The patch is blended in, see-through included, so colour is pulled into empty paper and empty
+// paper thins the colour it is pulled over, as a finger in wet paint. It reads the picture as it
+// stands under the line (only that layer), so the same strokes in the same order smudge the same on
+// every screen.
+// from/upto: the dabs to lay (a line still being drawn lays only its new ones each frame); it
+// returns where it stopped.
+let smudgeScratch = null;
+function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
+  if (points.length < 2 || !g.canvas) return from;
+  const t = g.getTransform();
+  const scale = Math.hypot(t.a, t.b) || 1;
+  const r = Math.max(2, Math.round((size / 2) * scale));
+  const d = r * 2;
+  const marks = dabs(points, { step: size * look.spacing });
+  const end = Math.min(upto, marks.length);
+  from = Math.max(1, from);
+  if (end <= from) return from;
+  smudgeScratch ||= document.createElement("canvas");
+  const s = smudgeScratch;
+  if (s.width !== d || s.height !== d) {
+    s.width = d;
+    s.height = d;
+  }
+  const sg = s.getContext("2d");
+  if (!sg) return from;
+  const fade = sg.createRadialGradient(r, r, 0, r, r, r);
+  fade.addColorStop(0, "rgba(0,0,0,1)");
+  fade.addColorStop(0.5, "rgba(0,0,0,0.85)");
+  fade.addColorStop(1, "rgba(0,0,0,0)");
+  const px = (m) => [Math.round(t.a * m.x + t.c * m.y + t.e - r), Math.round(t.b * m.x + t.d * m.y + t.f - r)];
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  let [fx, fy] = px(marks[from - 1]);
+  for (let i = from; i < end; i++) {
+    const [tx, ty] = px(marks[i]);
+    // The patch under where the finger was, softened to a round dab.
+    sg.globalCompositeOperation = "source-over";
+    sg.clearRect(0, 0, d, d);
+    sg.drawImage(g.canvas, fx, fy, d, d, 0, 0, d, d);
+    sg.globalCompositeOperation = "destination-in";
+    sg.fillStyle = fade;
+    sg.fillRect(0, 0, d, d);
+    // Where it is now: what is there gives way by the dab's share, and the patch fills that share
+    // (a blend that carries see-through as well as colour). Harder pressed, more of it.
+    const a = look.alpha * (real ? 0.45 + 0.55 * marks[i].p : 0.85);
+    g.globalAlpha = a;
+    g.globalCompositeOperation = "destination-out";
+    g.fillStyle = fade;
+    g.translate(tx, ty);
+    g.fillRect(0, 0, d, d);
+    g.globalCompositeOperation = "lighter";
+    g.drawImage(s, 0, 0);
+    g.translate(-tx, -ty);
+    fx = tx;
+    fy = ty;
+  }
+  g.restore();
+  return end;
+}
+
+/** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
+function wetPicture(live, kept, color, px) {
+  if (!live.wet || live.wet.key !== kept.key) {
+    const c = live.wet?.canvas || document.createElement("canvas");
+    c.width = kept.canvas.width;
+    c.height = kept.canvas.height;
+    const wg = c.getContext("2d");
+    wg.drawImage(kept.canvas, 0, 0);
+    live.wet = { key: kept.key, canvas: c, done: 1 };
+  }
+  const pts = thinPoints(live.pts);
+  if (pts.length < 6) return live.wet.canvas;
+  const look = brushLook("smudge");
+  const size = (px || 4) * (100 / 16) * look.scale;
+  const points = strokePoints(pts, { streamline: look.streamline });
+  // Only up to the line's last settled point: its very end still moves as the hand goes on.
+  const settled = points.length > 2 ? Math.floor(points[points.length - 2].run / Math.max(1, size * look.spacing)) + 1 : 1;
+  const wg = live.wet.canvas.getContext("2d");
+  wg.setTransform(kept.t);
+  live.wet.done = smudgeAlong(wg, points, size, look, hasPressure(pts), live.wet.done, settled);
+  return live.wet.canvas;
 }
 
 /** A small line drawn with the brush, as it will look (pressure rising and falling, as a hand does). */
@@ -15510,7 +16606,14 @@ function brushPreview(brush, color, width) {
     const k = 0.16 * ratio;
     g.setTransform(k, 0, 0, k, 0, 0);
     const pts = [];
-    if (brush === "sketch") {
+    if (brush === "smudge") {
+      // 문지르기 shows itself pulling three bars of the colour along to the right.
+      for (const x of [40, 78, 116]) paintStroke(g, [x, 10, 60, x, 50, 60, x, 90, 60], color, WIDTH_PX[2], "marker");
+      for (let i = 0; i <= 12; i++) pts.push(Math.round(24 + i * 13), 50, 70);
+    } else if (brush === "fill") {
+      // 채우기 shows a filled drop (a bucket's paint) rather than a line.
+      for (const [x, y, p] of [[60, 18, 100], [128, 18, 0], [176, 60, 0], [128, 92, 0], [60, 92, 0], [18, 55, 0]]) pts.push(x, y, p);
+    } else if (brush === "sketch") {
       // 스케치 shows itself when rubbed back and forth (its web of faint strokes appears).
       for (let i = 0; i <= 40; i++) {
         const t = i / 40;
@@ -15523,7 +16626,7 @@ function brushPreview(brush, color, width) {
         pts.push(Math.round(24 + t * 164), Math.round(50 + Math.sin(t * Math.PI * 2) * 22), Math.round(25 + 70 * Math.sin(t * Math.PI)));
       }
     }
-    paintStroke(g, pts, color, Math.min(width, 2), brush);
+    paintStroke(g, pts, color, WIDTH_PX[Math.min(width, 2)] || 4, brush);
   };
   // Its size is fixed, so it is painted at once (a frame may never come to a screen in the back).
   draw();
@@ -15538,6 +16641,7 @@ function brushPreview(brush, color, width) {
  */
 function drawInkTools(panel, { pen, setTool, store }) {
   panel.hidden = !pen.tool;
+  if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return;
   const erasing = pen.tool === "eraser" || pen.tool === "eraser-stroke";
   const pointing = pen.tool === "laser";
@@ -15560,15 +16664,41 @@ function drawInkTools(panel, { pen, setTool, store }) {
     h("div", { class: "ink-row" },
       ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
         style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-      // A colour picked from the drawing (스포이트) shows beside them while it is the pen's.
-      typeof pen.color === "string" && pen.color.startsWith("#") && h("button", { class: "ink-color custom", id: "ink-picked", type: "button", "aria-label": "고른 색 " + pen.color, "aria-pressed": String(!erasing),
-        style: { background: pen.color }, onclick: () => choose({ color: pen.color }) }),
-      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(pen.width === w),
-        onclick: () => { pen.width = w; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
+      // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from
+      // the drawing (스포이트), fills it while it is the pen's.
+      inkWell(),
+      // A size of my own (그림 방's size bar) leaves all three unchosen; one of them takes it back.
+      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
+        onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
       h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
         onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
       h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
         onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); setTool(pen.tool); } }, "보정 " + STEADY_NAMES[steady])));
+  function inkWell() {
+    const own = typeof pen.color === "string" && pen.color.startsWith("#");
+    const well = h("button", { class: "ink-color more" + (own ? " has" : ""), id: "ink-more", type: "button", "aria-label": own ? "고른 색 " + pen.color + " · 색 원판" : "색 더 고르기 (색 원판)",
+      "aria-pressed": String(own && !erasing), "aria-expanded": String(colorWheelOpen()), style: own ? { "--well": pen.color } : {},
+      onclick: () => {
+        if (colorWheelOpen()) return void closeColorWheel();
+        well.setAttribute("aria-expanded", "true");
+        openColorWheel({
+          anchor: well,
+          color: own ? pen.color : inkColor(pen.color),
+          recent: getSettings(store).inkRecent || [],
+          // While the finger moves only the pen and this well change; the lift chooses it.
+          onPick: (hex, done) => {
+            if (done) return void choose({ color: hex });
+            pen.color = hex;
+            const now = panel.querySelector("#ink-more");
+            now?.classList.add("has");
+            now?.style.setProperty("--well", hex);
+          },
+          onRecent: (list) => setSetting(store, "inkRecent", list),
+          alive: () => panel.isConnected && !panel.hidden && pen.tool === "pen",
+        });
+      } });
+    return well;
+  }
   panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
   panel.querySelector("#ink-laser").setAttribute("aria-pressed", String(pointing));
   // The chosen brush in view (the row slides sideways on a narrow screen, and says so). Done at
@@ -15588,14 +16718,14 @@ return { BRUSH_NAMES, STEADY_NAMES, inkColor, pixelAt, paintStroke, InkLayer, dr
 __m["src/ui/text-room.js"] = (() => {
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
 
-const { h, icon, iconButton, mount, toast, openSheet, flashHint } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame, closeOnOutside } = __m["src/ui/dom.js"];
 const { shrinkPhoto } = __m["src/ui/photo.js"];
 const { watchPickers } = __m["src/ui/picker-watch.js"];
 const { watchFingers, watchFingerTaps } = __m["src/ui/fingers.js"];
 const { onThemeChange } = __m["src/ui/theme.js"];
 const { SheetEditor } = __m["src/ui/editor.js"];
 const { UndoStack } = __m["src/core/undo.js"];
-const { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps } = __m["src/core/edit.js"];
+const { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps } = __m["src/core/edit.js"];
 const { MARK_COLORS, MAX_SOUND_MS } = __m["src/core/crdt.js"];
 const { fileOps } = __m["src/core/files.js"];
 const { toBase64, fromBase64 } = __m["src/core/b64.js"];
@@ -15836,6 +16966,7 @@ function mountTextRoom(body, app, session) {
       editor = new SheetEditor({
         app, session, day, isToday: day === today, zone, record, onCaret, tell: (text) => toast(app.root, text),
         onReveal: (att, from) => (att.kind === "sound" ? revealSound(day, att, from) : revealPhoto(day, att, from)),
+        onDay: (ed, head) => dayMenu(ed, head),
         onSelect: (ed) => {
           const range = ed.selectionRange();
           const word = range || ed.wordAround();
@@ -15964,7 +17095,10 @@ function mountTextRoom(body, app, session) {
   const isOwner = () => session.room.meta("createdBy") === session.memberId;
   /** The ranges (marks, locks) that share letters with the chosen words. */
   function touching(list, target) {
-    const pos = new Map(target.editor.sheet.ids().map((id, i) => [id, i]));
+    if (!list.length) return [];
+    // Where each letter stands, from the sheet's own table (kept until the sheet changes): a long
+    // day is not counted through again each time the chosen words move.
+    const pos = target.editor.sheet.view().before;
     const span = (r) => {
       const a = pos.get(r.ch);
       const b = pos.get(r.to);
@@ -15978,26 +17112,53 @@ function mountTextRoom(body, app, session) {
     });
   }
 
-  function drawSel() {
-    selTools.hidden = !sel || readOnlyNow() || !!pen.tool;
-    if (selTools.hidden) return void selTools.replaceChildren();
-    const sheet = sel.editor.sheet;
-    const marks = touching(sheet.marks(), sel);
-    const locks = touching(sheet.locks(), sel);
-    const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
+  // The row for chosen words is made once and then only brought up to date: while a handle is
+  // dragged the words change many times a second (the owner: "글자를 고르고… 툭툭 끊기지 않게"), so
+  // nothing is made again, and an update waits for the next frame (one per frame at most).
+  let selRow = null;
+  let selFrame = null;
+  const marksNow = () => (sel ? touching(sel.editor.sheet.marks(), sel) : []);
+  const freeableNow = () => (sel ? touching(sel.editor.sheet.locks(), sel).filter((l) => l.by === session.memberId || isOwner()) : []);
+  function buildSel() {
+    const row = {
+      unmark: h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marksNow()) }),
+      unlock: h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeableNow()) }, icon("lock"), "잠금 풀기"),
+      lock: h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금"),
+    };
     selTools.replaceChildren(
       h("div", { class: "sel-row" },
         h("span", { class: "sel-label", text: "표시" }),
         ...MARK_COLORS.map((c) => h("button", { class: "sel-color", type: "button", data: { hl: c }, "aria-label": "표시 " + MARK_NAMES[c], onclick: () => markSel(c) })),
-        marks.length > 0 && h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marks) })),
+        row.unmark),
       h("div", { class: "sel-row" },
         h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
         h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
-        locks.length
-          ? freeable.length > 0 && h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeable) }, icon("lock"), "잠금 풀기")
-          : h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금")));
+        row.unlock, row.lock));
     // The words stay chosen while a button here is pressed.
     for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
+    return row;
+  }
+  function paintSel() {
+    const show = !!sel && !readOnlyNow() && !pen.tool;
+    if (selTools.hidden === show) selTools.hidden = !show;
+    if (!show) return;
+    selRow ||= buildSel();
+    const locks = touching(sel.editor.sheet.locks(), sel);
+    const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
+    const set = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
+    set(selRow.unmark, !marksNow().length);
+    set(selRow.lock, locks.length > 0);
+    set(selRow.unlock, !(locks.length && freeable.length));
+  }
+  function drawSel() {
+    // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
+    if (selTools.hidden || !sel || readOnlyNow() || pen.tool) {
+      selFrame?.();
+      selFrame = null;
+      return paintSel();
+    }
+    if (selFrame) return;
+    selFrame = nextFrame(() => { selFrame = null; paintSel(); });
   }
 
   function commitRange(target, made, done) {
@@ -16011,6 +17172,43 @@ function mountTextRoom(body, app, session) {
   function markSel(c) {
     if (!sel || readOnlyNow()) return;
     commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "mark", { ch: sel.ch, to: sel.to, c, by: session.memberId }));
+  }
+
+  // ---- the day's own: 이 날 전체 잠그기 -------------------------------------------------------
+  let closeDay = null;
+  /**
+   * The day's name pressed: a small menu under it. Unlocked: 이 날 잠그기 (nobody writes, changes or
+   * removes anything that day). Locked: who locked it, and 잠금 풀기 for them and the room's maker.
+   */
+  function dayMenu(editor, head) {
+    closeDay?.();
+    if (readOnlyNow()) return;
+    const lock = editor.sheet.dayLock();
+    const mayFree = lock && (lock.by === session.memberId || isOwner());
+    const commitDay = (made, said) => {
+      if (!made.ops.length) return;
+      session.commit(editor.doc, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: editor.doc })), false);
+      editor.render();
+      toast(app.root, said, 2600);
+    };
+    const menu = h("div", { class: "day-menu", id: "day-menu", role: "menu" },
+      lock
+        ? [h("p", { class: "day-menu-who", text: `${session.room.member(lock.by)?.name || "누군가"} 님이 잠근 날이에요` }),
+          mayFree && h("button", { class: "chip", id: "day-unlock", type: "button", onclick: () => { close(); commitDay(unrangeOps(editor.sheet, session.clock, "lock", lock.id), "이 날의 잠금을 풀었어요"); } }, icon("lock"), "잠금 풀기")]
+        : [h("button", { class: "chip", id: "day-lock", type: "button", onclick: () => { close(); commitDay(dayLockOps(editor.sheet, session.clock, { by: session.memberId }), "이 날을 잠갔어요. 잠근 사람과 방장만 풀 수 있어요"); } }, icon("lock"), "이 날 잠그기"),
+          h("p", { class: "day-menu-help", text: "잠그면 아무도 이 날에 쓰거나 지울 수 없어요" })]);
+    document.body.append(menu);
+    const r = head.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.left)) + "px";
+    menu.style.top = r.bottom + 6 + "px";
+    const stop = closeOnOutside((t) => menu.contains(t) || head.contains(t), () => close(), menu);
+    function close() {
+      stop();
+      menu.remove();
+      if (closeDay === close) closeDay = null;
+    }
+    closeDay = close;
   }
 
   function lockSel() {
@@ -16279,6 +17477,8 @@ function mountTextRoom(body, app, session) {
     closeSound?.();
     stopSoundPickers();
     for (const input of soundInputs) input.remove();
+    selFrame?.();
+    closeDay?.();
     selTools.remove();
     stopPhotoWatch();
     photoInput.remove();
@@ -16693,14 +17893,20 @@ class Timeline {
   drawRecording(rec) {
     let el = this.lanes.querySelector(".clip.rec");
     if (!rec) return void el?.remove();
+    let fresh = false;
     if (!el) {
       el = h("div", { class: "clip rec", id: "rec-clip", "aria-label": "녹음 중" }, h("span", { class: "notes" }), h("span", { class: "rec-time" }));
       this.lanes.append(el);
+      fresh = true;
     }
     el.style.left = this.xOf(rec.start) + "px";
     el.style.top = rec.row * this.rowH + this.inset + "px";
     el.style.width = Math.max(4, (rec.ms / 1000) * this.pps) + "px";
     el.style.height = this.rowH - 2 * this.inset + "px";
+    // The row being sung into is in view (a row below the screen would be sung into unseen), and
+    // its growing end stays in view as the take goes on.
+    if (fresh) this.reveal(rec.row, rec.start);
+    else this.follow(rec.start + rec.ms);
     el.querySelector(".rec-time").textContent = timeText(rec.ms);
     const notes = el.querySelector(".notes");
     if (notes.dataset.n === String(rec.notes.length) && notes.dataset.w === String(Math.round(rec.ms / 200))) return;
@@ -16745,6 +17951,40 @@ class Timeline {
     const left = this.el.scrollLeft;
     const width = this.el.clientWidth;
     if (x > left + width * 0.85 || x < left) this.el.scrollLeft = Math.max(0, x - width * 0.25);
+  }
+
+  /**
+   * Brings a row (and a moment on it) into view when it is not: the timeline scrolls just enough,
+   * under the time bar that stays on top. Gently, unless the reader asked for less motion.
+   */
+  reveal(row, ms = null) {
+    const el = this.el;
+    const top = this.lanes.offsetTop + row * this.rowH;
+    const bottom = top + this.rowH;
+    const under = this.ruler.offsetHeight;
+    let y = el.scrollTop;
+    if (top < el.scrollTop + under) y = top - under - 4;
+    else if (bottom > el.scrollTop + el.clientHeight) y = bottom - el.clientHeight + 8;
+    let x = el.scrollLeft;
+    if (ms !== null) {
+      const at = this.xOf(ms);
+      if (at < el.scrollLeft || at > el.scrollLeft + el.clientWidth * 0.85) x = at - el.clientWidth * 0.25;
+    }
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    if (Math.abs(x - el.scrollLeft) < 1 && Math.abs(y - el.scrollTop) < 1) return;
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (el.scrollTo) el.scrollTo({ left: x, top: y, behavior: calm ? "auto" : "smooth" });
+    else {
+      el.scrollLeft = x;
+      el.scrollTop = y;
+    }
+  }
+
+  /** A clip into view (one just made: a take, a file, a paste). */
+  revealClip(id) {
+    const c = this.model?.clips?.find?.((x) => x.id === id) || null;
+    if (c) this.reveal(c.lane ?? c.row ?? 0, c.start);
   }
 
   clipBox(id) {
@@ -17487,7 +18727,7 @@ const { currentTheme, onThemeChange } = __m["src/ui/theme.js"];
 const { Timeline, timeText } = __m["src/ui/song-view.js"];
 const { openNoteEditor } = __m["src/ui/note-editor.js"];
 const { UndoStack } = __m["src/core/undo.js"];
-const { memberColor, INK, PALETTE } = __m["src/core/paint.js"];
+const { memberColor, personColor, INK, PALETTE } = __m["src/core/paint.js"];
 const { MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan, joinClipOps, joinWithSourceOps, combinedSource, packMs, noteInSeconds, tonalOps } = __m["src/core/song.js"];
 const { keyName } = __m["src/audio/intent.js"];
 const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
@@ -17622,6 +18862,57 @@ function mountSongRoom(body, app, session, frame) {
   const side = h("aside", { class: "song-side", id: "song-side", "aria-label": "고른 클립" });
   body.append(side);
   const wideSide = matchMedia("(min-width: 1000px) and (min-height: 600px) and (orientation: landscape)");
+  // Its own controls (the owner: "폴드폰처럼 크기를 줄였다", "손을 기대고 하는데… 잠금… 아이콘 검정으로
+  // 조그마낳게… 아무것도 안눌리게", "잠시 옆에 숨기기로", "패널을 안보고 또 보고"): its width by its inner
+  // edge, a small lock (a resting hand presses nothing), hide to a tab at the screen's edge and back.
+  // Kept on this device.
+  const SIDE_MIN = 11;
+  const SIDE_MAX = 26;
+  const sideLook = () => ({ w: 15, locked: false, hidden: false, ...(getSettings(app.store).songSide || {}) });
+  const saveSide = (patch) => setSetting(app.store, "songSide", { ...sideLook(), ...patch });
+  const sideLock = h("button", { class: "side-lock", id: "side-lock", type: "button", onclick: (e) => { e.stopPropagation(); saveSide({ locked: !sideLook().locked }); paintSide(); buzz(app, 8); } }, icon("lock"));
+  const sideHide = h("button", { class: "side-hide", id: "side-hide", type: "button", "aria-label": "옆 패널 숨기기", title: "옆 패널 숨기기", onclick: (e) => { e.stopPropagation(); saveSide({ hidden: true }); paintSide(); } }, icon("hideRight"));
+  const sideHead = h("div", { class: "side-head" }, sideLock, sideHide);
+  const sideEdge = h("div", { class: "side-edge", id: "side-edge", role: "separator", "aria-orientation": "vertical", "aria-label": "옆 패널 크기 (끌어서)" }, h("span", { class: "grip-bar" }));
+  const sideTab = h("button", { class: "side-tab", id: "side-tab", type: "button", "aria-label": "옆 패널 보이기", title: "옆 패널 보이기", onclick: () => { saveSide({ hidden: false }); paintSide(); } }, icon("showLeft"));
+  side.append(sideHead);
+  body.append(sideEdge, sideTab);
+  function paintSide() {
+    const look = sideLook();
+    body.style.setProperty("--side-w", Math.max(SIDE_MIN, Math.min(SIDE_MAX, look.w)) + "rem");
+    body.classList.toggle("side-hidden", !!look.hidden);
+    side.classList.toggle("locked", !!look.locked);
+    sideLock.setAttribute("aria-pressed", String(!!look.locked));
+    sideLock.setAttribute("aria-label", look.locked ? "잠금 풀기 (옆 패널이 다시 눌려요)" : "옆 패널 잠금 (손이 닿아도 안 눌려요)");
+    sideLock.title = sideLock.getAttribute("aria-label");
+  }
+  paintSide();
+  // Dragged by its inner edge: wider or narrower, as a split screen is.
+  let edgeDrag = null;
+  sideEdge.addEventListener("pointerdown", (e) => {
+    if (sideLook().locked || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    edgeDrag = { id: e.pointerId };
+    try { sideEdge.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    side.classList.add("resizing");
+  });
+  sideEdge.addEventListener("pointermove", (e) => {
+    if (!edgeDrag || e.pointerId !== edgeDrag.id) return;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const right = body.getBoundingClientRect().right - 0.6 * rem;
+    const w = Math.max(SIDE_MIN, Math.min(SIDE_MAX, (right - e.clientX) / rem));
+    body.style.setProperty("--side-w", w.toFixed(2) + "rem");
+    edgeDrag.w = w;
+  });
+  const edgeUp = (e) => {
+    if (!edgeDrag || e.pointerId !== edgeDrag.id) return;
+    if (edgeDrag.w) saveSide({ w: Math.round(edgeDrag.w * 4) / 4 });
+    edgeDrag = null;
+    side.classList.remove("resizing");
+    timeline.render(model());
+  };
+  sideEdge.addEventListener("pointerup", edgeUp);
+  sideEdge.addEventListener("pointercancel", edgeUp);
   const onWide = () => { if (alive) { menu?.stopGuard?.(); menu?.remove(); menu = null; draw(); } };
   wideSide.addEventListener?.("change", onWide);
 
@@ -17672,7 +18963,7 @@ function mountSongRoom(body, app, session, frame) {
 
   function colorOf(by) {
     const m = session.room.member(by);
-    return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()];
+    return m ? personColor(m, currentTheme()) : INK[currentTheme()];
   }
 
   function peerSelections() {
@@ -17680,7 +18971,7 @@ function mountSongRoom(body, app, session, frame) {
     for (const p of session.peers) {
       if (p.isMe || !p.state || typeof p.state.sel !== "string") continue;
       const m = session.room.member(p.state.m);
-      if (m) map.set(p.state.sel, memberColor(m.color, currentTheme()));
+      if (m) map.set(p.state.sel, personColor(m, currentTheme()));
     }
     return map;
   }
@@ -17694,7 +18985,7 @@ function mountSongRoom(body, app, session, frame) {
       live.add(p.key);
       const m = session.room.member(p.state.m);
       if (!peerRecs.has(p.key)) peerRecs.set(p.key, { row: r.row, at: r.at, since: performance.now() });
-      Object.assign(peerRecs.get(p.key), { name: m?.name || "친구", color: m ? memberColor(m.color, currentTheme()) : "#e5484d" });
+      Object.assign(peerRecs.get(p.key), { name: m?.name || "친구", color: m ? personColor(m, currentTheme()) : "#e5484d" });
     }
     for (const key of [...peerRecs.keys()]) if (!live.has(key)) peerRecs.delete(key);
   }
@@ -18237,6 +19528,8 @@ function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = place;
     select(clip.id);
+    // A take or a file lands where it may be off the screen (a row below, later in time): shown.
+    timeline.revealClip(clip.id);
     keepTake(app, { name, result, blob, where: takeWhere(app, session.roomId) });
   }
 
@@ -18272,7 +19565,9 @@ function mountSongRoom(body, app, session, frame) {
     const scale = song.scaleOf(clip.src);
     const toTonal = state === "sung";
     const label = toTonal ? "조에 맞춰" + (scale ? " · " + keyName(scale.tonic, scale.minor) : "") : "부른 그대로";
-    return h("button", { type: "button", id: "clip-tonal", text: label, onclick: (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); } });
+    const onclick = (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); };
+    if (wideSide.matches) return h("button", { type: "button", id: "clip-tonal", class: "side-btn", "aria-label": label, onclick }, icon("fork"), h("span", { class: "side-btn-word", text: toTonal ? "조에 맞춰" : "부른 그대로" }));
+    return h("button", { type: "button", id: "clip-tonal", text: label, onclick });
   }
 
   function step(dir) {
@@ -18501,6 +19796,7 @@ function mountSongRoom(body, app, session, frame) {
     record(clip.atoms);
     selectedRow = row;
     select(clip.id);
+    timeline.revealClip(clip.id);
   }
 
   /** 붙여넣기 of copied clips (an 올가미's): at the playhead, as they stood to each other; one undo step. */
@@ -18545,6 +19841,7 @@ function mountSongRoom(body, app, session, frame) {
     record(atoms);
     group = new Set(placed);
     select(null);
+    if (placed.length) timeline.revealClip(placed[0]);
   }
 
   function toggleMute(id) {
@@ -18657,10 +19954,15 @@ function mountSongRoom(body, app, session, frame) {
           () => select(null), menu);
       }
     }
-    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다").
-    const item = (id, text, onclick, can = true) => can && h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } });
+    // Only what can be done now is there: no greyed words (본질 5, "가리지 않는다"). At the side (옆 패널)
+    // they stand as a grid of buttons, the icon above and the word below (the owner: "너무 나열식…
+    // 버튼 형식으로다가 설명은 아래에"); floating, as words.
+    const item = (id, text, onclick, can = true, ic = null) => can && (docked && ic
+      ? h("button", { type: "button", id, class: "side-btn", "aria-label": text.replace(/^[▶■] /, ""), onclick: (e) => { e.stopPropagation(); onclick(); } }, icon(ic), h("span", { class: "side-btn-word", text: text.replace(/^[▶■] /, "") }))
+      : h("button", { type: "button", id, text, onclick: (e) => { e.stopPropagation(); onclick(); } }));
     // 색: the people colours in place of the menu (small, so it covers little), and 기본 (the recorder's).
     const named = clipName(clip);
+    menu.classList.toggle("tints", menuView === "tints" && !locked);
     if (menuView === "tints" && !locked) {
       const now = clip.tint ?? null;
       // Whose it is, so a colour that is a person's is not taken for theirs (the owner: "색깔 들어가면은
@@ -18676,24 +19978,24 @@ function mountSongRoom(body, app, session, frame) {
     } else menu.replaceChildren(...[
       // What it is: its name, what it came from, who put it in.
       h("p", { class: "menu-info", id: "clip-info", text: [named.title, named.long, named.who && named.who + "이(가) 넣음"].filter(Boolean).join(" · ") }),
-      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec),
-      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id)),
-      item("clip-copy", "복사", () => copyClip(clip.id)),
-      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly()),
-      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly()),
+      item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec, soloClip === clip.id ? "stop" : "play"),
+      item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id), "scissors"),
+      item("clip-copy", "복사", () => copyClip(clip.id), true, "copy"),
+      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
+      item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
-      item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src)),
+      item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
       // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
       tonalItem(clip),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
-      item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly()),
-      !locked && h("button", { type: "button", id: "clip-tint", onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
-        h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), "색"),
-      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy),
-      item("clip-notes", "음 편집", () => editNotes(clip.id)),
-      item("clip-send", "보내기", () => sendClip(clip.id)),
-      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly()),
-      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked),
+      item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly(), "speed"),
+      !locked && h("button", { type: "button", id: "clip-tint", class: docked ? "side-btn" : null, onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
+        h("span", { class: "menu-swatch", style: { background: clipColor(clip) } }), docked ? h("span", { class: "side-btn-word", text: "색" }) : "색"),
+      item("clip-join", "잇기", () => joinClip(clip.id), !locked && !!next && !next.locked && !busy, "join"),
+      item("clip-notes", "음 편집", () => editNotes(clip.id), true, "roll"),
+      item("clip-send", "보내기", () => sendClip(clip.id), true, "send"),
+      item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly(), "lock"),
+      item("clip-delete", "삭제", () => deleteClip(clip.id), !locked, "trash"),
     ].filter(Boolean));
     if (docked) return;
     const w = menu.offsetWidth;
@@ -18713,7 +20015,7 @@ function mountSongRoom(body, app, session, frame) {
     if (menu) return void rest?.remove();
     if (!rest) {
       rest = h("div", { class: "side-summary", id: "side-summary" });
-      side.prepend(rest);
+      sideHead.after(rest);
     }
     const clips = song.layout();
     const people = [...new Set(clips.map((c) => c.by))].map((by) => session.room.member(by)?.name).filter(Boolean);
@@ -19030,7 +20332,7 @@ const { SPEEDS } = __m["src/ui/song-room.js"];
 const { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } = __m["src/ui/sound-in.js"];
 const { shrinkPhoto } = __m["src/ui/photo.js"];
 const { watchPickers } = __m["src/ui/picker-watch.js"];
-const { memberColor, INK, contrast, PALETTE } = __m["src/core/paint.js"];
+const { memberColor, personColor, INK, contrast, PALETTE } = __m["src/core/paint.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { Clock } = __m["src/core/crdt.js"];
 const { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS, packMs, noteInSeconds, unpackNote } = __m["src/core/song.js"];
@@ -19348,7 +20650,7 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   const readOnly = () => !!session.transport.readOnly;
-  const colorOf = (by) => { const m = session.room.member(by); return m ? memberColor(m.color, currentTheme()) : INK[currentTheme()]; };
+  const colorOf = (by) => { const m = session.room.member(by); return m ? personColor(m, currentTheme()) : INK[currentTheme()]; };
   const settings = () => getSettings(app.store);
   const writeStyle = () => ({ color: "black", size: 2, ...(settings().boardText || {}) });
   // 노래's stretch is one card's own (the owner: "이 녹음된 것만 늘리려고 했는데 다른 것까지 다
@@ -19983,7 +21285,7 @@ function mountBoardRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "board-items",
       items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) })),
-      strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, b: l.b || "pen", ...(l.s ? { s: l.s } : {}), ...(l.q ? { q: 1 } : {}) })),
+      strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, ...(l.z ? { z: l.z } : {}), b: l.b || "pen", ...(l.s ? { s: l.s } : {}), ...(l.q ? { q: 1 } : {}) })),
     });
     toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
   }
@@ -21058,7 +22360,7 @@ function mountBoardRoom(body, app, session, frame) {
     }
     for (const l of strokes) {
       const pts = l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v + at.x * INK_UNIT) : k % 3 === 1 ? Math.round(v + at.y * INK_UNIT) : v));
-      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color: l.c, width: l.w, by: session.memberId, brush: l.b || "pen", style: l.s, shape: !!l.q });
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color: l.c, width: l.w, size: l.z ? l.z / 10 : undefined, by: session.memberId, brush: l.b || "pen", style: l.s, shape: !!l.q });
       session.commit(INK_DOC, made.ops);
       atoms.push(...made.atoms.map((a) => ({ ...a, doc: INK_DOC })));
     }
@@ -21969,6 +23271,300 @@ function mountBoardRoom(body, app, session, frame) {
 
 return { mountBoardRoom };
 })();
+__m["src/core/timelapse.js"] = (() => {
+// 타임랩스 (그린 과정 보기; the reference study: Procreate's time-lapse replay, and ours shows who drew
+// each line, since every stroke already knows its person and moment): the strokes of a drawing, from
+// every layer, in the order they were drawn, each drawn again along its own path, one after another
+// with the waits between them left out. Pure computation; ui/timelapse.js draws it.
+
+/**
+ * layers: [{ layer, strokes }] → { items: [{ stroke, layer, start, end }], total } in ms of replay.
+ * A line takes time by its length (msPerUnit), between minMs and maxMs.
+ */
+function replayPlan(layers, { msPerUnit = 0.45, minMs = 140, maxMs = 1400 } = {}) {
+  const all = [];
+  for (const { layer, strokes } of layers || []) for (const stroke of strokes) all.push({ stroke, layer });
+  all.sort((a, b) => a.stroke.at - b.stroke.at || cmp(a.stroke.id, b.stroke.id));
+  let t = 0;
+  const items = all.map(({ stroke, layer }) => {
+    const ms = Math.max(minMs, Math.min(maxMs, lengthOf(stroke.pts) * msPerUnit));
+    const item = { stroke, layer, start: t, end: t + ms };
+    t += ms;
+    return item;
+  });
+  return { items, total: t };
+}
+
+// Ids are "counter@device": by counter, then device.
+function cmp(a, b) {
+  const [na, da] = [Number(a.slice(0, a.indexOf("@"))), a.slice(a.indexOf("@") + 1)];
+  const [nb, db] = [Number(b.slice(0, b.indexOf("@"))), b.slice(b.indexOf("@") + 1)];
+  return na - nb || (da < db ? -1 : da > db ? 1 : 0);
+}
+
+function lengthOf(pts) {
+  let len = 0;
+  for (let i = 3; i + 2 < pts.length; i += 3) len += Math.hypot(pts[i] - pts[i - 3], pts[i + 1] - pts[i - 2]);
+  return len;
+}
+
+/**
+ * The first fraction f (0..1) of a stroke's points [x, y, p, …] by length along it, the last point
+ * placed between two (pressure too). whole: the stroke comes all at once (a fill, a shape made exact).
+ */
+function strokePart(pts, f, { whole = false } = {}) {
+  if (whole || f >= 1) return pts;
+  const total = lengthOf(pts);
+  const want = Math.max(0, f) * total;
+  const out = [pts[0], pts[1], pts[2]];
+  let run = 0;
+  for (let i = 3; i + 2 < pts.length; i += 3) {
+    const d = Math.hypot(pts[i] - pts[i - 3], pts[i + 1] - pts[i - 2]);
+    if (run + d >= want) {
+      if (want <= run) break;
+      const k = (want - run) / d;
+      out.push(Math.round(pts[i - 3] + (pts[i] - pts[i - 3]) * k), Math.round(pts[i - 2] + (pts[i + 1] - pts[i - 2]) * k), Math.round(pts[i - 1] + (pts[i + 2] - pts[i - 1]) * k));
+      break;
+    }
+    run += d;
+    out.push(pts[i], pts[i + 1], pts[i + 2]);
+  }
+  return out;
+}
+
+return { replayPlan, strokePart };
+})();
+__m["src/ui/timelapse.js"] = (() => {
+// 타임랩스 on screen (그림 방's 과정): the drawing made again from its first line, every layer, each
+// line drawn along its path with the name of the one who drew it at the pen in their colour, as
+// Procreate replays a painting — ours shows everyone who drew it together. ▶/❚❚, 1·2·4배, a bar to
+// jump along it, and 영상으로 저장 where the browser can record a canvas.
+
+const { h, toast } = __m["src/ui/dom.js"];
+const { paintStroke } = __m["src/ui/ink.js"];
+const { brushOf, widthOf } = __m["src/core/ink.js"];
+const { replayPlan, strokePart } = __m["src/core/timelapse.js"];
+
+const SPEEDS = [1, 2, 4];
+
+/**
+ * layers: [{ strokes, opacity, mode }] bottom first; pageW/pageH in stroke units; paper: its colour;
+ * nameOf(member), colorOf(member); title for a saved video. Returns { close }.
+ */
+function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, title = "그림" }) {
+  const plan = replayPlan(layers.map((l, i) => ({ layer: i, strokes: l.strokes })));
+  const canvas = h("canvas", { class: "tl-canvas", id: "tl-canvas", "aria-label": "그린 과정" });
+  const fill = h("span", { class: "tl-fill" });
+  const bar = h("div", { class: "tl-bar", id: "tl-bar", role: "slider", "aria-label": "어디까지", "aria-valuemin": "0", "aria-valuemax": "100" }, fill);
+  const play = h("button", { class: "chip primary tl-play", id: "tl-play", type: "button" });
+  const speed = h("button", { class: "chip", id: "tl-speed", type: "button" });
+  const canRecord = typeof canvas.captureStream === "function" && typeof window.MediaRecorder === "function";
+  const save = canRecord ? h("button", { class: "chip", id: "tl-save", type: "button", text: "영상 저장", title: "그린 과정을 영상으로 저장" }) : null;
+  const close = h("button", { class: "chip", id: "tl-close", type: "button", text: "닫기" });
+  const card = h("div", { class: "tl-card", role: "dialog", "aria-label": "그린 과정" },
+    h("div", { class: "game-head" }, h("span", { class: "game-title", text: "그린 과정" }), h("span", { class: "relay-sub", id: "tl-count", text: `선 ${plan.items.length}개` })),
+    h("div", { class: "tl-stage" }, canvas), bar,
+    h("div", { class: "game-foot" }, play, speed, save, close));
+  const layer = h("div", { class: "tl-layer", id: "timelapse" }, card);
+  root.append(layer);
+
+  // The picture: one canvas per layer, each line painted on its own layer once it is done.
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  const pad = parseFloat(getComputedStyle(card).paddingLeft) || 0;
+  const cssW = Math.max(120, Math.min(card.clientWidth - 2 * pad - 2, 480, ((innerHeight - 230) * pageW) / pageH));
+  const W = Math.round(cssW * ratio);
+  const H = Math.round((cssW * pageH) / pageW * ratio);
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = cssW + "px";
+  canvas.style.height = (cssW * pageH) / pageW + "px";
+  const g = canvas.getContext("2d");
+  const made = layers.map(() => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; });
+  const scratch = document.createElement("canvas");
+  scratch.width = W;
+  scratch.height = H;
+  const k = W / pageW;
+  let painted = 0; // items painted onto their layer
+  let t = 0; // replay time, ms
+  let rate = 1;
+  let running = false;
+  let last = 0;
+  let frame = 0;
+
+  function reset() {
+    for (const c of made) c.getContext("2d").clearRect(0, 0, W, H);
+    painted = 0;
+  }
+
+  function paintOn(c, item, pts) {
+    const lg = c.getContext("2d");
+    lg.setTransform(k, 0, 0, k, 0, 0);
+    paintStroke(lg, pts, item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q);
+    lg.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  /** The picture at replay time t. */
+  function render() {
+    if (t < (plan.items[painted - 1]?.end ?? 0)) reset();
+    while (painted < plan.items.length && plan.items[painted].end <= t) {
+      paintOn(made[plan.items[painted].layer], plan.items[painted], plan.items[painted].stroke.pts);
+      painted++;
+    }
+    const now = plan.items[painted];
+    const drawing = now && now.start <= t ? now : null;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = paper;
+    g.fillRect(0, 0, W, H);
+    let tip = null;
+    layers.forEach((l, i) => {
+      let src = made[i];
+      if (drawing && drawing.layer === i) {
+        // The line being drawn: its part so far, over what its layer already has.
+        const sg = scratch.getContext("2d");
+        sg.clearRect(0, 0, W, H);
+        sg.drawImage(made[i], 0, 0);
+        const f = (t - drawing.start) / (drawing.end - drawing.start);
+        const s = drawing.stroke;
+        const whole = brushOf(s) === "fill" || !!s.q;
+        const part = strokePart(s.pts, f, { whole });
+        paintOn(scratch, drawing, part);
+        src = scratch;
+        if (brushOf(s) !== "erase") tip = { x: part[part.length - 3] * k, y: part[part.length - 2] * k, by: s.by };
+      }
+      g.globalAlpha = l.opacity ?? 1;
+      g.globalCompositeOperation = l.mode || "source-over";
+      g.drawImage(src, 0, 0);
+    });
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = "source-over";
+    if (tip) nameTag(tip);
+    const done = plan.total ? Math.min(1, t / plan.total) : 1;
+    fill.style.width = done * 100 + "%";
+    bar.setAttribute("aria-valuenow", String(Math.round(done * 100)));
+  }
+
+  /** The name of the one drawing, at the pen, in their colour. */
+  function nameTag({ x, y, by }) {
+    const name = nameOf(by);
+    g.font = `700 ${12 * ratio}px system-ui, sans-serif`;
+    const w = g.measureText(name).width + 12 * ratio;
+    const hh = 18 * ratio;
+    const bx = Math.min(W - w - 2, Math.max(2, x + 8 * ratio));
+    const by2 = Math.min(H - hh - 2, Math.max(2, y - hh - 6 * ratio));
+    g.fillStyle = colorOf(by);
+    g.beginPath();
+    g.roundRect?.(bx, by2, w, hh, hh / 2);
+    if (!g.roundRect) g.rect(bx, by2, w, hh);
+    g.fill();
+    g.fillStyle = "#fff";
+    g.textBaseline = "middle";
+    g.fillText(name, bx + 6 * ratio, by2 + hh / 2);
+    g.beginPath();
+    g.arc(x, y, 3 * ratio, 0, Math.PI * 2);
+    g.fillStyle = colorOf(by);
+    g.fill();
+  }
+
+  function step(now) {
+    frame = 0;
+    if (!running) return;
+    t = Math.min(plan.total, t + (now - last) * rate);
+    last = now;
+    render();
+    if (t >= plan.total) return void pause(true);
+    frame = requestAnimationFrame(step);
+  }
+
+  function start() {
+    if (t >= plan.total) t = 0;
+    running = true;
+    last = performance.now();
+    play.textContent = "❚❚ 멈춤";
+    play.setAttribute("aria-label", "멈추기");
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(step);
+  }
+
+  function pause(ended = false) {
+    running = false;
+    cancelAnimationFrame(frame);
+    play.textContent = ended ? "▶ 처음부터" : "▶ 이어 보기";
+    layer.dataset.ended = String(ended);
+    onEnd?.();
+  }
+
+  let onEnd = null;
+  play.addEventListener("click", () => (running ? pause() : start()));
+  const paintSpeed = () => { speed.textContent = rate + "배"; };
+  speed.addEventListener("click", () => { rate = SPEEDS[(SPEEDS.indexOf(rate) + 1) % SPEEDS.length]; paintSpeed(); });
+  paintSpeed();
+  // A press on the bar goes there.
+  const seek = (e) => {
+    const r = bar.getBoundingClientRect();
+    t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * plan.total;
+    render();
+  };
+  bar.addEventListener("pointerdown", (e) => {
+    seek(e);
+    bar.setPointerCapture?.(e.pointerId);
+    const moveOn = (ev) => seek(ev);
+    const up = () => { bar.removeEventListener("pointermove", moveOn); bar.removeEventListener("pointerup", up); bar.removeEventListener("pointercancel", up); };
+    bar.addEventListener("pointermove", moveOn);
+    bar.addEventListener("pointerup", up);
+    bar.addEventListener("pointercancel", up);
+  });
+
+  // 영상으로 저장: the whole replay at 2배, recorded from the canvas.
+  save?.addEventListener("click", () => {
+    if (save.disabled) return;
+    const type = ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+    let rec;
+    try {
+      rec = new MediaRecorder(canvas.captureStream(30), type ? { mimeType: type } : {});
+    } catch {
+      return void toast(root, "이 브라우저에서는 영상으로 저장할 수 없어요");
+    }
+    const parts = [];
+    rec.ondataavailable = (e) => { if (e.data?.size) parts.push(e.data); };
+    rec.onstop = () => {
+      save.disabled = false;
+      save.textContent = "영상 저장";
+      const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
+      layer.dataset.saved = String(blob.size);
+      const url = URL.createObjectURL(blob);
+      const a = h("a", { href: url, download: `${title} 과정.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      toast(root, "그린 과정을 영상으로 저장했어요");
+    };
+    save.disabled = true;
+    save.textContent = "저장 중…";
+    rate = 2;
+    paintSpeed();
+    t = 0;
+    reset();
+    onEnd = () => { onEnd = null; setTimeout(() => rec.state !== "inactive" && rec.stop(), 300); };
+    rec.start(250);
+    start();
+  });
+
+  function shut() {
+    running = false;
+    cancelAnimationFrame(frame);
+    layer.remove();
+  }
+  close.addEventListener("click", shut);
+  render();
+  start();
+  return { close: shut };
+}
+
+return { openTimelapse };
+})();
 __m["src/ui/page-stage.js"] = (() => {
 // A page of fixed size on a stage, as 그림 방 and 애니메이션 방 show it: fitted to the screen at
 // first; two fingers zoom and move it, and a quick pinch inward puts it back to fit (Procreate's
@@ -22085,12 +23681,16 @@ __m["src/ui/draw-room.js"] = (() => {
 // Two fingers zoom and move the page; one draws.
 
 const { h, icon, iconButton, toast, closeOnOutside, flashHint } = __m["src/ui/dom.js"];
+const { openTimelapse } = __m["src/ui/timelapse.js"];
+const { personColor } = __m["src/core/paint.js"];
+const { currentTheme } = __m["src/ui/theme.js"];
 const { watchFingerTaps } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
-const { InkLayer, drawInkTools, paintStroke, pixelAt } = __m["src/ui/ink.js"];
+const { InkLayer, drawInkTools, paintStroke, pixelAt, inkColor } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
 const { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } = __m["src/core/draw.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf } = __m["src/core/ink.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX } = __m["src/core/ink.js"];
+const { brushLook } = __m["src/core/brush.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -22122,9 +23722,71 @@ function mountDrawRoom(body, app, session, frame) {
   const redoButton = iconButton("draw-redo", "redo", "다시하기", () => step("redo"), "다시하기");
   const layersButton = iconButton("draw-layers", "layers", "레이어", () => showPanel(panel.hidden), "레이어");
   const saveButton = iconButton("draw-save", "save", "그림을 이미지로 저장", () => saveImage(), "저장");
-  const toolbar = h("div", { class: "toolbar draw-tools", id: "draw-tools" }, undoButton, redoButton, layersButton, saveButton);
+  const replayButton = iconButton("draw-replay", "replay", "그린 과정 보기 (누가 언제 그렸는지 처음부터)", () => showReplay(), "과정");
+  const toolbar = h("div", { class: "toolbar draw-tools", id: "draw-tools" }, undoButton, redoButton, layersButton, replayButton, saveButton);
   body.append(panel);
   body.after(inkTools, toolbar);
+
+  // 붓 크기 막대 (Procreate's sidebar): a thin bar at the left edge, fine at the bottom and bold at the
+  // top (0.5 to 40 px, a doubling every eighth of the way); while it moves, a dot beside it shows the
+  // brush as big as it will draw on the page now. A width chosen in the tools goes back to that width.
+  const sizeThumb = h("span", { class: "size-thumb" });
+  const sizePeek = h("span", { class: "size-peek", "aria-hidden": "true" });
+  const sizeRail = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
+    "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), sizeThumb, sizePeek);
+  body.append(sizeRail);
+  const penPx = () => pen.size || WIDTH_PX[pen.width] || 4;
+  const sizeT = (px) => Math.log(px / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
+  const sizeFrom = (t) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** clamp(t, 0, 1) * 10) / 10;
+  function paintRail() {
+    const px = penPx();
+    sizeRail.hidden = readOnly() || !(pen.tool === "pen" || pen.tool === "eraser");
+    sizeRail.style.setProperty("--t", sizeT(px).toFixed(4));
+    sizeRail.setAttribute("aria-valuenow", String(px));
+    sizeRail.setAttribute("aria-valuetext", px + "px");
+    // The brush on the page now: its width in stroke units over the units in a screen pixel.
+    const unit = hosts.get(active)?.ink.unitsPerPx() || 1;
+    const look = brushLook(pen.tool === "eraser" ? "erase" : pen.brush);
+    const d = Math.max(2, Math.min(220, (px * (100 / 16) * (look.scale || 1)) / unit));
+    sizePeek.style.width = sizePeek.style.height = d.toFixed(1) + "px";
+    sizePeek.style.background = pen.tool === "eraser" ? "transparent" : inkColor(pen.color);
+    sizePeek.classList.toggle("erase", pen.tool === "eraser");
+  }
+  function setSize(px) {
+    pen.size = px;
+    for (const { ink } of hosts.values()) ink.setStyle({ size: px });
+    paintRail();
+  }
+  let sizing = null;
+  const sizeAt = (e) => {
+    const r = sizeRail.getBoundingClientRect();
+    const pad = 11;
+    setSize(sizeFrom(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
+  };
+  sizeRail.addEventListener("pointerdown", (e) => {
+    if (sizing || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    sizing = { id: e.pointerId };
+    sizeRail.setPointerCapture?.(e.pointerId);
+    sizeRail.classList.add("sizing");
+    sizeAt(e);
+  });
+  sizeRail.addEventListener("pointermove", (e) => { if (sizing && e.pointerId === sizing.id) sizeAt(e); });
+  const sizeDone = (e) => {
+    if (!sizing || e.pointerId !== sizing.id) return;
+    sizing = null;
+    sizeRail.classList.remove("sizing");
+    drawLayers(); // the widths in the tools let go of their choice
+  };
+  sizeRail.addEventListener("pointerup", sizeDone);
+  sizeRail.addEventListener("pointercancel", sizeDone);
+  sizeRail.addEventListener("keydown", (e) => {
+    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    setSize(sizeFrom(sizeT(penPx()) + step / 24));
+    drawLayers();
+  });
 
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
   const stopTaps = watchFingerTaps(stage, {
@@ -22150,9 +23812,9 @@ function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, brush, shape }) => {
+      onStroke: ({ pts, color, width, size, brush, shape }) => {
         if (readOnly()) return;
-        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: session.memberId });
+        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
@@ -22206,9 +23868,10 @@ function mountDrawRoom(body, app, session, frame) {
       page.append(el); // in order, bottom first
       const tool = layer.id === active && layer.visible && !readOnly() ? pen.tool : null;
       if (ink.tool !== tool) ink.setTool(tool);
-      ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
+      ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
     drawInkTools(inkTools, { pen, setTool, store: app.store });
+    paintRail();
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -22250,7 +23913,7 @@ function mountDrawRoom(body, app, session, frame) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
     g.setTransform(c.width / PAGE_W, 0, 0, c.height / PAGE_H, 0, 0);
-    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, s.w, brushOf(s), !!s.q);
+    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
   }
 
   function drawPanel() {
@@ -22356,6 +24019,22 @@ function mountDrawRoom(body, app, session, frame) {
 
   // ---- 저장: the page as a picture --------------------------------------------------------------
 
+  // 타임랩스: the page made again from its first line, each line with the name of the one who drew it.
+  function showReplay() {
+    const list = doc.layers().filter((l) => l.visible).map((l) => ({ strokes: session.doc(inkDocOf(l.id)).strokes(), opacity: l.opacity, mode: l.mode }));
+    if (!list.some((l) => l.strokes.length)) return void toast(root, "아직 그린 것이 없어요");
+    openTimelapse({
+      root,
+      layers: list,
+      pageW: PAGE_W,
+      pageH: PAGE_H,
+      paper: getComputedStyle(page).backgroundColor || "#fff",
+      nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
+      colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
+      title: session.room.meta("name") || "그림",
+    });
+  }
+
   function saveImage() {
     const scale = 3; // 1080 × 1440 pixels
     const w = Math.round((PAGE_W / 100) * 16 * scale);
@@ -22374,7 +24053,7 @@ function mountDrawRoom(body, app, session, frame) {
       one.height = hgt;
       const lg = one.getContext("2d");
       lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, s.w, brushOf(s), !!s.q);
+      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
       g.globalAlpha = layer.opacity;
       g.globalCompositeOperation = layer.mode;
       g.drawImage(one, 0, 0);
@@ -22451,11 +24130,11 @@ const { watchFingerTaps } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
 const { PAGE_W, PAGE_H } = __m["src/ui/draw-room.js"];
 const { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } = __m["src/core/anim.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf } = __m["src/core/ink.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf } = __m["src/core/ink.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
-const { memberColor } = __m["src/core/paint.js"];
+const { memberColor, personColor } = __m["src/core/paint.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 
 const ONION = { before: "#e5484d", after: "#2f9e5b" };
@@ -22570,7 +24249,7 @@ function mountAnimRoom(body, app, session) {
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, s.w, brushOf(s), !!s.q);
+    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, widthOf(s), brushOf(s), !!s.q);
   }
 
   const neighbours = () => {
@@ -22691,7 +24370,7 @@ function mountAnimRoom(body, app, session) {
       const member = peer.state?.m ? session.room.member(peer.state.m) : null;
       if (peer.isMe || !f || !member) continue;
       if (!out.has(f)) out.set(f, []);
-      out.get(f).push(memberColor(member.color, currentTheme()));
+      out.get(f).push(personColor(member, currentTheme()));
     }
     return out;
   }
@@ -22823,7 +24502,7 @@ function mountAnimRoom(body, app, session) {
     const atoms = made.atoms.map((atom) => ({ ...atom, doc: "anim" }));
     const name = frameDocOf(made.id);
     for (const s of from.strokes()) {
-      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
+      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
       session.commit(name, one.ops);
       atoms.push(...one.atoms.map((atom) => ({ ...atom, doc: name })));
     }
@@ -24038,6 +25717,322 @@ function relayScreen(ctx) {
 
 return { relayScreen };
 })();
+__m["src/ui/sketch.js"] = (() => {
+// 그려서 맞히기 on screen (core/game.js "sketch"; the reference study §4: Skribbl's turns as
+// scribble.rs and Skribblrs.io run them, with 초성 hints). Everyone who joins plays; in turn one picks a
+// word and draws it — the others watch the line appear as it is drawn (live, as in every drawing) and
+// type guesses; wrong ones show to everyone, a right one only as "맞혔어요". The hint grows from ○ to
+// 초성 to one syllable. When everyone has it or time is up, the answer shows, and the next one draws.
+// At the end, everyone's points.
+//
+// The screens: gathering (as 이어 그리기), the 3·2·1, picking a word (the drawer; the others wait),
+// drawing and guessing, the answer, the scores.
+
+const { h } = __m["src/ui/dom.js"];
+const { buzz, chime } = __m["src/ui/chime.js"];
+const { InkLayer, drawInkTools } = __m["src/ui/ink.js"];
+const { LiveInk } = __m["src/ui/live-ink.js"];
+const { strokeOps, eraseOps } = __m["src/core/ink.js"];
+const { getSettings } = __m["src/identity.js"];
+const { beginOps, quitOps, replyOps, wordOps, tryOps, sketchAt, sketchHint, sketchDoc, nearWord, SKETCH } = __m["src/core/game.js"];
+
+const PAGE_W = 2800; // the drawing page in stroke units (hundredths of a rem): 28 × 21 rem, 4:3
+const PAGE_H = 2100;
+
+/**
+ * ctx: { app, session, doc: () => GameDoc, me: () => member, nameOf, colorOf, commit(made), countdown(g),
+ * again() (asks a new one), shut() (puts the game away) }. Returns { draw(g, el), close(), destroy() }.
+ */
+function sketchScreen(ctx) {
+  const { app, session, nameOf, colorOf, commit } = ctx;
+  const me = () => ctx.me();
+  let built = null; // what is on screen now, kept while the same thing goes on
+  let timer = 0;
+  // The room's live lines if it draws (the same presence), or our own.
+  const ownLive = !session.liveInk;
+  const live = session.liveInk || new LiveInk(session);
+  const pen = { tool: "pen", brush: getSettings(app.store).inkBrush || "pen", color: "black", width: 2 };
+  const off = session.on("change", ({ doc: name }) => { if (name?.startsWith("k:G")) built?.ink?.render(); });
+
+  function clear() {
+    clearTimeout(timer);
+    built?.stop?.();
+    built?.ink?.destroy();
+    built = null;
+  }
+
+  function soon(g, ms) {
+    clearTimeout(timer);
+    timer = setTimeout(() => draw(ctx.doc().game(g.id) || g, built?.el), Math.max(16, ms));
+  }
+
+  /** Builds a card once for a key and then only brings it up to date (a line being drawn keeps going). */
+  function show(el, key, make, g) {
+    if (built?.key === key && built.el === el && built.card?.isConnected) return void built.update?.(g);
+    clear();
+    const made = make();
+    built = { key, el, ...made };
+    el.replaceChildren(made.card);
+    made.after?.();
+  }
+
+  function draw(g, el) {
+    if (!el) return;
+    const now = Date.now();
+    const at = sketchAt(g, now);
+    if (at.phase === "countdown") return ctx.countdown(g);
+    el.classList.remove("counting");
+    if (at.phase === "gathering") return show(el, "gather", () => gathering(g), g);
+    if (at.phase === "cancelled") return ctx.shut();
+    if (at.phase === "choose") {
+      show(el, "choose:" + at.n, () => choosing(g, at), g);
+      built.tick?.(at);
+      return soon(g, Math.min(500, at.left));
+    }
+    if (at.phase === "draw") {
+      show(el, "draw:" + at.n, () => drawing(g, at), g);
+      built.tick?.(at);
+      return soon(g, Math.min(500, at.left));
+    }
+    if (at.phase === "reveal") {
+      show(el, "reveal:" + at.n, () => reveal(g, at), g);
+      return soon(g, at.until - now);
+    }
+    return show(el, "scores", () => scores(g), g);
+  }
+
+  // ---- parts ------------------------------------------------------------------------------------
+
+  const who = (m) => (m === me() ? "나" : nameOf(m));
+
+  function people(g, done = null) {
+    return h("div", { class: "relay-people" }, g.players.map((p) => h("span", { class: "relay-person" + (done && done.has(p) ? " done" : ""), style: { "--c": colorOf(p) } },
+      h("span", { class: "relay-dot" }), h("span", { text: who(p) }))));
+  }
+
+  function head(g, at, total) {
+    const bar = h("div", { class: "relay-time", id: "sketch-time", role: "timer" }, h("span", { class: "relay-time-fill" }));
+    const secs = h("span", { class: "relay-secs", id: "sketch-secs" });
+    const el = h("div", { class: "relay-head" },
+      h("div", { class: "game-head" },
+        h("span", { class: "game-title", text: "그려서 맞히기" }),
+        h("span", { class: "relay-sub", text: `${at.n + 1} / ${g.turns}` }),
+        secs),
+      bar);
+    const tick = (now) => {
+      if (!now.left) return;
+      bar.firstChild.style.width = Math.max(0, Math.min(100, (100 * now.left) / total)) + "%";
+      bar.classList.toggle("hurry", now.left < 10000);
+      secs.textContent = Math.ceil(now.left / 1000) + "초";
+      secs.classList.toggle("hurry", now.left < 10000);
+    };
+    return { el, tick };
+  }
+
+  /** The page (28 × 21 rem) scaled to the card's width; the ink layer reads the scale from it. */
+  function page(name, editable) {
+    const sheet = h("div", { class: "relay-page" + (editable ? "" : " shown"), id: "sketch-page" });
+    const wrap = h("div", { class: "relay-page-wrap" }, sheet);
+    const mine = [];
+    const ink = new InkLayer({
+      host: sheet,
+      ink: () => session.doc(name),
+      share: live.on(name),
+      grow: false,
+      maxPixels: 2.4e6,
+      steady: () => getSettings(app.store).inkSteady ?? 1,
+      shapes: () => getSettings(app.store).inkShapes !== false,
+      onShape: () => buzz(app),
+      onStroke: editable
+        ? ({ pts, color, width, size, brush, shape }) => {
+            const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: me() });
+            session.commit(name, made.ops);
+            if (made.ops[0]) mine.push(made.ops[0].id);
+            return made.ops[0]?.id;
+          }
+        : () => null,
+      onErase: editable ? (id) => session.commit(name, eraseOps(session.clock, session.doc(name), id).ops) : () => {},
+    });
+    const fit = () => {
+      if (!wrap.isConnected) return;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const k = Math.min(1.25, wrap.clientWidth / ((PAGE_W / 100) * rem));
+      sheet.style.transform = `scale(${k})`;
+      wrap.style.height = (PAGE_H / 100) * rem * k + "px";
+      ink.render();
+    };
+    session.load(name).then(fit);
+    return { wrap, ink, fit, undo: () => { const id = mine.pop(); if (id) session.commit(name, eraseOps(session.clock, session.doc(name), id).ops); } };
+  }
+
+  /** What has been said this turn: wrong guesses as typed, right ones only as "맞혔어요". */
+  function saidList(s) {
+    return s.said.map((x) => h("p", { class: "sketch-line" + (x.got ? " got" : ""), style: { "--c": colorOf(x.by) } },
+      h("b", { text: who(x.by) }), x.got ? " 맞혔어요! ✓" : ": " + x.text));
+  }
+
+  // ---- the screens --------------------------------------------------------------------------------
+
+  function gathering(g) {
+    const asker = g.by === me();
+    const whoEl = h("div", { class: "relay-who" });
+    const foot = h("div", { class: "game-foot" });
+    const card = h("div", { class: "game-card relay-card", id: "sketch-gather" },
+      h("div", { class: "game-head" }, h("span", { class: "game-title", text: "그려서 맞히기" }), h("span", { class: "relay-sub", text: "모이는 중" })),
+      h("p", { class: "relay-say", text: "한 사람이 그리고 모두 맞혀요. 힌트는 초성으로! 빨리 맞힐수록 점수가 커요." }),
+      whoEl, foot);
+    const begin = h("button", { class: "chip primary", id: "sketch-begin", type: "button", onclick: () => { commit(beginOps(session.clock, ctx.doc(), g.id, { by: me() })); buzz(app, 12); } });
+    foot.append(...(asker
+      ? [begin, h("button", { class: "chip", id: "sketch-cancel", type: "button", text: "그만두기", onclick: () => commit(quitOps(session.clock, ctx.doc(), g.id, { by: me() })) })]
+      : [h("p", { class: "game-hint", text: `${nameOf(g.by)}님이 시작하면 같이 시작해요` }),
+        h("button", { class: "chip", id: "sketch-leave", type: "button", text: "빠지기", onclick: () => { commit(replyOps(session.clock, ctx.doc(), g.id, { by: me(), yes: false })); ctx.shut(); } })]));
+    const update = (now) => {
+      whoEl.replaceChildren(people(now));
+      begin.disabled = now.players.length < 2;
+      begin.textContent = now.players.length < 2 ? "친구를 기다려요" : `${now.players.length}명이서 시작`;
+    };
+    update(g);
+    return { card, update };
+  }
+
+  function choosing(g, at) {
+    const s = at.s;
+    const top = head(g, at, SKETCH.choose);
+    const parts = [top.el];
+    if (s.drawer === me()) {
+      parts.push(h("p", { class: "relay-say", text: "그릴 낱말을 골라요" }),
+        h("div", { class: "sketch-words", id: "sketch-words" }, s.options.map((w, i) => h("button", { class: "chip sketch-word", id: "sketch-word-" + i, type: "button", data: { word: w }, text: w,
+          onclick: (e) => {
+            for (const b of e.currentTarget.parentElement.children) b.disabled = true;
+            commit(wordOps(session.clock, ctx.doc(), g.id, { by: me(), n: s.n, w }));
+            buzz(app, 12);
+          } }))));
+      chime(app);
+    } else {
+      parts.push(h("p", { class: "relay-big", text: `${nameOf(s.drawer)}님이 그릴 낱말을 고르는 중` }), board(g));
+    }
+    const card = h("div", { class: "game-card relay-card sketch-card", id: "sketch-choose" }, ...parts);
+    return { card, tick: top.tick };
+  }
+
+  function drawing(g, at) {
+    const s = at.s;
+    const mine = s.drawer === me();
+    const name = sketchDoc(g.id, s.n);
+    const top = head(g, at, SKETCH.draw);
+    const sheet = page(name, mine);
+    const said = h("div", { class: "sketch-said", id: "sketch-said", "aria-live": "polite" });
+    const parts = [top.el];
+    let hint = null;
+    let guessBox = null;
+    let stopTools = null;
+    if (mine) {
+      parts.push(h("p", { class: "sketch-mine" }, "이 낱말을 그려요 · ", h("b", { id: "sketch-secret", text: s.word })), sheet.wrap);
+      const tools = h("div", { class: "ink-tools relay-tools", id: "sketch-ink-tools" });
+      const setTool = (tool) => {
+        pen.tool = tool;
+        sheet.ink.setTool(tool);
+        sheet.ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
+        drawInkTools(tools, { pen, setTool, store: app.store });
+      };
+      setTool(pen.tool === "pen" || pen.tool?.startsWith("eraser") ? pen.tool : "pen");
+      parts.push(tools, h("div", { class: "game-foot" }, h("button", { class: "chip", id: "sketch-undo", type: "button", text: "되돌리기", onclick: () => sheet.undo() })), said);
+      stopTools = () => sheet.ink.setTool(null);
+    } else {
+      hint = h("p", { class: "sketch-hint", id: "sketch-hint", "aria-live": "polite" });
+      const near = h("p", { class: "sketch-near", id: "sketch-near" });
+      const field = h("input", { class: "input relay-input", id: "sketch-guess", maxlength: SKETCH.maxTry, autocomplete: "off", enterkeyhint: "send", placeholder: "정답은…" });
+      const send = () => {
+        const text = field.value.trim();
+        if (!text) return;
+        commit(tryOps(session.clock, ctx.doc(), g.id, { by: me(), n: s.n, text }));
+        const word = ctx.doc().game(g.id)?.schedule[s.n]?.word ?? s.word;
+        near.textContent = nearWord(word, text) ? "거의 맞았어요!" : "";
+        field.value = "";
+      };
+      field.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) send(); });
+      const got = h("p", { class: "sketch-got", id: "sketch-got", hidden: true });
+      guessBox = h("div", { class: "sketch-guess" }, field, h("button", { class: "chip primary", id: "sketch-send", type: "button", text: "보내기", onclick: () => send() }));
+      parts.push(hint, sheet.wrap, said, near, got, guessBox);
+    }
+    const card = h("div", { class: "game-card relay-card sketch-card", id: "sketch-draw", data: { mine: String(mine) } }, ...parts);
+    let lastSaid = -1;
+    const update = (now) => {
+      const turn = now.schedule[s.n];
+      if (!turn) return;
+      if (turn.said.length !== lastSaid) {
+        lastSaid = turn.said.length;
+        said.replaceChildren(...saidList(turn));
+        said.scrollTop = said.scrollHeight;
+      }
+      const right = turn.correct.find((x) => x.by === me());
+      if (!mine && right) {
+        const got = card.querySelector("#sketch-got");
+        if (got.hidden) {
+          got.hidden = false;
+          got.textContent = `맞혔어요! +${right.points}`;
+          guessBox.hidden = true;
+          card.querySelector("#sketch-near").textContent = "";
+          buzz(app, 14);
+          chime(app);
+        }
+      }
+    };
+    const tick = (now) => {
+      top.tick(now);
+      if (hint) hint.textContent = sketchHint(now.s?.word ?? s.word, now.f ?? 0);
+    };
+    update(g);
+    const onResize = () => sheet.fit();
+    addEventListener("resize", onResize);
+    if (mine) chime(app);
+    return {
+      card,
+      ink: sheet.ink,
+      update,
+      tick,
+      after: () => { sheet.fit(); if (!mine && !matchMedia("(pointer: coarse)").matches) card.querySelector("#sketch-guess")?.focus({ preventScroll: true }); },
+      stop: () => { removeEventListener("resize", onResize); stopTools?.(); },
+    };
+  }
+
+  function reveal(g, at) {
+    const s = at.s;
+    const sheet = page(sketchDoc(g.id, s.n), false);
+    const got = s.correct.length
+      ? h("div", { class: "sketch-said" }, s.correct.map((x) => h("p", { class: "sketch-line got", style: { "--c": colorOf(x.by) } }, h("b", { text: who(x.by) }), ` +${x.points}`)))
+      : h("p", { class: "relay-say", text: "아무도 못 맞혔어요" });
+    const card = h("div", { class: "game-card relay-card sketch-card", id: "sketch-reveal" },
+      h("div", { class: "game-head" }, h("span", { class: "game-title", text: "정답" }), h("span", { class: "relay-sub", text: `${who(s.drawer)}의 그림` })),
+      h("p", { class: "sketch-answer", id: "sketch-answer", text: s.word }),
+      sheet.wrap, got);
+    buzz(app, 8);
+    return { card, ink: sheet.ink, after: () => sheet.fit() };
+  }
+
+  /** Everyone's points, most first. */
+  function board(g) {
+    const order = g.players.slice().sort((a, b) => g.scores[b] - g.scores[a] || g.players.indexOf(a) - g.players.indexOf(b));
+    return h("ol", { class: "sketch-board", id: "sketch-board" }, order.map((p, i) => h("li", { class: "sketch-score" + (i === 0 && g.scores[p] > 0 ? " first" : ""), style: { "--c": colorOf(p) } },
+      h("span", { class: "relay-dot" }), h("span", { class: "sketch-who", text: who(p) }), h("b", { text: String(g.scores[p]) }))));
+  }
+
+  function scores(g) {
+    const card = h("div", { class: "game-card relay-card sketch-card", id: "sketch-scores" },
+      h("div", { class: "game-head" }, h("span", { class: "game-title", text: "점수" }), h("span", { class: "relay-sub", text: "그려서 맞히기" })),
+      board(g),
+      h("div", { class: "game-foot" },
+        h("button", { class: "chip primary", id: "sketch-again", type: "button", text: "한 판 더", onclick: () => { ctx.shut(); ctx.again(); } }),
+        h("button", { class: "chip", id: "sketch-close", type: "button", text: "닫기", onclick: () => ctx.shut() })));
+    chime(app);
+    return { card };
+  }
+
+  return { draw, close: clear, destroy: () => { clear(); off(); if (ownLive) live.close(); } };
+}
+
+return { sketchScreen };
+})();
 __m["src/ui/game.js"] = (() => {
 // 미니게임 in any room (the owner: "방 안에서 친구랑 잠깐… 미니게임 신청… 친구가 수락하면 전체가 조금
 // 불투명하게 바뀌고 가운데 3, 2, 1… 카운트가 끝났을 때 미니게임이 뜨게", "홈에서 끄는 기능도").
@@ -24051,17 +26046,19 @@ __m["src/ui/game.js"] = (() => {
 const { h, icon, toast } = __m["src/ui/dom.js"];
 const { buzz, chime } = __m["src/ui/chime.js"];
 const { getSettings } = __m["src/identity.js"];
-const { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS } = __m["src/core/game.js"];
+const { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS, MANY } = __m["src/core/game.js"];
 const { relayScreen } = __m["src/ui/relay.js"];
-const { memberColor } = __m["src/core/paint.js"];
+const { sketchScreen } = __m["src/ui/sketch.js"];
+const { memberColor, personColor } = __m["src/core/paint.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 
-// [kind, name, faces, many]: 이어 그리기 is for everyone in the room (2 and more), the others for two.
-const GAMES = [["rps", "가위바위보", "✊✋✌️", false], ["omok", "오목", "⚫⚪", false], ["relay", "이어 그리기", "📝🎨", true]];
+// [kind, name, faces, many]: 이어 그리기 and 그려서 맞히기 are for everyone in the room (2 and more), the others for two.
+const GAMES = [["rps", "가위바위보", "✊✋✌️", false], ["omok", "오목", "⚫⚪", false], ["relay", "이어 그리기", "📝🎨", true], ["sketch", "그려서 맞히기", "✏️❓", true]];
 const gameName = (kind) => GAMES.find(([k]) => k === kind)?.[1] || "게임";
 const RPS_FACE = { rock: "✊", paper: "✋", scissors: "✌️" };
 const RPS_NAME = { rock: "바위", paper: "보", scissors: "가위" };
 const STALE_MS = 2 * 60 * 1000; // an invitation older than this is not shown
+const SCORES_MS = 60 * 1000; // 그려서 맞히기's scores open again after a reload this long after the end
 
 const gamesOn = (store) => getSettings(store).games !== false;
 
@@ -24076,6 +26073,7 @@ function mountGames(app, session) {
   let invite = null; // the invitation card: { id, el }
   let closeMenu = null;
   let relay = null; // 이어 그리기's screens (ui/relay.js), made when one is first shown
+  let sketch = null; // 그려서 맞히기's (ui/sketch.js)
   const seenAsks = new Set(); // asks that were already there when the room opened
   const dismissed = new Set(); // games put away here (닫기, 다음에): not opened again on this screen
   const button = gamesOn(app.store)
@@ -24085,7 +26083,7 @@ function mountGames(app, session) {
   const nameOf = (m) => session.room.member(m)?.name || "친구";
   const colorOf = (m) => {
     const member = session.room.member(m);
-    return member ? memberColor(member.color, currentTheme()) : "#8c919c";
+    return member ? personColor(member, currentTheme()) : "#8c919c";
   };
   const friendsHere = () => (session.peers || []).filter((p) => !p.isMe && p.state?.m && p.state.m !== me()).map((p) => p.state.m);
 
@@ -24131,7 +26129,7 @@ function mountGames(app, session) {
   function ask(kind) {
     const made = askOps(session.clock, doc, { kind, by: me() });
     if (!commit(made)) return;
-    if (kind === "relay") look();
+    if (MANY.includes(kind)) look();
     else toast(app.root, `${gameName(kind)}를 신청했어요. 친구가 받으면 시작해요`);
   }
 
@@ -24141,7 +26139,7 @@ function mountGames(app, session) {
     if (invite?.id === g.id) return;
     invite?.el.remove();
     const name = gameName(g.kind);
-    const many = g.kind === "relay";
+    const many = MANY.includes(g.kind);
     const el = h("div", { class: "game-invite", id: "game-invite", role: "alertdialog", "aria-label": "미니게임 신청" },
       h("span", { class: "game-invite-dot", style: { background: colorOf(g.by) } }),
       h("span", { class: "game-invite-text", text: many ? `${nameOf(g.by)}님이 ${name}를 열었어요` : `${nameOf(g.by)}님이 ${name}를 신청했어요` }),
@@ -24175,6 +26173,7 @@ function mountGames(app, session) {
     dismissed.add(shown.id);
     clearTimeout(shown.timer);
     relay?.close();
+    sketch?.close();
     shown.el.remove();
     shown = null;
   }
@@ -24203,6 +26202,10 @@ function mountGames(app, session) {
     if (g.kind === "relay") {
       relay ||= relayScreen({ app, session, doc: () => doc, me, nameOf, colorOf, commit, countdown, shut, again: () => ask("relay") });
       return relay.draw(g, el);
+    }
+    if (g.kind === "sketch") {
+      sketch ||= sketchScreen({ app, session, doc: () => doc, me, nameOf, colorOf, commit, countdown, shut, again: () => ask("sketch") });
+      return sketch.draw(g, el);
     }
     const left = g.start - Date.now();
     if (g.state === "playing" && left > 0) return countdown(g);
@@ -24294,11 +26297,13 @@ function mountGames(app, session) {
     let mine = null;
     let asked = null;
     for (const g of doc.list()) {
-      if (g.kind === "relay") {
-        // 이어 그리기: open while gathering (once I am in it) and while it goes on; the invitation
-        // shows to those not in it until it begins.
+      if (MANY.includes(g.kind)) {
+        // 이어 그리기, 그려서 맞히기: open while gathering (once I am in it) and while it goes on; the
+        // invitation shows to those not in it until it begins. 그려서 맞히기 is over by the clock.
         if (dismissed.has(g.id) && shown?.id !== g.id) continue;
         const inIt = g.players.includes(me());
+        const over = g.kind === "sketch" && g.endAt && now > g.endAt + SCORES_MS && shown?.id !== g.id;
+        if (over) continue;
         if (inIt && (g.state === "gathering" || g.state === "playing")) mine = g;
         else if (g.state === "done" && shown?.id === g.id) mine = g;
         else if (g.state === "gathering" && !inIt && g.by !== me() && !seenAsks.has(g.id) && now - g.at < STALE_MS) asked = g;
@@ -24329,6 +26334,7 @@ function mountGames(app, session) {
     close() {
       for (const off of offs) off();
       relay?.destroy();
+      sketch?.destroy();
       closeMenu?.();
       invite?.el.remove();
       shut();
@@ -24346,7 +26352,7 @@ const { watchPickers } = __m["src/ui/picker-watch.js"];
 const { fileOps } = __m["src/core/files.js"];
 const { fromBase64 } = __m["src/core/b64.js"];
 const { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } = __m["src/ui/dom.js"];
-const { applyTheme, applyAccent, applyTextScale, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } = __m["src/ui/theme.js"];
+const { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } = __m["src/ui/theme.js"];
 const { showJoin } = __m["src/ui/join.js"];
 const { kindInfo, sideOf } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
@@ -24356,7 +26362,7 @@ const { RoomSession } = __m["src/sync/session.js"];
 const { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } = __m["src/identity.js"];
 const { keepRoomWords } = __m["src/houses.js"];
 const { mountGames } = __m["src/ui/game.js"];
-const { memberColor, PALETTE } = __m["src/core/paint.js"];
+const { memberColor, personColor, PALETTE } = __m["src/core/paint.js"];
 const { memberOps, makeVerifier, validPin } = __m["src/core/room.js"];
 
 /** Theme, and optionally the two colour switches. Shared by home and room settings. */
@@ -24367,6 +26373,7 @@ function displaySettings(app, { withColors }) {
     if (key === "theme") applyTheme(value);
     if (key === "accent") applyAccent(value);
     if (key === "textScale") applyTextScale(value);
+    if (key === "tintAmount") applyTintAmount(value);
     app.events.emit("settings");
   };
   // Your own colour: the presets, and a colour well for any colour at all.
@@ -24381,10 +26388,20 @@ function displaySettings(app, { withColors }) {
     oninput: () => { change("accent", well.value); paintAccents(well.value); } });
   accents.append(h("span", { class: "swatch own", data: { accent: ACCENTS.some(([, , hex]) => hex === current) ? "" : current }, title: "직접 고르기" }, well));
   paintAccents(current);
+  // 색 세기: the glass colour's amount, from as it was made (100%) down to none; 원래대로 puts it back.
+  const amount = Math.round(tintAmount(settings.tintAmount) * 100);
+  const amountText = h("span", { class: "tint-amount-text", id: "tint-amount-text", text: amount + "%" });
+  const back = h("button", { class: "chip", id: "tint-amount-back", type: "button", text: "원래대로", hidden: amount === 100,
+    onclick: () => { slider.value = "100"; show(100); change("tintAmount", 1); } });
+  const show = (v) => { amountText.textContent = v + "%"; back.hidden = v === 100; };
+  const slider = h("input", { class: "tint-amount", id: "tint-amount", type: "range", min: "0", max: "100", step: "5", value: String(amount), "aria-label": "글라스 색 세기",
+    oninput: () => { const v = Number(slider.value); show(v); change("tintAmount", v / 100); } });
   return h("div", { class: "form" },
     h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
     h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
+      h("div", { class: "tint-amount-row" }, slider, amountText, back)),
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
     toggle("set-reference", "레퍼런스 기능 (나만 보는 메모)", settings.reference, (on) => change("reference", on)),
@@ -24506,7 +26523,7 @@ function showRoom(app, roomId) {
     const drawPeople = () => {
       const here = [memberId, ...session.peers.map((p) => p.state?.m)].filter((id, i, all) => typeof id === "string" && all.indexOf(id) === i);
       mount(people, here.map((id) => session.room.member(id)).filter(Boolean)
-        .map((m) => h("span", { class: "dot", title: m.name, style: { background: memberColor(m.color, currentTheme()) } })));
+        .map((m) => h("span", { class: "dot", title: m.name, style: { background: personColor(m, currentTheme()) } })));
     };
     const drawStatus = () => {
       status.dataset.status = session.status;
@@ -24733,10 +26750,16 @@ function showRoom(app, roomId) {
         onchange: () => { const v = roomName.input.value.trim(); if (v) session.commit("room", [{ t: "meta", id: session.clock.next(), k: "name", v }]); } });
       const myName = inputRow("set-name", "내 별명", { maxLength: 20, value: me.name,
         onchange: () => { const v = myName.input.value.trim(); if (v && v !== session.me.name) set({ name: v }); } });
-      const swatches = h("div", { class: "swatches" }, PALETTE.map((_, i) =>
-        h("button", { class: "swatch", type: "button", data: { color: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(i === me.color),
+      // 내 색: the palette's eight, or one of my own (roadmap 7: "직접 고르기"). My own keeps its hue; only
+      // its lightness is set on each paper so my words read (personColor). Older screens show my palette colour.
+      const pressSwatch = (key) => { for (const b of swatches.children) b.setAttribute("aria-pressed", String(b.dataset.color === key)); };
+      const ownWell = h("input", { type: "color", id: "my-own-color", value: me.hex || memberColor(me.color, "light"), "aria-label": "내 색 직접 고르기",
+        oninput: () => { set({ hex: ownWell.value.toLowerCase() }); ownSwatch.style.background = personColor({ hex: ownWell.value }, currentTheme()); pressSwatch("own"); } });
+      const ownSwatch = h("label", { class: "swatch own", data: { color: "own" }, title: "직접 고르기", "aria-pressed": String(!!me.hex), style: me.hex ? { background: personColor(me, currentTheme()) } : {} }, ownWell);
+      const swatches = h("div", { class: "swatches", id: "my-colors" }, ...PALETTE.map((_, i) =>
+        h("button", { class: "swatch", type: "button", data: { color: String(i) }, "aria-label": "색 " + (i + 1), "aria-pressed": String(!me.hex && i === me.color),
           style: { background: memberColor(i, currentTheme()) },
-          onclick: () => { set({ color: i }); for (const b of swatches.children) b.setAttribute("aria-pressed", String(b.dataset.color === String(i))); } })));
+          onclick: () => { set({ color: i, hex: null }); pressSwatch(String(i)); } })), ownSwatch);
       const pin = h("input", { class: "input", id: "set-pin", type: "text", inputMode: "numeric", maxLength: 5, autocomplete: "off", placeholder: me.pin ? "새 코드" : "숫자 5자리" });
       const pinError = h("p", { class: "error", id: "pin-error", role: "alert" });
       const savePin = async () => {
@@ -25207,112 +27230,6 @@ function gripThrow({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, home, size = 300 }) {
 }
 
 return { fitPolynomial, VelocityTracker, edgeHit, throwOf, VELOCITY_THRESHOLD, CLOSE_THRESHOLD, gripThrow };
-})();
-__m["src/core/search.js"] = (() => {
-// Finding rooms (and what they hold) by a few typed letters, the way Korean is typed.
-//
-// The owner: "쇼타로면 ㅅ만 쳐도 앞 초성이 ㅅ인 것부터 다 나오고, 그 다음 ㅅ이 뒤에 나오는 것, 쇼를 치면
-// 앞에 쇼가 있는 것 먼저, 다음에 쇼가 어디 들어가는 것. 아닌 것은 다 안 보이게."
-//
-// So: a lone consonant (초성) stands for any syllable that begins with it; the last character of
-// the query may still be on its way (쇼 is on the way to 숀, 소 to 솨, 숕 to 쇼타 — while typing
-// 쇼타 the ㅌ sits as a 받침 until the vowel comes); everything else must be as typed. Matches that
-// begin earlier come first.
-
-const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
-const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
-const JONG = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ", "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
-/** A 받침 of two consonants, as the two typed one after the other. */
-const TWO = { ㄳ: ["ㄱ", "ㅅ"], ㄵ: ["ㄴ", "ㅈ"], ㄶ: ["ㄴ", "ㅎ"], ㄺ: ["ㄹ", "ㄱ"], ㄻ: ["ㄹ", "ㅁ"], ㄼ: ["ㄹ", "ㅂ"], ㄽ: ["ㄹ", "ㅅ"], ㄾ: ["ㄹ", "ㅌ"], ㄿ: ["ㄹ", "ㅍ"], ㅀ: ["ㄹ", "ㅎ"], ㅄ: ["ㅂ", "ㅅ"] };
-/** A vowel typed in two strokes, by its first stroke (소 is on the way to 솨). */
-const FIRST_STROKE = { ㅘ: "ㅗ", ㅙ: "ㅗ", ㅚ: "ㅗ", ㅝ: "ㅜ", ㅞ: "ㅜ", ㅟ: "ㅜ", ㅢ: "ㅡ" };
-
-function parts(ch) {
-  if (!ch) return null;
-  const c = ch.charCodeAt(0) - 0xac00;
-  if (ch.length !== 1 || c < 0 || c > 11171) return null;
-  return { cho: CHO[Math.floor(c / 588)], jung: JUNG[Math.floor((c % 588) / 28)], jong: JONG[c % 28] };
-}
-
-const isConsonant = (ch) => ch.length === 1 && CHO.includes(ch);
-
-/** How many characters of `text` from i the query character q takes (0: it does not match). */
-function step(q, last, text, i) {
-  const c = text[i];
-  if (c === undefined) return 0;
-  if (isConsonant(q)) {
-    if (c === q) return 1;
-    return parts(c)?.cho === q ? 1 : 0;
-  }
-  const pq = parts(q);
-  if (!pq) return c.toLowerCase() === q.toLowerCase() ? 1 : 0;
-  if (c === q) return 1;
-  if (!last) return 0;
-  const pc = parts(c);
-  if (!pc || pc.cho !== pq.cho) return 0;
-  if (!pq.jong) return pc.jung === pq.jung || FIRST_STROKE[pc.jung] === pq.jung ? 1 : 0;
-  if (pc.jung !== pq.jung) return 0;
-  // 달 on its way to 닭.
-  if (TWO[pc.jong]?.[0] === pq.jong) return 1;
-  // 숕 on its way to 쇼타: the 받침 begins the next syllable.
-  const [first, second] = TWO[pq.jong] || [pq.jong, ""];
-  const next = text[i + 1];
-  const nextCho = parts(next)?.cho || next;
-  if (!second && !pc.jong && nextCho === first) return 2;
-  if (second && pc.jong === first && nextCho === second) return 2;
-  return 0;
-}
-
-/** Where the query first appears in the text: { at, len } in characters, or null. */
-function findMatch(text, query) {
-  const t = [...String(text || "")];
-  const q = [...String(query || "")];
-  if (!q.length) return null;
-  for (let i = 0; i < t.length; i++) {
-    let j = i;
-    let ok = true;
-    for (let k = 0; k < q.length; k++) {
-      const n = step(q[k], k === q.length - 1, t, j);
-      if (!n) {
-        ok = false;
-        break;
-      }
-      j += n;
-    }
-    if (ok) return { at: i, len: j - i };
-  }
-  return null;
-}
-
-/**
- * Things whose name holds the query, those where it comes earliest first (then the most recent):
- * [{ item, at, len }]. The rest are left out.
- */
-function rankByName(items, query, nameOf = (x) => x.name) {
-  const found = [];
-  for (const item of items) {
-    const m = findMatch(nameOf(item), query);
-    if (m) found.push({ item, ...m });
-  }
-  return found.sort((a, b) => a.at - b.at || (b.item.at || 0) - (a.item.at || 0));
-}
-
-/** The words around the first match: { before, match, after, at }, or null. */
-function snippet(text, query, around = 24) {
-  const m = findMatch(text, query);
-  if (!m) return null;
-  const t = [...String(text)];
-  const from = Math.max(0, m.at - around);
-  const to = Math.min(t.length, m.at + m.len + around * 2);
-  return {
-    before: (from > 0 ? "…" : "") + t.slice(from, m.at).join(""),
-    match: t.slice(m.at, m.at + m.len).join(""),
-    after: t.slice(m.at + m.len, to).join("") + (to < t.length ? "…" : ""),
-    at: m.at,
-  };
-}
-
-return { findMatch, rankByName, snippet };
 })();
 __m["src/ui/home-panel.js"] = (() => {
 // 찾기와 집: what the ⋮ at home's top right brings out (the owner, 17 November). At the top, a search
@@ -25831,7 +27748,7 @@ const { glowEdge, aimMarker } = __m["src/ui/edge-glow.js"];
 const { VelocityTracker, throwOf } = __m["src/core/fling.js"];
 const { buzz } = __m["src/ui/chime.js"];
 const { segmented } = __m["src/ui/dom.js"];
-const { memberColor } = __m["src/core/paint.js"];
+const { memberColor, personColor } = __m["src/core/paint.js"];
 const { currentTheme, myPeopleColor } = __m["src/ui/theme.js"];
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -25867,7 +27784,7 @@ const WORK_WORDS = { 녹음: (n) => `녹음 ${n}개`, 그림: (n) => `그림 ${n
 function historyView(hist) {
   const who = (id) => hist.people.get(id);
   const name = (id) => who(id)?.name || "누군가";
-  const dot = (id) => h("span", { class: "dot", style: { background: memberColor(who(id)?.color ?? 0, currentTheme()) } });
+  const dot = (id) => h("span", { class: "dot", style: { background: personColor(who(id), currentTheme()) } });
   const line = (label, value, id) => h("p", { class: "hist-line" }, h("span", { class: "hist-label", text: label }), h("span", { class: "hist-value" }, value));
   const parts = [];
   if (hist.createdAt) parts.push(line("시작", [whenText(hist.createdAt), hist.createdBy ? ` · ${name(hist.createdBy)}이(가) 만듦` : ""].join(""), hist.createdBy));
@@ -26475,7 +28392,7 @@ const { Emitter } = __m["src/sync/transport.js"];
 const { LocalTransport } = __m["src/sync/local.js"];
 const { ClaudeTransport } = __m["src/sync/claude.js"];
 const { FirebaseTransport, serverFrom } = __m["src/sync/firebase.js"];
-const { applyTheme, applyAccent, applyTextScale, fitScale } = __m["src/ui/theme.js"];
+const { applyTheme, applyAccent, applyTextScale, applyTintAmount, fitScale } = __m["src/ui/theme.js"];
 const { showHome } = __m["src/ui/home.js"];
 const { showRoom } = __m["src/ui/room-shell.js"];
 const { roomLink } = __m["src/core/room.js"];
@@ -26577,6 +28494,7 @@ function boot(root) {
   fitScale();
   applyTheme(getSettings(store).theme);
   applyAccent(getSettings(store).accent);
+  applyTintAmount(getSettings(store).tintAmount);
   applyTextScale(getSettings(store).textScale);
   app.ready = chooseTransport(app, patience, !!dev, params).then(({ transport, limited }) => {
     app.transport = transport;
