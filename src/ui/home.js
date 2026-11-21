@@ -116,9 +116,11 @@ function previewOf(room) {
   return svg;
 }
 
-// ⋮ counts as thrown only when it clearly is: this far, and quick (or twice as far).
-const THROW_PX = 40;
-const THROW_SPEED = 0.35; // px per ms
+// 햇살 counts as thrown when it clearly is: this far and quick, or far. A finger that slips in a
+// tap moves less than this; a swipe the owner means ("발사한 곳으로 우선") is quicker and longer.
+const THROW_PX = 28;
+const THROW_SPEED = 0.3; // px per ms
+const THROW_FAR = 72;
 
 export function showHome(app) {
   const root = app.root;
@@ -327,8 +329,8 @@ export function showHome(app) {
   function kebab() {
     // Its look is the window's (the owner: "점3개 세로 아이콘 그걸 너가 새로 만든 그거 아이콘 디자인으로…
     // 기능은 점 3개 세로인 걸로").
-    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 자리에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
-      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("float"));
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "햇살: 방 찾기와 집 (누르면 지난번 그 자리에서, 끌어서 던지면 그쪽에서)",
+      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("sunshine"));
     let g = null;
     const aim = aimMarker();
     const reset = () => {
@@ -364,7 +366,7 @@ export function showHome(app) {
       g.track.add(e.timeStamp, e.clientX, e.clientY);
       const v = g.track.velocity(e.timeStamp);
       const moved = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
-      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= 2.2 * THROW_PX) ? throwNow(e.clientX, e.clientY, v) : null;
+      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= THROW_FAR) ? throwNow(e.clientX, e.clientY, v) : null;
       g = null;
       reset();
       if (!hit) return void openPanel();
@@ -509,13 +511,13 @@ export function showHome(app) {
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
-        // 설정 and 레퍼런스 side by side at the top right, ⋮ under 레퍼런스 (the owner, 20 November: "점 3개
-        // 세로와 레퍼런스의 위치 바꾸고"), so nothing lies over 창작's title.
+        // 설정 and 햇살 side by side at the top right, 비서 under 햇살 (the owner, 21 November: "찾기와 집
+        // 그거 기능을 레퍼런스 아이콘 위로"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
-          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openRef()),
-          // ⋮: 찾기와 집 (its own top-right button turns it into a window of its own and back).
-          kebab()),
+          // 햇살: 방 찾기와 집 (its bar's own button turns it into a window of its own and back).
+          kebab(),
+          getSettings(app.store).reference && iconButton("home-reference", "book", "비서 (나만 보기)", () => openRef())),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
@@ -673,9 +675,9 @@ export function showHome(app) {
           segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
       // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
       // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기와 집" }),
-        toggle("panel-cycle", "열린 채 ⋮을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
-        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 ⋮이나 위쪽 바를 그쪽으로 던져요." })),
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
+        toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
       // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
       h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
         toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
@@ -706,14 +708,18 @@ export function showHome(app) {
       if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
-  // While a window is out (a sheet, 레퍼런스, 찾기와 집), home's three round buttons step away: they never
-  // lie over it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The
-  // window closes by its own button or a press outside it; 설정's spot pressed again is outside it.
-  // With 설정's "열린 채 ⋮을 다시 누르면 다른 쪽으로" on, ⋮ is wanted while 찾기와 집 is out: the
-  // buttons stay for it (and the panel keeps clear of them), as before.
-  const windowOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference") ||
-    (document.getElementById("home-panel") && !getSettings(app.store).panelCycle));
-  const watchWindows = new MutationObserver(() => root.classList.toggle("home-window", alive && windowOut()));
+  // While a window is out (a sheet, 비서), home's three round buttons step away: they never lie over
+  // it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The window
+  // closes by its own button or a press outside it; 설정's spot pressed again is outside it. While
+  // 햇살's own window is out, only 햇살 stays where it was and still answers (the owner: "걍 아이콘들 다
+  // 가리고서 거기에 있던 그 아이콘만 보이게"), whatever 설정 says: that setting is only what its tap does.
+  const sheetOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference"));
+  const sunOut = () => !!document.getElementById("home-panel");
+  const watchWindows = new MutationObserver(() => {
+    const sheet = alive && sheetOut();
+    root.classList.toggle("home-window", sheet);
+    root.classList.toggle("home-sun-out", alive && !sheet && sunOut());
+  });
   watchWindows.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 
   return () => {
@@ -721,6 +727,6 @@ export function showHome(app) {
     clearTimeout(slowTimer);
     closeSheet?.();
     watchWindows.disconnect();
-    root.classList.remove("home-window");
+    root.classList.remove("home-window", "home-sun-out");
   };
 }

@@ -3,4 +3,4 @@
 // its record. Said where something begins: an empty sheet, an invitation. (Not on home and not as
 // the app opens: the owner took those away on 16 November.)
 
-export const MOTTO = "내 안에 작은 우주를 기록해 보자";
+export const MOTTO = "작은 우주를 기록해 보자";

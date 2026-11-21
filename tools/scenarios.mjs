@@ -229,7 +229,8 @@ scenario("home windows: the titles stay while the rooms scroll and fade under a 
   await page.release(more[0] - 18, more[1] + 10);
   await page.waitFor(q("#home-panel"), 3000);
   assert.equal(await page.eval(`JSON.stringify(window.__app.store.get("homePanelEdge", null))`), edgeBefore, "the edge it comes from did not change");
-  await page.waitFor(`getComputedStyle(document.querySelector(".home-top")).visibility === "hidden"`, 2000);
+  // 햇살's own window: the other round buttons go, 햇살 stays where it was (the owner, 21 November).
+  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "hidden" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
   // The 녹음 button (레퍼런스's recordings) with 찾기와 집 out: 찾기와 집 goes, 레퍼런스 comes.
   await click(page, "#home-record");
   await page.waitFor(`${q("#reference")} && !${q("#home-panel")}`, 3000);
@@ -5268,7 +5269,7 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
 // swap; then "위에 또 아이콘 하나 붙여서 … 오른쪽에는 독단적으로 나오게 하는 거, 그리고 왼쪽에는 그 원래".
 // The owner (21 November): "찾기 기능 있는 그걸 위치를 오른쪽 끝에다가 해야지.. 왜 거기에 여백이 있는거야":
 // ⋮ stands at the right end, under 레퍼런스, with nothing empty beside it.
-scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone at the right end, under 레퍼런스 (찾기와 집 floats from its own button, no second icon); clear of 창작's one-line title, at 390 and 360 wide; with 레퍼런스 off, ⋮ beside 설정 at the right end", async ({ open, out }) => {
+scenario("home top: 설정 and 햇살 side by side; under them 비서 alone at the right end, under 햇살 (햇살 is a sun; its window floats from its own button, no second icon); clear of 창작's one-line title, at 390 and 360 wide; with 비서 off, 햇살 beside 설정 at the right end", async ({ open, out }) => {
   for (const width of [390, 360]) {
     const page = await open({ width, height: 760 });
     await page.waitFor(q("#home-more"));
@@ -5281,14 +5282,15 @@ scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone a
     })()`);
     assert.ok(box.right <= box.buttons, width + ": the title ends before the buttons: " + JSON.stringify(box));
     assert.ok(box.h < box.lh * 1.5, width + ": one line: " + JSON.stringify(box));
-    // 설정 and 레퍼런스 side by side; under them ⋮; none over another, each pressable.
+    // 설정 and 햇살 side by side; under them 비서; none over another, each pressable.
     const at = await page.eval(`(() => {
       const r = (id) => { const b = document.getElementById(id).getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { l: b.left, r: b.right, t: b.top, b: b.bottom, cx: b.left + b.width / 2, ok: !!hit && document.getElementById(id).contains(hit) }; };
       return { set: r("home-settings"), more: r("home-more"), ref: r("home-reference") };
     })()`);
     assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, width + ": no second icon");
-    assert.ok(Math.abs(at.set.t - at.ref.t) < 1 && at.set.r <= at.ref.l + 0.5, width + ": 설정 then 레퍼런스 in a row: " + JSON.stringify(at));
-    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1 && Math.abs(at.ref.r - at.more.r) < 1, width + ": ⋮ under 레퍼런스, at the right end: " + JSON.stringify(at));
+    assert.ok(Math.abs(at.set.t - at.more.t) < 1 && at.set.r <= at.more.l + 0.5, width + ": 설정 then 햇살 in a row: " + JSON.stringify(at));
+    assert.ok(at.ref.t >= at.more.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1 && Math.abs(at.ref.r - at.more.r) < 1, width + ": 비서 under 햇살, at the right end: " + JSON.stringify(at));
+    assert.ok(await page.eval(`!!document.querySelector("#home-more .sun-core")`), width + ": 햇살 is a sun");
     assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }
@@ -5299,7 +5301,7 @@ scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone a
   await pause(400);
   await page.waitFor(`window.__app?.booted && ${q("#home-more")} && !${q("#home-reference")}`);
   const two = await page.eval(`(() => { const a = document.getElementById("home-settings").getBoundingClientRect(); const b = document.getElementById("home-more").getBoundingClientRect(); return { at: a.top, bt: b.top, ar: a.right, bl: b.left, br: b.right, w: innerWidth }; })()`);
-  assert.ok(Math.abs(two.at - two.bt) < 1 && two.ar <= two.bl + 0.5 && two.w - two.br < 16, "설정 then ⋮ in one row at the right end: " + JSON.stringify(two));
+  assert.ok(Math.abs(two.at - two.bt) < 1 && two.ar <= two.bl + 0.5 && two.w - two.br < 16, "설정 then 햇살 in one row at the right end: " + JSON.stringify(two));
 });
 
 // The owner: "자기의 ui색유리의 색… 가라데이션 되어있는부분의 끝부분부터 색깔을 줄이면서. 원본 버전이있고…
@@ -6025,12 +6027,20 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.touch("start", [empty]);
   await page.touch("end");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  // While it is out, home's buttons step away (the owner, 21 November); its own ✕ puts it away, and
-  // moving it is for a throw.
+  // While it is out, the other round buttons step away and 햇살 stays and answers (the owner, 21
+  // November: "아이콘들 다 가리고서 거기에 있던 그 아이콘만 보이게"); a tap on it puts it away.
   await click(page, "#home-more");
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
   await pause(600);
-  assert.ok(!(await pressable("#home-more")), "⋮ stepped away while the panel is out");
+  assert.ok(await pressable("#home-more"), "햇살 stays while its window is out");
+  assert.ok(!(await pressable("#home-settings")), "설정 stepped away");
+  await click(page, "#home-more");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // Its lock, its float button and its ✕ are on its bar.
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
+  await pause(600);
+  assert.ok(await page.eval(`["panel-lock", "panel-float", "panel-close"].every((id) => document.getElementById(id)?.closest(".panel-grip"))`), "the buttons are on the bar");
   await click(page, "#panel-close");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
   // With 설정's "다시 누르면 다른 쪽으로" on, it goes round the edges (bottom → left → top → right), ⋮ pressable on each.
@@ -6043,22 +6053,33 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
     await click(page, "#home-more");
     await page.waitFor(`${q("#home-panel")}?.dataset.edge === ${JSON.stringify(next)} && document.querySelectorAll("#home-panel").length === 1`, 2500);
     await pause(650);
-    // What the panel holds is not under home's buttons.
-    const clear = await page.eval(`(() => { const t = document.querySelector(".home-top").getBoundingClientRect(); const f = document.getElementById("home-search").getBoundingClientRect(); return f.top >= t.bottom || f.right <= t.left || f.left >= t.right || f.bottom <= t.top; })()`);
-    assert.ok(clear, next + ": the search field is clear of home's buttons");
+    // What the panel holds is not under 햇살: the search field and the bar's buttons make room.
+    const clear = await page.eval(`(() => { const t = document.getElementById("home-more").getBoundingClientRect(); const ok = (el) => { const f = el.getBoundingClientRect(); return f.top >= t.bottom || f.right <= t.left || f.left >= t.right || f.bottom <= t.top; }; return ok(document.getElementById("home-search")) && ["panel-lock", "panel-float", "panel-close"].every((id) => ok(document.getElementById(id))); })()`);
+    assert.ok(clear, next + ": the search field and the bar's buttons are clear of 햇살");
     if (next === "right") await page.shot(out("panel-moved-right.png"));
   }
   assert.ok(await pressable("#home-more"), "⋮ can still be pressed");
   await page.eval(`window.__app.store.set("settings", { ...window.__app.store.get("settings", {}), panelCycle: false })`);
   assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, "no second icon on home");
-  // Its own top-right button: the same panel floating on its own (home's buttons step away for it).
+  // Its own button on the bar: the same panel floating on its own (the other buttons step away, 햇살 stays).
   await click(page, "#panel-float");
   await page.waitFor(`${q("#home-panel.floating")} && ${q("#float-head")}`, 2000);
   await pause(350);
   assert.equal(await page.eval(`document.querySelectorAll("#home-panel").length`), 1, "one panel at a time");
   const placed = await page.eval(`(() => { const r = document.getElementById("home-panel").getBoundingClientRect(); const t = document.querySelector(".home-top").getBoundingClientRect(); return { top: r.top, below: t.bottom, left: r.left, right: r.right }; })()`);
   assert.ok(placed.top >= 0 && placed.left >= 0 && placed.right <= 390, "on the screen: " + JSON.stringify(placed));
-  await page.waitFor(`getComputedStyle(document.querySelector(".home-top")).visibility === "hidden"`, 2000);
+  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "hidden" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
+  assert.ok(!(await page.eval(`!!document.querySelector("#home-panel .float-title")`)), "no name over the floating window");
+  // Its right side draws it narrower; moved by its bar, it keeps that width (it went back to 360).
+  const wide = await page.eval(`document.getElementById("home-panel").getBoundingClientRect().width`);
+  const side = await centre("#panel-side-right");
+  await page.front();
+  await page.touch("start", [side]);
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[side[0] - i * 10, side[1]]]);
+  await page.touch("end");
+  await pause(150);
+  const narrow = await page.eval(`document.getElementById("home-panel").getBoundingClientRect().width`);
+  assert.ok(narrow < wide - 40, "its right side drew it narrower: " + [wide, narrow]);
   // Moved by its head; let go, it stays there and is remembered.
   const head = await centre("#float-head");
   await page.front();
@@ -6068,7 +6089,10 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await pause(200);
   const moved = await page.eval(`(() => { const r = document.getElementById("home-panel").getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top) }; })()`);
   assert.ok(moved.y > placed.top + 200, "it went down with the head: " + JSON.stringify([placed, moved]));
-  assert.deepEqual(await page.eval(`window.__app.store.get("homePanelFloat", null)`), moved, "where it was left is kept");
+  assert.ok(Math.abs((await page.eval(`document.getElementById("home-panel").getBoundingClientRect().width`)) - narrow) < 2, "moved, it kept its width");
+  const left = await page.eval(`window.__app.store.get("homePanelFloat", null)`);
+  assert.deepEqual({ x: left.x, y: left.y }, moved, "where it was left is kept");
+  assert.ok(Math.abs(left.w - narrow) < 2, "and its width: " + JSON.stringify(left));
   await page.shot(out("panel-floating.png"));
   // Floating, a tap on an empty place leaves it (it stands on its own); its ✕ puts it away; ⋮ again, it comes back there.
   // (The empty middle of 창작's half: its title's box reaches under home's buttons.)

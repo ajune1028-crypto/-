@@ -151,10 +151,19 @@ export function throwOf({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, tap = 14 }) {
   const dy = y1 - y0;
   const d = Math.hypot(dx, dy);
   if (d < tap) return null;
-  const hit = edgeHit(x0, y0, dx, dy, w, h);
-  if (!hit) return null;
+  // The way it was thrown decides the edge (the owner, 21 November: "발사한 곳에는 우선적으로 그쪽으로"):
+  // its larger part, left or right, up or down. From a corner its line can meet another edge first
+  // (a throw to the left that rises a little, from the top right, met the top); where along the
+  // edge is where that line crosses the edge's own line, kept on the edge.
+  const edge = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? "left" : "right") : dy < 0 ? "top" : "bottom";
+  const sx = clamp(x0, 0, w);
+  const sy = clamp(y0, 0, h);
+  const t = edge === "left" ? -sx / dx : edge === "right" ? (w - sx) / dx : edge === "top" ? -sy / dy : (h - sy) / dy;
+  const x = edge === "left" ? 0 : edge === "right" ? w : clamp(sx + dx * t, 0, w);
+  const y = edge === "top" ? 0 : edge === "bottom" ? h : clamp(sy + dy * t, 0, h);
+  const at = edge === "left" || edge === "right" ? y / h : x / w;
   const speed = Math.hypot(vx, vy);
-  return { ...hit, speed, strength: strengthOf(speed, d) };
+  return { edge, at: clamp(at, 0, 1), x, y, dist: Math.hypot(x - sx, y - sy), speed, strength: strengthOf(speed, d) };
 }
 
 const OUTWARD = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };

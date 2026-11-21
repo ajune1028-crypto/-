@@ -78,7 +78,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   const max = () => getSettings(store).recentSearchMax || 5;
   let mode = "name";
   let query = "";
-  const panel = h("aside", { class: "home-panel" + (floating ? " floating" : ""), id: "home-panel", data: { edge }, role: "dialog", "aria-label": "찾기와 집" });
+  const panel = h("aside", { class: "home-panel" + (floating ? " floating" : ""), id: "home-panel", data: { edge }, role: "dialog", "aria-label": "햇살 (방 찾기와 집)" });
   // While the panel is still coming out, a tap beside it does not put it away (it may be a tap on
   // the part of the panel that is not shown yet).
   let entering = false;
@@ -87,7 +87,9 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   // away (see onOutside).
   const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true" });
   // The grip stays the same element while the views change under it (a finger on it keeps its hold).
-  const grip = h("div", { class: "panel-grip", id: "panel-grip", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  // It is the window's bar: its lock, its way between edge and window and its close live on it (the
+  // owner: "창 끝에 무슨 바 있는 거, 거기 줄에다가 잠금과 나가기와 다른 식으로 바꾸기").
+  const grip = h("div", { class: "panel-grip", id: "panel-grip" });
   // A side panel's inner edge (its 끝자락) takes the same throw.
   const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   const body = h("div", { class: "home-panel-body" });
@@ -111,34 +113,49 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   // Its ┘ corner draws it bigger or smaller (the owner: "'ㄴ'을 반대로 한 거… 스와이프하면 그대로 크기가 그만큼
   // 작아지고"); small, only the houses stay, in a column when tall and a row when wide.
   const sizer = h("div", { class: "panel-sizer", id: "panel-sizer", role: "separator", "aria-label": "크기 바꾸기 (끌어서)" });
-  // Floating (like 레퍼런스, with the same head): its head moves it, where it is left it stays; its
-  // own button puts it away.
+  // Floating: its bar moves it and keeps its size; no name over it (the owner: "그 창 위에 이름을
+  // 넣지 마… 촌스러워"); its own button puts it away. Its two sides draw it wider or narrower.
   const head = floating && h("div", { class: "float-head", id: "float-head" },
     lockBtn,
-    h("h2", { class: "float-title", text: "찾기와 집" }),
-    floatBtn,
-    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
-  if (floating) panel.append(head, body, sizer);
-  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn,
-    h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")))), body, end, sizer);
+    h("span", { class: "grip-bar", "aria-hidden": "true" }),
+    h("span", { class: "panel-ctrl-end" }, floatBtn,
+      h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close"))));
+  const sides = floating ? ["left", "right"].map((side) => h("div", { class: "panel-side " + side, id: "panel-side-" + side, role: "separator", "aria-label": (side === "left" ? "왼쪽" : "오른쪽") + " 가장자리를 끌어 너비 바꾸기" })) : [];
+  if (floating) panel.append(head, body, ...sides, sizer);
+  else {
+    grip.append(lockBtn, h("span", { class: "grip-bar", "aria-hidden": "true" }),
+      h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close"))));
+    panel.append(grip, body, end, sizer);
+  }
   paintLock();
   root.append(scrim, panel);
-  // Home's round buttons step away while the panel is out, so there is nothing to keep clear of —
-  // unless ⋮ is kept for "다시 누르면 다른 쪽으로": then what the panel holds starts below them.
-  const topClear = () => {
-    const t = getSettings(store).panelCycle && document.querySelector(".home-top");
-    return t ? Math.ceil(t.getBoundingClientRect().bottom + 6) : 0;
-  };
-  panel.style.setProperty("--top-clear", topClear() + "px");
+  // 햇살 stays where it is while its window is out (the owner: "아이콘들 다 가리고서 거기 있던 그 아이콘만
+  // 보이게"); where the window comes under it (a small screen, a window at the top or the right),
+  // the rows under it make room: the bar's buttons and the search field shrink away from it.
+  function keepClearOfSun() {
+    const sun = document.getElementById("home-more")?.getBoundingClientRect();
+    for (const row of panel.querySelectorAll(".panel-grip, .float-head, .search-row")) {
+      row.style.removeProperty("--sun-r");
+      row.style.removeProperty("--sun-l");
+      if (!sun || !sun.width) continue;
+      const r = row.getBoundingClientRect();
+      if (!(sun.bottom > r.top && sun.top < r.bottom && sun.right > r.left && sun.left < r.right)) continue;
+      if (sun.left + sun.width / 2 >= r.left + r.width / 2) row.style.setProperty("--sun-r", Math.ceil(r.right - sun.left + 6) + "px");
+      else row.style.setProperty("--sun-l", Math.ceil(sun.right - r.left + 6) + "px");
+    }
+  }
+  addEventListener("resize", keepClearOfSun);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (floating) placeFloat(store.get(FLOAT_KEY, null));
   if (floating) popIn();
   else enter(at);
 
   function placeFloat(spot) {
-    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : 360));
+    // Moved by its bar it keeps the size it has (it went back to 360 wide: the owner, "크기가 원상 복구").
+    const now = panel.style.width ? panel.getBoundingClientRect().width : 360;
+    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : now));
     const x = spot && Number.isFinite(spot.x) ? spot.x : innerWidth - w - 12;
-    const y = spot && Number.isFinite(spot.y) ? spot.y : topClear() || 72;
+    const y = spot && Number.isFinite(spot.y) ? spot.y : 72;
     panel.style.width = w + "px";
     if (spot && Number.isFinite(spot.h)) {
       panel.style.height = Math.round(Math.min(innerHeight - 16, Math.max(MIN_SIDE, spot.h))) + "px";
@@ -170,6 +187,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     panel.classList.toggle("compact", compact);
     panel.classList.toggle("tall", compact && tall);
     panel.classList.toggle("wide", compact && !tall);
+    keepClearOfSun();
   };
   const shapeWatch = typeof ResizeObserver === "function" ? new ResizeObserver(() => shape()) : null;
   shapeWatch?.observe(panel);
@@ -216,10 +234,46 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     sizer.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
   }
 
+  for (const strip of sides) {
+    let s = null;
+    const left = strip.classList.contains("left");
+    strip.addEventListener("pointerdown", (e) => {
+      if (!open || s || locked || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = panel.getBoundingClientRect();
+      s = { id: e.pointerId, x0: e.clientX, left: r.left, right: r.right };
+      try { strip.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      panel.classList.add("sizing");
+    });
+    strip.addEventListener("pointermove", (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x0;
+      if (left) {
+        const x = Math.max(8, Math.min(s.right - MIN_SIDE, s.left + dx));
+        panel.style.left = Math.round(x) + "px";
+        panel.style.width = Math.round(s.right - x) + "px";
+      } else {
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth - 8 - s.left, s.right - s.left + dx))) + "px";
+      }
+      shape();
+    });
+    const done = (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      s = null;
+      panel.classList.remove("sizing");
+      const r = panel.getBoundingClientRect();
+      store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), ...(panel.style.height ? { h: Math.round(r.height) } : {}) });
+    };
+    strip.addEventListener("pointerup", done);
+    strip.addEventListener("pointercancel", done);
+    strip.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
+  }
+
   function popIn() {
     if (reduced || !panel.animate) return;
     entering = true;
-    const done = () => { entering = false; };
+    const done = () => { entering = false; keepClearOfSun(); };
     panel.animate([{ opacity: 0, transform: "translateY(-8px) scale(0.96)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }).finished.then(done, done);
   }
 
@@ -244,7 +298,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       panel.classList.remove("held");
       const r = panel.getBoundingClientRect();
       const was = store.get(FLOAT_KEY, null) || {};
-      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w, h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
+      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w } : {}), ...(Number.isFinite(was.h) ? { h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
     };
     head.addEventListener("pointerup", drop);
     head.addEventListener("pointercancel", drop);
@@ -274,7 +328,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       { clipPath: open, offset: 0.55 },
       { clipPath: open, transform: "translate(0px, 0px) scale(1)", opacity: 1, offset: 1 },
     ], { duration: 480, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
-    const done = () => { entering = false; };
+    const done = () => { entering = false; keepClearOfSun(); };
     anim.finished.then(done, done);
   }
   let open = true;
@@ -285,7 +339,8 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   for (const handle of [grip, end]) {
     let g = null;
     handle.addEventListener("pointerdown", (e) => {
-      if (!open || g || (e.pointerType === "mouse" && e.button !== 0)) return;
+      // Its buttons are pressed, not held as the bar.
+      if (!open || g || (e.pointerType === "mouse" && e.button !== 0) || e.target.closest?.("button")) return;
       e.preventDefault();
       g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, track: new VelocityTracker() };
       g.track.add(e.timeStamp, e.clientX, e.clientY);
@@ -412,7 +467,6 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     panel.style.transform = "";
     edge = to;
     panel.dataset.edge = to;
-    panel.style.setProperty("--top-clear", topClear() + "px");
     sizeAtEdge();
     shape();
     enter(spot);
@@ -460,6 +514,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     document.removeEventListener("pointerup", onOutsideUp, true);
     document.removeEventListener("sheet-open", onSheet);
     removeEventListener("hashchange", onLeave);
+    removeEventListener("resize", keepClearOfSun);
     const gone = () => { panel.remove(); scrim.remove(); };
     if (now || reduced || !panel.animate) return gone();
     if (floating) {
@@ -485,9 +540,10 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     // A house open in the panel takes a room held and dropped anywhere on it.
     if (view.name === "house") panel.dataset.dropHouse = view.id;
     else delete panel.dataset.dropHouse;
-    if (view.name === "house") return drawHouse();
-    if (view.name === "build") return drawBuild();
-    drawMain();
+    if (view.name === "house") drawHouse();
+    else if (view.name === "build") drawBuild();
+    else drawMain();
+    keepClearOfSun();
   }
 
   // ---- 찾기 + 집 ----------------------------------------------------------------------------

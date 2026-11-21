@@ -45,7 +45,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
   // words: notes), else where I was last.
   const here = insertSound && !insert ? "sounds" : insert && !insertSound ? "notes" : null;
   const first = tab || here || getSettings(app.store).refTab || "notes";
-  openFloat(app.root, { id: "reference", title: "레퍼런스", pos, dock }, (panel, close, onClose) => {
+  openFloat(app.root, { id: "reference", title: "비서", pos, dock }, (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
@@ -334,7 +334,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
         return h("div", { class: "ref-item" },
           h("p", { text: f.text || `♪ ${f.sound.name} · ${timeText(f.sound.dur * 1000)}` }),
           act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "가져오기", onclick: act }),
-          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "레퍼런스 메모에 넣었어요"); } }));
+          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "비서 메모에 넣었어요"); } }));
       }) : [h("p", { class: "help", text: "가져올 것이 아직 없어요" })]));
     }
     onClose(() => {

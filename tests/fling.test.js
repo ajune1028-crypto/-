@@ -113,3 +113,17 @@ function pick(hit) {
 function pick2(r) {
   return [r.act, r.edge];
 }
+
+// The owner (21 November): "스와이프하고서 그거 발사한 곳에는 우선적으로 그쪽으로 가게". From 햇살 at the
+// top right, a throw to the left that rises a little met the top edge first along its line; it
+// goes the way it was thrown: its larger part, left or right, up or down.
+test("a throw goes the way it was thrown, even when its line meets another edge first", () => {
+  const W = 390;
+  const H = 844;
+  const left = throwOf({ x0: 360, y0: 40, x1: 260, y1: 20, vx: -1.2, vy: -0.2, w: W, h: H });
+  assert.equal(left.edge, "left");
+  assert.ok(left.at >= 0 && left.at <= 0.2, "near the top of the left edge: " + left.at);
+  assert.equal(throwOf({ x0: 360, y0: 40, x1: 330, y1: 140, vx: -0.3, vy: 1.1, w: W, h: H }).edge, "bottom");
+  assert.equal(throwOf({ x0: 200, y0: 800, x1: 330, y1: 760, vx: 1.1, vy: -0.3, w: W, h: H }).edge, "right");
+  assert.equal(throwOf({ x0: 30, y0: 400, x1: 60, y1: 300, vx: 0.2, vy: -1, w: W, h: H }).edge, "top");
+});

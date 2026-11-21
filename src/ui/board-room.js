@@ -702,7 +702,7 @@ export function mountBoardRoom(body, app, session, frame) {
       if (soloLasso === id) stopPlaying();
       apply(removeLassoOps(session.clock, board, id));
     } });
-    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 레퍼런스", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
+    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 맡기기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
     // 곡·글·그림·전체: what the loop's actions take.
     const kind = h("button", { type: "button", class: "lasso-kind", id: "lasso-kind-" + id, "aria-label": "올가미가 다룰 것 (곡, 글, 그림, 전체)", onclick: () => { if (!chipDragged) openKinds(id, chip); } });
     const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, kind, more, remove);
@@ -792,7 +792,7 @@ export function mountBoardRoom(body, app, session, frame) {
         songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
         can && pasteable && one("lasso-paste", "붙여넣기", () => pasteIntoLoop(id)),
         one("lasso-copy", "복사", () => copyLasso(loopHolds(id))),
-        one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(loopHolds(id).cards)),
+        one("lasso-ref", "비서에게 맡기기", () => lassoToReference(loopHolds(id).cards)),
         can && one("lasso-delete", "지우기", () => deleteLasso(loopHolds(id))),
       ].filter(Boolean));
     };
@@ -1070,7 +1070,7 @@ export function mountBoardRoom(body, app, session, frame) {
         n++;
       }
     }
-    toast(root, n ? `레퍼런스에 ${n}개를 넣었어요` : "레퍼런스에 넣을 글이나 노래 카드가 없어요", 3000);
+    toast(root, n ? `비서에게 ${n}개를 맡겼어요` : "비서에게 맡길 글이나 노래 카드가 없어요", 3000);
   }
 
   /** Takes every loop off (one undo step). */

@@ -1615,6 +1615,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .in-houses svg { width: 1rem; height: 1rem; }
 .home-kebab { touch-action: none; transition: scale 0.15s var(--ease), background 0.2s var(--ease); }
 .home-kebab.charging { scale: 1.14; background: color-mix(in srgb, var(--tint) 24%, transparent); }
+/* 햇살 (the owner's branding: 일상, 친근): its core stays warm whatever colour the rays read from behind them. */
+:root { --sun-core: #ffbd3a; }
+:root[data-theme="dark"] { --sun-core: #ffc95e; }
+.sun-core { fill: var(--sun-core); stroke: currentColor; }
 
 /* A house: one deep colour of glass, a ㅅ roof, a small chimney, a white icon inside. */
 .house-shape { position: relative; display: block; width: 100%; aspect-ratio: 1; filter: drop-shadow(0 7px 10px color-mix(in srgb, var(--house, #888) 36%, transparent)); }
@@ -1646,20 +1650,21 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="bottom"] { bottom: 0; border-radius: 1.6rem 1.6rem 0 0; }
 .home-panel[data-edge="top"] { top: 0; border-radius: 0 0 1.6rem 1.6rem; }
 /* The grip: a bar across the panel's inner end (on a side panel, across its top). */
-.panel-grip { flex: none; display: grid; place-items: center; height: 1.7rem; touch-action: none; cursor: grab; }
+.panel-grip { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 1.7rem; padding: 0 max(0.35rem, var(--sun-r, 0px)) 0 max(0.35rem, var(--sun-l, 0px)); touch-action: none; cursor: grab; }
+/* The window's bar holds its lock (left), the bar itself (middle) and its other two buttons (right). */
+.panel-grip > .panel-lock { justify-self: start; }
+.panel-grip > .grip-bar { justify-self: center; }
+.panel-grip > .panel-ctrl-end { justify-self: end; }
+.panel-grip .icon-btn, .home-panel .float-head .icon-btn { width: 1.9rem; height: 1.9rem; cursor: pointer; }
 .grip-bar { width: 2.6rem; height: 0.32rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); }
 .home-panel[data-edge="top"] .panel-grip { order: 2; }
 .home-panel[data-edge="left"] .panel-grip { margin-top: env(safe-area-inset-top); }
-.home-panel[data-edge="right"] .panel-grip { margin-top: max(env(safe-area-inset-top), var(--top-clear, 0px)); }
-/* Its lock (top left) and the way between edge and window (top right), on the grip's row. */
+.home-panel[data-edge="right"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel:not(.floating) .panel-grip { height: 2.15rem; }
-.panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
-.panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
 .panel-ctrl-end { display: flex; gap: 0.15rem; }
-.panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
-.home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
-.home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
-.home-panel[data-edge="bottom"] .panel-ctrl { right: 2rem; }
+.panel-grip .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+/* A bottom window's ┐ is at the bar's right end: the buttons stop short of it. */
+.home-panel[data-edge="bottom"] .panel-grip { padding-right: max(2rem, var(--sun-r, 0px)); }
 .home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
 .home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
 /* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
@@ -1680,12 +1685,24 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel.compact.wide .home-panel-body { overflow-y: hidden; overflow-x: auto; overscroll-behavior-x: contain; }
 .home-panel.compact.wide .house-grid { display: flex; flex-direction: row; gap: 0.6rem; width: max-content; }
 .home-panel.compact.wide .house-tile { width: 4.6rem; flex: none; }
-.home-panel.floating.compact .float-title { display: none; }
+/* The floating window: its bar (no name over it), its two sides to draw it wider or narrower. */
+.home-panel .float-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.3rem; padding: 0.3rem max(0.4rem, var(--sun-r, 0px)) 0.15rem max(0.4rem, var(--sun-l, 0px)); }
+.home-panel .float-head > .panel-lock { justify-self: start; }
+.home-panel .float-head > .grip-bar { justify-self: center; }
+.home-panel .float-head > .panel-ctrl-end { justify-self: end; }
+.panel-side { position: absolute; z-index: 4; top: 2.4rem; bottom: 2rem; width: 0.8rem; touch-action: none; cursor: ew-resize; }
+.panel-side.left { left: 0; }
+.panel-side.right { right: 0; }
+.panel-side::before { content: ""; position: absolute; top: 50%; translate: 0 -50%; width: 0.22rem; height: 2.4rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 16%, transparent); transition: background 0.2s var(--ease), height 0.2s var(--ease); }
+.panel-side.left::before { left: 0.2rem; }
+.panel-side.right::before { right: 0.2rem; }
+.panel-side:hover::before, .home-panel.sizing .panel-side::before { height: 3.2rem; background: var(--tint); }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
 .home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
-.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)) + 1.7rem); padding-bottom: 0.3rem; }
-.search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
-.search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(0.9rem + env(safe-area-inset-top)); padding-bottom: 0.3rem; }
+/* Under 햇살 (a small screen, a window at the top or the right) the search row makes room for it. */
+.search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; padding-right: var(--sun-r, 0px); padding-left: var(--sun-l, 0px); }
+.search-icon { position: absolute; left: calc(0.8rem + var(--sun-l, 0px)); top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
 .search-row .search-input { flex: 1; min-width: 0; height: 2.7rem; padding-left: 2.4rem; border-radius: 999px; }
 .search-row .search-modes { flex: none; width: auto; }
@@ -1751,8 +1768,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
 /* ⋮ (찾기와 집) at the right end, under 레퍼런스, nothing empty beside it (the owner, 21 November);
    with 레퍼런스 off it stands beside 설정. */
-.home-top .home-kebab { grid-column: 2; }
-.home-top:not(:has(#home-reference)) .home-kebab { grid-row: 1; }
+/* 설정 · 햇살 on the top row, 비서 under 햇살 (the owner, 21 November: "찾기와 집을 레퍼런스 아이콘 위로"). */
+.home-top #home-reference { grid-column: 2; }
+/* 햇살's window is out: the other round buttons go, 햇살 stays where it is and still answers. */
+.home-sun-out .home-top > :not(.home-kebab) { opacity: 0; visibility: hidden; pointer-events: none; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
