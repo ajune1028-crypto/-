@@ -296,6 +296,9 @@ h1, h2, p { margin: 0; }
   box-shadow: var(--glass-shine), 0 6px 16px rgb(38 72 140 / 0.1);
 }
 .room-name { font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
+/* The house a room is in, small beside its name. */
+.room-house { display: inline-block; width: 1.15rem; height: 1.15rem; margin-left: 0.3rem; vertical-align: -0.18rem; }
+.room-house .house-shape { display: block; width: 100%; height: 100%; }
 /* Pressed: a small sink instead of the browser's blue flash. */
 /* `scale` rather than `transform`, so it stacks on a transform the element already has (.add is centred by one). */
 .room-row, .btn, label.btn, .icon-btn, .chip, .add, .swatch, .seg button { transition: scale 0.09s var(--ease); }
@@ -1615,9 +1618,38 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="top"] .panel-grip { order: 2; }
 .home-panel[data-edge="left"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel[data-edge="right"] .panel-grip { margin-top: max(env(safe-area-inset-top), var(--top-clear, 0px)); }
+/* Its lock (top left) and the way between edge and window (top right), on the grip's row. */
+.home-panel:not(.floating) .panel-grip { height: 2.15rem; }
+.panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
+.panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
+.panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+.home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
+.home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
+.home-panel[data-edge="bottom"] .panel-ctrl { right: 2rem; }
+.home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
+/* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
+.panel-sizer { position: absolute; z-index: 4; width: 1.75rem; height: 1.75rem; touch-action: none; }
+.panel-sizer::before { content: ""; position: absolute; inset: 0.45rem; border: 0 solid color-mix(in srgb, var(--ink) 38%, transparent); border-right-width: 3px; border-bottom-width: 3px; border-bottom-right-radius: 0.4rem; }
+.home-panel.floating .panel-sizer, .home-panel[data-edge="left"] .panel-sizer, .home-panel[data-edge="top"] .panel-sizer { right: 0.05rem; bottom: 0.05rem; cursor: nwse-resize; }
+.home-panel[data-edge="left"] .panel-sizer { bottom: calc(0.05rem + env(safe-area-inset-bottom)); }
+.home-panel[data-edge="right"] .panel-sizer { left: 0.05rem; bottom: calc(0.05rem + env(safe-area-inset-bottom)); cursor: nesw-resize; }
+.home-panel[data-edge="right"] .panel-sizer::before { border-right-width: 0; border-left-width: 3px; border-bottom-right-radius: 0; border-bottom-left-radius: 0.4rem; }
+.home-panel[data-edge="bottom"] .panel-sizer { right: 0.05rem; top: 0.05rem; cursor: nesw-resize; }
+.home-panel[data-edge="bottom"] .panel-sizer::before { border-bottom-width: 0; border-top-width: 3px; border-bottom-right-radius: 0; border-top-right-radius: 0.4rem; }
+.home-panel.sizing { transition: none; }
+.home-panel.sizing .panel-sizer::before { border-color: var(--tint); }
+/* Small: only the houses, in a column when tall, in a row when wide; rooms still go in. */
+.home-panel.compact .search-row, .home-panel.compact .search-results, .home-panel.compact .houses-title, .home-panel.compact .houses > .help, .home-panel.compact .house-new { display: none; }
+.home-panel.compact .home-panel-body { gap: 0.4rem; padding: 0.35rem 0.5rem 0.6rem; }
+.home-panel.compact.tall .house-grid { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+.home-panel.compact.wide .home-panel-body { overflow-y: hidden; overflow-x: auto; overscroll-behavior-x: contain; }
+.home-panel.compact.wide .house-grid { display: flex; flex-direction: row; gap: 0.6rem; width: max-content; }
+.home-panel.compact.wide .house-tile { width: 4.6rem; flex: none; }
+.home-panel.floating.compact .float-title { display: none; }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
 .home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
-.home-panel[data-edge="top"] .home-panel-body { padding-top: max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)); padding-bottom: 0.3rem; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)) + 1.7rem); padding-bottom: 0.3rem; }
 .search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
 .search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }

@@ -4964,11 +4964,12 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
   for (let i = 1; i <= 12; i++) await page.touch("move", [[at[0] + ((target[0] - at[0]) * i) / 12, at[1] + ((target[1] - at[1]) * i) / 12]]);
   await page.waitFor(q("#house-dock .dock-house.over"));
   await page.touch("end");
-  await page.waitFor(`!document.getElementById("house-dock") && ${q("#in-houses-daily")}`, 3000);
-  assert.ok(!(await dailyNames()).includes("산책 노트"), "it left home's list");
-  assert.match(await text(page, "#in-houses-daily"), /집에 둔 방 1개/);
+  const housed = (name) => page.eval(`!![...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === ${JSON.stringify(name)})?.querySelector(".room-house")`);
+  await page.waitFor(`!document.getElementById("house-dock") && !!document.querySelector(".room-row .room-house")`, 3000);
+  assert.ok((await dailyNames()).includes("산책 노트"), "it stays on home's list");
+  assert.ok(await housed("산책 노트"), "with its house small beside its name");
   // In the house, and out again.
-  await click(page, "#in-houses-daily");
+  await click(page, "#home-more");
   await page.waitFor(q(".house-tile[data-house]"));
   await click(page, ".house-tile[data-house]");
   await page.waitFor(`${q("#house-rooms")}?.textContent.includes("산책 노트")`);
@@ -4977,7 +4978,8 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
   await page.waitFor(q("#house-empty"));
   await page.key("Escape");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  assert.ok((await dailyNames()).includes("산책 노트"), "back on home");
+  assert.ok((await dailyNames()).includes("산책 노트"), "on home");
+  assert.equal(await housed("산책 노트"), false, "no house beside it now");
   // Thrown to the left: the left edge lights, the panel comes from the left.
   const k = await page.eval(`(() => { const b = document.getElementById("home-more").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
   await page.touch("start", [k]);
@@ -4994,7 +4996,7 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
 // The round buttons at home's top right (설정, 레퍼런스, ⋮, 떠 있는 찾기와 집) never lie over 창작's title,
 // which stays on one line, on a 390 and a 360 wide phone. The owner (20 November): ⋮ and 레퍼런스
 // swap; then "위에 또 아이콘 하나 붙여서 … 오른쪽에는 독단적으로 나오게 하는 거, 그리고 왼쪽에는 그 원래".
-scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ and on its right the floating 찾기와 집; clear of 창작's one-line title, at 390 and 360 wide", async ({ open, out }) => {
+scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone (찾기와 집 floats from its own button, no second icon); clear of 창작's one-line title, at 390 and 360 wide", async ({ open, out }) => {
   for (const width of [390, 360]) {
     const page = await open({ width, height: 760 });
     await page.waitFor(q("#home-more"));
@@ -5007,15 +5009,15 @@ scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ and on 
     })()`);
     assert.ok(box.right <= box.buttons, width + ": the title ends before the buttons: " + JSON.stringify(box));
     assert.ok(box.h < box.lh * 1.5, width + ": one line: " + JSON.stringify(box));
-    // 설정 and 레퍼런스 side by side; under them ⋮ (left) and the floating one (right); none over another, each pressable.
+    // 설정 and 레퍼런스 side by side; under them ⋮; none over another, each pressable.
     const at = await page.eval(`(() => {
       const r = (id) => { const b = document.getElementById(id).getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { l: b.left, r: b.right, t: b.top, b: b.bottom, cx: b.left + b.width / 2, ok: !!hit && document.getElementById(id).contains(hit) }; };
-      return { set: r("home-settings"), more: r("home-more"), ref: r("home-reference"), float: r("home-float") };
+      return { set: r("home-settings"), more: r("home-more"), ref: r("home-reference") };
     })()`);
+    assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, width + ": no second icon");
     assert.ok(Math.abs(at.set.t - at.ref.t) < 1 && at.set.r <= at.ref.l + 0.5, width + ": 설정 then 레퍼런스 in a row: " + JSON.stringify(at));
-    assert.ok(Math.abs(at.more.t - at.float.t) < 1 && at.more.r <= at.float.l + 0.5, width + ": ⋮ then the floating one in a row: " + JSON.stringify(at));
-    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.set.cx - at.more.cx) < 1 && Math.abs(at.ref.cx - at.float.cx) < 1, width + ": that row under the first: " + JSON.stringify(at));
-    assert.ok(at.set.ok && at.more.ok && at.ref.ok && at.float.ok, width + ": each can be pressed: " + JSON.stringify(at));
+    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.set.cx - at.more.cx) < 1, width + ": ⋮ under them: " + JSON.stringify(at));
+    assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }
 });
@@ -5721,7 +5723,7 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.shot(out("panel-drop-house.png"));
   await page.touch("end");
   await page.waitFor(`!${q(".room-ghost")} && ${q("#home-panel .house-tile[data-house] .house-count")}?.textContent === "1"`, 3000);
-  assert.ok(!(await dailyNames()).includes("바람 노트"), "it left home's list");
+  assert.ok((await dailyNames()).includes("바람 노트"), "it stays on home's list, its house beside its name");
   assert.ok(await page.eval(`!!document.getElementById("home-panel")`), "the panel is still out");
   // An open house takes a room dropped anywhere on it.
   await click(page, "#home-panel .house-tile[data-house]");
@@ -5740,7 +5742,14 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.touch("start", [empty]);
   await page.touch("end");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  // ⋮ again while it is out: it moves to the next edge round (bottom → left → top → right), and ⋮ stays pressable on each.
+  // ⋮ again while it is out puts it away (the owner, 21 November); moving it is for a throw.
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
+  await pause(600);
+  await click(page, "#home-more");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // With 설정's "다시 누르면 다른 쪽으로" on, it goes round the edges (bottom → left → top → right), ⋮ pressable on each.
+  await page.eval(`window.__app.store.set("settings", { ...window.__app.store.get("settings", {}), panelCycle: true })`);
   await click(page, "#home-more");
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
   await pause(600);
@@ -5755,8 +5764,10 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
     if (next === "right") await page.shot(out("panel-moved-right.png"));
   }
   assert.ok(await pressable("#home-more"), "⋮ can still be pressed");
-  // The icon on ⋮'s right: the same panel floating on its own, below home's buttons.
-  await click(page, "#home-float");
+  await page.eval(`window.__app.store.set("settings", { ...window.__app.store.get("settings", {}), panelCycle: false })`);
+  assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, "no second icon on home");
+  // Its own top-right button: the same panel floating on its own, below home's buttons.
+  await click(page, "#panel-float");
   await page.waitFor(`${q("#home-panel.floating")} && ${q("#float-head")}`, 2000);
   await pause(350);
   assert.equal(await page.eval(`document.querySelectorAll("#home-panel").length`), 1, "one panel at a time");
@@ -5774,23 +5785,64 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   assert.deepEqual(await page.eval(`window.__app.store.get("homePanelFloat", null)`), moved, "where it was left is kept");
   await page.shot(out("panel-floating.png"));
   // Floating, a tap on an empty place leaves it (it stands on its own); the icon puts it away; again, it comes back there.
-  const empty2 = await centre('.half[data-side="creative"] .half-title');
+  // (The empty middle of 창작's half: its title's box reaches under home's buttons.)
+  const empty2 = await page.eval(`(() => { const r = document.querySelector('.half[data-side="creative"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height * 0.42]; })()`);
   await page.touch("start", [empty2]);
   await page.touch("end");
   await pause(300);
   assert.ok(await page.eval(`!!document.getElementById("home-panel")`), "floating, an empty tap leaves it out");
-  await click(page, "#home-float");
+  await click(page, "#home-more");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  await click(page, "#home-float");
+  // ⋮ brings it back as it was left: floating, where it was.
+  await click(page, "#home-more");
   await page.waitFor(q("#home-panel.floating"), 2000);
   await pause(350);
   const again = await page.eval(`(() => { const r = document.getElementById("home-panel").getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top) }; })()`);
   assert.deepEqual(again, moved, "it comes back where it was left");
-  await click(page, "#float-close");
-  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  // And ⋮ still brings it out of the edge as before.
+  // Its ┘ corner draws it smaller: the search goes, the houses stay, in a column (tall) or a row (wide).
+  const corner = await centre("#panel-sizer");
+  await page.front();
+  await page.touch("start", [corner]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[corner[0] - i * 26, corner[1] - i * 10]]);
+  await page.touch("end");
+  await page.waitFor(`${q("#home-panel")}.classList.contains("compact")`, 2000);
+  assert.ok(await page.eval(`!${q("#home-search")} || ${q("#home-search")}.getBoundingClientRect().width === 0`), "small: no search");
+  assert.ok(await page.eval(`${q("#home-panel .house-tile[data-house]")}.getBoundingClientRect().width > 0`), "small: the houses stay");
+  const kept = await page.eval(`window.__app.store.get("homePanelFloat", null)`);
+  assert.ok(kept.w < 300, "its size is kept: " + JSON.stringify(kept));
+  await page.shot(out("panel-compact.png"));
+  // Locked (top left), ⋮ leaves it where it is.
+  await click(page, "#panel-lock");
+  assert.equal(await page.eval(`${q("#panel-lock")}.getAttribute("aria-pressed")`), "true");
   await click(page, "#home-more");
+  await pause(300);
+  assert.ok(await page.eval(`!!document.getElementById("home-panel")`), "locked: ⋮ does not put it away");
+  await click(page, "#panel-lock");
+  // Back to its edge by the same top-right button; then a swipe on it toward its edge puts it away.
+  await click(page, "#panel-float");
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right" && !${q("#home-panel.floating")}`, 2000);
+  await pause(600);
+  const mid = await page.eval(`(() => { const r = document.querySelector("#home-panel .home-panel-body").getBoundingClientRect(); return [r.left + r.width * 0.4, r.top + r.height * 0.6]; })()`);
+  await page.touch("start", [mid]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[mid[0] + i * 22, mid[1] + i]]);
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // Locked at its edge, the same swipe leaves it; its bar drawn back to its own edge puts it away.
+  await click(page, "#home-more");
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right"`, 2000);
+  await pause(600);
+  await click(page, "#panel-lock");
+  await page.touch("start", [mid]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[mid[0] + i * 22, mid[1] + i]]);
+  await page.touch("end");
+  await pause(400);
+  assert.ok(await page.eval(`!!document.getElementById("home-panel")`), "locked: a swipe leaves it");
+  const bar = await centre("#panel-end");
+  await page.touch("start", [bar]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[bar[0] + i * 25, bar[1]]]);
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  await page.eval(`window.__app.store.set("homePanelLocked", false)`);
 });
 
 // The owner (20 November): "필압등 그 걍 손으로 해도 좋은 필기감". A finger has no pressure: it is read
