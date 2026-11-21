@@ -88,6 +88,11 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **텍스트 방**: 두 손가락 = 스크롤 + 확대. **그림 올가미**(텍스트 방·그림 방, `InkLayer`의 `lasso` 도구, `lassoActions`, 메뉴는 `#ink-lasso-menu`: 화이트보드 올가미의 `#lasso-menu`와 이름을 섞지 않는다): 둘러 잡고 아무 데나 옮기기·색·복제·지우기. **글자 옮기기**: 글자를 고르고 선택 도구의 '옮기기'(`#sel-move`) → 다음에 누른 글 속 자리로(다른 날도). 쓴 사람·쓴 때를 그대로 가져가 색이 안 바뀌고, 얹힌 표시·사진·녹음·색 섞기도 같이(`core/edit.js` `moveTextOps`), 되돌리기 한 번.
   - 그림 방 **종이**(`core/draw.js` `PAPERS`, `paper` op): 레이어 창 맨 아래, 투명은 체커보드와 투명 PNG. 노래 방 옆 패널은 잠그면 반투명.
   - 그 전(11월 20일 밤): 색 원판, 그려서 맞히기(`ui/sketch.js`, 초성 힌트), 타임랩스(`ui/timelapse.js`, `core/timelapse.js`), 저장 공간 버그(시나리오마다 localStorage 비우기, '이 기기만' 방은 원본 사본을 안 만듦).
+- **11월 21일 밤 (사용자의 새 규칙 "실행하기 전에"를 처음 쓴 날)**: `specs/2026-11-21-check-and-plan.md`(의도·점검·참고·판단), rulings의 같은 날 밤 절.
+  - **홈**: 반쪽마다 제목 줄 고정(`.half-head`), 방 목록만 스크롤하고 위·아래 끝이 그라데이션으로 사라짐, 제목 밑 가는 선. 창은 하나씩(`closeWindows`), 창이 열린 동안 홈 아이콘 셋은 숨김(`.home-window`), 붙은 찾기와 집에도 ✕, ⋮ 던지기는 40px 넘게·빠르게만.
+  - **노래**: 기본은 부른 그대로(사용자 녹음 79/79 대 조에 맞춰 51/79; `notesOf`와 카드 `playsSung`가 옛 것도 그렇게 읽음). 조 이름 없음, 음 편집의 '음 다듬기'(`tonalOps`), 숨 음 빼기(`withoutStrays`), 듣기 [원본 | 피아노 | 같이]. 사용자 녹음은 `out/voices/owner/`에만.
+  - **붓**: 점 사이 곡선(`throughCurve`, 구심 Catmull-Rom), 0.6px까지 남김(`THIN_UNITS`, 긴 선은 더 솎아 자르지 않음), 손떨림 보정 기본 끔.
+  - 빈 값이 화면에 'null'로 나오던 다섯 곳 고침(`mount`), 모든 화면 코드를 훑는 시험 `tests/ui-source.test.js`.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 21일 판: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -123,7 +128,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 420개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 425개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 190개 남짓. --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
