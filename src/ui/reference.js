@@ -6,7 +6,7 @@
 // Removing a recording from the list keeps its sound on the device: a clip or
 // card made from it may still play it.
 
-import { h, icon, openFloat, openSheet, segmented, toast } from "./dom.js";
+import { h, icon, openFloat, openSheet, segmented, toast, mount } from "./dom.js";
 import { exampleTake } from "../audio/example.js";
 import { putSoundInto, reachableRooms } from "./room-actions.js";
 import { getSettings, setSetting } from "../identity.js";
@@ -61,7 +61,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     function drawNotes() {
       const notes = refNotes(app.store);
       const clip = clipboardItem(app.store, "song-clip");
-      list.replaceChildren(
+      mount(list,
         clip && h("p", { class: "help ref-clip", id: "ref-clip", text: `복사해 둔 노래 클립: ${clip.source?.name || "녹음"} · ${(clip.length / 1000).toFixed(1)}초 (노래 방이나 화이트보드에 붙일 수 있어요)` }),
         ...(notes.length ? notes.map((n) => h("div", { class: "ref-note", data: { id: n.id } },
           h("p", { class: "ref-body", text: n.text }),

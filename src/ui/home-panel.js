@@ -119,13 +119,14 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     floatBtn,
     h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
   if (floating) panel.append(head, body, sizer);
-  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn, floatBtn), body, end, sizer);
+  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn,
+    h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")))), body, end, sizer);
   paintLock();
   root.append(scrim, panel);
-  // Home's round buttons stay above the panel (⋮ pressed again moves it); what the panel holds
-  // starts below them where they would lie over it (at the right and top edges, floating).
+  // Home's round buttons step away while the panel is out, so there is nothing to keep clear of —
+  // unless ⋮ is kept for "다시 누르면 다른 쪽으로": then what the panel holds starts below them.
   const topClear = () => {
-    const t = document.querySelector(".home-top");
+    const t = getSettings(store).panelCycle && document.querySelector(".home-top");
     return t ? Math.ceil(t.getBoundingClientRect().bottom + 6) : 0;
   };
   panel.style.setProperty("--top-clear", topClear() + "px");

@@ -10,7 +10,7 @@
 // and seen; the speed button plays 0.5x to 3x; the tone button switches the
 // piano between 밝게 and 어둡게. Those three are this device's own choice.
 
-import { h, icon, iconButton, segmented, toggle, openSheet, toast, closeOnOutside } from "./dom.js";
+import { h, icon, iconButton, segmented, toggle, openSheet, toast, closeOnOutside, mount } from "./dom.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { Timeline, timeText } from "./song-view.js";
 import { openNoteEditor } from "./note-editor.js";
@@ -1314,7 +1314,7 @@ export function mountSongRoom(body, app, session, frame) {
     const key = [clips.length, song.rowCount(), Math.round(song.end() / 100), people.join()].join("|");
     if (rest.dataset.key === key) return;
     rest.dataset.key = key;
-    rest.replaceChildren(
+    mount(rest,
       h("p", { class: "side-title", text: "이 노래" }),
       h("p", { class: "side-facts", text: clips.length ? `클립 ${clips.length}개 · 줄 ${Math.max(1, song.rowCount() - 1)}개 · ${timeText(song.end())}` : "아직 클립이 없어요" }),
       people.length > 0 && h("p", { class: "side-facts", text: people.join(", ") + "이(가) 불렀어요" }),

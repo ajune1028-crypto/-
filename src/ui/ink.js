@@ -11,7 +11,7 @@
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-import { h, icon, iconButton, closeOnOutside } from "./dom.js";
+import { h, icon, iconButton, closeOnOutside, mount } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
 import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
@@ -1232,7 +1232,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
             onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); pop.fill(); } }, "보정 " + STEADY_NAMES[steady])));
     } else if (kind === "color") {
       const recent = (getSettings(store).inkRecent || []).slice(0, 8);
-      el.replaceChildren(
+      mount(el,
         h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
           ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
             style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),

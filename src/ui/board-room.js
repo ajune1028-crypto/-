@@ -14,7 +14,7 @@
 // a drag inside it moves it with its cards, its chip drags just the loop, ✕ takes it
 // off, and it closes itself the shortest way when the end does not reach the start.
 
-import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint } from "./dom.js";
+import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint, mount } from "./dom.js";
 import { watchFingers, watchFingerTaps } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
@@ -2166,7 +2166,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const paint = () => {
       const saved = new Map(board.slots().map((s) => [s.n, s]));
       const now = JSON.stringify(board.links().map((l) => [l.a, l.b]));
-      menu.replaceChildren(
+      mount(menu,
         h("p", { class: "slot-title", text: "순서 칸" }),
         ...Array.from({ length: count }, (_, i) => {
           const n = i + 1;

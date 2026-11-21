@@ -7,7 +7,7 @@
 // in a row lit like neon). The result stays in the room (the tally between two people). 설정's
 // 미니게임 off hides the button and lets no invitation in.
 
-import { h, icon, toast } from "./dom.js";
+import { h, icon, toast, mount } from "./dom.js";
 import { buzz, chime } from "./chime.js";
 import { getSettings } from "../identity.js";
 import { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS, MANY } from "../core/game.js";
@@ -148,7 +148,7 @@ export function mountGames(app, session) {
     const left = g.start - Date.now();
     const n = Math.ceil(left / 1000);
     // While counting, 가위바위보 can already be chosen (a hand made ready before "보!").
-    el.replaceChildren(h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
+    mount(el, h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
     shown.card = null;
     el.classList.add("counting");
     if (shown.lastCount !== n) {
