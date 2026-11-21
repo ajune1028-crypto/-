@@ -1631,9 +1631,23 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .house-plan { display: grid; place-items: center; border: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 1.1rem; color: var(--muted); filter: none; }
 .house-plan svg { width: 38%; height: 38%; }
 
-.house-dock { position: fixed; left: 0.6rem; right: 0.6rem; bottom: calc(0.8rem + env(safe-area-inset-bottom)); z-index: 80; max-width: 36rem; margin-inline: auto; padding: 0.55rem 0.8rem 0.7rem; border-radius: 1.4rem; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 74%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; }
-.dock-hint { margin-bottom: 0.35rem; font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
-.dock-row { display: flex; justify-content: center; gap: 0.8rem; overflow: hidden; }
+/* The world of houses (ui/house-arc.js): the top third of a big circle rising from the bottom, its
+   rings drawn out from the middle, the houses standing on its rim, + at the top. */
+.house-arc { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+.arc-world { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.arc-face { filter: drop-shadow(0 -12px 30px color-mix(in srgb, var(--tint) 26%, transparent)); }
+.arc-glow-top { stop-color: color-mix(in srgb, var(--paper) 90%, var(--tint)); stop-opacity: 0.95; }
+.arc-glow-edge { stop-color: color-mix(in srgb, var(--paper) 66%, var(--tint)); stop-opacity: 0.92; }
+.arc-ring { fill: none; stroke: color-mix(in srgb, var(--tint) 70%, var(--ink)); stroke-width: 1.1; stroke-dasharray: 1; stroke-linecap: round; opacity: 0.45; }
+.arc-ring.rim { stroke-width: 2; opacity: 0.85; }
+.house-arc .dock-house { position: absolute; width: 4.4rem; padding: 0; border: 0; background: none; color: var(--ink); transform: translate(-50%, -100%) scale(var(--s, 1)); transform-origin: 50% 100%; }
+.house-arc .dock-house.over { transform: translate(-50%, -100%) translateY(-8px) scale(calc(var(--s, 1) * 1.18)); }
+.dock-hint { font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
+.arc-hint { position: absolute; left: 0; right: 0; bottom: calc(0.9rem + env(safe-area-inset-bottom)); margin: 0; font-size: 0.78rem; color: var(--ink); opacity: 0.72; }
+/* The world itself is frosted glass in my colour: home's buttons below it do not show through. */
+.arc-glass { position: absolute; border-radius: 50%; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 78%, var(--tint) 10%); box-shadow: var(--glass-shine), 0 -14px 36px color-mix(in srgb, var(--tint) 24%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+.arc-face { opacity: 0.55; }
+.arc-catcher { position: fixed; inset: 0; z-index: 79; }
 .dock-house { flex: none; display: grid; justify-items: center; gap: 0.15rem; width: 4rem; pointer-events: auto; transition: transform 0.2s var(--ease); }
 .dock-house.over { transform: translateY(-6px) scale(1.16); }
 .dock-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; font-weight: 700; }

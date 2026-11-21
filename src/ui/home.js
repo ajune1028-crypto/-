@@ -1,6 +1,7 @@
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
 import { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast, toggle } from "./dom.js";
+import { openHouseArc } from "./house-arc.js";
 import { duplicateRoom, putIntoBoard, putRoomIntoSong, roomHistory } from "./room-actions.js";
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
@@ -168,28 +169,40 @@ export function showHome(app) {
         draw();
         toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600);
       } }, icon("star"));
-    // Held, the room lifts: let go where it is, its actions open (as before); drawn onto a house in
-    // the dock below, it goes into that house (the owner: "꾹 눌러서 폴더에 넣으면 그 안에 포함").
+    // Held, the room lifts and the houses come up as a small world from below (ui/house-arc.js);
+    // drawn onto a house it goes in, let go where it was the world stays for a tap on a house (the
+    // owner, 21 November: "꾹 누르면 어디 집에 넣을지"). Its details and actions are two fingers' tap
+    // (or 마우스 왼쪽·오른쪽 together, or the right button): roomMenu.
     let lift = null;
     const hold = () => {
+      if (fingers.size > 1) return;
       held = true;
       clearTimeout(timer);
-      // With 찾기와 집 out, its own houses take the room; otherwise a row of houses rises from below.
-      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseDock() };
+      // With 햇살 out, its own houses take the room; otherwise the world of houses rises from below.
+      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseArc() };
       row.classList.add("lifted");
       try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
       buzz(app, 10);
     };
-    const endLift = () => {
+    const endLift = ({ keep = false } = {}) => {
       row.classList.remove("lifted");
       lift?.ghost?.remove();
       lift?.over?.classList.remove("over");
       const dock = lift?.dock;
       lift = null;
-      if (dock) {
-        if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(110%)", opacity: 0 }], { duration: 220, easing: "ease-in", fill: "forwards" }).finished.then(() => dock.remove(), () => dock.remove());
-        else dock.remove();
+      if (dock && !keep) dock.close();
+    };
+    const putRoom = (id) => {
+      if (!id) return;
+      if (id === "new") {
+        if (panelCtl?.isOpen()) return void panelCtl.show({ name: "build", room: room.id });
+        return void openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } });
       }
+      putInHouse(app.store, room.id, id);
+      buzz(app, 14);
+      draw();
+      panelCtl?.isOpen() && panelCtl.refresh();
+      toast(root, `'${houses(app.store).find((x) => x.id === id)?.name || "집"}'에 넣었어요`);
     };
     const dragTo = (x, y) => {
       if (!lift.moved && Math.hypot(x - lift.x, y - lift.y) < 8) return;
@@ -210,56 +223,76 @@ export function showHome(app) {
     const drop = () => {
       const target = lift.over;
       const moved = lift.moved;
-      endLift();
-      if (!moved) return void roomMenu(room);
-      if (!target) return;
-      const id = target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null);
-      if (!id) return;
-      if (id === "new") {
-        if (panelCtl?.isOpen()) return void panelCtl.show({ name: "build", room: room.id });
-        return void openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } });
+      const dock = lift.dock;
+      if (!moved) {
+        // Let go where it was held: the world stays for a tap on a house (or + for a new one).
+        endLift({ keep: true });
+        if (dock) dock.choose(putRoom);
+        else toast(root, "집 위로 끌어다 놓아요 · 방의 자세한 것은 두 손가락으로 톡", 2600);
+        return;
       }
-      putInHouse(app.store, room.id, id);
-      buzz(app, 14);
-      draw();
-      panelCtl?.isOpen() && panelCtl.refresh();
-      toast(root, `'${houses(app.store).find((x) => x.id === id)?.name || "집"}'에 넣었어요`);
+      endLift();
+      if (!target) return;
+      putRoom(target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null));
     };
+    // Two fingers on the room at once, a quick tap: its details and what can be done with it (the
+    // owner, 21 November: "두 손가락으로 동시에 그 방을 누르면 그 방의 세부 정보나 상호작용").
+    const fingers = new Map();
+    let two = null;
+    let lastKind = "mouse";
     row.addEventListener("pointerdown", (e) => {
+      lastKind = e.pointerType || "mouse";
+      if (e.pointerType === "touch") {
+        fingers.set(e.pointerId, [e.clientX, e.clientY]);
+        if (fingers.size === 2 && !lift) {
+          clearTimeout(timer);
+          held = true; // no tap-to-open from these fingers
+          two = { at: e.timeStamp, spoiled: e.timeStamp - (two?.first ?? e.timeStamp) > 220 };
+        } else if (fingers.size === 1) two = { first: e.timeStamp };
+        else if (fingers.size > 2 && two) two.spoiled = true;
+        if (fingers.size > 1) return;
+      }
       held = false;
       start = { x: e.clientX, y: e.clientY, id: e.pointerId };
       clearTimeout(timer);
       if (e.button === 0) timer = setTimeout(hold, 500);
     });
     row.addEventListener("pointermove", (e) => {
+      const at = fingers.get(e.pointerId);
+      if (at && two?.at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > 16) two.spoiled = true;
       if (lift) return void dragTo(e.clientX, e.clientY);
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer);
     });
-    row.addEventListener("pointerup", () => { clearTimeout(timer); if (lift) drop(); });
-    row.addEventListener("pointercancel", () => { clearTimeout(timer); if (lift) endLift(); });
+    const lifted = (e) => {
+      if (!fingers.delete(e.pointerId) || fingers.size) return false;
+      const t = two;
+      two = null;
+      if (!t?.at || t.spoiled || e.type === "pointercancel" || e.timeStamp - t.at > 450) return t?.at != null;
+      roomMenu(room);
+      return true;
+    };
+    row.addEventListener("pointerup", (e) => { clearTimeout(timer); if (lifted(e)) return; if (lift) drop(); });
+    row.addEventListener("pointercancel", (e) => { clearTimeout(timer); fingers.delete(e.pointerId); if (!fingers.size) two = null; if (lift) endLift(); });
     row.addEventListener("pointerleave", () => { if (!lift) clearTimeout(timer); });
     // Lifted, the finger moves the room, not the list.
-    row.addEventListener("touchmove", (e) => { if (lift) e.preventDefault(); }, { passive: false });
+    row.addEventListener("touchmove", (e) => { if (lift || fingers.size > 1) e.preventDefault(); }, { passive: false });
+    // The mouse's right button (alone, or with the left held) is two fingers' tap; a finger's long
+    // press may also send this (an iPad does): it is the long press, already in hand, so nothing more.
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (lift || held) return;
+      // Chrome says what sent it; Safari does not, so the last press's kind stands in.
+      if ((e.pointerType || lastKind) !== "mouse") return;
+      clearTimeout(timer);
+      if (lift) endLift();
       held = true;
       roomMenu(room);
     });
     return h("div", { class: "room-cell" }, row, star);
   }
 
-  /** The houses at the bottom while a room is held, to drop it into (and a new one). */
-  function houseDock() {
-    const list = houses(app.store);
-    const dock = h("div", { class: "house-dock", id: "house-dock", "aria-hidden": "true" },
-      h("p", { class: "dock-hint", text: list.length ? "집 위에 놓으면 그 집에 들어가요" : "새 집 위에 놓으면 집을 지어 넣어요" }),
-      h("div", { class: "dock-row" },
-        ...list.map((house) => h("div", { class: "dock-house", data: { house: house.id } }, houseShape(house), h("span", { class: "dock-name", text: house.name }))),
-        h("div", { class: "dock-house dock-new", data: { house: "new" } }, h("span", { class: "house-shape house-plan" }, icon("plus")), h("span", { class: "dock-name", text: "새 집" }))));
-    document.body.append(dock);
-    if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "translateY(110%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
-    return dock;
+  /** The world of houses that rises while a room is held (ui/house-arc.js). */
+  function houseArc() {
+    return openHouseArc({ houses: houses(app.store), shapeOf: houseShape });
   }
 
   // ---- ⋮: 찾기와 집 ---------------------------------------------------------------------------

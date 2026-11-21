@@ -39,6 +39,18 @@ const click = async (page, sel) => {
   await page.tap(at.x, at.y);
 };
 
+/**
+ * Two fingers set down on a room at once and lifted (the owner, 21 November: "두 손가락으로 동시에 그 방을
+ * 누르면 그 방의 세부 정보나 상호작용"): its details and actions (#room-actions) open.
+ */
+async function twoFingerTap(page, sel) {
+  const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await page.front();
+  await page.touch("start", [[at[0] - 14, at[1]], [at[0] + 14, at[1] + 6]]);
+  await pause(90);
+  await page.touch("end");
+}
+
 /** The drawing tools' small window (ui/ink.js): opened from the rail, then the brush in it. */
 async function pickBrush(page, brush) {
   for (let i = 0; i < 3 && !(await page.eval(`!!document.querySelector('#ink-pop [data-brush="${brush}"]')`)); i++) await click(page, "#ink-brush-now");
@@ -346,7 +358,7 @@ scenario("home 미리보기: a room's row shows what it holds as it was left - a
 
 // The owner: "방을 만들 때 그 날짜 같은 거는 꾹 눌러가지고 … 처음 시작한 날짜, 그리고 현재 지금 수정한 날짜
 // 가장 최근에, 그리고 방에 누가 언제 들어갔는지".
-scenario("home: a long press shows the room's 역사 first - when it began and who made it, its latest change, who came in when, what each made by day", async ({ open }) => {
+scenario("home: two fingers' tap on a room shows its 역사 first - when it began and who made it, its latest change, who came in when, what each made by day", async ({ open }) => {
   const page = await open();
   await createRoom(page, { room: "역사 방" });
   await focusEnd(page);
@@ -356,10 +368,7 @@ scenario("home: a long press shows the room's 역사 first - when it began and w
   await page.waitFor(`window.__app.session.room.history().days.length === 1`, 8000);
   await click(page, "#back");
   await page.waitFor(q('.room-row[data-room-kind="daily-text"]'));
-  const at = await page.eval(`(() => { const r = ${q('.room-row[data-room-kind="daily-text"]')}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-  await page.touch("start", [at]);
-  await pause(700);
-  await page.touch("end");
+  await twoFingerTap(page, '.room-row[data-room-kind="daily-text"]');
   await page.waitFor(q("#room-history .hist-line"), 8000);
   const story = await page.eval(`[...document.querySelectorAll("#room-history .hist-line")].map((l) => l.textContent)`);
   assert.ok(story[0].startsWith("시작") && story[0].includes("오늘") && story[0].includes("만듦"), "when it began, by whom: " + story[0]);
@@ -372,7 +381,7 @@ scenario("home: a long press shows the room's 역사 first - when it began and w
   assert.ok(await page.eval(q("#room-actions #room-open")), "the actions are still there below");
 });
 
-scenario("home: a long press on a room offers 열기, 복제, 링크 복사, 화이트보드에 넣기 and 목록에서 빼기; 복제 makes '… 복사본' with the same words; 화이트보드에 넣기 puts its lines on a board", async ({ open }) => {
+scenario("home: two fingers' tap on a room offers 열기, 복제, 링크 복사, 화이트보드에 넣기 and 목록에서 빼기; 복제 makes '… 복사본' with the same words; 화이트보드에 넣기 puts its lines on a board", async ({ open }) => {
   const page = await open();
   await createRoom(page, { room: "글 방" });
   await focusEnd(page);
@@ -385,14 +394,11 @@ scenario("home: a long press on a room offers 열기, 복제, 링크 복사, 화
   await click(page, "#back");
   await page.waitFor(q('.room-row[data-room-kind="daily-text"]'));
   const holdRow = async (sel) => {
-    const at = await page.eval(`(() => { const r = ${q(sel)}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-    await page.touch("start", [at]);
-    await pause(700);
-    await page.touch("end");
+    await twoFingerTap(page, sel);
     await page.waitFor(q("#room-actions"));
   };
   await holdRow('.room-row[data-room-kind="daily-text"]');
-  assert.ok(await page.eval(`location.hash === "" || location.hash === "#"`), "the long press did not open the room");
+  assert.ok(await page.eval(`location.hash === "" || location.hash === "#"`), "the two fingers did not open the room");
   for (const id of ["room-open", "room-duplicate", "room-copy-link", "room-to-board", "room-forget"]) assert.ok(await page.eval(q("#" + id)), id);
   await click(page, "#room-duplicate");
   await page.waitFor(`[...document.querySelectorAll(".room-row .room-name")].some((n) => n.textContent === "글 방 복사본")`, 10000);
@@ -4582,7 +4588,7 @@ scenario("순서 목록: the order as a row of chips; a chip dragged to the fron
 });
 
 // The owner: "홈화면에서 꾹 누르면 보내기… 거기 보내기 누르면 뭘 보내고".
-scenario("home: a long press on a whiteboard → 보내기 says what goes and lists where; its songs go to a song room in their order", async ({ open, fixtures }) => {
+scenario("home: two fingers' tap on a whiteboard → 보내기 says what goes and lists where; its songs go to a song room in their order", async ({ open, fixtures }) => {
   const page = await open({ width: 600, height: 860 });
   await songThenBoard(page, fixtures);
   await click(page, "#mode-song");
@@ -4594,10 +4600,7 @@ scenario("home: a long press on a whiteboard → 보내기 says what goes and li
   }
   await click(page, "#back");
   await page.waitFor(q('.room-row[data-room-kind="creative-board"]'));
-  const at = await page.eval(`(() => { const r = ${q('.room-row[data-room-kind="creative-board"]')}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-  await page.touch("start", [at]);
-  await pause(700);
-  await page.touch("end");
+  await twoFingerTap(page, '.room-row[data-room-kind="creative-board"]');
   await page.waitFor(q("#room-send"));
   await click(page, "#room-send");
   await page.waitFor(q("#send-what"));
@@ -5170,6 +5173,65 @@ scenario("brushes fit: on a 360-wide phone the tools' rail (brush, eraser, 가�
 // rooms hold; the last searches; 집 made with a colour, an icon and a name; a room held and
 // dropped on a house goes in (and leaves home's list), and comes out again; leaving the app puts
 // it all away.
+// The owner (21 November): "방 꾹 누르면 어디 집에 넣을지 뜨는데 아이패드는 안 떠" / "큰 원의 3분의 1… 윗부분이
+// 우선 나오는데 거기에 내가 생성한 집이… 가운데에 플러스… 촤라라락 펼쳐지듯이" / "두 손가락으로 동시에 누르면
+// 세부 정보… 마우스는 왼쪽 오른쪽 같이". The world of houses, and the room's details by two fingers or the mouse.
+scenario("home 집 고르기: held, a room raises a world of houses from the bottom (+ at its top, the houses evenly to both sides, all on the screen); let go without moving it stays for a tap on a house; a tap outside closes it; a finger's contextmenu (as an iPad sends while held) changes nothing; the mouse's right button gives the room's details", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  for (const room of ["첫 방", "둘째 방"]) {
+    await createRoom(page, { room });
+    await click(page, "#back");
+    await page.waitFor(q("#home"));
+  }
+  await page.eval(`(() => { const st = window.__app.store; st.set("houses", ["가족", "친구", "일", "취미"].map((name, i) => ({ id: "h" + i, name, color: ["coral", "blue", "green", "violet"][i], icon: "home", rooms: [], at: i }))); return true; })()`);
+  await page.eval(`(() => { location.reload(); return true; })()`);
+  await pause(300);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 2`);
+  const rowOf = (name) => `[...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === ${JSON.stringify(name)})`;
+  const at = await page.eval(`(() => { const b = ${rowOf("첫 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  // Held: the world comes up; a finger's contextmenu in the middle of it (an iPad sends one) is nothing more.
+  await page.front();
+  await page.touch("start", [at]);
+  await pause(250);
+  await page.eval(`(() => { ${rowOf("첫 방")}.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); return true; })()`);
+  await pause(450);
+  await page.waitFor(q("#house-dock .dock-new"));
+  assert.ok(!(await page.eval(q("#room-actions"))), "no details from a finger's long press");
+  await pause(900);
+  const spots = await page.eval(`[...document.querySelectorAll("#house-dock .dock-house")].map((t) => { const r = t.getBoundingClientRect(); return { id: t.dataset.house, x: r.left + r.width / 2, l: r.left, r: r.right, b: r.bottom }; })`);
+  assert.equal(spots.length, 5, "+ and the four houses");
+  const plus = spots.find((t) => t.id === "new");
+  assert.ok(Math.abs(plus.x - 195) < 2, "+ in the middle: " + plus.x);
+  const rest = spots.filter((t) => t.id !== "new");
+  assert.equal(rest.filter((t) => t.x > 195).length, 2, "two to the right");
+  assert.equal(rest.filter((t) => t.x < 195).length, 2, "two to the left");
+  for (const t of spots) assert.ok(t.l >= -1 && t.r <= 391 && t.b <= 844, "on the screen: " + JSON.stringify(t));
+  await page.shot(out("house-arc.png"));
+  // Let go where it was held: the world stays for a tap.
+  await page.touch("end");
+  await pause(300);
+  assert.ok(await page.eval(`!!document.querySelector("#house-dock.choosing")`), "it stays to be chosen from");
+  await click(page, '#house-dock [data-house="h1"]');
+  await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === "h1").rooms.length === 1`, 3000);
+  // Held again and let go: a tap outside closes it and touches nothing there.
+  const at2 = await page.eval(`(() => { const b = ${rowOf("둘째 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.touch("start", [at2]);
+  await pause(700);
+  await page.touch("end");
+  await page.waitFor(q("#house-dock.choosing"));
+  await page.touch("start", [[at2[0], 30]]);
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("house-dock")`, 2000);
+  assert.ok(await page.eval(`location.hash === "" || location.hash === "#"`), "nothing under the tap opened");
+  // The mouse: the left held and the right pressed with it gives the room's details and actions.
+  const m = await page.eval(`(() => { const b = ${rowOf("둘째 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.press(m[0], m[1]);
+  await page.rightWhileLeft(m[0], m[1]);
+  await page.release(m[0], m[1]);
+  await page.waitFor(q("#room-actions #room-open"), 3000);
+  assert.ok(!(await page.eval(q("#house-dock"))), "no world of houses from it");
+});
+
 scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that edge, lit); 초성 search ranks and hides; 내용 search; recent searches; a house built; a room dropped into it and taken out; leaving the app puts it away", async ({ open, out }) => {
   const page = await open({ width: 390, height: 800 });
   const roomNames = ["쇼타로 일기", "산책 노트", "우리 쇼핑"];
@@ -5231,6 +5293,8 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
   await page.touch("start", [at]);
   await pause(700);
   await page.waitFor(q("#house-dock .dock-house:not(.dock-new)"));
+  // The world settles (its houses pop up one after another) before the finger aims at one.
+  await pause(800);
   const target = await page.eval(`(() => { const b = document.querySelector("#house-dock .dock-house:not(.dock-new)").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
   for (let i = 1; i <= 12; i++) await page.touch("move", [[at[0] + ((target[0] - at[0]) * i) / 12, at[1] + ((target[1] - at[1]) * i) / 12]]);
   await page.waitFor(q("#house-dock .dock-house.over"));
