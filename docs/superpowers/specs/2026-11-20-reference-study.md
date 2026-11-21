@@ -261,3 +261,16 @@
 | glbrush.js | 라이선스 파일 없음 | — | 안 씀 |
 | Drawpile, Krita, Pencil2D | GPL | 생각만 | 코드 안 씀 |
 | tldraw | 상업 라이선스 키 필요 | 생각만 | 코드 안 씀 |
+
+## 10. 아트크래프트 코드를 실제로 읽은 것 (11월 21일, 사용자: "코딩 가져오고 그거 어디서 할지 어떻게 여긴 구조화가 되어있는지")
+
+받은 곳: `github.com/storytold/artcraft`(MIT 또는 Apache-2.0), 파일 4,941개. 구조: `frontend/apps/artcraft`(앱), `frontend/libs/components/*`(화면 부품: `pagedraw` 그림 화면, `moodboard` 무드보드, `soundboard`, `promptbox` …), `crates/*`(Rust 백엔드·AI 연결). 우리에게 쓸모 있는 것은 그림 화면과 무드보드.
+
+| 그쪽 파일 | 무엇 | 우리 것 | 어떻게 |
+|---|---|---|---|
+| `pagedraw/components/ui/SideToolbar.tsx` | 세로 유리 도구 막대, 누르면 옆으로 나오는 창(색 고르개 + 크기), 지금 붓 버튼에 지금 색 | `ui/ink.js` `drawInkTools` | 배치와 동작을 옮김. React 대신 우리 `h()`, 창은 `closeOnOutside`로 바깥을 누르면 닫힘. 고르면 창이 닫혀 바로 그림(터치에 맞게) |
+| `pagedraw/PaintSurface.tsx` | 체커보드 투명 배경, 두 손가락 확대(가운데 기준) | `core/draw.js` 종이, `ui/text-room.js` 두 손가락 | 체커보드 무늬와 배경색 개념. 두 손가락은 우리 것이 확대 + 이동을 함께(그쪽은 확대만) |
+| `moodboard/interactions/useSelection.ts` | 사각형·올가미 고르기, 모서리 하나라도 안이면 잡힘 | `core/ink.js` `strokesWithinLoop` | 그림 선에 맞게 "점 절반 넘게 또는 가운데" |
+| `moodboard/MoodboardToolbar.tsx` | 도구 줄(선택·올가미·손) | 텍스트 방·그림 방 막대의 올가미 | 올가미를 그리기 도구 막대에 |
+
+그대로 복붙하지 않은 까닭: 그쪽은 React 상태(zustand)와 Konva 캔버스 위에 있어 한 줄도 그대로 돌지 않는다. 대신 위 표처럼 "무엇을 어디에" 옮겼는지 남긴다.

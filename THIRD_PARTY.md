@@ -194,3 +194,10 @@ SOFTWARE.
 
 `src/core/game.js`의 그려서 맞히기는 scribble.rs(BSD-3-Clause)와 Skribblrs.io(MIT)에서 스크리블류 놀이의 판 흐름(차례로 그리는 사람, 세 낱말 중 고르기, 시간이 갈수록 늘어나는 힌트, 빨리 맞힐수록 큰 점수, 맞힌 사람마다 그린 사람 점수)을 읽고 따랐다. 코드는 옮기지 않았다. 힌트는 한국어 초성으로 새로 만들었고, 낱말 목록(`src/core/words.js`)은 우리가 직접 썼다.
 
+## 아트크래프트 (ArtCraft, MIT 또는 Apache-2.0: 구조와 규칙을 읽고 우리 것으로 다시 씀)
+
+https://github.com/storytold/artcraft 를 받아 `frontend/libs/components/pagedraw`(그림 화면)와 `moodboard`(무드보드)를 읽었다. 그 코드는 React·Konva·Tailwind로 되어 있어 그대로 붙일 수 없어서, 다음을 우리 뼈대(외부 패키지 없음)에 다시 썼다.
+- `SideToolbar.tsx`의 배치: 화면 가장자리의 세로 유리 막대, 아이콘만, 지금 붓 버튼에 지금 색, 누르면 옆으로 나오는 작은 창(색·크기) → `src/ui/ink.js`의 `drawInkTools`(그리기 도구 막대와 붓·색·지우개 창).
+- `PaintSurface.tsx`의 투명 배경(체커보드 무늬)과 배경색 도구 → 그림 방의 '종이'(`src/core/draw.js`의 `PAPERS`·`paperOps`, `src/ui/draw-room.js`).
+- `moodboard/interactions/useSelection.ts`의 올가미 고르기(둘러싼 것 대부분이 들어 있으면 잡힘) → `src/core/ink.js`의 `strokesWithinLoop`(선의 점 절반 넘게 안이거나 가운데가 안).
+
