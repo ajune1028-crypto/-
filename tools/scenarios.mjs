@@ -6192,11 +6192,38 @@ scenario("finger lines press as a pen would: a slow finger line is kept heavier 
 // next; a frame copied comes next with the same drawing; held longer (×3) it is wider in the strip
 // and shows longer as it plays; ▶ plays the frames in turn; the friend sees the same frames, and the
 // strip shows on which frame each friend is.
+// The owner (21 November): "다 연동이 되어야". On the narrowest phone every room's bars show all their
+// buttons: none hangs off the screen's edge where no finger can reach it.
+scenario("every room on a 360-wide phone: the top bar, the bottom bar and the drawing tools show every button inside the screen", async ({ open }) => {
+  const a = await open({ dev: "a", width: 360, height: 780 });
+  const rooms = [["#add-daily", "daily-text"], ["#add-creative", "creative-song"], ["#add-creative", "creative-board"], ["#add-creative", "creative-draw"], ["#add-creative", "creative-anim"]];
+  const off = {};
+  for (const [add, kind] of rooms) {
+    await a.waitFor(q(add));
+    await click(a, add);
+    await click(a, `[data-kind="${kind}"]`);
+    await fill(a, "#room-name", kind);
+    await fill(a, "#my-name", "가람");
+    await click(a, "#create-room");
+    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+    await click(a, "#invite-done");
+    await a.waitFor(`${q(".toolbar")} && !${q("#invite-done")}`);
+    await pause(400);
+    const outside = await a.eval(`[...document.querySelectorAll(".toolbar > *, .ink-tools > *, .board-rail > *, .room > .bar > *, .room-top > *")].filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && getComputedStyle(b).visibility !== "hidden" && (r.left < -1 || r.right > innerWidth + 1);
+    }).map((b) => (b.id || b.className || b.tagName) + " " + Math.round(b.getBoundingClientRect().left) + "→" + Math.round(b.getBoundingClientRect().right))`);
+    if (outside.length) off[kind] = outside;
+    await click(a, "#back");
+  }
+  assert.deepEqual(off, {}, "every button is on the screen");
+});
+
 // The owner (21 November): "애니도 다른 어플들 다 보라니까… 너무 비효율적… 다 연동이 되어야". The same 올가미 and
 // papers as 그림 방; ‹ › to the frame before and after (FlipaClip, RoughAnimator); a 배경 under every
 // frame (Procreate's background frame); 영상으로 저장 (FlipaClip's MP4).
-scenario("애니메이션 방 with the other rooms' tools: 올가미 holds a line and moves it; ‹ › step through the frames; 배경 lies under every frame; 종이 투명 for everyone; 영상으로 저장 records it", async ({ open, out }) => {
-  const a = await open({ dev: "a", width: 420, height: 880 });
+scenario("애니메이션 방 with the other rooms' tools: on a 360-wide phone the whole bar is in view; 올가미 holds a line and moves it; ‹ › step through the frames; 배경 lies under every frame and, held, gives the 종이 (투명 for everyone); the 재생 chip sets 1초에 and 끝나면 and closes when pressed again; 영상으로 저장 records it", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 360, height: 780 });
   await click(a, "#add-creative");
   await click(a, '[data-kind="creative-anim"]');
   await fill(a, "#room-name", "연동 플립북");
@@ -6206,6 +6233,8 @@ scenario("애니메이션 방 with the other rooms' tools: 올가미 holds a lin
   await click(a, "#invite-done");
   await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && ${q("#anim-bg")} && ${q("#anim-where")}?.textContent === "1/2"`);
   const [f1, f2] = await a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const outside = await a.eval(`[...document.querySelectorAll("#anim-tools > *")].filter((b) => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth; }).map((b) => b.id)`);
+  assert.deepEqual(outside, [], "every button of the bar is on the screen");
   const box = await a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   const line = async (v) => {
     await a.press(box.x + box.w * 0.35, box.y + box.h * v);
@@ -6243,9 +6272,21 @@ scenario("애니메이션 방 with the other rooms' tools: 올가미 holds a lin
   await a.release(box.x + box.w * 0.5, box.y + box.h * 0.54);
   await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes()[0].pts[1] > ${y0} + 500`, 3000);
   await click(a, "#ink-lasso");
-  // 종이: 투명, for everyone.
-  await click(a, "#anim-paper");
-  await a.waitFor(q('#anim-paper-menu [data-paper="clear"]'));
+  // 재생: 1초에 8장, 끝나면 왕복, in one menu; the chip pressed again closes it.
+  await click(a, "#anim-speed");
+  await a.waitFor(q('#anim-play-menu [data-fps="8"]'));
+  await click(a, '#anim-play-menu [data-fps="8"]');
+  await click(a, '#anim-play-menu [data-loop="pingpong"]');
+  await a.waitFor(`window.__app.session.doc("anim").settings().fps === 8 && window.__app.session.doc("anim").settings().loop === "pingpong" && ${q("#anim-speed")}.textContent === "8장/초" && ${q('#anim-play-menu [data-loop="pingpong"]')}?.getAttribute("aria-pressed") === "true"`);
+  await click(a, "#anim-speed");
+  await a.waitFor(`!${q("#anim-play-menu")}`, 2000);
+  // 종이: held on 배경, 투명, for everyone.
+  const bg = await a.eval(`(() => { const r = document.getElementById("anim-bg").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [bg]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q('#anim-paper-menu [data-paper="clear"]'), 2000);
   await click(a, '#anim-paper-menu [data-paper="clear"]');
   await a.waitFor(`window.__app.session.doc("anim").settings().paper === "clear" && ${q("#anim-page")}.dataset.paper === "clear"`);
   await a.shot(out("anim-together.png"));

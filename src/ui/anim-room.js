@@ -7,7 +7,7 @@
 // shows where each of them is, and their lines appear live on the frame they share. Each frame is its
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
-import { h, icon, iconButton, toast, flashHint, closeOnOutside } from "./dom.js";
+import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
 import { InkLayer, drawInkTools, paintStroke, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps } from "./fingers.js";
@@ -112,18 +112,19 @@ export function mountAnimRoom(body, app, session) {
     paintOnion();
     drawTools();
   }, "양파");
-  const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", title: "1초에 몇 장", onclick: () => cycle("fps") });
-  const loopChip = h("button", { class: "chip anim-chip", id: "anim-loop", type: "button", title: "다 돌면 어떻게", onclick: () => cycle("loop") });
-  // The paper (그림 방's papers, 투명 too) and 영상으로 저장, as the other drawing rooms keep and save.
-  const paperButton = iconButton("anim-paper", "palette", "종이 (모든 장 밑)", () => paperMenu(), "종이");
+  // 빠르기 and what happens at the end share one chip and one small menu (Procreate keeps them in its
+  // Animation Assist settings), so the bar fits a 360-wide phone; the paper is held in the 배경 cell,
+  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 영상으로 저장 as the
+  // other drawing rooms save.
+  const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", "aria-haspopup": "menu", title: "재생: 빠르기와 끝나면", onclick: () => playMenu() });
   const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
-  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, loopChip, paperButton, saveButton);
+  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, saveButton);
   body.after(strip, inkTools, toolbar);
 
   function drawTools() {
     const { fps, loop } = doc.settings();
     speedChip.textContent = `${fps}장/초`;
-    loopChip.textContent = LOOP_NAMES[loop];
+    speedChip.setAttribute("aria-label", `재생: 1초에 ${fps}장, 끝나면 ${LOOP_NAMES[loop]}`);
     onionButton.setAttribute("aria-pressed", String(onionOn()));
     playButton.replaceChildren(icon(playing ? "pause" : "play"));
     playButton.setAttribute("aria-label", playing ? "멈춤" : "재생");
@@ -331,7 +332,7 @@ export function mountAnimRoom(body, app, session) {
   const bgThumb = h("canvas", { class: "anim-thumb", width: 54, height: 72, "aria-hidden": "true" });
   const bgCell = h("button", { class: "anim-frame anim-bg", id: "anim-bg", type: "button", role: "option", data: { frame: BG }, "aria-label": "배경 (모든 장 밑에)" }, bgThumb, h("span", { class: "anim-num", text: "배경" }),
     h("span", { class: "anim-peers" }));
-  bgCell.addEventListener("click", () => { if (playing) stopPlay(); select(BG); });
+  wireCell(bgCell, BG, () => { select(BG); paperMenu(bgCell); });
   cells.set(BG, { cell: bgCell, thumb: bgThumb });
   const addButton = h("button", { class: "anim-add", id: "anim-add", type: "button", "aria-label": "빈 장 더하기", onclick: () => addFrame() }, icon("plus"));
   const copyButton = h("button", { class: "anim-add", id: "anim-copy", type: "button", "aria-label": "이 장 복제해서 다음 장으로", onclick: () => duplicate() }, icon("copy"));
@@ -381,8 +382,8 @@ export function mountAnimRoom(body, app, session) {
     }
   }
 
-  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기. */
-  function wireCell(cell, id) {
+  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). */
+  function wireCell(cell, id, hold = () => frameMenu(cell, id)) {
     let timer = 0;
     let held = false;
     cell.addEventListener("pointerdown", () => {
@@ -391,7 +392,7 @@ export function mountAnimRoom(body, app, session) {
       timer = setTimeout(() => {
         held = true;
         buzz(app, 8);
-        frameMenu(cell, id);
+        hold();
       }, 480);
     });
     const off = () => clearTimeout(timer);
@@ -403,10 +404,38 @@ export function mountAnimRoom(body, app, session) {
       if (held) return;
       if (playing) stopPlay();
       select(id);
+      if (id === BG && !getSettings(app.store).animBgSeen) {
+        setSetting(app.store, "animBgSeen", true);
+        flashHint("배경은 모든 장 밑에 깔려요 · 꾹 누르면 종이");
+      }
     });
   }
 
   let closeMenu = null;
+  let menuFor = null;
+  /**
+   * A small menu just above what opened it. A tap outside closes it and touches nothing else; the
+   * bar's own button pressed again closes it too (the bars let a press through, so it asks).
+   */
+  function openMenu(anchor, menu) {
+    closeMenu?.();
+    document.body.append(menu);
+    const r = anchor.getBoundingClientRect();
+    const mr = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
+    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
+    let stop = null;
+    function close() {
+      stop?.();
+      menu.remove();
+      if (closeMenu === close) { closeMenu = null; menuFor = null; }
+    }
+    closeMenu = close;
+    menuFor = anchor;
+    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t), close, menu); }, 0);
+    return close;
+  }
+
   function frameMenu(cell, id) {
     closeMenu?.();
     select(id);
@@ -423,19 +452,7 @@ export function mountAnimRoom(body, app, session) {
         at > 0 && h("button", { class: "chip", type: "button", id: "anim-menu-left", text: "← 앞으로", onclick: () => { apply(moveFrameOps(session.clock, doc, id, -1)); close(); } }),
         at < list.length - 1 && h("button", { class: "chip", type: "button", id: "anim-menu-right", text: "뒤로 →", onclick: () => { apply(moveFrameOps(session.clock, doc, id, 1)); close(); } }),
         list.length > 1 && h("button", { class: "chip danger", type: "button", id: "anim-menu-remove", text: "지우기", onclick: () => { close(); removeFrame(id); } })));
-    document.body.append(menu);
-    const r = cell.getBoundingClientRect();
-    const mr = menu.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
-    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
-    let stop = null;
-    function close() {
-      stop?.();
-      menu.remove();
-      if (closeMenu === close) closeMenu = null;
-    }
-    closeMenu = close;
-    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t), close, menu); }, 0);
+    const close = openMenu(cell, menu);
   }
 
   // ---- frames: choose, add, copy, take away -------------------------------------------------------
@@ -489,9 +506,8 @@ export function mountAnimRoom(body, app, session) {
     }
   }
 
-  /** 종이: the 그림 방's papers (투명 too), under every frame, for everyone. */
-  function paperMenu() {
-    closeMenu?.();
+  /** 종이: the 그림 방's papers (투명 too), under every frame, for everyone; held from the 배경 cell. */
+  function paperMenu(anchor) {
     if (readOnly()) return;
     const now = doc.settings().paper;
     const menu = h("div", { class: "anim-menu", id: "anim-paper-menu", role: "menu" },
@@ -499,19 +515,30 @@ export function mountAnimRoom(body, app, session) {
         h("span", { class: "anim-menu-label", text: "종이" }),
         ...PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === now), "aria-label": label, title: label,
           style: c ? { background: c } : {}, onclick: () => { if (k !== now) apply(setAnimOps(session.clock, doc, { paper: k })); close(); } }))));
-    document.body.append(menu);
-    const r = paperButton.getBoundingClientRect();
-    const mr = menu.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
-    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
-    let stop = null;
-    function close() {
-      stop?.();
-      menu.remove();
-      if (closeMenu === close) closeMenu = null;
-    }
-    closeMenu = close;
-    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t) || paperButton.contains(t), close, menu); }, 0);
+    const close = openMenu(anchor, menu);
+  }
+
+  /** 재생: how many frames a second, and at the end 반복·왕복·한 번. Both can be set before it closes. */
+  function playMenu() {
+    if (menuFor === speedChip) return void closeMenu?.();
+    if (readOnly()) return;
+    const rows = () => {
+      const { fps, loop } = doc.settings();
+      return [
+        h("div", { class: "anim-menu-row", role: "group", "aria-label": "1초에" },
+          h("span", { class: "anim-menu-label", text: "1초에" }),
+          ...FPS_CHOICES.map((n) => h("button", { class: "chip", type: "button", data: { fps: String(n) }, "aria-pressed": String(n === fps), text: `${n}장`, onclick: () => pick({ fps: n }) }))),
+        h("div", { class: "anim-menu-row", role: "group", "aria-label": "끝나면" },
+          h("span", { class: "anim-menu-label", text: "끝나면" }),
+          ...LOOPS.map((k) => h("button", { class: "chip", type: "button", data: { loop: k }, "aria-pressed": String(k === loop), text: LOOP_NAMES[k], onclick: () => pick({ loop: k }) }))),
+      ];
+    };
+    const menu = h("div", { class: "anim-menu", id: "anim-play-menu", role: "menu" }, ...rows());
+    const pick = (change) => {
+      apply(setAnimOps(session.clock, doc, change));
+      mount(menu, rows());
+    };
+    openMenu(speedChip, menu);
   }
 
   /**
@@ -588,13 +615,6 @@ export function mountAnimRoom(body, app, session) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 8000);
     toast(root, "영상으로 저장했어요");
-  }
-
-  function cycle(key) {
-    const now = doc.settings();
-    const choices = key === "fps" ? FPS_CHOICES : LOOPS;
-    const next = choices[(choices.indexOf(now[key]) + 1) % choices.length];
-    apply(setAnimOps(session.clock, doc, { [key]: next }));
   }
 
   // ---- changes, undo --------------------------------------------------------------------------------
