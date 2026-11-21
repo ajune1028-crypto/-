@@ -11,9 +11,10 @@
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-import { h, iconButton, closeOnOutside } from "./dom.js";
+import { h, icon, iconButton, closeOnOutside } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
+import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
 import { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } from "../core/fill.js";
@@ -310,8 +311,15 @@ export class InkLayer {
    * as in Procreate); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare
    * paper), by default from this layer's own picture.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null }) {
+  /**
+   * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
+   * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null }) {
     this.host = host;
+    this.onLasso = onLasso;
+    this.onLassoMove = onLassoMove;
+    this.selection = null; // the 올가미's: { ids: Set, loop: [x, y, …] } in stroke units
     this.onPick = onPick;
     this.pickAt = pick;
     this.share = share;
@@ -354,6 +362,7 @@ export class InkLayer {
   }
 
   setTool(tool) {
+    if (tool !== "lasso" && this.selection) this.clearSelection();
     this.tool = tool;
     this.canvas.classList.toggle("on", !!tool);
     this.host.classList.toggle("inking", !!tool);
@@ -366,6 +375,69 @@ export class InkLayer {
     if (width) this.width = width;
     if (brush) this.brush = brush;
     if (size !== undefined) this.size = size;
+  }
+
+  // ---- 올가미 on drawings ------------------------------------------------------------------
+
+  /** A point in stroke units on the screen. */
+  toClient(x, y) {
+    const r = this.host.getBoundingClientRect();
+    if (this.view) {
+      const [a, b, c, d, e, f] = this.view.matrix();
+      return [r.left + a * x + c * y + e, r.top + b * x + d * y + f];
+    }
+    const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
+    const rem = remPx() * zoom;
+    return [r.left + (x / 100) * rem, r.top + (y / 100) * rem];
+  }
+
+  /** What the 올가미 holds, with where it lies on the screen. */
+  selectionInfo() {
+    const sel = this.selection;
+    if (!sel) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < sel.loop.length; i += 2) {
+      const [x, y] = this.toClient(sel.loop[i], sel.loop[i + 1]);
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { ids: sel.ids, loop: sel.loop, rect: { left: x0, top: y0, right: x1, bottom: y1 } };
+  }
+
+  /** Holds these strokes (after a change made new ones of them), keeping the loop. */
+  setSelection(ids, loop = this.selection?.loop) {
+    this.selection = ids.length && loop ? { ids: new Set(ids), loop } : null;
+    this.onLasso?.(this.selectionInfo());
+    this.render();
+  }
+
+  clearSelection() {
+    if (!this.selection) return;
+    this.selection = null;
+    this.onLasso?.(null);
+    this.render();
+  }
+
+  /** The loop being drawn or held: dashed in my accent, a faint fill when closed. */
+  paintLoop(g, loop, closed) {
+    if (!loop || loop.length < 4) return;
+    const unit = this.unitsPerPx();
+    const shift = closed && this.shift ? this.shift : { dx: 0, dy: 0 };
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2f7bf0";
+    g.save();
+    g.beginPath();
+    for (let i = 0; i < loop.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, loop[i] + shift.dx, loop[i + 1] + shift.dy);
+    if (closed) {
+      g.closePath();
+      g.globalAlpha = 0.07;
+      g.fillStyle = accent;
+      g.fill();
+    }
+    g.globalAlpha = 0.95;
+    g.strokeStyle = accent;
+    g.lineWidth = 1.8 * unit;
+    g.setLineDash([7 * unit, 5 * unit]);
+    g.stroke();
+    g.restore();
   }
 
   /** The pen's width in px now. */
@@ -416,6 +488,20 @@ export class InkLayer {
       if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
+      if (this.tool === "lasso") {
+        // 올가미: inside what it holds, the finger takes it anywhere; elsewhere a new loop is drawn.
+        const [x, y] = this.point(e);
+        const sel = this.selection;
+        if (sel && loopHas(sel.loop, x, y)) {
+          this.live = { pointer: e.pointerId, kind: e.pointerType, moving: true, x0: x, y0: y };
+          this.shift = { dx: 0, dy: 0, ids: sel.ids };
+          this.onLasso?.({ moving: true });
+        } else {
+          if (sel) this.clearSelection();
+          this.live = { pointer: e.pointerId, kind: e.pointerType, loop: [x, y] };
+        }
+        return void this.renderSoon();
+      }
       if (this.tool === "eraser-stroke") {
         this.live = { pointer: e.pointerId, kind: e.pointerType, erase: new Set() };
         this.eraseAt(e);
@@ -457,6 +543,19 @@ export class InkLayer {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
+      if (live.moving) {
+        const [x, y] = this.point(e);
+        this.shift = { dx: x - live.x0, dy: y - live.y0, ids: this.selection.ids };
+        return void this.renderSoon();
+      }
+      if (live.loop) {
+        for (const ev of e.getCoalescedEvents?.() || [e]) {
+          const [x, y] = this.point(ev);
+          const n = live.loop.length;
+          if (Math.hypot(x - live.loop[n - 2], y - live.loop[n - 1]) >= 6) live.loop.push(x, y);
+        }
+        return void this.renderSoon();
+      }
       if (live.shape) {
         // Still held after it became a shape: a line's end follows, any other shape grows or shrinks.
         const [x, y] = this.point(e);
@@ -488,6 +587,29 @@ export class InkLayer {
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       const live = this.live;
+      if (live.moving) {
+        this.live = null;
+        const { dx, dy } = this.shift || { dx: 0, dy: 0 };
+        this.shift = null;
+        const sel = this.selection;
+        if (sel && e.type === "pointerup" && Math.hypot(dx, dy) >= 2) {
+          const moved = this.onLassoMove?.([...sel.ids], Math.round(dx), Math.round(dy));
+          sel.loop = sel.loop.map((v, i) => Math.round(v + (i % 2 ? dy : dx)));
+          if (moved?.length) sel.ids = new Set(moved);
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
+      if (live.loop) {
+        this.live = null;
+        if (live.loop.length >= 6) {
+          const loop = closeLoop(live.loop).map(Math.round);
+          const ids = strokesWithinLoop(this.ink().strokes().filter((s) => s.b !== "erase"), loop);
+          this.selection = ids.length ? { ids: new Set(ids), loop } : null;
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
       if (live.light) {
         this.live = null;
         if (this.light) this.light.ended = performance.now();
@@ -697,6 +819,9 @@ export class InkLayer {
     else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
+    // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
+    if (live?.loop) this.paintLoop(g, live.loop, false);
+    else if (this.selection) this.paintLoop(g, this.selection.loop, true);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
@@ -979,7 +1104,7 @@ function brushPreview(brush, color, width) {
  * lie in one row. pen: { tool, brush, color, width, size }; setTool(tool) applies a change;
  * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
-export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null }) {
+export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false }) {
   panel.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return void closeInkPop();
@@ -1000,12 +1125,15 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   eraserButton.setAttribute("aria-pressed", String(erasing));
   const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
   laserButton.setAttribute("aria-pressed", String(pointing));
+  // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
+  const lassoButton = lasso && iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
+  lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
   const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
     "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
   const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
     ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
       onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
-  const parts = [brushNow, eraserButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow];
+  const parts = [brushNow, eraserButton, lassoButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow].filter(Boolean);
   if (rail && !pointing) parts.push(h("span", { class: "ink-sep", "aria-hidden": "true" }), sizeBar(), widths);
   else if (!pointing) parts.push(widths);
   panel.replaceChildren(...parts);
@@ -1164,6 +1292,60 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       inkPop.fill();
     }
   }
+}
+
+/**
+ * The 올가미's few actions beside what it holds (the text room, 그림 방; the whiteboard's 올가미 for the
+ * idea, kept to what drawings on a page want): 색, 복제 (beside it, held), 지우기, and ✕ to let go. What it
+ * holds is moved by drawing it anywhere. commit(made) keeps a change ({ ops, atoms }, one undo).
+ */
+let lassoMenuNow = null;
+export function lassoActions({ ink, doc, clock, by, commit }) {
+  let colours = false;
+  const hide = () => {
+    if (lassoMenuNow?.ink === ink) {
+      lassoMenuNow.el.remove();
+      lassoMenuNow = null;
+    }
+    colours = false;
+  };
+  function show(info) {
+    if (!info) return hide();
+    if (info.moving) return void (lassoMenuNow?.ink === ink && lassoMenuNow.el.classList.add("moving"));
+    const ids = [...info.ids];
+    const keep = (made, select) => {
+      if (!made.ops.length) return;
+      commit(made);
+      const fresh = made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      if (select && fresh.length) {
+        // A copy is held where it lies (beside the first), ready to be taken where it should go.
+        const shiftBy = made.copied ? (v, i) => v + 300 : (v) => v;
+        ink.setSelection(fresh, info.loop.map(shiftBy));
+      } else ink.clearSelection();
+    };
+    const chip = (id, text, fn) => h("button", { class: "chip", id, type: "button", text, onclick: fn });
+    const el = h("div", { class: "lasso-menu", id: "lasso-menu", role: "toolbar", "aria-label": "올가미로 고른 그림" },
+      colours
+        ? INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { lassoInk: c }, "aria-label": c, style: { background: inkColor(c) },
+            onclick: () => { colours = false; keep(recolorStrokesOps(clock, doc(), ids, c, by), true); } }))
+        : [h("span", { class: "lasso-count", text: `그림 ${ids.length}` }),
+          chip("lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
+          chip("lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
+          chip("lasso-delete", "지우기", () => {
+            const all = ids.map((id) => eraseOps(clock, doc(), id));
+            keep({ ops: all.flatMap((m) => m.ops), atoms: all.flatMap((m) => m.atoms) }, false);
+          }),
+          h("button", { class: "icon-btn", id: "lasso-off", type: "button", "aria-label": "올가미 풀기", onclick: () => ink.clearSelection() }, icon("close"))]);
+    lassoMenuNow?.el.remove();
+    lassoMenuNow = { ink, el };
+    document.body.append(el);
+    const r = info.rect;
+    const w = el.offsetWidth;
+    const ht = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(innerWidth - w - 8, (r.left + r.right) / 2 - w / 2)) + "px";
+    el.style.top = (r.top - ht - 10 >= 8 ? r.top - ht - 10 : Math.min(innerHeight - ht - 8, r.bottom + 10)) + "px";
+  }
+  return { show, hide };
 }
 
 /** The one small tools window open now (brushes, colours or the eraser's way). */

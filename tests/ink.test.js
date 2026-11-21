@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock } from "../src/core/crdt.js";
-import { InkDoc, strokeOps, eraseOps, invertInkOps, thinPoints, moveStrokesOps, recolorStrokesOps, widthOf, nearestWidth } from "../src/core/ink.js";
+import { InkDoc, strokeOps, eraseOps, invertInkOps, thinPoints, moveStrokesOps, recolorStrokesOps, widthOf, nearestWidth, strokesWithinLoop } from "../src/core/ink.js";
 import { rng, shuffle } from "./helpers.js";
 
 const line = (x0, y0, x1, y1, n = 10) => Array.from({ length: n + 1 }, (_, i) => [Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 50]).flat();
@@ -199,4 +199,17 @@ test("a stroke of any size keeps it, with the nearest width for older devices", 
   assert.equal(recoloured.z, 5);
   // The nearest width, by how it looks (2, 4, 8 px).
   assert.deepEqual([1, 2.8, 2.9, 5.6, 5.7, 30].map(nearestWidth), [1, 1, 2, 2, 3, 3]);
+});
+
+// 올가미 on drawings (the text room, 그림 방): what a loop holds — a stroke more than half inside it
+// (as GoodNotes' lasso takes handwriting), or whose middle is inside.
+test("a lasso holds the strokes mostly inside it", () => {
+  const loop = [0, 0, 1000, 0, 1000, 1000, 0, 1000];
+  const s = (id, pts) => ({ id, pts });
+  const inside = s("1@a", [100, 100, 50, 900, 900, 50]);
+  const half = s("2@a", [500, 500, 50, 800, 500, 50, 1500, 500, 50, 1900, 500, 50]); // two of four inside: its middle is outside
+  const most = s("3@a", [100, 100, 50, 200, 200, 50, 300, 300, 50, 1300, 300, 50]);
+  const out = s("4@a", [1500, 1500, 50, 1800, 1800, 50]);
+  assert.deepEqual(strokesWithinLoop([inside, half, most, out], loop), ["1@a", "3@a"]);
+  assert.deepEqual(strokesWithinLoop([inside], [0, 0, 10, 0]), [], "no loop, nothing");
 });

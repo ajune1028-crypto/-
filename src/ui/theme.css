@@ -988,6 +988,14 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-widths { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; }
 .ink-tools.row .ink-widths { flex-direction: row; }
 .ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* 올가미 on drawings: its few actions beside what it holds (faded while it is carried). */
+.lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
+.lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
+.lasso-menu .chip { height: 1.9rem; padding: 0 0.7rem; font-size: 0.8rem; }
+.lasso-menu .icon-btn { width: 1.9rem; height: 1.9rem; }
+.lasso-menu .ink-color { width: 1.5rem; height: 1.5rem; }
+.lasso-count { padding: 0 0.3rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.paper canvas.ink[data-tool="lasso"] { cursor: crosshair; }
 /* The small window beside the rail: every brush, the colours, or the eraser's way. */
 .ink-pop { position: fixed; z-index: 71; display: grid; gap: 0.5rem; max-width: min(19rem, calc(100vw - 4.5rem)); padding: 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.2s var(--ease); }
 .ink-pop .ink-brushes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.15rem; overflow: visible; max-width: none; -webkit-mask-image: none; mask-image: none; }

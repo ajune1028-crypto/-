@@ -10,10 +10,10 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } from "../core/draw.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -64,7 +64,20 @@ export function mountDrawRoom(body, app, session, frame) {
     if (entry) return entry;
     const el = h("div", { class: "draw-layer", data: { layer: layer.id } });
     const name = inkDocOf(layer.id);
+    const keepInk = (made) => {
+      session.commit(name, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+      thumbSoon(layer.id);
+    };
+    let lasso = null;
     const ink = new InkLayer({
+      // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
+      onLasso: (info) => lasso?.show(info),
+      onLassoMove: (ids, dx, dy) => {
+        const made = moveStrokesOps(session.clock, session.doc(name), ids, dx, dy, session.memberId);
+        keepInk(made);
+        return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      },
       host: el,
       ink: () => session.doc(name),
       share: liveInk.on(name),
@@ -91,6 +104,7 @@ export function mountDrawRoom(body, app, session, frame) {
         thumbSoon(layer.id);
       },
     });
+    lasso = lassoActions({ ink, doc: () => session.doc(name), clock: session.clock, by: session.memberId, commit: keepInk });
     entry = { el, ink };
     hosts.set(layer.id, entry);
     session.load(name).then(() => { if (alive) { ink.render(); thumbSoon(layer.id); } });
@@ -134,7 +148,7 @@ export function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }

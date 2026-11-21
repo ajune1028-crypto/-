@@ -2436,6 +2436,65 @@ scenario("text room: two fingers zoom the page, words and drawings together; not
   assert.ok((await word()).w < w1.w * 0.8, "Ctrl+wheel zooms out");
 });
 
+// The owner (21 November): "그림 모드일 때 두 손으로 아래 넘기기도", and "아무 데나 이동… 올가미도…
+// 텍스트에서 좋을 것만". Two fingers moved together carry the page; the 올가미 holds drawn lines to take
+// anywhere on the page, recolour, copy or rub out.
+scenario("text room drawing: two fingers moved together scroll the page; 올가미 drawn round a line holds it, takes it anywhere, recolours, copies and rubs it out", async ({ open, out }) => {
+  const [a] = await together(open, [], { width: 400, height: 820 });
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  const strokes = () => a.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => ({ c: s.c, x: s.pts[0], y: s.pts[1] }))`);
+  await click(a, "#pen");
+  await a.waitFor(`!${q("#ink-tools")}.hidden && ${q("#ink-lasso")}`);
+  const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (colour, v) => {
+    await pickColor(a, colour);
+    await a.press(box.x + box.w * 0.3, box.y + v);
+    for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * (0.3 + k * 0.05), box.y + v);
+    await a.release(box.x + box.w * 0.7, box.y + v);
+  };
+  await line("red", 120);
+  await line("blue", 260);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 2`);
+  // 올가미 round the red line.
+  await click(a, "#ink-lasso");
+  const ring = [[0.22, 80], [0.78, 80], [0.78, 165], [0.22, 165], [0.22, 82]].map(([u, v]) => [box.x + box.w * u, box.y + v]);
+  await a.press(...ring[0]);
+  for (let k = 1; k < ring.length; k++) for (let j = 1; j <= 5; j++) await a.moveTo(ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * j) / 5, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * j) / 5);
+  await a.release(...ring.at(-1));
+  await a.waitFor(`${q("#lasso-menu")}?.textContent.includes("그림 1")`, 2000);
+  await a.shot(out("text-lasso.png"));
+  // Taken anywhere: down below the blue line and to the right.
+  const before = (await strokes()).find((s) => s.c === "red");
+  await a.press(box.x + box.w * 0.5, box.y + 120);
+  for (let k = 1; k <= 10; k++) await a.moveTo(box.x + box.w * 0.5 + k * 6, box.y + 120 + k * 22);
+  await a.release(box.x + box.w * 0.5 + 60, box.y + 340);
+  await a.waitFor(`(() => { const s = window.__app.session.doc("k:${day}").strokes().find((s) => s.c === "red"); return s && s.pts[1] > ${before.y + 1000}; })()`, 3000);
+  assert.equal((await strokes()).length, 2, "moved, not copied");
+  // 색: green.
+  await click(a, "#lasso-color");
+  await click(a, '#lasso-menu [data-lasso-ink="green"]');
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().some((s) => s.c === "green")`, 2000);
+  assert.ok(!(await strokes()).some((s) => s.c === "red"), "the red line is green now");
+  // 복제: a copy beside it, held; 지우기 rubs the copy out.
+  await click(a, "#lasso-copy");
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.c === "green").length === 2`, 2000);
+  await click(a, "#lasso-delete");
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().filter((s) => s.c === "green").length === 1 && !${q("#lasso-menu")}`, 2000);
+  // Back to the pen; zoomed in, two fingers moved together up carry the page down.
+  await pickBrush(a, "pen");
+  const mid = [box.x + box.w / 2, box.y + 300];
+  await a.pinch([[mid[0] - 40, mid[1]], [mid[0] + 40, mid[1]]], [[mid[0] - 90, mid[1]], [mid[0] + 90, mid[1]]]);
+  await frames(a);
+  const top0 = await a.eval(`document.querySelector(".text-body").scrollTop`);
+  await a.touch("start", [[mid[0] - 60, mid[1] + 120], [mid[0] + 60, mid[1] + 120]]);
+  for (let k = 1; k <= 8; k++) await a.touch("move", [[mid[0] - 60, mid[1] + 120 - k * 20], [mid[0] + 60, mid[1] + 120 - k * 20]]);
+  await a.touch("end");
+  await frames(a);
+  const top1 = await a.eval(`document.querySelector(".text-body").scrollTop`);
+  assert.ok(top1 - top0 > 100, `two fingers scrolled the page: ${top0} → ${top1}`);
+  assert.equal((await strokes()).length, 2, "and drew nothing");
+});
+
 scenario("drawing: a stylus's line ignores a resting palm; with a finger, a second finger zooms and draws nothing", async ({ open }) => {
   const [a] = await together(open, []);
   const box = await a.eval(`(() => { const r = ${TODAY}.querySelector(".paper").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
