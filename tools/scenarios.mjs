@@ -2834,7 +2834,7 @@ scenario("song: what was sung plays first; no key names in the clip menu; 음 �
   assert.deepEqual(await keys(), [57, 59, 61, 64], "what was sung plays");
   await choose(page, ".clip[data-id]");
   await page.waitFor(q("#clip-notes"));
-  assert.ok(!(await page.eval(`/조에 맞춰|장조|단조/.test(document.body.textContent)`)), "no key names anywhere");
+  assert.ok(!(await page.eval(`/조에 맞춰|장조|단조/.test(document.body.innerText)`)), "no key names anywhere");
   await click(page, "#clip-notes");
   await page.waitFor(`${q("#note-tidy")} && !${q("#note-tidy")}.hidden`);
   assert.equal(await page.eval(`${q("#note-tidy")}.getAttribute("aria-pressed")`), "false");
@@ -6742,6 +6742,6 @@ scenario("song start card: the three ways in show no stray words", async ({ open
   const page = await open();
   await createSongRoom(page);
   await page.waitFor(q("#start-record"));
-  const words = await page.eval(`document.querySelector(".start, #song-start, .song-start")?.textContent || document.body.textContent`);
+  const words = await page.eval(`document.querySelector(".start, #song-start, .song-start")?.textContent || document.body.innerText`);
   assert.ok(!/false|true|undefined|null/.test(words), "no stray words: " + words.slice(0, 200));
 });
