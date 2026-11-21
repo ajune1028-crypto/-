@@ -5115,7 +5115,9 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
 // The round buttons at home's top right (설정, 레퍼런스, ⋮, 떠 있는 찾기와 집) never lie over 창작's title,
 // which stays on one line, on a 390 and a 360 wide phone. The owner (20 November): ⋮ and 레퍼런스
 // swap; then "위에 또 아이콘 하나 붙여서 … 오른쪽에는 독단적으로 나오게 하는 거, 그리고 왼쪽에는 그 원래".
-scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone (찾기와 집 floats from its own button, no second icon); clear of 창작's one-line title, at 390 and 360 wide", async ({ open, out }) => {
+// The owner (21 November): "찾기 기능 있는 그걸 위치를 오른쪽 끝에다가 해야지.. 왜 거기에 여백이 있는거야":
+// ⋮ stands at the right end, under 레퍼런스, with nothing empty beside it.
+scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone at the right end, under 레퍼런스 (찾기와 집 floats from its own button, no second icon); clear of 창작's one-line title, at 390 and 360 wide; with 레퍼런스 off, ⋮ beside 설정 at the right end", async ({ open, out }) => {
   for (const width of [390, 360]) {
     const page = await open({ width, height: 760 });
     await page.waitFor(q("#home-more"));
@@ -5135,10 +5137,18 @@ scenario("home top: 설정 and 레퍼런스 side by side; under them ⋮ alone (
     })()`);
     assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, width + ": no second icon");
     assert.ok(Math.abs(at.set.t - at.ref.t) < 1 && at.set.r <= at.ref.l + 0.5, width + ": 설정 then 레퍼런스 in a row: " + JSON.stringify(at));
-    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.set.cx - at.more.cx) < 1, width + ": ⋮ under them: " + JSON.stringify(at));
+    assert.ok(at.more.t >= at.ref.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1 && Math.abs(at.ref.r - at.more.r) < 1, width + ": ⋮ under 레퍼런스, at the right end: " + JSON.stringify(at));
     assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }
+  // 레퍼런스 turned off in 설정: ⋮ comes up beside 설정, still at the right end.
+  const page = await open({ width: 390, height: 760 });
+  await page.waitFor(q("#home-more"));
+  await page.eval(`(() => { const st = window.__app.store; st.set("settings", { ...st.get("settings", {}), reference: false }); setTimeout(() => location.reload(), 50); return true; })()`);
+  await pause(400);
+  await page.waitFor(`window.__app?.booted && ${q("#home-more")} && !${q("#home-reference")}`);
+  const two = await page.eval(`(() => { const a = document.getElementById("home-settings").getBoundingClientRect(); const b = document.getElementById("home-more").getBoundingClientRect(); return { at: a.top, bt: b.top, ar: a.right, bl: b.left, br: b.right, w: innerWidth }; })()`);
+  assert.ok(Math.abs(two.at - two.bt) < 1 && two.ar <= two.bl + 0.5 && two.w - two.br < 16, "설정 then ⋮ in one row at the right end: " + JSON.stringify(two));
 });
 
 // The owner: "자기의 ui색유리의 색… 가라데이션 되어있는부분의 끝부분부터 색깔을 줄이면서. 원본 버전이있고…

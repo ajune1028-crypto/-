@@ -1734,8 +1734,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-top { display: grid; grid-template-columns: auto auto; gap: 0.3rem; right: 0.5rem; justify-items: center; z-index: 62; }
 .home-top .icon-btn { width: 2.3rem; height: 2.3rem; }
 .home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
-.home-top .home-kebab { grid-column: 1; }
-.home-top #home-float { grid-column: 2; }
+/* ⋮ (찾기와 집) at the right end, under 레퍼런스, nothing empty beside it (the owner, 21 November);
+   with 레퍼런스 off it stands beside 설정. */
+.home-top .home-kebab { grid-column: 2; }
+.home-top:not(:has(#home-reference)) .home-kebab { grid-row: 1; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
