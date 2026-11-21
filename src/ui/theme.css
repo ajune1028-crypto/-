@@ -1929,6 +1929,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-menu { position: fixed; z-index: 70; display: grid; gap: 0.35rem; padding: 0.5rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 80%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .anim-menu-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
 .anim-menu-label { font-size: 0.75rem; font-weight: 700; margin-right: 0.15rem; }
+.anim-menu .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--ink); }
 
 /* 미니게임 (ui/game.js): the menu under the top bar, a small invitation card at the top, and the
    game over a slightly dimmed room, counting 3·2·1 in the middle first. */
