@@ -4758,8 +4758,8 @@ scenario("brushes: each brush shows itself; 붓펜, 만년필 and 에어브러�
   assert.ok(toolsTop > box.y + 860, "room to draw above the tools: " + toolsTop);
   // Every brush in the tools, each with a painted little line and its name.
   const shown = await a.eval(`[...document.querySelectorAll("#ink-tools .ink-brush")].map((b) => { const c = b.querySelector("canvas"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 20) n++; return [b.dataset.brush, b.textContent, n]; })`);
-  assert.deepEqual(shown.map((s) => s[0]), ["pen", "fountain", "brushpen", "pencil", "sketch", "crayon", "marker", "airbrush", "highlighter"]);
-  assert.deepEqual(shown.map((s) => s[1]), ["펜", "만년필", "붓펜", "연필", "스케치", "크레용", "마커", "에어브러시", "형광펜"]);
+  assert.deepEqual(shown.map((s) => s[0]), ["pen", "fountain", "brushpen", "pencil", "sketch", "crayon", "marker", "airbrush", "highlighter", "fill", "smudge"]);
+  assert.deepEqual(shown.map((s) => s[1]), ["펜", "만년필", "붓펜", "연필", "스케치", "크레용", "마커", "에어브러시", "형광펜", "채우기", "문지르기"]);
   assert.ok(shown.every((s) => s[2] > 40), "each little line is painted: " + JSON.stringify(shown));
   const day = await a.eval(`${TODAY}.dataset.day`);
   const strokes = (page) => page.eval(`window.__app.session.doc("k:${day}").strokes().map((s) => ({ b: s.b, s: s.s || null, q: s.q || 0, n: s.pts.length / 3, pts: s.pts }))`);
