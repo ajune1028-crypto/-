@@ -306,6 +306,9 @@ h1, h2, p { margin: 0; }
   box-shadow: var(--glass-shine), 0 6px 16px rgb(38 72 140 / 0.1);
 }
 .room-name { font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
+/* The house a room is in, small beside its name. */
+.room-house { display: inline-block; width: 1.15rem; height: 1.15rem; margin-left: 0.3rem; vertical-align: -0.18rem; }
+.room-house .house-shape { display: block; width: 100%; height: 100%; }
 /* Pressed: a small sink instead of the browser's blue flash. */
 /* `scale` rather than `transform`, so it stacks on a transform the element already has (.add is centred by one). */
 .room-row, .btn, label.btn, .icon-btn, .chip, .add, .swatch, .seg button { transition: scale 0.09s var(--ease); }
@@ -653,7 +656,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   pointer-events: none;
 }
 /* Above the drawing tools or the chosen words' row while they are out. */
-#app:has(.sel-tools:not([hidden])) .toast, #app:has(.ink-tools:not([hidden])) .toast { bottom: 11.4rem; }
+#app:has(.sel-tools:not([hidden])) .toast { bottom: 11.4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -977,6 +980,41 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools .icon-btn { width: 1.9rem; height: 1.9rem; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+/* The tools' rail (ArtCraft's paint page side toolbar; Procreate's and ibisPaint's size bar): slim glass
+   at the left edge, the middle of the screen, icons only; it fades while a line is drawn. */
+.ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
+.ink-tools.rail::-webkit-scrollbar { display: none; }
+.room[data-kind] > .ink-tools.rail { position: fixed; }
+.ink-tools.rail .icon-btn { width: 2.35rem; height: 2.35rem; }
+.ink-tools.rail .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+.ink-tools.row { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+.ink-tool { display: grid; place-items: center; width: 2.35rem; min-height: 2.35rem; padding: 0.15rem 0; border-radius: 0.8rem; color: var(--muted); }
+.ink-tool[aria-pressed="true"], .ink-tool[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
+.ink-brush-now .ink-preview { width: 30px; height: 14px; }
+.ink-tool-name { font-size: 0.5rem; font-weight: 800; line-height: 1; white-space: nowrap; letter-spacing: -0.03em; }
+.ink-color-now .ink-dot { display: block; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px color-mix(in srgb, var(--ink) 30%, transparent); }
+.ink-sep { flex: none; width: 1.4rem; height: 1px; margin: 0.1rem auto; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ink-tools.row .ink-sep { width: 1px; height: 1.4rem; margin: 0 0.1rem; }
+.ink-widths { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; }
+.ink-tools.row .ink-widths { flex-direction: row; }
+.ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* 올가미 on drawings: its few actions beside what it holds (faded while it is carried). */
+.ink-lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
+.ink-lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
+.ink-lasso-menu .chip { height: 1.9rem; padding: 0 0.7rem; font-size: 0.8rem; }
+.ink-lasso-menu .icon-btn { width: 1.9rem; height: 1.9rem; }
+.ink-lasso-menu .ink-color { width: 1.5rem; height: 1.5rem; }
+.ink-lasso-count { padding: 0 0.3rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.paper canvas.ink[data-tool="lasso"] { cursor: crosshair; }
+/* The small window beside the rail: every brush, the colours, or the eraser's way. */
+.ink-pop { position: fixed; z-index: 71; display: grid; gap: 0.5rem; max-width: min(19rem, calc(100vw - 4.5rem)); padding: 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.2s var(--ease); }
+.ink-pop .ink-brushes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.15rem; overflow: visible; max-width: none; -webkit-mask-image: none; mask-image: none; }
+.ink-pop .ink-brush { min-width: 0; padding: 0.3rem 0.1rem 0.25rem; }
+.ink-pop-row { display: flex; justify-content: center; gap: 0.35rem; }
+.ink-colors { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; max-width: 12.5rem; }
+.ink-colors .ink-color { width: 1.75rem; height: 1.75rem; }
+.ink-colors.recent { padding-top: 0.4rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.ink-colors.recent .ink-color { width: 1.35rem; height: 1.35rem; }
 
 /* ---- song room: ways in, speed, friends, note editor ---------------------------- */
 
@@ -1101,6 +1139,13 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
    무한적으로"); the bars float over it as glass. The room body stays the part in view. */
 .room-body.board-body { position: relative; overflow: visible; z-index: 0; } /* its own layer: nothing of the board rises over the bars */
 .room[data-kind="creative-board"] > :is(.bar, .banner, .room-top, .toolbar, .ink-tools) { position: relative; z-index: 2; }
+/* The drawing tools' rail floats at the left edge over the board too, out of the way of the board's
+   own bars: beside the mode column when that stands at the left, and on the other side from the
+   helper rail when that was put at the left (as the helper rail itself steps beside the modes). */
+.room[data-kind="creative-board"] > .ink-tools.rail { position: fixed; z-index: 30; }
+.room[data-kind="creative-board"][data-modes-at="left"] > .ink-tools.rail { left: 5.6rem; }
+.room[data-kind="creative-board"][data-rail-at="left"] > .ink-tools.rail { left: auto; right: max(0.45rem, env(safe-area-inset-right)); }
+.room[data-kind="creative-board"][data-rail-at="left"][data-modes-at="right"] > .ink-tools.rail { right: 5.6rem; }
 /* 그리기 on the whiteboard: a screen-sized canvas beneath the cards, drawn in the board's own frame;
    while the pen is on, the cards let every touch through to it. */
 .board > canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -1257,6 +1302,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .sel-color { width: 1.45rem; height: 1.45rem; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
 .sel-tools .chip { display: inline-flex; align-items: center; gap: 0.25rem; }
 .sel-tools .chip svg { width: 0.95rem; height: 0.95rem; }
+/* 옮기기: the lifted words and where they go, where the chosen words' row was. */
+.move-chip .sel-row { flex-wrap: nowrap; }
+.move-chip .sel-row > svg { flex: none; width: 1.05rem; height: 1.05rem; color: var(--accent); }
+.move-what { min-width: 0; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
 .sel-color[data-hl="red"], .w.hl[data-hl="red"] { --hl: rgb(255 99 99 / 0.55); }
 .sel-color[data-hl="orange"], .w.hl[data-hl="orange"] { --hl: rgb(255 160 60 / 0.55); }
 .sel-color[data-hl="yellow"], .w.hl[data-hl="yellow"] { --hl: rgb(255 214 40 / 0.6); }
@@ -1598,9 +1647,38 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="top"] .panel-grip { order: 2; }
 .home-panel[data-edge="left"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel[data-edge="right"] .panel-grip { margin-top: max(env(safe-area-inset-top), var(--top-clear, 0px)); }
+/* Its lock (top left) and the way between edge and window (top right), on the grip's row. */
+.home-panel:not(.floating) .panel-grip { height: 2.15rem; }
+.panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
+.panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
+.panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+.home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
+.home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
+.home-panel[data-edge="bottom"] .panel-ctrl { right: 2rem; }
+.home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
+/* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
+.panel-sizer { position: absolute; z-index: 4; width: 1.75rem; height: 1.75rem; touch-action: none; }
+.panel-sizer::before { content: ""; position: absolute; inset: 0.45rem; border: 0 solid color-mix(in srgb, var(--ink) 38%, transparent); border-right-width: 3px; border-bottom-width: 3px; border-bottom-right-radius: 0.4rem; }
+.home-panel.floating .panel-sizer, .home-panel[data-edge="left"] .panel-sizer, .home-panel[data-edge="top"] .panel-sizer { right: 0.05rem; bottom: 0.05rem; cursor: nwse-resize; }
+.home-panel[data-edge="left"] .panel-sizer { bottom: calc(0.05rem + env(safe-area-inset-bottom)); }
+.home-panel[data-edge="right"] .panel-sizer { left: 0.05rem; bottom: calc(0.05rem + env(safe-area-inset-bottom)); cursor: nesw-resize; }
+.home-panel[data-edge="right"] .panel-sizer::before { border-right-width: 0; border-left-width: 3px; border-bottom-right-radius: 0; border-bottom-left-radius: 0.4rem; }
+.home-panel[data-edge="bottom"] .panel-sizer { right: 0.05rem; top: 0.05rem; cursor: nesw-resize; }
+.home-panel[data-edge="bottom"] .panel-sizer::before { border-bottom-width: 0; border-top-width: 3px; border-bottom-right-radius: 0; border-top-right-radius: 0.4rem; }
+.home-panel.sizing { transition: none; }
+.home-panel.sizing .panel-sizer::before { border-color: var(--tint); }
+/* Small: only the houses, in a column when tall, in a row when wide; rooms still go in. */
+.home-panel.compact .search-row, .home-panel.compact .search-results, .home-panel.compact .houses-title, .home-panel.compact .houses > .help, .home-panel.compact .house-new { display: none; }
+.home-panel.compact .home-panel-body { gap: 0.4rem; padding: 0.35rem 0.5rem 0.6rem; }
+.home-panel.compact.tall .house-grid { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+.home-panel.compact.wide .home-panel-body { overflow-y: hidden; overflow-x: auto; overscroll-behavior-x: contain; }
+.home-panel.compact.wide .house-grid { display: flex; flex-direction: row; gap: 0.6rem; width: max-content; }
+.home-panel.compact.wide .house-tile { width: 4.6rem; flex: none; }
+.home-panel.floating.compact .float-title { display: none; }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
 .home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
-.home-panel[data-edge="top"] .home-panel-body { padding-top: max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)); padding-bottom: 0.3rem; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)) + 1.7rem); padding-bottom: 0.3rem; }
 .search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
 .search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
@@ -1666,8 +1744,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-top { display: grid; grid-template-columns: auto auto; gap: 0.3rem; right: 0.5rem; justify-items: center; z-index: 62; }
 .home-top .icon-btn { width: 2.3rem; height: 2.3rem; }
 .home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
-.home-top .home-kebab { grid-column: 1; }
-.home-top #home-float { grid-column: 2; }
+/* ⋮ (찾기와 집) at the right end, under 레퍼런스, nothing empty beside it (the owner, 21 November);
+   with 레퍼런스 off it stands beside 설정. */
+.home-top .home-kebab { grid-column: 2; }
+.home-top:not(:has(#home-reference)) .home-kebab { grid-row: 1; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
@@ -1728,7 +1808,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* ---- 그림 방 ------------------------------------------------------------------------------- */
 .draw-body { position: relative; overflow: hidden; }
 .draw-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: #fffdf8; box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
+.draw-page { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0.4rem; background: var(--paper-c, #fffdf8); box-shadow: 0 12px 34px color-mix(in srgb, var(--tint) 20%, transparent), 0 1px 3px rgb(0 0 0 / 0.12); isolation: isolate; }
 .draw-layer { position: absolute; inset: 0; pointer-events: none; }
 .draw-layer.active { pointer-events: auto; }
 .draw-layer[hidden] { display: none; }
@@ -1802,6 +1882,14 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
 .home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
 .home-panel.held { transition: none; }
+/* 투명 종이: the checkerboard every drawing app shows for nothing behind (ArtCraft's paint page too). */
+.draw-page[data-paper="clear"], .paper-swatch.clear, .paper-pick.clear { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
+.paper-swatch.clear, .paper-pick.clear { background-size: 10px 10px; }
+.paper-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.45rem 0.6rem; margin-top: 0.55rem; padding: 0.55rem 0.35rem 0.15rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.paper-swatch { width: 2.8rem; height: 2rem; border-radius: 0.4rem; box-shadow: inset 0 0 0 1px var(--line); }
+.paper-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.paper-pick { width: 1.75rem; height: 1.75rem; padding: 0; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.paper-pick[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .draw-page.fitting { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
 
 /* 애니메이션 방: the onion skin and the frame playing lie over the page; the strip of frames below. */
@@ -1978,8 +2066,12 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
   .side-lock svg, .side-hide svg { width: 0.95rem; height: 0.95rem; }
   .side-lock:hover, .side-hide:hover { opacity: 0.85; }
   .side-lock[aria-pressed="true"] { opacity: 1; color: var(--paper); background: var(--ink); }
-  .song-side.locked > :not(.side-head) { pointer-events: none; }
-  .song-side.locked { box-shadow: var(--glass-shine), var(--glass-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent); }
+  /* Locked (the owner, 21 November: "잠금하면 좀 불투명하게… 진짜 잘 만든 디자인처럼"): the glass thins
+     and what it holds steps back (a resting hand presses nothing); only its lock stays clear. */
+  .song-side { transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease), -webkit-backdrop-filter 0.3s var(--ease), backdrop-filter 0.3s var(--ease); }
+  .song-side > :not(.side-head) { transition: opacity 0.3s var(--ease), filter 0.3s var(--ease); }
+  .song-side.locked > :not(.side-head) { pointer-events: none; opacity: 0.4; filter: saturate(0.6); }
+  .song-side.locked { background: color-mix(in srgb, var(--paper) 18%, transparent); -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1); box-shadow: var(--glass-shine), inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 20%, transparent); }
   .side-edge { position: absolute; top: 0.4rem; bottom: 0.65rem; right: calc(var(--side-w) + 0.6rem); z-index: 7; display: grid; place-items: center; width: 1rem; translate: 50% 0; cursor: ew-resize; touch-action: none; }
   .side-edge .grip-bar { width: 0.26rem; height: 2.8rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); transition: background 0.15s var(--ease), height 0.15s var(--ease); }
   .side-edge:hover .grip-bar, .song-side.resizing ~ .side-edge .grip-bar { height: 3.6rem; background: var(--tint); }
@@ -3324,6 +3416,52 @@ function moveStrokesOps(clock, ink, ids, dx, dy, by) {
   return { ops, atoms };
 }
 
+/** Inside a closed loop [x, y, x, y, …] (even-odd). */
+function insidePolygon(loop, x, y) {
+  let inside = false;
+  for (let i = 0, j = loop.length - 2; i < loop.length; j = i, i += 2) {
+    const xi = loop[i], yi = loop[i + 1], xj = loop[j], yj = loop[j + 1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * The strokes a lasso holds (the text room's and 그림 방's 올가미; loop in stroke units): more than half
+ * of a stroke's points inside the loop, or its middle — as GoodNotes' lasso takes handwriting, and
+ * ArtCraft's moodboard lasso takes what it mostly surrounds.
+ */
+function strokesWithinLoop(strokes, loop) {
+  if (!loop || loop.length < 6) return [];
+  const out = [];
+  for (const s of strokes) {
+    let n = 0, inside = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i + 1 < s.pts.length; i += 3) {
+      const x = s.pts[i], y = s.pts[i + 1];
+      n++;
+      if (insidePolygon(loop, x, y)) inside++;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    if (n && (inside * 2 > n || insidePolygon(loop, (x0 + x1) / 2, (y0 + y1) / 2))) out.push(s.id);
+  }
+  return out;
+}
+
+/** Copies of strokes moved by (dx, dy) (the 올가미's 복제); the originals stay. */
+function copyStrokesOps(clock, ink, ids, dx, dy, by) {
+  const ops = [];
+  const atoms = [];
+  for (const id of ids) {
+    const s = ink.get(id);
+    if (!s || s.rm % 2 === 1) continue;
+    const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    ops.push(...made.ops);
+    atoms.push(...made.atoms);
+  }
+  return { ops, atoms };
+}
+
 /** Strokes in another colour (the 올가미's 색 on 그림): each goes and comes back the same but for its colour. */
 function recolorStrokesOps(clock, ink, ids, color, by) {
   const ops = [];
@@ -3359,7 +3497,7 @@ function invertInkOps(ink, clock, atoms, dir) {
   return ops;
 }
 
-return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, recolorStrokesOps, invertInkOps };
+return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
 })();
 __m["src/core/board.js"] = (() => {
 // The whiteboard: cards on a big surface, and 잇기 lines that say in which
@@ -6181,6 +6319,7 @@ const ICONS = {
   fit: '<path d="M4 9V4.5h4.5M20 9V4.5h-4.5M4 15v4.5h4.5M20 15v4.5h-4.5"/>',
   slots: '<rect x="4" y="4.5" width="16" height="4" rx="1.3"/><rect x="4" y="10" width="16" height="4" rx="1.3"/><rect x="4" y="15.5" width="10" height="4" rx="1.3"/>',
   stretch: '<path d="M3.5 12h17M7.5 8l-4 4 4 4M16.5 8l4 4-4 4"/>',
+  move: '<path d="M12 3.6v16.8M3.6 12h16.8"/><path d="M9.4 6.2L12 3.6l2.6 2.6M9.4 17.8l2.6 2.6 2.6-2.6M6.2 9.4L3.6 12l2.6 2.6M17.8 9.4l2.6 2.6-2.6 2.6"/>',
   lasso: '<path d="M7.6 15.4C5.3 14.4 3.8 12.7 3.8 10.6 3.8 7.3 7.5 4.8 12 4.8s8.2 2.5 8.2 5.8-3.7 5.8-8.2 5.8c-1.1 0-2.2-.1-3.2-.4" stroke-dasharray="2.6 2.4"/><path d="M8.8 15.9c-1.2.7-1.6 2.1-.7 3.3"/>',
   squeeze: '<path d="M3 12h6.5M14.5 12H21M6 8.5l3.5 3.5L6 15.5M18 8.5L14.5 12l3.5 3.5"/>',
   wave: '<path d="M3 12h2.2l2-5 3 10 3-12 3 9 1.8-2H21"/>',
@@ -6189,6 +6328,8 @@ const ICONS = {
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M5 15.5V6.4c0-.8.6-1.4 1.4-1.4h9.1"/>',
   book: '<path d="M5 4.5h9.5A2.5 2.5 0 0117 7v12.5H7.5A2.5 2.5 0 015 17z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H17"/><path d="M9 8.5h5"/>',
   // A panel floating on its own (찾기와 집 like 레퍼런스).
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  dock: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 14.5h16"/><path d="M9.5 17h5"/>',
   replay: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.4h3.4"/><path d="M10.4 9.3v5.4l4.4-2.7z" fill="currentColor" stroke-width="1.2"/>',
   float: '<rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9.5h16"/><circle cx="7.2" cy="7.25" r="0.6" fill="currentColor" stroke="none"/><path d="M8 13.5h8M8 16h5"/>',
   textSize: '<path d="M4 18.5L9 6l5 12.5M5.8 14h6.4"/><path d="M15.5 18.5l3-7.5 3 7.5M16.4 16.3h4.2"/>',
@@ -7121,6 +7262,9 @@ const { cmpId, validId } = __m["src/core/crdt.js"];
 
 const BLEND_MODES = ["source-over", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"];
 const MAX_LAYERS = 16;
+// 종이: the page under every layer, one for everyone in the room ([key, colour, name]); "clear" is none
+// at all (see-through, shown as a checkerboard and kept so in a saved image).
+const PAPERS = [["white", "#fffdf8", "흰 종이"], ["cream", "#fbf6e9", "미색"], ["grey", "#e9eaee", "회색"], ["sky", "#e6f0fb", "하늘"], ["pink", "#fbe9ef", "분홍"], ["black", "#17181c", "검정"], ["clear", null, "투명"]];
 const MAX_UNKNOWN = 300;
 const FIELDS = ["name", "opacity", "visible", "mode", "order"];
 
@@ -7147,11 +7291,17 @@ class DrawDoc {
     this.seen = new Set();
     this.unknown = [];
     this.maxN = 0;
+    this.paperSet = null; // { v, at: op id }: the latest wins
   }
 
   apply(op) {
     if (!op || typeof op !== "object" || !validId(op.id)) return this.setAside(op);
     if (this.seen.has(op.id)) return "dup";
+    if (op.t === "paper") {
+      if (!PAPERS.some(([k]) => k === op.v)) return this.setAside(op);
+      if (!this.paperSet || cmpId(op.id, this.paperSet.at) > 0) this.paperSet = { v: op.v, at: op.id };
+      return this.done(op);
+    }
     if (op.t === "layer") {
       if (!nameOk(op.name) || typeof op.by !== "string" || op.by.length > 40 || !Number.isFinite(op.at)) return this.setAside(op);
       this.byId.set(op.id, { id: op.id, name: op.name, by: op.by, at: op.at, rm: 0, rmBy: "", fields: new Map() });
@@ -7205,6 +7355,11 @@ class DrawDoc {
   setAside(op) {
     if (this.unknown.length < MAX_UNKNOWN) this.unknown.push(op);
     return "unknown";
+  }
+
+  /** The page's paper (a key of PAPERS). */
+  paper() {
+    return this.paperSet?.v || "white";
   }
 
   /** A layer as shown: its fields with their defaults, or null. */
@@ -7267,6 +7422,13 @@ function moveLayerOps(clock, doc, id, delta) {
   return setLayerOps(clock, doc, id, { order });
 }
 
+/** The paper for everyone. */
+function paperOps(clock, doc, v) {
+  clock.atLeast(doc.maxN);
+  const before = doc.paper();
+  return { ops: [{ t: "paper", id: clock.next(), v }], atoms: [{ k: "paper", before, after: v }] };
+}
+
 /** Undo or redo of layer changes, judged against the layers as they are now. */
 function invertDrawOps(doc, clock, atoms, dir) {
   const ops = [];
@@ -7280,7 +7442,10 @@ function invertDrawOps(doc, clock, atoms, dir) {
   for (const atom of list) {
     if (atom.k === "lay+") flip(atom.l, dir === "undo");
     else if (atom.k === "lay-") flip(atom.l, dir !== "undo");
-    else if (atom.k === "lset") {
+    else if (atom.k === "paper") {
+      clock.atLeast(doc.maxN);
+      ops.push({ t: "paper", id: clock.next(), v: dir === "undo" ? atom.before : atom.after });
+    } else if (atom.k === "lset") {
       const fields = dir === "undo" ? atom.before : atom.after;
       clock.atLeast(doc.maxN);
       const now = doc.layer(atom.l);
@@ -7290,7 +7455,7 @@ function invertDrawOps(doc, clock, atoms, dir) {
   return ops;
 }
 
-return { BLEND_MODES, MAX_LAYERS, inkDocOf, DrawDoc, addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps };
+return { BLEND_MODES, MAX_LAYERS, PAPERS, inkDocOf, DrawDoc, addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, paperOps, invertDrawOps };
 })();
 __m["src/core/anim.js"] = (() => {
 // 애니메이션 방's frames: which frames there are, in which order, how long each is shown, and how
@@ -10726,6 +10891,54 @@ function attachSoundOps(sheet, clock, { ch, to, file, dur, by, at = Date.now() }
 }
 
 /**
+ * 옮기기: the letters `ids` of `from` (in order) put after `after` in `to` — the same sheet or another
+ * day's. Each new letter keeps who wrote it and when, so its colour stays; the 표시, photos and
+ * recordings lying wholly on the moved letters, and their colour mixing, go with them. Put down
+ * among the moved letters or where they already are, nothing moves. Returns
+ * { from: { ops, atoms }, to: { ops, atoms }, ids } (ids: the letters at their new place); one undo
+ * takes both back.
+ */
+function moveTextOps(from, to, clock, { ids, after }) {
+  const out = { from: { ops: [], atoms: [] }, to: { ops: [], atoms: [] }, ids: [] };
+  const moving = (ids || []).filter((id) => from.isVisible(id));
+  if (!moving.length || (after !== ROOT && !to.get(after))) return out;
+  if (from === to && (moving.includes(after) || from.indexAfter(after) === from.indexAfter(moving[0]) - 1)) return out;
+  clock.atLeast(from.maxN);
+  clock.atLeast(to.maxN);
+  const moved = new Map();
+  let prev = after;
+  for (const id of moving) {
+    const node = from.get(id);
+    const nid = clock.next();
+    out.to.ops.push({ t: "ins", id: nid, after: prev, v: node.v, by: node.by, at: node.at });
+    moved.set(id, nid);
+    out.ids.push(nid);
+    prev = nid;
+  }
+  out.to.atoms.push({ k: "ins", ids: out.ids.slice() });
+  for (const id of moving) out.from.ops.push({ t: "vis", id: clock.next(), ch: id, n: from.get(id).rm + 1 });
+  out.from.atoms.push({ k: "del", ids: moving.slice() });
+  for (const id of moving) {
+    const lv = from.mixLevel(id);
+    if (lv) out.to.ops.push({ t: "mix", id: clock.next(), ch: moved.get(id), lv });
+  }
+  for (const [t, list, type, key] of [["mark", from.marks(), "mrm", "m"], ["att", from.attachments(), "arm", "a"]]) {
+    for (const r of list) {
+      if (!moved.has(r.ch) || !moved.has(r.to)) continue;
+      out.from.ops.push({ t: type, id: clock.next(), [key]: r.id, n: r.rm + 1 });
+      out.from.atoms.push({ k: "unrange", t, id: r.id });
+      const op = { t, id: clock.next(), ch: moved.get(r.ch), to: moved.get(r.to), by: r.by, at: r.at };
+      if (t === "mark") op.c = r.c;
+      else if (r.kind === "photo") Object.assign(op, { kind: "photo", data: r.data, w: r.w, h: r.h });
+      else Object.assign(op, { kind: "sound", file: r.file, dur: r.dur });
+      out.to.ops.push(op);
+      out.to.atoms.push({ k: "range", t, id: op.id });
+    }
+  }
+  return out;
+}
+
+/**
  * Whether a change on screen touches locked words: removing any locked letter, or
  * typing between two letters of one lock. ids: the letters on screen in order;
  * index: where the change starts; del: how many letters it removes.
@@ -10746,7 +10959,7 @@ function lockedEdit(sheet, ids, index, del) {
   return false;
 }
 
-return { diffText, spliceOps, mixOps, invertOps, attachOps, detachOps, rangeOps, dayLockOps, unrangeOps, attachSoundOps, lockedEdit };
+return { diffText, spliceOps, mixOps, invertOps, attachOps, detachOps, rangeOps, dayLockOps, unrangeOps, attachSoundOps, moveTextOps, lockedEdit };
 })();
 __m["src/ui/editor.js"] = (() => {
 // One day's sheet: a drawn layer under a transparent input box.
@@ -15637,13 +15850,20 @@ function openColorWheel({ anchor, color, recent = [], onPick, onRecent = () => {
   // Above the tools it came from, over the button (below them when there is no room above), inside
   // the screen: the brushes and colours stay in view beneath it.
   const a = anchor.getBoundingClientRect();
-  const tools = anchor.closest(".ink-tools")?.getBoundingClientRect() || a;
+  const toolsEl = anchor.closest(".ink-tools");
+  const tools = toolsEl?.getBoundingClientRect() || a;
   const w = box.offsetWidth;
   const ht = box.offsetHeight;
-  box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
-  box.style.top = (tools.top - ht - 10 >= 8 ? tools.top - ht - 10 : Math.min(innerHeight - ht - 8, tools.bottom + 10)) + "px";
+  if (toolsEl?.classList.contains("rail")) {
+    // Beside the tools' rail, at the colour's height.
+    box.style.left = Math.min(innerWidth - w - 8, tools.right + 8) + "px";
+    box.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
+  } else {
+    box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+    box.style.top = (tools.top - ht - 10 >= 8 ? tools.top - ht - 10 : Math.min(innerHeight - ht - 8, tools.bottom + 10)) + "px";
+  }
 
-  const stop = closeOnOutside((t) => box.contains(t) || !!t.closest?.("#ink-more"), () => close(), box);
+  const stop = closeOnOutside((t) => box.contains(t) || !!t.closest?.("#ink-more, #ink-color-now"), () => close(), box);
   // Its tools gone (the pen put away, another room) take it away too.
   const watch = setInterval(() => { if (!alive()) close(); }, 400);
   // The colour it was put away with joins the last colours (not each turn of the ring on the way).
@@ -15676,9 +15896,10 @@ __m["src/ui/ink.js"] = (() => {
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-const { h, iconButton } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, closeOnOutside } = __m["src/ui/dom.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
-const { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX } = __m["src/core/ink.js"];
+const { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } = __m["src/core/ink.js"];
+const { closeLoop, insideLoop: loopHas } = __m["src/core/board.js"];
 const { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } = __m["src/core/brush.js"];
 const { LIGHT_MS } = __m["src/ui/live-ink.js"];
 const { fillMask, maskRings, simplifyRing, ringsToPoints, pointsToRings } = __m["src/core/fill.js"];
@@ -15975,8 +16196,15 @@ class InkLayer {
    * as in Procreate); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare
    * paper), by default from this layer's own picture.
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null }) {
+  /**
+   * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
+   * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
+   */
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null }) {
     this.host = host;
+    this.onLasso = onLasso;
+    this.onLassoMove = onLassoMove;
+    this.selection = null; // the 올가미's: { ids: Set, loop: [x, y, …] } in stroke units
     this.onPick = onPick;
     this.pickAt = pick;
     this.share = share;
@@ -16019,6 +16247,7 @@ class InkLayer {
   }
 
   setTool(tool) {
+    if (tool !== "lasso" && this.selection) this.clearSelection();
     this.tool = tool;
     this.canvas.classList.toggle("on", !!tool);
     this.host.classList.toggle("inking", !!tool);
@@ -16031,6 +16260,69 @@ class InkLayer {
     if (width) this.width = width;
     if (brush) this.brush = brush;
     if (size !== undefined) this.size = size;
+  }
+
+  // ---- 올가미 on drawings ------------------------------------------------------------------
+
+  /** A point in stroke units on the screen. */
+  toClient(x, y) {
+    const r = this.host.getBoundingClientRect();
+    if (this.view) {
+      const [a, b, c, d, e, f] = this.view.matrix();
+      return [r.left + a * x + c * y + e, r.top + b * x + d * y + f];
+    }
+    const zoom = this.host.offsetWidth ? r.width / this.host.offsetWidth : 1;
+    const rem = remPx() * zoom;
+    return [r.left + (x / 100) * rem, r.top + (y / 100) * rem];
+  }
+
+  /** What the 올가미 holds, with where it lies on the screen. */
+  selectionInfo() {
+    const sel = this.selection;
+    if (!sel) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < sel.loop.length; i += 2) {
+      const [x, y] = this.toClient(sel.loop[i], sel.loop[i + 1]);
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { ids: sel.ids, loop: sel.loop, rect: { left: x0, top: y0, right: x1, bottom: y1 } };
+  }
+
+  /** Holds these strokes (after a change made new ones of them), keeping the loop. */
+  setSelection(ids, loop = this.selection?.loop) {
+    this.selection = ids.length && loop ? { ids: new Set(ids), loop } : null;
+    this.onLasso?.(this.selectionInfo());
+    this.render();
+  }
+
+  clearSelection() {
+    if (!this.selection) return;
+    this.selection = null;
+    this.onLasso?.(null);
+    this.render();
+  }
+
+  /** The loop being drawn or held: dashed in my accent, a faint fill when closed. */
+  paintLoop(g, loop, closed) {
+    if (!loop || loop.length < 4) return;
+    const unit = this.unitsPerPx();
+    const shift = closed && this.shift ? this.shift : { dx: 0, dy: 0 };
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2f7bf0";
+    g.save();
+    g.beginPath();
+    for (let i = 0; i < loop.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, loop[i] + shift.dx, loop[i + 1] + shift.dy);
+    if (closed) {
+      g.closePath();
+      g.globalAlpha = 0.07;
+      g.fillStyle = accent;
+      g.fill();
+    }
+    g.globalAlpha = 0.95;
+    g.strokeStyle = accent;
+    g.lineWidth = 1.8 * unit;
+    g.setLineDash([7 * unit, 5 * unit]);
+    g.stroke();
+    g.restore();
   }
 
   /** The pen's width in px now. */
@@ -16081,6 +16373,20 @@ class InkLayer {
       if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
+      if (this.tool === "lasso") {
+        // 올가미: inside what it holds, the finger takes it anywhere; elsewhere a new loop is drawn.
+        const [x, y] = this.point(e);
+        const sel = this.selection;
+        if (sel && loopHas(sel.loop, x, y)) {
+          this.live = { pointer: e.pointerId, kind: e.pointerType, moving: true, x0: x, y0: y };
+          this.shift = { dx: 0, dy: 0, ids: sel.ids };
+          this.onLasso?.({ moving: true });
+        } else {
+          if (sel) this.clearSelection();
+          this.live = { pointer: e.pointerId, kind: e.pointerType, loop: [x, y] };
+        }
+        return void this.renderSoon();
+      }
       if (this.tool === "eraser-stroke") {
         this.live = { pointer: e.pointerId, kind: e.pointerType, erase: new Set() };
         this.eraseAt(e);
@@ -16122,6 +16428,19 @@ class InkLayer {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
+      if (live.moving) {
+        const [x, y] = this.point(e);
+        this.shift = { dx: x - live.x0, dy: y - live.y0, ids: this.selection.ids };
+        return void this.renderSoon();
+      }
+      if (live.loop) {
+        for (const ev of e.getCoalescedEvents?.() || [e]) {
+          const [x, y] = this.point(ev);
+          const n = live.loop.length;
+          if (Math.hypot(x - live.loop[n - 2], y - live.loop[n - 1]) >= 6) live.loop.push(x, y);
+        }
+        return void this.renderSoon();
+      }
       if (live.shape) {
         // Still held after it became a shape: a line's end follows, any other shape grows or shrinks.
         const [x, y] = this.point(e);
@@ -16153,6 +16472,29 @@ class InkLayer {
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       const live = this.live;
+      if (live.moving) {
+        this.live = null;
+        const { dx, dy } = this.shift || { dx: 0, dy: 0 };
+        this.shift = null;
+        const sel = this.selection;
+        if (sel && e.type === "pointerup" && Math.hypot(dx, dy) >= 2) {
+          const moved = this.onLassoMove?.([...sel.ids], Math.round(dx), Math.round(dy));
+          sel.loop = sel.loop.map((v, i) => Math.round(v + (i % 2 ? dy : dx)));
+          if (moved?.length) sel.ids = new Set(moved);
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
+      if (live.loop) {
+        this.live = null;
+        if (live.loop.length >= 6) {
+          const loop = closeLoop(live.loop).map(Math.round);
+          const ids = strokesWithinLoop(this.ink().strokes().filter((s) => s.b !== "erase"), loop);
+          this.selection = ids.length ? { ids: new Set(ids), loop } : null;
+        }
+        this.onLasso?.(this.selectionInfo());
+        return void this.render();
+      }
       if (live.light) {
         this.live = null;
         if (this.light) this.light.ended = performance.now();
@@ -16362,6 +16704,9 @@ class InkLayer {
     else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
+    // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
+    if (live?.loop) this.paintLoop(g, live.loop, false);
+    else if (this.selection) this.paintLoop(g, this.selection.loop, true);
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
@@ -16499,6 +16844,11 @@ class InkLayer {
   }
 
   destroy() {
+    // What the 올가미 held lets go (its small menu goes with the room).
+    if (this.selection) {
+      this.selection = null;
+      this.onLasso?.(null);
+    }
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.share?.detach(this);
@@ -16634,64 +16984,171 @@ function brushPreview(brush, color, width) {
 }
 
 /**
- * The drawing tools (펜·만년필·붓펜·연필·마커·에어브러시·형광펜, 지우개 부분/획, eight colours, three widths,
- * 모양 잡기), the same in the text room and on the whiteboard. pen: { tool, brush, color, width };
- * setTool(tool) applies a change. Hidden while no tool is on. Each brush shows a little line of
- * itself in the chosen colour, its name beneath.
+ * The drawing tools, the same in every room that draws, laid out as ArtCraft's paint page lays its
+ * side toolbar (MIT/Apache; read for the layout) and as Procreate and ibisPaint keep the size on a
+ * side bar: a slim glass rail at the left edge — the brush (a little line of itself in the colour),
+ * the eraser, 가리키기, the colour, and the size (a bar, fine at the bottom, bold at the top, with
+ * three quick sizes). A tap on the brush, the colour or the eraser (when it is on) opens a small window
+ * beside the rail: every brush with 모양 잡기 and 보정; the eight colours, 색 원판 and the last colours;
+ * 부분 or 획. Choosing in it closes it, so the next touch draws. In a card (the games) the same tools
+ * lie in one row. pen: { tool, brush, color, width, size }; setTool(tool) applies a change;
+ * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
-function drawInkTools(panel, { pen, setTool, store }) {
+function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false }) {
   panel.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
-  if (!pen.tool) return;
+  if (!pen.tool) return void closeInkPop();
+  const rail = layout === "rail";
+  panel.classList.toggle("rail", rail);
+  panel.classList.toggle("row", !rail);
   const erasing = pen.tool === "eraser" || pen.tool === "eraser-stroke";
   const pointing = pen.tool === "laser";
-  const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
   const eraserKind = () => (getSettings(store).inkEraser === "stroke" ? "eraser-stroke" : "eraser");
   const choose = (patch) => { Object.assign(pen, patch); setTool("pen"); };
-  const shapes = getSettings(store).inkShapes !== false;
-  const brushes = h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
-    ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
-      onclick: () => { setSetting(store, "inkBrush", b); choose({ brush: b }); } },
-      brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name }))));
-  panel.replaceChildren(
-    h("div", { class: "ink-row ink-row-brushes" },
-      brushes,
-      iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser")),
-      iconButton("eraser", "eraser", "지우개", () => setTool(erasing ? "pen" : eraserKind())),
-      erasing && h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
-        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([kind, name]) => h("button", { type: "button", data: { erase: kind }, "aria-pressed": String(pen.tool === kind), text: name,
-          onclick: () => { setSetting(store, "inkEraser", kind === "eraser-stroke" ? "stroke" : "area"); setTool(kind); } })))),
-    h("div", { class: "ink-row" },
-      ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-        style: { background: inkColor(c) }, onclick: () => choose({ color: c }) })),
-      // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from
-      // the drawing (스포이트), fills it while it is the pen's.
-      inkWell(),
-      // A size of my own (그림 방's size bar) leaves all three unchosen; one of them takes it back.
-      ...[1, 2, 3].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
-        onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))),
-      h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
-        onclick: () => { setSetting(store, "inkShapes", !shapes); setTool(pen.tool); } }, "모양 잡기"),
-      h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
-        onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); setTool(pen.tool); } }, "보정 " + STEADY_NAMES[steady])));
+  const own = typeof pen.color === "string" && pen.color.startsWith("#");
+  const brushName = BRUSH_NAMES.find(([b]) => b === pen.brush)?.[1] || "펜";
+  const brushNow = h("button", { class: "ink-tool ink-brush-now", id: "ink-brush-now", type: "button", "aria-label": `붓: ${brushName} (눌러서 붓 고르기)`,
+    "aria-pressed": String(pen.tool === "pen"), "aria-expanded": String(inkPop?.kind === "brush"),
+    onclick: () => (pen.tool !== "pen" ? setTool("pen") : togglePop("brush", brushNow)) },
+    brushPreview(pen.brush, pen.color, pen.width), h("span", { class: "ink-tool-name", text: brushName }));
+  const eraserButton = iconButton("eraser", "eraser", "지우개 (다시 누르면 부분·획)", () => (erasing ? togglePop("erase", eraserButton) : setTool(eraserKind())));
+  eraserButton.setAttribute("aria-pressed", String(erasing));
+  const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
+  laserButton.setAttribute("aria-pressed", String(pointing));
+  // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
+  const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
+  lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
+  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
+    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
+  const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
+    ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
+      onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
+  const parts = [brushNow, eraserButton, lassoButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow].filter(Boolean);
+  if (rail && !pointing) parts.push(h("span", { class: "ink-sep", "aria-hidden": "true" }), sizeBar(), widths);
+  else if (!pointing) parts.push(widths);
+  panel.replaceChildren(...parts);
+
+  /** The size bar: 0.5 to 40 px on a doubling scale; while a finger is on it a dot shows the brush. */
+  function sizeBar() {
+    const px = () => pen.size || WIDTH_PX[pen.width] || 4;
+    const t = (v) => Math.log(v / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
+    const from = (k) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** Math.max(0, Math.min(1, k)) * 10) / 10;
+    const peek = h("span", { class: "size-peek", "aria-hidden": "true" });
+    const bar = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
+      "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), h("span", { class: "size-thumb" }), peek);
+    const paint = () => {
+      const v = px();
+      bar.style.setProperty("--t", t(v).toFixed(4));
+      bar.setAttribute("aria-valuenow", String(v));
+      bar.setAttribute("aria-valuetext", v + "px");
+      const look = brushLook(erasing ? "erase" : pen.brush);
+      const d = Math.max(2, Math.min(220, (v * (100 / 16) * (look.scale || 1)) / (units?.() || 100 / 16)));
+      peek.style.width = peek.style.height = d.toFixed(1) + "px";
+      peek.style.background = erasing ? "transparent" : inkColor(pen.color);
+      peek.classList.toggle("erase", erasing);
+    };
+    const set = (v) => {
+      pen.size = v;
+      paint();
+    };
+    let drag = null;
+    const at = (e) => {
+      const r = bar.getBoundingClientRect();
+      const pad = 9;
+      set(from(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
+    };
+    bar.addEventListener("pointerdown", (e) => {
+      if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      drag = { id: e.pointerId };
+      bar.setPointerCapture?.(e.pointerId);
+      bar.classList.add("sizing");
+      at(e);
+    });
+    bar.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag.id) at(e); });
+    const done = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag = null;
+      bar.classList.remove("sizing");
+      setTool(pen.tool); // the layers take the size; the quick sizes let go of their choice
+    };
+    bar.addEventListener("pointerup", done);
+    bar.addEventListener("pointercancel", done);
+    bar.addEventListener("keydown", (e) => {
+      const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      set(from(t(px()) + step / 24));
+      setTool(pen.tool);
+    });
+    paint();
+    return bar;
+  }
+
+  /** A small window beside the rail (above the row): the brushes, the colours or the eraser's way. */
+  function togglePop(kind, anchor) {
+    if (inkPop?.kind === kind) return void closeInkPop();
+    closeInkPop();
+    closeColorWheel();
+    const el = h("div", { class: "ink-pop", id: "ink-pop", role: "dialog", data: { kind }, "aria-label": { brush: "붓", color: "색", erase: "지우개" }[kind] });
+    document.body.append(el);
+    const stop = closeOnOutside((t) => el.contains(t), () => closeInkPop(), el);
+    const pop = { kind, el, anchor, panel, close: () => { stop(); el.remove(); }, fill: () => fillPop(pop) };
+    inkPop = pop;
+    pop.fill();
+    place(pop);
+    for (const b of panel.querySelectorAll("[aria-expanded]")) b.setAttribute("aria-expanded", String(b === anchor));
+  }
+
+  function fillPop(pop) {
+    const { el, kind } = pop;
+    if (kind === "brush") {
+      const shapes = getSettings(store).inkShapes !== false;
+      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
+      el.replaceChildren(
+        h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
+          ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
+            onclick: () => { setSetting(store, "inkBrush", b); closeInkPop(); choose({ brush: b }); } },
+            brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name })))),
+        h("div", { class: "ink-pop-row" },
+          h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
+            onclick: () => { setSetting(store, "inkShapes", !shapes); pop.fill(); } }, "모양 잡기"),
+          h("button", { class: "ink-steady chip", id: "ink-steady", type: "button", "aria-pressed": String(steady > 0), "aria-label": "손떨림 보정: " + STEADY_NAMES[steady], title: "손떨림 보정: 손이 떨려도 선이 매끈하게 (누를 때마다 약·중·강·끔)",
+            onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); pop.fill(); } }, "보정 " + STEADY_NAMES[steady])));
+    } else if (kind === "color") {
+      const recent = (getSettings(store).inkRecent || []).slice(0, 8);
+      el.replaceChildren(
+        h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
+          ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
+            style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
+          inkWell()),
+        recent.length ? h("div", { class: "ink-colors recent", role: "group", "aria-label": "최근 색" },
+          ...recent.map((c) => h("button", { class: "ink-color", type: "button", data: { recent: c }, "aria-label": "최근 색 " + c, "aria-pressed": String(pen.color === c),
+            style: { background: c }, onclick: () => { closeInkPop(); choose({ color: c }); } }))) : null);
+    } else {
+      el.replaceChildren(h("div", { class: "seg ink-erase", role: "group", "aria-label": "지우개 방식" },
+        ...[["eraser", "부분"], ["eraser-stroke", "획"]].map(([way, name]) => h("button", { type: "button", data: { erase: way }, "aria-pressed": String(pen.tool === way), text: name,
+          onclick: () => { setSetting(store, "inkEraser", way === "eraser-stroke" ? "stroke" : "area"); closeInkPop(); setTool(way); } }))));
+    }
+  }
+
+  // 색 원판: any colour (the wheel and the last eight); a colour of my own, or one picked from the
+  // drawing (스포이트), fills it while it is the pen's.
   function inkWell() {
-    const own = typeof pen.color === "string" && pen.color.startsWith("#");
     const well = h("button", { class: "ink-color more" + (own ? " has" : ""), id: "ink-more", type: "button", "aria-label": own ? "고른 색 " + pen.color + " · 색 원판" : "색 더 고르기 (색 원판)",
-      "aria-pressed": String(own && !erasing), "aria-expanded": String(colorWheelOpen()), style: own ? { "--well": pen.color } : {},
+      "aria-pressed": String(own && !erasing), style: own ? { "--well": pen.color } : {},
       onclick: () => {
-        if (colorWheelOpen()) return void closeColorWheel();
-        well.setAttribute("aria-expanded", "true");
+        const anchor = colorNow.isConnected ? colorNow : panel.querySelector("#ink-color-now") || well;
+        closeInkPop();
         openColorWheel({
-          anchor: well,
+          anchor,
           color: own ? pen.color : inkColor(pen.color),
           recent: getSettings(store).inkRecent || [],
-          // While the finger moves only the pen and this well change; the lift chooses it.
+          // While the finger moves only the pen and the colour dot change; the lift chooses it.
           onPick: (hex, done) => {
             if (done) return void choose({ color: hex });
             pen.color = hex;
-            const now = panel.querySelector("#ink-more");
-            now?.classList.add("has");
-            now?.style.setProperty("--well", hex);
+            panel.querySelector("#ink-color-now")?.style.setProperty("--c", hex);
           },
           onRecent: (list) => setSetting(store, "inkRecent", list),
           alive: () => panel.isConnected && !panel.hidden && pen.tool === "pen",
@@ -16699,21 +17156,98 @@ function drawInkTools(panel, { pen, setTool, store }) {
       } });
     return well;
   }
-  panel.querySelector("#eraser").setAttribute("aria-pressed", String(erasing));
-  panel.querySelector("#ink-laser").setAttribute("aria-pressed", String(pointing));
-  // The chosen brush in view (the row slides sideways on a narrow screen, and says so). Done at
-  // once, not a frame later: a frame later it could slide the row away under a finger already
-  // reaching for another brush.
-  brushes.classList.toggle("more", brushes.scrollWidth > brushes.clientWidth + 1);
-  const chosen = brushes.querySelector('[aria-pressed="true"]');
-  if (chosen) {
-    const r = chosen.getBoundingClientRect();
-    const box = brushes.getBoundingClientRect();
-    if (r.left < box.left || r.right > box.right) chosen.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+
+  // Beside the rail at its button's height (inside the screen); above the row in a card.
+  function place(pop) {
+    const a = pop.anchor.getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const w = pop.el.offsetWidth;
+    const ht = pop.el.offsetHeight;
+    if (rail) {
+      pop.el.style.left = Math.min(innerWidth - w - 8, box.right + 8) + "px";
+      pop.el.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
+    } else {
+      pop.el.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+      pop.el.style.top = Math.max(8, box.top - ht - 8) + "px";
+    }
+  }
+
+  // An open window keeps up with the tools (the brush in the new colour, what is chosen).
+  if (inkPop && inkPop.panel === panel) {
+    const anchor = panel.querySelector(inkPop.kind === "brush" ? "#ink-brush-now" : inkPop.kind === "color" ? "#ink-color-now" : "#eraser");
+    if (!anchor || (inkPop.kind === "erase" && !erasing)) closeInkPop();
+    else {
+      inkPop.anchor = anchor;
+      anchor.setAttribute("aria-expanded", "true");
+      inkPop.fill();
+    }
   }
 }
 
-return { BRUSH_NAMES, STEADY_NAMES, inkColor, pixelAt, paintStroke, InkLayer, drawInkTools };
+/**
+ * The 올가미's few actions beside what it holds (the text room, 그림 방; the whiteboard's 올가미 for the
+ * idea, kept to what drawings on a page want): 색, 복제 (beside it, held), 지우기, and ✕ to let go. What it
+ * holds is moved by drawing it anywhere. commit(made) keeps a change ({ ops, atoms }, one undo).
+ */
+let lassoMenuNow = null;
+function lassoActions({ ink, doc, clock, by, commit }) {
+  let colours = false;
+  const hide = () => {
+    if (lassoMenuNow?.ink === ink) {
+      lassoMenuNow.el.remove();
+      lassoMenuNow = null;
+    }
+    colours = false;
+  };
+  function show(info) {
+    if (!info) return hide();
+    if (info.moving) return void (lassoMenuNow?.ink === ink && lassoMenuNow.el.classList.add("moving"));
+    const ids = [...info.ids];
+    const keep = (made, select) => {
+      if (!made.ops.length) return;
+      commit(made);
+      const fresh = made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      if (select && fresh.length) {
+        // A copy is held where it lies (beside the first), ready to be taken where it should go.
+        const shiftBy = made.copied ? (v, i) => v + 300 : (v) => v;
+        ink.setSelection(fresh, info.loop.map(shiftBy));
+      } else ink.clearSelection();
+    };
+    const chip = (id, text, fn) => h("button", { class: "chip", id, type: "button", text, onclick: fn });
+    const el = h("div", { class: "ink-lasso-menu", id: "ink-lasso-menu", role: "toolbar", "aria-label": "올가미로 고른 그림" },
+      colours
+        ? INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { lassoInk: c }, "aria-label": c, style: { background: inkColor(c) },
+            onclick: () => { colours = false; keep(recolorStrokesOps(clock, doc(), ids, c, by), true); } }))
+        : [h("span", { class: "ink-lasso-count", text: `그림 ${ids.length}` }),
+          chip("ink-lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
+          chip("ink-lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
+          chip("ink-lasso-delete", "지우기", () => {
+            const all = ids.map((id) => eraseOps(clock, doc(), id));
+            keep({ ops: all.flatMap((m) => m.ops), atoms: all.flatMap((m) => m.atoms) }, false);
+          }),
+          h("button", { class: "icon-btn", id: "ink-lasso-off", type: "button", "aria-label": "올가미 풀기", onclick: () => ink.clearSelection() }, icon("close"))]);
+    lassoMenuNow?.el.remove();
+    lassoMenuNow = { ink, el };
+    document.body.append(el);
+    const r = info.rect;
+    const w = el.offsetWidth;
+    const ht = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(innerWidth - w - 8, (r.left + r.right) / 2 - w / 2)) + "px";
+    el.style.top = (r.top - ht - 10 >= 8 ? r.top - ht - 10 : Math.min(innerHeight - ht - 8, r.bottom + 10)) + "px";
+  }
+  return { show, hide };
+}
+
+/** The one small tools window open now (brushes, colours or the eraser's way). */
+let inkPop = null;
+function closeInkPop() {
+  const pop = inkPop;
+  inkPop = null;
+  pop?.close();
+  for (const b of pop?.panel?.querySelectorAll("[aria-expanded]") || []) b.setAttribute("aria-expanded", "false");
+}
+
+return { BRUSH_NAMES, STEADY_NAMES, inkColor, pixelAt, paintStroke, InkLayer, drawInkTools, lassoActions, closeInkPop };
 })();
 __m["src/ui/text-room.js"] = (() => {
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
@@ -16725,8 +17259,8 @@ const { watchFingers, watchFingerTaps } = __m["src/ui/fingers.js"];
 const { onThemeChange } = __m["src/ui/theme.js"];
 const { SheetEditor } = __m["src/ui/editor.js"];
 const { UndoStack } = __m["src/core/undo.js"];
-const { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps } = __m["src/core/edit.js"];
-const { MARK_COLORS, MAX_SOUND_MS } = __m["src/core/crdt.js"];
+const { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps, moveTextOps, lockedEdit } = __m["src/core/edit.js"];
+const { MARK_COLORS, MAX_SOUND_MS, ROOT } = __m["src/core/crdt.js"];
 const { fileOps } = __m["src/core/files.js"];
 const { toBase64, fromBase64 } = __m["src/core/b64.js"];
 const { encodeAdpcm, decodeAdpcm } = __m["src/audio/adpcm.js"];
@@ -16739,9 +17273,9 @@ const { soundPickers, waysIn, pickerHelp, micRefused } = __m["src/ui/sound-in.js
 const { dayKey } = __m["src/core/time.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
-const { InkLayer, inkColor, drawInkTools: drawInkToolsInto } = __m["src/ui/ink.js"];
+const { InkLayer, inkColor, drawInkTools: drawInkToolsInto, lassoActions } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
-const { INK_COLORS, strokeOps, eraseOps, invertInkOps } = __m["src/core/ink.js"];
+const { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } = __m["src/core/ink.js"];
 
 const FIRST_SHEETS = 7;
 const PRESENCE_EVERY_MS = 80;
@@ -16808,6 +17342,9 @@ function mountTextRoom(body, app, session) {
   // a photo or a recording hidden in them, 잠금.
   const selTools = h("div", { class: "sel-tools", id: "sel-tools", hidden: true, role: "toolbar", "aria-label": "고른 글자" });
   let sel = null; // { editor, ch, to } while words are chosen
+  // 옮기기: while chosen words are lifted, what they are and where to put them down.
+  let lifted = null; // { editor, ids }
+  const moveChip = h("div", { class: "sel-tools move-chip", id: "move-chip", hidden: true, role: "status", "aria-live": "polite" });
   const mic = micSupport();
   let closeSound = null;
   let soundTarget = null;
@@ -16817,7 +17354,7 @@ function mountTextRoom(body, app, session) {
   });
   body.append(photoInput, ...soundInputs);
   body.append(list);
-  body.after(selTools, inkTools, toolbar);
+  body.after(selTools, moveChip, inkTools, toolbar);
 
   // Two fingers zoom the page, words and drawings together; Ctrl+wheel or a trackpad
   // pinch on a computer. The page keeps its width while zoomed, so nothing reflows and
@@ -16876,13 +17413,21 @@ function mountTextRoom(body, app, session) {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
   });
+  // Two fingers also carry the page (the owner, 21 November: "그림 모드일 때 두 손으로 아래 넘기기도"):
+  // moved together they scroll it, spread or pinched they zoom it, both at once as in Procreate.
   let pinch = null;
   const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom }; };
+  const middle = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = { d: spread(e.touches), z: pageZoom, m: middle(e.touches) }; };
   const onTouchMove = (e) => {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
-    setPageZoom(pinch.z * (spread(e.touches) / pinch.d), (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
+    const m = middle(e.touches);
+    setPageZoom(pinch.z * (spread(e.touches) / pinch.d), m[0], m[1]);
+    body.scrollLeft -= m[0] - pinch.m[0];
+    body.scrollTop -= m[1] - pinch.m[1];
+    pinch.m = m;
+    repaintSoon();
   };
   const onTouchEnd = (e) => { if (e.touches.length < 2) pinch = null; };
   const onWheel = (e) => {
@@ -16897,6 +17442,7 @@ function mountTextRoom(body, app, session) {
 
   function setTool(tool) {
     pen.tool = tool;
+    if (tool) dropLifted();
     for (const editor of editors.values()) {
       editor.ink?.setTool(tool);
       editor.ink?.setStyle(pen);
@@ -16908,7 +17454,7 @@ function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    drawInkToolsInto(inkTools, { pen, setTool, store: app.store });
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
   }
 
   function buttons() {
@@ -16979,7 +17525,20 @@ function mountTextRoom(body, app, session) {
       editor.setReadOnly(!!app.transport.readOnly);
       editors.set(day, editor);
       const inkDoc = "k:" + day;
+      const keepInk = (made) => {
+        session.commit(inkDoc, made.ops);
+        record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
+      };
+      let lasso = null;
       editor.ink = new InkLayer({
+        // 올가미 (the owner, 21 November: "아무 데나 이동 가능하게… 올가미도… 텍스트에서 좋을 것만"): lines
+        // drawn round are held, taken anywhere on the page, recoloured, copied or rubbed out.
+        onLasso: (info) => lasso?.show(info),
+        onLassoMove: (ids, dx, dy) => {
+          const made = moveStrokesOps(session.clock, session.doc(inkDoc), ids, dx, dy, session.memberId);
+          keepInk(made);
+          return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+        },
         host: editor.paper,
         share: liveInk.on(inkDoc),
         steady: () => getSettings(app.store).inkSteady ?? 1,
@@ -16991,8 +17550,8 @@ function mountTextRoom(body, app, session) {
         // already reaches the bottom of the screen; a long one grows past its last line).
         room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, shape, by: session.memberId });
+        onStroke: ({ pts, color, width, size, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, size, brush, shape, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
           return made.ops[0]?.id;
@@ -17003,6 +17562,7 @@ function mountTextRoom(body, app, session) {
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
         },
       });
+      lasso = lassoActions({ ink: editor.ink, doc: () => session.doc(inkDoc), clock: session.clock, by: session.memberId, commit: keepInk });
       editor.ink.setTool(pen.tool);
       editor.ink.setStyle(pen);
       session.load(inkDoc).then(() => editor.ink?.render());
@@ -17124,6 +17684,7 @@ function mountTextRoom(body, app, session) {
       unmark: h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marksNow()) }),
       unlock: h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeableNow()) }, icon("lock"), "잠금 풀기"),
       lock: h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금"),
+      move: h("button", { class: "chip", id: "sel-move", type: "button", onclick: () => liftSel() }, icon("move"), "옮기기"),
     };
     selTools.replaceChildren(
       h("div", { class: "sel-row" },
@@ -17133,13 +17694,13 @@ function mountTextRoom(body, app, session) {
       h("div", { class: "sel-row" },
         h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
         h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
-        row.unlock, row.lock));
+        row.move, row.unlock, row.lock));
     // The words stay chosen while a button here is pressed.
     for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
     return row;
   }
   function paintSel() {
-    const show = !!sel && !readOnlyNow() && !pen.tool;
+    const show = !!sel && !lifted && !readOnlyNow() && !pen.tool;
     if (selTools.hidden === show) selTools.hidden = !show;
     if (!show) return;
     selRow ||= buildSel();
@@ -17149,10 +17710,11 @@ function mountTextRoom(body, app, session) {
     set(selRow.unmark, !marksNow().length);
     set(selRow.lock, locks.length > 0);
     set(selRow.unlock, !(locks.length && freeable.length));
+    set(selRow.move, locks.length > 0 || !!sel.editor.sheet.dayLock());
   }
   function drawSel() {
     // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
-    if (selTools.hidden || !sel || readOnlyNow() || pen.tool) {
+    if (selTools.hidden || !sel || lifted || readOnlyNow() || pen.tool) {
       selFrame?.();
       selFrame = null;
       return paintSel();
@@ -17215,6 +17777,73 @@ function mountTextRoom(body, app, session) {
     if (!sel || readOnlyNow()) return;
     commitRange(sel, rangeOps(sel.editor.sheet, session.clock, "lock", { ch: sel.ch, to: sel.to, by: session.memberId }), "잠갔어요. 잠근 사람과 방장만 풀 수 있어요");
   }
+
+  // ---- 옮기기: chosen words lifted and put down wherever the next tap lands -----------------
+  // (the owner, 21 November: "그 글자나 그린 거를 이동할 수 있… 아무데나 이동 가능하게"). Written words
+  // are one flow, so they go to any place in the writing (this day or another), not to a point on
+  // the paper; drawings go anywhere with the 올가미. The words keep who wrote them (their colour) and
+  // their 표시, photos and recordings; one undo puts them back.
+  function liftSel() {
+    if (!sel || readOnlyNow()) return;
+    const ed = sel.editor;
+    const ta = ed.input;
+    const a = Math.min(ta.selectionStart, ta.selectionEnd);
+    const b = Math.max(ta.selectionStart, ta.selectionEnd);
+    if (a === b) return;
+    if (lockedEdit(ed.sheet, ed.snap.ids, a, b - a)) return void toast(app.root, ed.sheet.dayLock() ? "잠긴 날이라 옮길 수 없어요" : "잠긴 글이라 옮길 수 없어요", 2600);
+    const words = ed.snap.text.slice(a, b).replace(/\s+/g, " ").trim();
+    lifted = { editor: ed, ids: ed.snap.ids.slice(a, b) };
+    moveChip.replaceChildren(h("div", { class: "sel-row" },
+      icon("move"),
+      h("span", { class: "move-what", id: "move-what", text: "‘" + (words.length > 14 ? words.slice(0, 13) + "…" : words) + "’" }),
+      h("span", { class: "sel-label", text: "놓을 곳을 누르세요" }),
+      h("button", { class: "chip", id: "move-cancel", type: "button", text: "그만", onclick: () => dropLifted() })));
+    // The words stay chosen while 그만 is pressed, as with the chosen words' own row.
+    for (const btn of moveChip.querySelectorAll("button")) btn.addEventListener("pointerdown", (e) => e.preventDefault());
+    moveChip.hidden = false;
+    // They stay chosen (highlighted) where they are while lifted; the next tap in the writing puts
+    // the caret where they go.
+    drawSel();
+  }
+  function dropLifted() {
+    if (!lifted) return;
+    lifted = null;
+    moveChip.hidden = true;
+    drawSel();
+  }
+  /** Puts the lifted words down at `index` of `ed`'s writing. */
+  function putDown(ed, index) {
+    const from = lifted.editor;
+    if (readOnlyNow()) return void dropLifted();
+    if (lockedEdit(ed.sheet, ed.snap.ids, index, 0)) return void toast(app.root, ed.sheet.dayLock() ? "잠긴 날에는 놓을 수 없어요" : "잠긴 글 사이에는 놓을 수 없어요", 2600);
+    const made = moveTextOps(from.sheet, ed.sheet, session.clock, { ids: lifted.ids, after: index > 0 ? ed.snap.ids[index - 1] ?? ROOT : ROOT });
+    dropLifted();
+    if (!made.ids.length) return void toast(app.root, "그 자리 그대로예요", 1600);
+    if (from === ed) session.commit(ed.doc, [...made.to.ops, ...made.from.ops]);
+    else {
+      session.commit(ed.doc, made.to.ops);
+      session.commit(from.doc, made.from.ops);
+    }
+    record([...made.from.atoms.map((atom) => ({ ...atom, doc: from.doc })), ...made.to.atoms.map((atom) => ({ ...atom, doc: ed.doc }))], false);
+    // Chosen again where they now are, so it shows where they went (and they can go on).
+    const at = ed.sheet.ids().indexOf(made.ids[0]);
+    if (at >= 0 && document.activeElement === ed.input) {
+      ed.input.setSelectionRange(at, at + made.ids.length);
+      ed.caretMoved();
+    }
+    buzz(app);
+    toast(app.root, "옮겼어요", 1600);
+  }
+  // A tap that puts the caret in the writing while words are lifted (the caret is placed by then).
+  const onPlace = (e) => {
+    if (!lifted || !e.target.classList?.contains("typing")) return;
+    const ed = [...editors.values()].find((x) => x.input === e.target);
+    if (!ed || ed.input.selectionStart !== ed.input.selectionEnd) return;
+    putDown(ed, ed.input.selectionStart);
+  };
+  list.addEventListener("click", onPlace);
+  const onEscape = (e) => { if (e.key === "Escape" && lifted) dropLifted(); };
+  document.addEventListener("keydown", onEscape);
 
   function undoRanges(t, list) {
     if (!sel || readOnlyNow()) return;
@@ -17480,6 +18109,8 @@ function mountTextRoom(body, app, session) {
     selFrame?.();
     closeDay?.();
     selTools.remove();
+    moveChip.remove();
+    document.removeEventListener("keydown", onEscape);
     stopPhotoWatch();
     photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);
@@ -20603,8 +21234,8 @@ function mountBoardRoom(body, app, session, frame) {
       point: (cx, cy) => { const p = toBoard(cx, cy); return [p.x * INK_UNIT, p.y * INK_UNIT]; },
       matrix: () => [(zoom * sx) / INK_UNIT, 0, 0, zoom / INK_UNIT, panX, panY],
     },
-    onStroke: ({ pts, color, width, brush, shape }) => {
-      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, brush, shape, by: session.memberId });
+    onStroke: ({ pts, color, width, size, brush, shape }) => {
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, size, brush, shape, by: session.memberId });
       session.commit(INK_DOC, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
       return made.ops[0]?.id;
@@ -20627,7 +21258,7 @@ function mountBoardRoom(body, app, session, frame) {
     pen.tool = tool;
     boardInk.setTool(tool);
     boardInk.setStyle(pen);
-    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store });
+    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store, units: () => boardInk.unitsPerPx() });
     penButton.setAttribute("aria-pressed", String(!!tool));
     if (tool) {
       finishWriting();
@@ -23686,11 +24317,10 @@ const { personColor } = __m["src/core/paint.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
 const { watchFingerTaps } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
-const { InkLayer, drawInkTools, paintStroke, pixelAt, inkColor } = __m["src/ui/ink.js"];
+const { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
-const { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS } = __m["src/core/draw.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX } = __m["src/core/ink.js"];
-const { brushLook } = __m["src/core/brush.js"];
+const { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } = __m["src/core/draw.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } = __m["src/core/ink.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -23700,6 +24330,8 @@ const PAGE_W = 2250;
 const PAGE_H = 3000;
 const BLEND_NAMES = { "source-over": "보통", multiply: "곱하기", screen: "스크린", overlay: "오버레이", darken: "어둡게", lighten: "밝게", "color-dodge": "닷지", "color-burn": "번", "hard-light": "하드 라이트", "soft-light": "소프트 라이트", difference: "차이", exclusion: "제외", hue: "색조", saturation: "채도", color: "색", luminosity: "광도" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A paper's colour (null for 투명). */
+const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
 
 function mountDrawRoom(body, app, session, frame) {
   const root = app.root;
@@ -23727,66 +24359,7 @@ function mountDrawRoom(body, app, session, frame) {
   body.append(panel);
   body.after(inkTools, toolbar);
 
-  // 붓 크기 막대 (Procreate's sidebar): a thin bar at the left edge, fine at the bottom and bold at the
-  // top (0.5 to 40 px, a doubling every eighth of the way); while it moves, a dot beside it shows the
-  // brush as big as it will draw on the page now. A width chosen in the tools goes back to that width.
-  const sizeThumb = h("span", { class: "size-thumb" });
-  const sizePeek = h("span", { class: "size-peek", "aria-hidden": "true" });
-  const sizeRail = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
-    "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), sizeThumb, sizePeek);
-  body.append(sizeRail);
-  const penPx = () => pen.size || WIDTH_PX[pen.width] || 4;
-  const sizeT = (px) => Math.log(px / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
-  const sizeFrom = (t) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** clamp(t, 0, 1) * 10) / 10;
-  function paintRail() {
-    const px = penPx();
-    sizeRail.hidden = readOnly() || !(pen.tool === "pen" || pen.tool === "eraser");
-    sizeRail.style.setProperty("--t", sizeT(px).toFixed(4));
-    sizeRail.setAttribute("aria-valuenow", String(px));
-    sizeRail.setAttribute("aria-valuetext", px + "px");
-    // The brush on the page now: its width in stroke units over the units in a screen pixel.
-    const unit = hosts.get(active)?.ink.unitsPerPx() || 1;
-    const look = brushLook(pen.tool === "eraser" ? "erase" : pen.brush);
-    const d = Math.max(2, Math.min(220, (px * (100 / 16) * (look.scale || 1)) / unit));
-    sizePeek.style.width = sizePeek.style.height = d.toFixed(1) + "px";
-    sizePeek.style.background = pen.tool === "eraser" ? "transparent" : inkColor(pen.color);
-    sizePeek.classList.toggle("erase", pen.tool === "eraser");
-  }
-  function setSize(px) {
-    pen.size = px;
-    for (const { ink } of hosts.values()) ink.setStyle({ size: px });
-    paintRail();
-  }
-  let sizing = null;
-  const sizeAt = (e) => {
-    const r = sizeRail.getBoundingClientRect();
-    const pad = 11;
-    setSize(sizeFrom(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
-  };
-  sizeRail.addEventListener("pointerdown", (e) => {
-    if (sizing || (e.pointerType === "mouse" && e.button !== 0)) return;
-    e.preventDefault();
-    sizing = { id: e.pointerId };
-    sizeRail.setPointerCapture?.(e.pointerId);
-    sizeRail.classList.add("sizing");
-    sizeAt(e);
-  });
-  sizeRail.addEventListener("pointermove", (e) => { if (sizing && e.pointerId === sizing.id) sizeAt(e); });
-  const sizeDone = (e) => {
-    if (!sizing || e.pointerId !== sizing.id) return;
-    sizing = null;
-    sizeRail.classList.remove("sizing");
-    drawLayers(); // the widths in the tools let go of their choice
-  };
-  sizeRail.addEventListener("pointerup", sizeDone);
-  sizeRail.addEventListener("pointercancel", sizeDone);
-  sizeRail.addEventListener("keydown", (e) => {
-    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    setSize(sizeFrom(sizeT(penPx()) + step / 24));
-    drawLayers();
-  });
+  // The brush's size is on the tools' rail (ui/ink.js), as in every room that draws.
 
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
   const stopTaps = watchFingerTaps(stage, {
@@ -23800,7 +24373,20 @@ function mountDrawRoom(body, app, session, frame) {
     if (entry) return entry;
     const el = h("div", { class: "draw-layer", data: { layer: layer.id } });
     const name = inkDocOf(layer.id);
+    const keepInk = (made) => {
+      session.commit(name, made.ops);
+      record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+      thumbSoon(layer.id);
+    };
+    let lasso = null;
     const ink = new InkLayer({
+      // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
+      onLasso: (info) => lasso?.show(info),
+      onLassoMove: (ids, dx, dy) => {
+        const made = moveStrokesOps(session.clock, session.doc(name), ids, dx, dy, session.memberId);
+        keepInk(made);
+        return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+      },
       host: el,
       ink: () => session.doc(name),
       share: liveInk.on(name),
@@ -23827,6 +24413,7 @@ function mountDrawRoom(body, app, session, frame) {
         thumbSoon(layer.id);
       },
     });
+    lasso = lassoActions({ ink, doc: () => session.doc(name), clock: session.clock, by: session.memberId, commit: keepInk });
     entry = { el, ink };
     hosts.set(layer.id, entry);
     session.load(name).then(() => { if (alive) { ink.render(); thumbSoon(layer.id); } });
@@ -23849,6 +24436,10 @@ function mountDrawRoom(body, app, session, frame) {
 
   /** The page as the layers are now: order, shown or hidden, opacity, blend; only mine takes the pen. */
   function drawLayers() {
+    // 종이 under them all (the owner, 21 November: "종이의 개념이고 뒷배경을 투명하게 할 수도").
+    const paper = doc.paper();
+    page.dataset.paper = paper;
+    page.style.setProperty("--paper-c", paperColour(paper) || "transparent");
     const list = doc.layers();
     if (active && !list.some((l) => l.id === active)) active = null;
     if (!active && list.length) active = list[list.length - 1].id;
@@ -23870,8 +24461,7 @@ function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store });
-    paintRail();
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -23936,7 +24526,20 @@ function mountDrawRoom(body, app, session, frame) {
             onclick: () => change(layer.id, { visible: !layer.visible }) }, icon(layer.visible ? "eye" : "eyeOff")));
         if (on && can) row.append(layerControls(layer, list));
         return row;
-      })));
+      })),
+      // 종이 at the bottom, under every layer (as Procreate's background colour lies under its layers).
+      paperRow(can));
+  }
+
+  function paperRow(can) {
+    const paper = doc.paper();
+    const [, colour, name] = PAPERS.find(([k]) => k === paper) || PAPERS[0];
+    return h("div", { class: "paper-row", id: "paper-row" },
+      h("span", { class: "paper-swatch" + (colour ? "" : " clear"), style: colour ? { background: colour } : {}, "aria-hidden": "true" }),
+      h("span", { class: "layer-name", text: "종이 · " + name }),
+      can && h("div", { class: "paper-choices", role: "group", "aria-label": "종이" },
+        PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === paper), "aria-label": label, title: label,
+          style: c ? { background: c } : {}, onclick: () => { if (k !== paper) apply(paperOps(session.clock, doc, k)); } }))));
   }
 
   function layerControls(layer, list) {
@@ -24028,7 +24631,7 @@ function mountDrawRoom(body, app, session, frame) {
       layers: list,
       pageW: PAGE_W,
       pageH: PAGE_H,
-      paper: getComputedStyle(page).backgroundColor || "#fff",
+      paper: paperColour(doc.paper()) || "rgba(0, 0, 0, 0)",
       nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
       colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
       title: session.room.meta("name") || "그림",
@@ -24044,8 +24647,12 @@ function mountDrawRoom(body, app, session, frame) {
     out.height = hgt;
     const g = out.getContext("2d");
     if (!g) return;
-    g.fillStyle = getComputedStyle(page).backgroundColor || "#fff";
-    g.fillRect(0, 0, w, hgt);
+    // A clear paper stays clear in the image (a PNG with nothing behind the drawing).
+    const paper = paperColour(doc.paper());
+    if (paper) {
+      g.fillStyle = paper;
+      g.fillRect(0, 0, w, hgt);
+    }
     for (const layer of doc.layers()) {
       if (!layer.visible) continue;
       const one = document.createElement("canvas");
@@ -24175,10 +24782,10 @@ function mountAnimRoom(body, app, session) {
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
     onPick: (color) => { pen.color = color; setTool(pen.tool); },
-    onStroke: ({ pts, color, width, brush, shape }) => {
+    onStroke: ({ pts, color, width, size, brush, shape }) => {
       if (readOnly() || !current) return null;
       const name = curDoc();
-      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: session.memberId });
+      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
       session.commit(name, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: name })));
       thumbSoon(current);
@@ -24226,8 +24833,8 @@ function mountAnimRoom(body, app, session) {
   function setTool(tool) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
-    ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-    drawInkTools(inkTools, { pen, setTool, store: app.store });
+    ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -25610,8 +26217,8 @@ function relayScreen(ctx) {
         steady: () => getSettings(app.store).inkSteady ?? 1,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
-        onStroke: ({ pts, color, width, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: me() });
+        onStroke: ({ pts, color, width, size, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: me() });
           session.commit(name, made.ops);
           if (made.ops[0]) mineIds.push(made.ops[0].id);
           return made.ops[0]?.id;
@@ -25621,8 +26228,8 @@ function relayScreen(ctx) {
       const setTool = (tool) => {
         pen.tool = tool;
         ink.setTool(tool);
-        ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-        drawInkTools(tools, { pen, setTool, store: app.store });
+        ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+        drawInkTools(tools, { pen, setTool, store: app.store, layout: "row" });
       };
       const undo = h("button", { class: "chip", id: "relay-undo", type: "button", text: "되돌리기",
         onclick: () => { const id = mineIds.pop(); if (id) session.commit(name, eraseOps(session.clock, session.doc(name), id).ops); } });
@@ -25932,8 +26539,8 @@ function sketchScreen(ctx) {
       const setTool = (tool) => {
         pen.tool = tool;
         sheet.ink.setTool(tool);
-        sheet.ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-        drawInkTools(tools, { pen, setTool, store: app.store });
+        sheet.ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+        drawInkTools(tools, { pen, setTool, store: app.store, layout: "row" });
       };
       setTool(pen.tool === "pen" || pen.tool?.startsWith("eraser") ? pen.tool : "pen");
       parts.push(tools, h("div", { class: "game-foot" }, h("button", { class: "chip", id: "sketch-undo", type: "button", text: "되돌리기", onclick: () => sheet.undo() })), said);
@@ -27253,9 +27860,17 @@ const { houses, addHouse, updateHouse, removeHouse, putInHouse, takeOutOfHouse, 
 
 const PANEL_EDGE = "homePanelEdge";
 const EDGES = ["left", "right", "top", "bottom"];
+const MIN_SIDE = 120; // the smallest it is drawn to, either way (px)
 
-// Where the floating 찾기와 집 was left (its head dragged it there): { x, y }.
+// Where the floating 찾기와 집 was left (its head dragged it there) and its size: { x, y, w?, h? }.
 const FLOAT_KEY = "homePanelFloat";
+// Its size at each edge (the ┘ corner drawn): { bottom: height, top: height, left: width, right: width }.
+const SIZE_KEY = "homePanelSize";
+// Locked where it is (the owner, 21 November: "잠금… 아무리 눌러도 그 위치가 고정"): ⋮ and swipes leave
+// it; only its bar drawn back to its own edge puts it away.
+const LOCK_KEY = "homePanelLocked";
+
+const panelLocked = (store) => store.get(LOCK_KEY, false) === true;
 
 /** Where 찾기와 집 last came out (a tap on ⋮ brings it from there, the owner asked): { edge, at }. */
 function lastPanelEdge(store) {
@@ -27297,7 +27912,7 @@ function marked(text, at, len) {
  * changed(): home draws itself again (a room went into a house, a house was built or taken down).
  * view: what it opens on ({ name: "main" }, { name: "house", id }, { name: "build", room }).
  */
-function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" }, floating = false }) {
+function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, changed, view = { name: "main" }, floating = false, swap = null }) {
   let edge = floating ? "float" : firstEdge;
   const root = app.root;
   const store = app.store;
@@ -27317,14 +27932,36 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   // A side panel's inner edge (its 끝자락) takes the same throw.
   const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
   const body = h("div", { class: "home-panel-body" });
+  // At its top left a lock, at its top right the way between an edge and a window of its own (the
+  // owner: "점3개… 거기 누르면 나오는 곳에서 위쪽 오른쪽에다가 그거 따로 독단적 창 나오게 하는 걸 버튼").
+  let locked = panelLocked(store);
+  const lockBtn = h("button", { class: "icon-btn panel-lock", id: "panel-lock", type: "button", onclick: () => setLocked(!locked) }, icon("lock"));
+  const floatBtn = h("button", { class: "icon-btn panel-float", id: "panel-float", type: "button", "aria-label": floating ? "가장자리에 붙이기" : "따로 떠 있는 창으로",
+    onclick: () => swap?.(!floating) }, icon(floating ? "dock" : "float"));
+  const paintLock = () => {
+    lockBtn.setAttribute("aria-pressed", String(locked));
+    lockBtn.setAttribute("aria-label", locked ? "잠금 풀기 (지금 이 자리에 고정돼 있어요)" : "이 자리에 잠그기");
+    panel.classList.toggle("locked", locked);
+  };
+  function setLocked(on) {
+    locked = on;
+    store.set(LOCK_KEY, on);
+    paintLock();
+    toast(root, on ? "이 자리에 고정했어요. 바를 제자리로 밀면 닫혀요" : "잠금을 풀었어요", 2000);
+  }
+  // Its ┘ corner draws it bigger or smaller (the owner: "'ㄴ'을 반대로 한 거… 스와이프하면 그대로 크기가 그만큼
+  // 작아지고"); small, only the houses stay, in a column when tall and a row when wide.
+  const sizer = h("div", { class: "panel-sizer", id: "panel-sizer", role: "separator", "aria-label": "크기 바꾸기 (끌어서)" });
   // Floating (like 레퍼런스, with the same head): its head moves it, where it is left it stays; its
   // own button puts it away.
   const head = floating && h("div", { class: "float-head", id: "float-head" },
-    h("span", { class: "float-grip", "aria-hidden": "true" }),
+    lockBtn,
     h("h2", { class: "float-title", text: "찾기와 집" }),
-    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back")));
-  if (floating) panel.append(head, body);
-  else panel.append(grip, body, end);
+    floatBtn,
+    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
+  if (floating) panel.append(head, body, sizer);
+  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn, floatBtn), body, end, sizer);
+  paintLock();
   root.append(scrim, panel);
   // Home's round buttons stay above the panel (⋮ pressed again moves it); what the panel holds
   // starts below them where they would lie over it (at the right and top edges, floating).
@@ -27339,12 +27976,84 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   else enter(at);
 
   function placeFloat(spot) {
-    const w = Math.min(innerWidth - 16, 360);
+    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : 360));
     const x = spot && Number.isFinite(spot.x) ? spot.x : innerWidth - w - 12;
     const y = spot && Number.isFinite(spot.y) ? spot.y : topClear() || 72;
     panel.style.width = w + "px";
+    if (spot && Number.isFinite(spot.h)) {
+      panel.style.height = Math.round(Math.min(innerHeight - 16, Math.max(MIN_SIDE, spot.h))) + "px";
+      panel.style.maxHeight = "none";
+    }
     panel.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, x))) + "px";
     panel.style.top = Math.round(Math.max(8, Math.min(innerHeight - 120, y))) + "px";
+  }
+
+  // The size it was last drawn to at this edge (or floating, in placeFloat).
+  function sizeAtEdge() {
+    if (floating) return;
+    const saved = store.get(SIZE_KEY, {})?.[edge];
+    panel.style.width = "";
+    panel.style.height = "";
+    if (!Number.isFinite(saved)) return;
+    if (edge === "left" || edge === "right") panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth * 0.92, saved))) + "px";
+    else panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight * 0.9, saved))) + "px";
+  }
+  sizeAtEdge();
+
+  // Small enough, it keeps only the houses (the search goes), laid along its longer side.
+  const shape = () => {
+    const w = panel.clientWidth;
+    // A floating one not drawn to a size takes the height of what it holds (which is less when small).
+    const ht = floating && !panel.style.height ? Infinity : panel.clientHeight;
+    const compact = w < 170 || ht < 240;
+    const tall = ht > w * 1.15;
+    panel.classList.toggle("compact", compact);
+    panel.classList.toggle("tall", compact && tall);
+    panel.classList.toggle("wide", compact && !tall);
+  };
+  const shapeWatch = typeof ResizeObserver === "function" ? new ResizeObserver(() => shape()) : null;
+  shapeWatch?.observe(panel);
+  shape();
+
+  {
+    let s = null;
+    sizer.addEventListener("pointerdown", (e) => {
+      if (!open || s || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = panel.getBoundingClientRect();
+      s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, w: r.width, h: r.height };
+      try { sizer.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      for (const a of panel.getAnimations()) a.cancel();
+      panel.classList.add("sizing");
+    });
+    sizer.addEventListener("pointermove", (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x0;
+      const dy = e.clientY - s.y0;
+      if (floating) {
+        const r = panel.getBoundingClientRect();
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth - r.left - 8, s.w + dx))) + "px";
+        panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight - r.top - 8, s.h + dy))) + "px";
+        panel.style.maxHeight = "none";
+      } else if (edge === "left" || edge === "right") {
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth * 0.92, s.w + (edge === "left" ? dx : -dx)))) + "px";
+      } else {
+        panel.style.height = Math.round(Math.max(MIN_SIDE, Math.min(innerHeight * 0.9, s.h + (edge === "top" ? dy : -dy)))) + "px";
+      }
+      shape();
+    });
+    const doneSizing = (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      s = null;
+      panel.classList.remove("sizing");
+      const r = panel.getBoundingClientRect();
+      if (floating) store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+      else store.set(SIZE_KEY, { ...(store.get(SIZE_KEY, {}) || {}), [edge]: Math.round(edge === "left" || edge === "right" ? r.width : r.height) });
+    };
+    sizer.addEventListener("pointerup", doneSizing);
+    sizer.addEventListener("pointercancel", doneSizing);
+    sizer.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
   }
 
   function popIn() {
@@ -27357,7 +28066,8 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   if (floating) {
     let d = null;
     head.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
+      // Locked, it stays where it is.
+      if (locked || e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
       e.preventDefault();
       const r = panel.getBoundingClientRect();
       d = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
@@ -27373,7 +28083,8 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       d = null;
       panel.classList.remove("held");
       const r = panel.getBoundingClientRect();
-      store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top) });
+      const was = store.get(FLOAT_KEY, null) || {};
+      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w, h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
     };
     head.addEventListener("pointerup", drop);
     head.addEventListener("pointercancel", drop);
@@ -27431,9 +28142,10 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       const dy = g.y - g.y0;
       panel.style.transform = `translate(${dx}px, ${dy}px)`;
       const now = judge(g, e.timeStamp);
-      // Toward its own edge it fades as it goes; toward another, a light shows where it will land.
+      // Toward its own edge it fades as it goes; toward another, a light shows where it will land
+      // (locked, it goes nowhere else).
       panel.style.opacity = now.act === "close" ? "0.75" : "";
-      aim.show(now.act === "move" ? spotOn(now) : null);
+      aim.show(now.act === "move" && !locked ? spotOn(now) : null);
     });
     const letGo = (e) => {
       if (!g || e.pointerId !== g.id) return;
@@ -27447,11 +28159,66 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       panel.classList.remove("held");
       panel.style.opacity = "";
       if (now.act === "close") return close({ from });
-      if (now.act === "move") return relocate(now, from);
+      if (now.act === "move" && !locked) return relocate(now, from);
       settle(from);
     };
     handle.addEventListener("pointerup", letGo);
     handle.addEventListener("pointercancel", letGo);
+  }
+
+  // A swipe anywhere on it toward its own edge puts it away (the owner: "그냥 스와이프해도 되게 없애는
+  // 거는"); moving it elsewhere stays with its bar. Not while locked, and not while what it holds can
+  // still scroll that way.
+  if (!floating) {
+    let sw = null;
+    body.addEventListener("pointerdown", (e) => {
+      if (!open || locked || sw || (e.pointerType === "mouse" && e.button !== 0) || e.target.closest?.("input, textarea")) return;
+      sw = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, track: new VelocityTracker() };
+      sw.track.add(e.timeStamp, e.clientX, e.clientY);
+    });
+    body.addEventListener("pointermove", (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      for (const one of e.getCoalescedEvents?.() || [e]) sw.track.add(one.timeStamp, one.clientX, one.clientY);
+      sw.x = e.clientX;
+      sw.y = e.clientY;
+      const dx = sw.x - sw.x0;
+      const dy = sw.y - sw.y0;
+      if (!sw.on) {
+        if (Math.hypot(dx, dy) < 10) return;
+        const toward = {
+          bottom: dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.2 && body.scrollTop <= 0,
+          top: dy < 0 && Math.abs(dy) > Math.abs(dx) * 1.2 && body.scrollTop + body.clientHeight >= body.scrollHeight - 1,
+          left: dx < 0 && Math.abs(dx) > Math.abs(dy) * 1.2,
+          right: dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2,
+        }[edge];
+        if (!toward) { sw = null; return; }
+        sw.on = true;
+        try { body.setPointerCapture(sw.id); } catch { /* fine */ }
+        for (const a of panel.getAnimations()) a.cancel();
+        panel.classList.add("held");
+      }
+      panel.style.transform = edge === "left" ? `translate(${Math.min(0, dx)}px, 0px)` : edge === "right" ? `translate(${Math.max(0, dx)}px, 0px)`
+        : edge === "top" ? `translate(0px, ${Math.min(0, dy)}px)` : `translate(0px, ${Math.max(0, dy)}px)`;
+    });
+    const swEnd = (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      const was = sw;
+      sw = null;
+      if (!was.on) return;
+      panel.classList.remove("held");
+      const side = edge === "left" || edge === "right";
+      const sign = edge === "right" || edge === "bottom" ? 1 : -1;
+      const d = Math.max(0, (side ? was.x - was.x0 : was.y - was.y0) * sign) * sign;
+      const v = was.track.velocity(e.timeStamp);
+      const speed = (side ? v.vx : v.vy) * sign;
+      const size = side ? panel.offsetWidth : panel.offsetHeight;
+      const from = side ? [d, 0] : [0, d];
+      if (e.type === "pointerup" && (Math.abs(d) > size * 0.25 || speed > 0.45)) return close({ from });
+      settle(from);
+    };
+    body.addEventListener("pointerup", swEnd);
+    body.addEventListener("pointercancel", swEnd);
+    body.addEventListener("touchmove", (e) => { if (sw?.on) e.preventDefault(); }, { passive: false });
   }
 
   function judge(g, time) {
@@ -27486,6 +28253,8 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     edge = to;
     panel.dataset.edge = to;
     panel.style.setProperty("--top-clear", topClear() + "px");
+    sizeAtEdge();
+    shape();
     enter(spot);
   }
 
@@ -27523,6 +28292,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     if (!open) return;
     open = false;
     aim.hide();
+    shapeWatch?.disconnect();
     if (!forget && query.trim()) rememberSearch(store, query, max());
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("visibilitychange", onHide);
@@ -27718,14 +28488,19 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   // nodes: home draws itself anew by replacing what it holds; it puts these back after.
   return {
     close, show: (next) => { view = next; draw(); }, isOpen: () => open, nodes: [scrim, panel],
-    floating, edge: () => edge,
+    floating, edge: () => edge, locked: () => locked,
+    // Locked and ⋮ pressed: it stays, with a small shake to say so.
+    nudge: () => {
+      toast(root, "잠겨 있어요. 왼쪽 위 자물쇠로 풀어요", 1600);
+      if (!reduced && panel.animate) panel.animate([{ translate: "0 0" }, { translate: "-5px 0" }, { translate: "5px 0" }, { translate: "0 0" }], { duration: 260 });
+    },
     // Somewhere else on the screen (the owner: "그걸 눌러서 다른 위치로 그게 옮겨가게").
     moveTo: (to, spot = 0.5, strength = 0.3) => { if (open && !floating && to !== edge) relocate({ edge: to, at: spot, strength }, [0, 0]); },
     refresh: () => draw(),
   };
 }
 
-return { lastPanelEdge, rememberPanelEdge, houseColor, houseShape, openHomePanel };
+return { panelLocked, lastPanelEdge, rememberPanelEdge, houseColor, houseShape, openHomePanel };
 })();
 __m["src/ui/home.js"] = (() => {
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
@@ -27744,6 +28519,9 @@ const { refSounds } = __m["src/reference.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } = __m["src/houses.js"];
 const { openHomePanel, houseShape, lastPanelEdge, rememberPanelEdge } = __m["src/ui/home-panel.js"];
+
+// Whether 찾기와 집 opens at its edge or as a window of its own (its top-right button chooses).
+const PANEL_MODE = "homePanelMode";
 const { glowEdge, aimMarker } = __m["src/ui/edge-glow.js"];
 const { VelocityTracker, throwOf } = __m["src/core/fling.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -27854,6 +28632,7 @@ function showHome(app) {
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
   function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
+    const house = mine ? houseOf(app.store, room.id) : null;
     const isStarred = mine && starred(app.store).has(room.id);
     let held = false;
     let timer = null;
@@ -27869,7 +28648,7 @@ function showHome(app) {
       // The name at the very top (the owner: "방이름은 맨위에"); under it the box of what it holds, with
       // what kind of room it is as a round logo with only its icon inside the box at its top left
       // ("무슨 방인지 알려주는 그런 동그란 아이콘은 네모 안에 왼쪽 끝에 위에").
-      h("span", { class: "room-name", text: room.name }),
+      h("span", { class: "room-name" }, room.name, house && h("span", { class: "room-house", role: "img", "aria-label": `${house.name}에 있어요`, title: house.name }, houseShape(house))),
       h("span", { class: "room-thumb" + (validPreview(room.preview) ? "" : " no-preview") },
         h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines")),
         previewOf(room)),
@@ -27989,30 +28768,55 @@ function showHome(app) {
     const remembered = app.store.get("rooms", []);
     return [...remembered, ...others.filter((o) => !remembered.some((r) => r.id === o.id))];
   };
-  /** Opens 찾기와 집 out of an edge; with no edge given, out of the one it was last thrown to. */
-  async function openPanel({ edge, at, strength = 0.3, delay = 0, view } = {}) {
-    // Out at an edge already: ⋮ sends it somewhere else (tapped: the next edge round; thrown: there).
-    if (panelCtl?.isOpen() && !panelCtl.floating && !view) {
-      const order = ["right", "bottom", "left", "top"];
-      const to = edge || order[(order.indexOf(panelCtl.edge()) + 1) % order.length];
-      if (to !== panelCtl.edge()) {
-        rememberPanelEdge(app.store, { edge: to, at: at ?? 0.5 });
-        panelCtl.moveTo(to, at ?? 0.5, strength);
+  /**
+   * Opens 찾기와 집: tapped, where it was last (at its edge, or floating if it was left floating);
+   * thrown (`thrown`), out of the edge it was thrown to. Out already, a tap puts it away, and a throw
+   * sends it to that edge (the owner, 21 November: "이미 거기 방향이면은 안 눌러주고 그걸 스와이프해서
+   * 그쪽으로 보내야지만"); 설정's "다시 누르면 다른 쪽으로" brings back the tap that sends it round the
+   * edges. Locked, it stays.
+   */
+  async function openPanel({ edge, at, strength = 0.3, delay = 0, view, thrown = false } = {}) {
+    if (panelCtl?.isOpen() && !view) {
+      if (panelCtl.locked()) return void panelCtl.nudge();
+      if (!thrown) {
+        if (!panelCtl.floating && getSettings(app.store).panelCycle) {
+          const order = ["right", "bottom", "left", "top"];
+          const to = order[(order.indexOf(panelCtl.edge()) + 1) % order.length];
+          rememberPanelEdge(app.store, { edge: to, at: 0.5 });
+          return void panelCtl.moveTo(to, 0.5, strength);
+        }
+        return void panelCtl.close();
       }
+      if (!panelCtl.floating) {
+        if (edge !== panelCtl.edge()) {
+          rememberPanelEdge(app.store, { edge, at: at ?? 0.5 });
+          panelCtl.moveTo(edge, at ?? 0.5, strength);
+        }
+        return;
+      }
+      // Floating and thrown: it comes down to that edge.
+      app.store.set(PANEL_MODE, "dock");
+    }
+    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
+    if (!thrown && !view && app.store.get(PANEL_MODE, "dock") === "float") {
+      panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw(), swap });
       return;
     }
     if (!edge) ({ edge, at } = lastPanelEdge(app.store));
-    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
     await glowEdge({ edge, at: at ?? 0.5, strength, delay, onImpact: () => buzz(app, 8) });
     if (!alive) return;
-    panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw() });
+    panelCtl = openHomePanel(app, { edge, at: at ?? 0.5, view, rooms: allRooms, changed: () => draw(), swap });
   }
 
-  /** The second way to 찾기와 집: floating on its own like 레퍼런스 (the right icon; ⋮ on its left as before). */
-  function toggleFloat() {
-    if (panelCtl?.isOpen() && panelCtl.floating) return void panelCtl.close();
-    if (panelCtl?.isOpen()) panelCtl.close({ now: true });
-    panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw() });
+  /** The panel's own top-right button: from its edge to a window of its own, and back (remembered). */
+  function swap(toFloat) {
+    app.store.set(PANEL_MODE, toFloat ? "float" : "dock");
+    panelCtl?.close({ now: true });
+    if (toFloat) panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw(), swap });
+    else {
+      const { edge, at } = lastPanelEdge(app.store);
+      panelCtl = openHomePanel(app, { edge, at, rooms: allRooms, changed: () => draw(), swap });
+    }
   }
 
   /**
@@ -28021,8 +28825,10 @@ function showHome(app) {
    * shows where while aiming), lights it in my colour and the panel comes out there.
    */
   function kebab() {
-    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 끝에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
-      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("kebab"));
+    // Its look is the window's (the owner: "점3개 세로 아이콘 그걸 너가 새로 만든 그거 아이콘 디자인으로…
+    // 기능은 점 3개 세로인 걸로").
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 자리에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
+      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("float"));
     let g = null;
     const aim = aimMarker();
     const reset = () => {
@@ -28063,8 +28869,9 @@ function showHome(app) {
       // The invisible ball takes a moment to fly from the finger to the edge: further and softer, longer.
       const flight = Math.hypot(hit.x - e.clientX, hit.y - e.clientY);
       const delay = Math.round(Math.max(40, Math.min(190, flight / Math.max(0.9, hit.speed * 1.3))));
+      if (panelCtl?.isOpen() && panelCtl.locked()) return void panelCtl.nudge();
       rememberPanelEdge(app.store, hit);
-      openPanel({ edge: hit.edge, at: hit.at, strength: hit.strength, delay });
+      openPanel({ edge: hit.edge, at: hit.at, strength: hit.strength, delay, thrown: true });
     });
     return btn;
   }
@@ -28161,10 +28968,10 @@ function showHome(app) {
 
   function half(side, title, note, emptyText) {
     const stars = starred(app.store);
-    const housed = new Set(houses(app.store).flatMap((x) => x.rooms || []));
+    // Rooms in a house stay here too, the house beside their name (the owner, 21 November: "집에 넣어
+    // 놓은 방은… 그냥 똑같이 있는데 이름 옆에다가 자그만하게 그 집의 아이콘").
     const all = app.store.get("rooms", []).filter((r) => sideOf(r.kind) === side);
-    const mine = all.filter((r) => !housed.has(r.id)).sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
-    const inHouses = all.length - mine.length;
+    const mine = all.slice().sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
     const known = new Set(app.store.get("rooms", []).map((r) => r.id));
     const elsewhere = others.filter((r) => sideOf(r.kind) === side && !known.has(r.id));
     return h("section", { class: "half field " + side, data: { side } },
@@ -28173,8 +28980,7 @@ function showHome(app) {
         h("p", { class: "half-note", text: note }),
         mine.length
           ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
-          : h("p", { class: "empty", text: inHouses ? "방은 모두 집에 있어요." : emptyText }),
-        inHouses > 0 && h("button", { class: "in-houses", id: "in-houses-" + side, type: "button", onclick: () => openPanel() }, icon("home"), `집에 둔 방 ${inHouses}개`),
+          : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
           h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r))),
@@ -28202,9 +29008,8 @@ function showHome(app) {
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
           getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
-          // ⋮ on the left comes out of an edge as before; on its right the same panel floats on its own.
-          kebab(),
-          iconButton("home-float", "float", "찾기와 집 (떠 있는 판, 머리를 끌어 옮겨요)", toggleFloat)),
+          // ⋮: 찾기와 집 (its own top-right button turns it into a window of its own and back).
+          kebab()),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
@@ -28345,6 +29150,11 @@ function showHome(app) {
       h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
         h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
           segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
+      // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
+      // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기와 집" }),
+        toggle("panel-cycle", "열린 채 ⋮을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 ⋮이나 위쪽 바를 그쪽으로 던져요." })),
       // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
       h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
         toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
