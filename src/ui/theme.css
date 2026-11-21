@@ -1901,10 +1901,21 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-sheet { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .anim-onion { z-index: 0; }
 #anim-ink { z-index: 1; }
-.anim-show { z-index: 2; background: #fffdf8; border-radius: 0.4rem; }
+.anim-show { z-index: 2; background: var(--paper-c, #fffdf8); border-radius: 0.4rem; }
+.draw-page[data-paper="clear"] .anim-show { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
+.anim-back { z-index: 0; }
+/* ‹ 3/12 ›: stays at the strip's start while it scrolls. */
+.anim-nav { position: sticky; left: 0; z-index: 2; flex: none; display: flex; align-items: center; gap: 0.1rem; align-self: center; padding: 0.15rem 0.2rem; border-radius: 0.8rem; background: color-mix(in srgb, var(--paper) 86%, transparent); box-shadow: 0 0 0 1px var(--glass-edge); }
+.anim-step { display: grid; place-items: center; width: 1.9rem; height: 2.6rem; border: 0; border-radius: 0.6rem; background: transparent; color: var(--ink); font: 800 1.25rem/1 var(--font); }
+.anim-step:active { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.anim-step:disabled { opacity: 0.3; }
+.anim-where { min-width: 2.6rem; text-align: center; font-size: 0.72rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.anim-frame.anim-bg .anim-num { font-size: 0.55rem; }
+.anim-record { position: fixed; left: -10000px; top: 0; pointer-events: none; }
 .anim-strip { display: flex; align-items: flex-end; gap: 0.35rem; width: min(100% - 1rem, 40rem); margin: 0 auto 0.3rem; padding: 0.35rem 0.45rem; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 62%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .anim-strip::-webkit-scrollbar { display: none; }
-.anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: #fffdf8; touch-action: manipulation; }
+.anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: var(--paper-c, #fffdf8); touch-action: manipulation; }
+.anim-strip[data-paper="clear"] .anim-frame { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px; }
 .anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }
 .anim-frame.on { border-color: var(--tint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint) 35%, transparent); }
 .anim-frame.playing { border-color: color-mix(in srgb, var(--tint) 70%, #fff); box-shadow: 0 0 0.8rem color-mix(in srgb, var(--tint) 55%, transparent); }

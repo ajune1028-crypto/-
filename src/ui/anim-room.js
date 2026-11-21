@@ -8,13 +8,14 @@
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
 import { h, icon, iconButton, toast, flashHint, closeOnOutside } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { PAGE_W, PAGE_H } from "./draw-room.js";
-import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf } from "../core/ink.js";
+import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
+import { PAPERS } from "../core/draw.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -24,6 +25,10 @@ import { currentTheme } from "./theme.js";
 const ONION = { before: "#e5484d", after: "#2f9e5b" };
 const LOOP_NAMES = { loop: "반복", pingpong: "왕복", once: "한 번" };
 const MAX_PIXELS = 3.2e6;
+// 배경: one drawing beneath every frame (Procreate's background frame): drawn once, it is under each
+// frame as it is drawn, played, shown small and saved.
+const BG = "bg";
+const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
 
 export function mountAnimRoom(body, app, session) {
   const root = app.root;
@@ -42,15 +47,31 @@ export function mountAnimRoom(body, app, session) {
   let ink = null;
   const view = pageStage(body, { id: "anim", width: PAGE_W, height: PAGE_H, onPinch: () => ink?.cancelTouch() });
   const { page, stage } = view;
+  const back = h("canvas", { class: "anim-sheet anim-back", id: "anim-back", "aria-hidden": "true" });
   const onion = h("canvas", { class: "anim-sheet anim-onion", "aria-hidden": "true" });
   const inkHost = h("div", { class: "draw-layer active", id: "anim-ink" });
   const show = h("canvas", { class: "anim-sheet anim-show", id: "anim-show", hidden: true, "aria-hidden": "true" });
-  page.append(onion, inkHost, show);
+  page.append(back, onion, inkHost, show);
   const curDoc = () => (current ? frameDocOf(current) : "k:F-");
   const share = liveInk.on(curDoc);
+  // 올가미, the same as in 그림 방 and the text room: what is drawn round is held, taken anywhere,
+  // recoloured, copied or rubbed out, on the frame being drawn.
+  let lasso = null;
+  const keepInk = (made) => {
+    const name = curDoc();
+    session.commit(name, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+    if (current) thumbSoon(current);
+  };
   ink = new InkLayer({
     host: inkHost,
     grow: false,
+    onLasso: (info) => lasso?.show(info),
+    onLassoMove: (ids, dx, dy) => {
+      const made = moveStrokesOps(session.clock, session.doc(curDoc()), ids, dx, dy, session.memberId);
+      keepInk(made);
+      return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+    },
     maxPixels: MAX_PIXELS,
     ink: () => session.doc(curDoc()),
     share,
@@ -77,6 +98,8 @@ export function mountAnimRoom(body, app, session) {
     },
   });
 
+  lasso = lassoActions({ ink, doc: () => session.doc(curDoc()), clock: session.clock, by: session.memberId, commit: keepInk });
+
   // ---- below the page: the strip of frames, the brushes, the tools ------------------------------
 
   const strip = h("div", { class: "anim-strip", id: "anim-strip", role: "listbox", "aria-label": "장" });
@@ -91,7 +114,10 @@ export function mountAnimRoom(body, app, session) {
   }, "양파");
   const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", title: "1초에 몇 장", onclick: () => cycle("fps") });
   const loopChip = h("button", { class: "chip anim-chip", id: "anim-loop", type: "button", title: "다 돌면 어떻게", onclick: () => cycle("loop") });
-  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, loopChip);
+  // The paper (그림 방's papers, 투명 too) and 영상으로 저장, as the other drawing rooms keep and save.
+  const paperButton = iconButton("anim-paper", "palette", "종이 (모든 장 밑)", () => paperMenu(), "종이");
+  const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
+  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, loopChip, paperButton, saveButton);
   body.after(strip, inkTools, toolbar);
 
   function drawTools() {
@@ -111,7 +137,7 @@ export function mountAnimRoom(body, app, session) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
-    drawInkTools(inkTools, { pen, setTool, store: app.store, units: () => ink.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -130,6 +156,31 @@ export function mountAnimRoom(body, app, session) {
     }
   }
 
+  function paintPaper() {
+    const key = doc.settings().paper;
+    page.dataset.paper = key;
+    page.style.setProperty("--paper-c", paperColour(key) || "transparent");
+    strip.dataset.paper = key;
+    strip.style.setProperty("--paper-c", paperColour(key) || "transparent");
+  }
+
+  /** The background under the frame being drawn (not while the background itself is drawn). */
+  function paintBack() {
+    fitCanvas(back);
+    const g = back.getContext("2d");
+    if (!g) return;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, back.width, back.height);
+    back.hidden = current === BG || !!playing;
+    if (!back.hidden) paintFrame(g, BG, back.width, back.height);
+  }
+
+  /** A frame as it is seen: the background, then its own strokes. */
+  function paintWhole(g, id, w, hgt) {
+    paintFrame(g, BG, w, hgt);
+    if (id !== BG) paintFrame(g, id, w, hgt);
+  }
+
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
@@ -137,6 +188,8 @@ export function mountAnimRoom(body, app, session) {
   }
 
   const neighbours = () => {
+    // Drawing the background, the first frame shows faintly over it (to place the scene).
+    if (current === BG) return { before: doc.frames()[0]?.id || null, after: null };
     const list = doc.frames();
     const i = list.findIndex((f) => f.id === current);
     return { before: i > 0 ? list[i - 1].id : null, after: i >= 0 && i < list.length - 1 ? list[i + 1].id : null };
@@ -165,7 +218,7 @@ export function mountAnimRoom(body, app, session) {
   function pictureOf(id, w, hgt) {
     const d = session.doc(frameDocOf(id));
     const had = pictures.get(id);
-    if (had && had.version === d.version && had.canvas.width === w && had.canvas.height === hgt) return had.canvas;
+    if (had && had.version === d.version + "/" + session.doc(frameDocOf(BG)).version && had.canvas.width === w && had.canvas.height === hgt) return had.canvas;
     const c = had?.canvas || document.createElement("canvas");
     c.width = w;
     c.height = hgt;
@@ -173,9 +226,9 @@ export function mountAnimRoom(body, app, session) {
     if (g) {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, w, hgt);
-      paintFrame(g, id, w, hgt);
+      paintWhole(g, id, w, hgt);
     }
-    pictures.set(id, { version: d.version, canvas: c });
+    pictures.set(id, { version: d.version + "/" + session.doc(frameDocOf(BG)).version, canvas: c });
     return c;
   }
 
@@ -189,6 +242,7 @@ export function mountAnimRoom(body, app, session) {
     inkHost.style.visibility = "hidden";
     fitCanvas(show);
     paintOnion();
+    paintBack();
     setTool(pen.tool);
     drawTools();
     const loop = (now) => {
@@ -222,6 +276,7 @@ export function mountAnimRoom(body, app, session) {
     inkHost.style.visibility = "";
     for (const cell of strip.querySelectorAll(".anim-frame.playing")) cell.classList.remove("playing");
     paintOnion();
+    paintBack();
     setTool(pen.tool);
     drawTools();
   }
@@ -243,7 +298,7 @@ export function mountAnimRoom(body, app, session) {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
-    paintFrame(g, id, c.width, c.height);
+    paintWhole(g, id, c.width, c.height);
   }
 
   /** Where friends are: frame id → their colours. */
@@ -259,13 +314,41 @@ export function mountAnimRoom(body, app, session) {
     return out;
   }
 
+  // ‹ 3/12 ›: to the frame before or after without hunting along the strip (as FlipaClip and
+  // RoughAnimator step through frames); it stays at the strip's start while the strip scrolls.
+  const where = h("span", { class: "anim-where", id: "anim-where" });
+  // 배경 sits before the first frame on the strip, so from it › is frame 1; at either end the
+  // arrow greys out rather than wrapping round (FlipaClip does not wrap either).
+  const stepTo = (by) => {
+    const list = doc.frames();
+    const i = current === BG ? -1 : list.findIndex((f) => f.id === current);
+    const next = list[i + by];
+    if (next) { if (playing) stopPlay(); select(next.id); }
+  };
+  const prevButton = h("button", { class: "anim-step", id: "anim-prev", type: "button", "aria-label": "앞 장", text: "‹", onclick: () => stepTo(-1) });
+  const nextButton = h("button", { class: "anim-step", id: "anim-next", type: "button", "aria-label": "다음 장", text: "›", onclick: () => stepTo(1) });
+  const nav = h("div", { class: "anim-nav", id: "anim-nav" }, prevButton, where, nextButton);
+  const bgThumb = h("canvas", { class: "anim-thumb", width: 54, height: 72, "aria-hidden": "true" });
+  const bgCell = h("button", { class: "anim-frame anim-bg", id: "anim-bg", type: "button", role: "option", data: { frame: BG }, "aria-label": "배경 (모든 장 밑에)" }, bgThumb, h("span", { class: "anim-num", text: "배경" }),
+    h("span", { class: "anim-peers" }));
+  bgCell.addEventListener("click", () => { if (playing) stopPlay(); select(BG); });
+  cells.set(BG, { cell: bgCell, thumb: bgThumb });
   const addButton = h("button", { class: "anim-add", id: "anim-add", type: "button", "aria-label": "빈 장 더하기", onclick: () => addFrame() }, icon("plus"));
   const copyButton = h("button", { class: "anim-add", id: "anim-copy", type: "button", "aria-label": "이 장 복제해서 다음 장으로", onclick: () => duplicate() }, icon("copy"));
   function drawStrip() {
     const list = doc.frames();
     const friends = friendsOn();
     const keep = new Set(list.map((f) => f.id));
+    keep.add(BG);
     for (const [id, { cell }] of cells) if (!keep.has(id)) { cell.remove(); cells.delete(id); }
+    strip.append(nav, bgCell);
+    const at = list.findIndex((f) => f.id === current);
+    where.textContent = current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`;
+    prevButton.disabled = current === BG || at <= 0;
+    nextButton.disabled = current !== BG && at >= list.length - 1;
+    bgCell.classList.toggle("on", current === BG);
+    bgCell.setAttribute("aria-selected", String(current === BG));
+    bgCell.querySelector(".anim-peers").replaceChildren(...(friends.get(BG) || []).map((color) => h("i", { style: { background: color } })));
     list.forEach((f, i) => {
       let entry = cells.get(f.id);
       if (!entry) {
@@ -363,23 +446,24 @@ export function mountAnimRoom(body, app, session) {
       current = id;
       share.detach(ink);
       share.attach(ink);
-      session.load(frameDocOf(id)).then(() => { if (alive && current === id) { ink.render(); paintOnion(); } });
+      session.load(frameDocOf(id)).then(() => { if (alive && current === id) { ink.render(); paintOnion(); paintBack(); } });
       session.setPresencePart("anim", { f: id });
     }
     ink.render();
     paintOnion();
+    paintBack();
     drawStrip();
   }
 
   function addFrame() {
     if (readOnly() || doc.frames().length >= MAX_FRAMES) return;
-    const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current });
+    const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current === BG ? null : current });
     if (apply(made)) select(made.id);
   }
 
   /** The animator's way: the frame copied as the next one, to change a little. */
   function duplicate() {
-    if (readOnly() || !current || doc.frames().length >= MAX_FRAMES) return;
+    if (readOnly() || !current || current === BG || doc.frames().length >= MAX_FRAMES) return;
     const from = session.doc(frameDocOf(current));
     const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current });
     session.commit("anim", made.ops);
@@ -403,6 +487,107 @@ export function mountAnimRoom(body, app, session) {
       toast(root, "장을 지웠어요 (되돌리기로 살려요)");
       if (current === id) select((list[i + 1] || list[i - 1]).id);
     }
+  }
+
+  /** 종이: the 그림 방's papers (투명 too), under every frame, for everyone. */
+  function paperMenu() {
+    closeMenu?.();
+    if (readOnly()) return;
+    const now = doc.settings().paper;
+    const menu = h("div", { class: "anim-menu", id: "anim-paper-menu", role: "menu" },
+      h("div", { class: "anim-menu-row paper-row", role: "group", "aria-label": "종이" },
+        h("span", { class: "anim-menu-label", text: "종이" }),
+        ...PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === now), "aria-label": label, title: label,
+          style: c ? { background: c } : {}, onclick: () => { if (k !== now) apply(setAnimOps(session.clock, doc, { paper: k })); close(); } }))));
+    document.body.append(menu);
+    const r = paperButton.getBoundingClientRect();
+    const mr = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
+    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
+    let stop = null;
+    function close() {
+      stop?.();
+      menu.remove();
+      if (closeMenu === close) closeMenu = null;
+    }
+    closeMenu = close;
+    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t) || paperButton.contains(t), close, menu); }, 0);
+  }
+
+  /**
+   * 영상으로 저장 (FlipaClip's MP4): the flipbook once through at its own speed (back and forth once for
+   * 왕복), each frame on its paper with the background beneath, recorded from a canvas.
+   */
+  let saving = false;
+  async function saveVideo() {
+    if (saving) return;
+    const pass = onePass(doc);
+    if (!pass.length) return;
+    const canvas = document.createElement("canvas");
+    if (typeof canvas.captureStream !== "function" || typeof window.MediaRecorder !== "function") return void toast(root, "이 브라우저에서는 영상으로 저장할 수 없어요");
+    saving = true;
+    if (playing) stopPlay();
+    const W = 720;
+    const H = Math.round((W * PAGE_H) / PAGE_W);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.className = "anim-record";
+    document.body.append(canvas);
+    const g = canvas.getContext("2d");
+    const paper = paperColour(doc.settings().paper) || "#ffffff"; // a video has no see-through
+    const draw = (id) => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.fillStyle = paper;
+      g.fillRect(0, 0, W, H);
+      paintWhole(g, id, W, H);
+    };
+    await Promise.all([...new Set(pass), BG].map((id) => session.load(frameDocOf(id))));
+    draw(pass[0]);
+    const { fps } = doc.settings();
+    const type = ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+    let rec;
+    try {
+      rec = new MediaRecorder(canvas.captureStream(fps), type ? { mimeType: type } : {});
+    } catch {
+      canvas.remove();
+      saving = false;
+      return void toast(root, "이 브라우저에서는 영상으로 저장할 수 없어요");
+    }
+    const parts = [];
+    rec.ondataavailable = (e) => { if (e.data?.size) parts.push(e.data); };
+    const stopped = new Promise((resolve) => { rec.onstop = resolve; });
+    saveButton.disabled = true;
+    saveButton.dataset.cap = "저장 중…";
+    rec.start(250);
+    const start = performance.now();
+    let shown = 0;
+    await new Promise((resolve) => {
+      const tick = () => {
+        if (!alive) return resolve();
+        const i = Math.floor(((performance.now() - start) / 1000) * fps);
+        if (i >= pass.length) return resolve();
+        if (i !== shown) { shown = i; draw(pass[i]); }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    setTimeout(() => rec.state !== "inactive" && rec.stop(), 1000 / fps + 150);
+    await stopped;
+    canvas.remove();
+    saving = false;
+    saveButton.disabled = false;
+    saveButton.dataset.cap = "저장";
+    const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
+    toolbar.dataset.saved = String(blob.size);
+    const url = URL.createObjectURL(blob);
+    const title = session.room.meta("name") || "플립북";
+    const a = h("a", { href: url, download: `${title}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    toast(root, "영상으로 저장했어요");
   }
 
   function cycle(key) {
@@ -441,10 +626,11 @@ export function mountAnimRoom(body, app, session) {
       else session.commit(name, invertInkOps(session.doc(name), session.clock, list, dir));
     }
     record([]);
-    if (!doc.frame(current) || doc.frame(current).removed) select(doc.frames()[0]?.id);
+    if (current !== BG && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
     drawStrip();
     ink.render();
     paintOnion();
+    paintBack();
   }
 
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
@@ -459,10 +645,16 @@ export function mountAnimRoom(body, app, session) {
   const offs = [
     session.on("change", ({ doc: name }) => {
       if (name === "anim") {
-        if (current && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
+        if (current && current !== BG && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
         drawStrip();
         drawTools();
         paintOnion();
+        paintPaper();
+      } else if (name === frameDocOf(BG)) {
+        // The background is under every frame: all of them change.
+        for (const id of [BG, ...doc.frames().map((f) => f.id)]) thumbSoon(id);
+        if (current === BG) ink.render();
+        paintBack();
       } else if (name.startsWith("k:F")) {
         const id = name.slice(3);
         thumbSoon(id);
@@ -476,7 +668,7 @@ export function mountAnimRoom(body, app, session) {
       peersTimer = setTimeout(() => { peersTimer = 0; if (alive) drawStrip(); }, 300);
     }),
   ];
-  const resize = new ResizeObserver(() => { if (!playing) paintOnion(); else fitCanvas(show); });
+  const resize = new ResizeObserver(() => { if (!playing) { paintOnion(); paintBack(); } else fitCanvas(show); });
   resize.observe(page);
 
   session.load("anim").then(async () => {
@@ -490,6 +682,8 @@ export function mountAnimRoom(body, app, session) {
     }
     const first = doc.frames()[0];
     if (first) select(first.id);
+    paintPaper();
+    session.load(frameDocOf(BG)).then(() => { if (!alive) return; paintBack(); for (const id of [BG, ...doc.frames().map((f) => f.id)]) thumbSoon(id); });
     drawTools();
     view.fit();
   });
@@ -502,6 +696,7 @@ export function mountAnimRoom(body, app, session) {
       alive = false;
       stopPlay();
       closeMenu?.();
+      lasso?.hide();
       for (const off of offs) off();
       clearTimeout(peersTimer);
       resize.disconnect();

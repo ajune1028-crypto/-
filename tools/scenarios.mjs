@@ -6192,6 +6192,68 @@ scenario("finger lines press as a pen would: a slow finger line is kept heavier 
 // next; a frame copied comes next with the same drawing; held longer (×3) it is wider in the strip
 // and shows longer as it plays; ▶ plays the frames in turn; the friend sees the same frames, and the
 // strip shows on which frame each friend is.
+// The owner (21 November): "애니도 다른 어플들 다 보라니까… 너무 비효율적… 다 연동이 되어야". The same 올가미 and
+// papers as 그림 방; ‹ › to the frame before and after (FlipaClip, RoughAnimator); a 배경 under every
+// frame (Procreate's background frame); 영상으로 저장 (FlipaClip's MP4).
+scenario("애니메이션 방 with the other rooms' tools: 올가미 holds a line and moves it; ‹ › step through the frames; 배경 lies under every frame; 종이 투명 for everyone; 영상으로 저장 records it", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 420, height: 880 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "연동 플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && ${q("#anim-bg")} && ${q("#anim-where")}?.textContent === "1/2"`);
+  const [f1, f2] = await a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const box = await a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (v) => {
+    await a.press(box.x + box.w * 0.35, box.y + box.h * v);
+    for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * (0.35 + k * 0.04), box.y + box.h * v);
+    await a.release(box.x + box.w * 0.67, box.y + box.h * v);
+  };
+  // 배경: a line on it, under every frame.
+  await click(a, "#anim-bg");
+  await a.waitFor(`${q("#anim-bg")}.classList.contains("on") && ${q("#anim-where")}.textContent.startsWith("배경")`);
+  await line(0.85);
+  await a.waitFor(`window.__app.session.doc("k:Fbg").strokes().length === 1`);
+  // ›: the second frame; the background shows under it.
+  await click(a, "#anim-next");
+  await a.waitFor(`${q("#anim-where")}.textContent === "1/2"`);
+  await click(a, "#anim-next");
+  await a.waitFor(`${q("#anim-where")}.textContent === "2/2" && ${q(`.anim-frame[data-frame="${f2}"]`)}.classList.contains("on")`);
+  await a.front();
+  await pause(200);
+  const backInk = await a.eval(`(() => { const c = document.getElementById("anim-back"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`);
+  assert.ok(backInk > 50, "the background lies under the frame: " + backInk);
+  await click(a, "#anim-prev");
+  await a.waitFor(`${q("#anim-where")}.textContent === "1/2"`);
+  // 올가미, as in 그림 방: a line on the first frame held and taken down.
+  await line(0.3);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes().length === 1`);
+  await click(a, "#ink-lasso");
+  const ring = [[0.25, 0.22], [0.78, 0.22], [0.78, 0.38], [0.25, 0.38], [0.25, 0.225]].map(([u, v]) => [box.x + box.w * u, box.y + box.h * v]);
+  await a.press(...ring[0]);
+  for (let k = 1; k < ring.length; k++) for (let j = 1; j <= 5; j++) await a.moveTo(ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * j) / 5, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * j) / 5);
+  await a.release(...ring.at(-1));
+  await a.waitFor(`${q("#ink-lasso-menu")}?.textContent.includes("그림 1")`, 3000);
+  const y0 = await a.eval(`window.__app.session.doc("k:F${f1}").strokes()[0].pts[1]`);
+  await a.press(box.x + box.w * 0.5, box.y + box.h * 0.3);
+  for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * 0.5, box.y + box.h * (0.3 + k * 0.03));
+  await a.release(box.x + box.w * 0.5, box.y + box.h * 0.54);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes()[0].pts[1] > ${y0} + 500`, 3000);
+  await click(a, "#ink-lasso");
+  // 종이: 투명, for everyone.
+  await click(a, "#anim-paper");
+  await a.waitFor(q('#anim-paper-menu [data-paper="clear"]'));
+  await click(a, '#anim-paper-menu [data-paper="clear"]');
+  await a.waitFor(`window.__app.session.doc("anim").settings().paper === "clear" && ${q("#anim-page")}.dataset.paper === "clear"`);
+  await a.shot(out("anim-together.png"));
+  // 영상으로 저장: recorded once through.
+  await click(a, "#anim-save");
+  await a.waitFor(`Number(${q("#anim-tools")}.dataset.saved || 0) > 0`, 15000);
+});
+
 scenario("애니메이션 방: two frames to start; the onion skin shows the frame before; 복제 copies a frame; ×3 holds it; ▶ plays the frames in turn; the friend sees the frames and where each one is", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 420, height: 880 });
   await click(a, "#add-creative");
@@ -6201,7 +6263,7 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
   await click(a, "#create-room");
   await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
   await click(a, "#invite-done");
-  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && document.querySelectorAll("#anim-strip .anim-frame").length === 2`);
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && document.querySelectorAll("#anim-strip .anim-frame:not(.anim-bg)").length === 2`);
   assert.equal(await a.eval(`${q("#anim-onion-btn")}.getAttribute("aria-pressed")`), "true", "the onion skin is on");
   const frames = () => a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
   const [f1, f2] = await frames();
@@ -6242,7 +6304,7 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
   const id = await a.eval("location.hash.slice(3)");
   const b = await open({ dev: "b", hash: "r-" + id, width: 420, height: 880 });
   await joinNew(b, { name: "나래" });
-  await b.waitFor(`document.querySelectorAll("#anim-strip .anim-frame").length === 3`);
+  await b.waitFor(`document.querySelectorAll("#anim-strip .anim-frame:not(.anim-bg)").length === 3`);
   await click(b, `.anim-frame[data-frame="${f2}"]`);
   await a.waitFor(`${q(`.anim-frame[data-frame="${f2}"] .anim-peers i`)}`, 4000);
   // ▶: the frames show in turn (f1 three ticks, then its copy, then f2), and ⏸ stops.

@@ -52,7 +52,7 @@ test("frames reorder, settings change; the later change wins in any order; devic
   take(setAnimOps(cb, src, { fps: 24, loop: "pingpong" }));
   take(removeFrameOps(ca, src, y.id));
   assert.deepEqual(src.frames().map((f) => f.id), [z.id, x.id]);
-  assert.deepEqual(src.settings(), { fps: 24, loop: "pingpong" });
+  assert.deepEqual(src.settings(), { fps: 24, loop: "pingpong", paper: "white" });
   const random = rng(11);
   for (let i = 0; i < 20; i++) {
     const d = new AnimDoc();
@@ -85,4 +85,29 @@ test("nonsense is set aside; a change that comes before its frame waits for it",
   assert.equal(doc.apply({ t: "fset", id: "9@x", f: "8@x", v: { hold: 2 } }), "pending");
   assert.equal(doc.apply({ t: "frame", id: "8@x", by: "m", at: 1 }), "applied");
   assert.equal(doc.frames()[0].hold, 2);
+});
+
+// The owner (21 November): "애니도 다른 앱 다 보라니까… 다 연동이 되어야" — the paper is the 그림 방's
+// (any of its papers or 투명), for the whole flipbook, for everyone; and a saved video plays it once
+// through (back and forth once for 왕복).
+test("a flipbook's paper is one of the 그림 방's, set for everyone (later wins, undo); a video plays it once through", async () => {
+  const { AnimDoc, addFrameOps, setAnimOps, setFrameOps, invertAnimOps, onePass } = await import("../src/core/anim.js");
+  const { Clock } = await import("../src/core/crdt.js");
+  const doc = new AnimDoc();
+  const clock = new Clock("a");
+  const log = [];
+  const put = (made) => { for (const op of made.ops) { doc.apply(op); log.push(op); } return made; };
+  assert.equal(doc.settings().paper, "white", "white at first");
+  const p = put(setAnimOps(clock, doc, { paper: "clear" }));
+  assert.equal(doc.settings().paper, "clear");
+  assert.equal(setAnimOps(clock, doc, { paper: "purple-glitter" }).ops.length, 0, "only the 그림 방's papers");
+  for (const op of invertAnimOps(doc, clock, p.atoms, "undo")) doc.apply(op);
+  assert.equal(doc.settings().paper, "white");
+  const a = put(addFrameOps(clock, doc, { by: "m" }));
+  const b = put(addFrameOps(clock, doc, { by: "m", after: a.id }));
+  const c = put(addFrameOps(clock, doc, { by: "m", after: b.id }));
+  put(setFrameOps(clock, doc, b.id, { hold: 2 }));
+  assert.deepEqual(onePass(doc), [a.id, b.id, b.id, c.id], "once through, each as long as it is held");
+  put(setAnimOps(clock, doc, { loop: "pingpong" }));
+  assert.deepEqual(onePass(doc), [a.id, b.id, b.id, c.id, b.id, b.id], "왕복: there and back to before the first");
 });

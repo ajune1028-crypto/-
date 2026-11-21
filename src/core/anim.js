@@ -8,9 +8,10 @@
 //   frame  { id, by, at, o? }                 a new frame; o: its place (else after all others)
 //   fset   { id, f: frame id, v: { order?, hold? } }   each field: the later op wins
 //   frm    { id, f: frame id, n }             taken away while n is odd (undo brings it back)
-//   aset   { id, v: { fps?, loop? } }         how it plays: the later op wins
+//   aset   { id, v: { fps?, loop?, paper? } } how it plays and the paper under it: the later op wins
 
 import { cmpId, validId } from "./crdt.js";
+import { PAPERS } from "./draw.js";
 
 export const FPS_CHOICES = [6, 8, 12, 24];
 export const LOOPS = ["loop", "pingpong", "once"];
@@ -18,8 +19,9 @@ export const MAX_FRAMES = 240;
 export const MAX_HOLD = 8;
 const MAX_UNKNOWN = 300;
 const FRAME_FIELDS = { order: (v) => typeof v === "number" && Number.isFinite(v), hold: (v) => Number.isInteger(v) && v >= 1 && v <= MAX_HOLD };
-const ANIM_FIELDS = { fps: (v) => FPS_CHOICES.includes(v), loop: (v) => LOOPS.includes(v) };
-const DEFAULTS = { fps: 12, loop: "loop" };
+// The paper is the 그림 방's (one of its papers, or 투명): the rooms draw alike (the owner, 21 November: "다 연동").
+const ANIM_FIELDS = { fps: (v) => FPS_CHOICES.includes(v), loop: (v) => LOOPS.includes(v), paper: (v) => PAPERS.some(([k]) => k === v) };
+const DEFAULTS = { fps: 12, loop: "loop", paper: "white" };
 
 /** The drawing document that holds a frame's strokes. */
 export function frameDocOf(frameId) {
@@ -121,7 +123,7 @@ export class AnimDoc {
 
   /** How it plays: { fps, loop }. */
   settings() {
-    return { fps: this.play.get("fps")?.v ?? DEFAULTS.fps, loop: this.play.get("loop")?.v ?? DEFAULTS.loop };
+    return { fps: this.play.get("fps")?.v ?? DEFAULTS.fps, loop: this.play.get("loop")?.v ?? DEFAULTS.loop, paper: this.play.get("paper")?.v ?? DEFAULTS.paper };
   }
 }
 
@@ -219,6 +221,16 @@ export function timeline(doc) {
   const out = [];
   for (const f of doc.frames()) for (let i = 0; i < f.hold; i++) out.push({ id: f.id, tick: out.length });
   return out;
+}
+
+/**
+ * The frames of one play through (each as many times as it is held), as a saved video shows them:
+ * once from the first to the last; 왕복 there and back, stopping before the first comes again.
+ */
+export function onePass(doc) {
+  const line = timeline(doc).map((t) => t.id);
+  if (doc.settings().loop !== "pingpong" || line.length < 3) return line;
+  return [...line, ...line.slice(1, -1).reverse()];
 }
 
 /** The frame shown at a tick, as the animation plays (looping, back and forth, or once). */
