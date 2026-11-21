@@ -643,7 +643,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
   pointer-events: none;
 }
 /* Above the drawing tools or the chosen words' row while they are out. */
-#app:has(.sel-tools:not([hidden])) .toast, #app:has(.ink-tools:not([hidden])) .toast { bottom: 11.4rem; }
+#app:has(.sel-tools:not([hidden])) .toast { bottom: 11.4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -967,6 +967,33 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools .icon-btn { width: 1.9rem; height: 1.9rem; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+/* The tools' rail (ArtCraft's paint page side toolbar; Procreate's and ibisPaint's size bar): slim glass
+   at the left edge, the middle of the screen, icons only; it fades while a line is drawn. */
+.ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
+.ink-tools.rail::-webkit-scrollbar { display: none; }
+.room[data-kind] > .ink-tools.rail { position: fixed; }
+.ink-tools.rail .icon-btn { width: 2.35rem; height: 2.35rem; }
+.ink-tools.rail .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+.ink-tools.row { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+.ink-tool { display: grid; place-items: center; width: 2.35rem; min-height: 2.35rem; padding: 0.15rem 0; border-radius: 0.8rem; color: var(--muted); }
+.ink-tool[aria-pressed="true"], .ink-tool[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
+.ink-brush-now .ink-preview { width: 30px; height: 14px; }
+.ink-tool-name { font-size: 0.5rem; font-weight: 800; line-height: 1; white-space: nowrap; letter-spacing: -0.03em; }
+.ink-color-now .ink-dot { display: block; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px color-mix(in srgb, var(--ink) 30%, transparent); }
+.ink-sep { flex: none; width: 1.4rem; height: 1px; margin: 0.1rem auto; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ink-tools.row .ink-sep { width: 1px; height: 1.4rem; margin: 0 0.1rem; }
+.ink-widths { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; }
+.ink-tools.row .ink-widths { flex-direction: row; }
+.ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* The small window beside the rail: every brush, the colours, or the eraser's way. */
+.ink-pop { position: fixed; z-index: 71; display: grid; gap: 0.5rem; max-width: min(19rem, calc(100vw - 4.5rem)); padding: 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.2rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.2s var(--ease); }
+.ink-pop .ink-brushes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.15rem; overflow: visible; max-width: none; -webkit-mask-image: none; mask-image: none; }
+.ink-pop .ink-brush { min-width: 0; padding: 0.3rem 0.1rem 0.25rem; }
+.ink-pop-row { display: flex; justify-content: center; gap: 0.35rem; }
+.ink-colors { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; max-width: 12.5rem; }
+.ink-colors .ink-color { width: 1.75rem; height: 1.75rem; }
+.ink-colors.recent { padding-top: 0.4rem; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.ink-colors.recent .ink-color { width: 1.35rem; height: 1.35rem; }
 
 /* ---- song room: ways in, speed, friends, note editor ---------------------------- */
 

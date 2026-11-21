@@ -59,10 +59,10 @@ export function mountAnimRoom(body, app, session) {
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
     onPick: (color) => { pen.color = color; setTool(pen.tool); },
-    onStroke: ({ pts, color, width, brush, shape }) => {
+    onStroke: ({ pts, color, width, size, brush, shape }) => {
       if (readOnly() || !current) return null;
       const name = curDoc();
-      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, brush, shape, by: session.memberId });
+      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
       session.commit(name, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: name })));
       thumbSoon(current);
@@ -110,8 +110,8 @@ export function mountAnimRoom(body, app, session) {
   function setTool(tool) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
-    ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush });
-    drawInkTools(inkTools, { pen, setTool, store: app.store });
+    ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------

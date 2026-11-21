@@ -190,7 +190,7 @@ export function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    drawInkToolsInto(inkTools, { pen, setTool, store: app.store });
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
   }
 
   function buttons() {
@@ -273,8 +273,8 @@ export function mountTextRoom(body, app, session) {
         // already reaches the bottom of the screen; a long one grows past its last line).
         room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, brush, shape, by: session.memberId });
+        onStroke: ({ pts, color, width, size, brush, shape }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, size, brush, shape, by: session.memberId });
           session.commit(inkDoc, made.ops);
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
           return made.ops[0]?.id;
