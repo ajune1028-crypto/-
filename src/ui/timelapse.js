@@ -5,7 +5,7 @@
 
 import { h, toast } from "./dom.js";
 import { paintStroke } from "./ink.js";
-import { brushOf, widthOf } from "../core/ink.js";
+import { brushOf, widthOf, opacityOf } from "../core/ink.js";
 import { replayPlan, strokePart } from "../core/timelapse.js";
 
 const SPEEDS = [1, 2, 4];
@@ -62,7 +62,7 @@ export function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, color
   function paintOn(c, item, pts) {
     const lg = c.getContext("2d");
     lg.setTransform(k, 0, 0, k, 0, 0);
-    paintStroke(lg, pts, item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q);
+    paintStroke(lg, pts, item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q, opacityOf(item.stroke));
     lg.setTransform(1, 0, 0, 1, 0, 0);
   }
 

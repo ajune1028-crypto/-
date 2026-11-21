@@ -13,7 +13,7 @@
 
 import { h, icon, iconButton, closeOnOutside, mount } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
@@ -160,9 +160,11 @@ function fillOutline(g, poly) {
  * shaped: a shape made straight (followed exactly, no pressure).
  */
 /** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
-export function paintStroke(g, pts, color, px, brush, shaped = false) {
+/** alpha: the stroke's own 불투명 (0.05 to 1), on top of what the brush itself lays down. */
+export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1) {
   if (!pts || pts.length < 3) return;
-  const look = brushLook(brush);
+  const base = brushLook(brush);
+  const look = alpha < 1 ? { ...base, alpha: base.alpha * alpha } : base;
   const size = (px || 4) * (100 / 16) * look.scale;
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
@@ -197,7 +199,7 @@ export function paintStroke(g, pts, color, px, brush, shaped = false) {
     fillOutline(g, poly);
     const seg = sketchLines(points, { reach: size * 9, seed: (pts[0] * 31 + pts[1]) | 0 });
     if (seg.length) {
-      g.globalAlpha = 0.22;
+      g.globalAlpha = 0.22 * alpha;
       g.strokeStyle = ink;
       g.lineWidth = Math.max(size * 0.25, 2);
       g.lineCap = "round";
@@ -341,6 +343,7 @@ export class InkLayer {
     this.width = 2;
     this.size = null;
     this.brush = "pen";
+    this.opacity = 1; // 불투명, Procreate's second slider
     this.live = null;
     this.canvas = h("canvas", { class: "ink", "aria-hidden": "true" });
     host.append(this.canvas);
@@ -370,12 +373,13 @@ export class InkLayer {
     this.canvas.dataset.tool = tool || "";
   }
 
-  /** size: a width of my own in px (그림 방's slider), null for the width's. */
-  setStyle({ color, width, brush, size }) {
+  /** size: a width of my own in px (그림 방's slider), null for the width's; opacity: 0.05 to 1. */
+  setStyle({ color, width, brush, size, opacity }) {
     if (color) this.color = color;
     if (width) this.width = width;
     if (brush) this.brush = brush;
     if (size !== undefined) this.size = size;
+    if (opacity !== undefined) this.opacity = Math.max(0.05, Math.min(1, Number(opacity) || 1));
   }
 
   // ---- 올가미 on drawings ------------------------------------------------------------------
@@ -534,7 +538,7 @@ export class InkLayer {
         }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
-          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}) });
+          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}), ...(this.opacity < 1 ? { o: Math.round(this.opacity * 100) } : {}) });
           this.share.grow("ink", this.live.pts);
         }
         this.render();
@@ -639,8 +643,9 @@ export class InkLayer {
       let opId = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
       const size = this.size || undefined;
-      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true });
-      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush });
+      const opacity = this.opacity < 1 ? this.opacity : undefined;
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true, opacity });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush, opacity });
       if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
@@ -711,7 +716,7 @@ export class InkLayer {
     const inv = kept.t.inverse();
     const pts = ringsToPoints(rings.filter((r) => r.length >= 3), ([x, y]) => { const p = inv.transformPoint({ x, y }); return [p.x, p.y]; });
     if (pts.length < 9) return;
-    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true });
+    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined });
     this.render();
   }
 
@@ -804,7 +809,7 @@ export class InkLayer {
       pg.setTransform(t);
       for (const s of this.ink().strokes()) {
         const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q);
+        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s));
       }
       this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
@@ -813,11 +818,11 @@ export class InkLayer {
     const wet = live?.pts && live.brush === "smudge" && !live.shapeNow;
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px()) : this.kept.canvas, 0, 0);
+    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px(), this.opacity) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true);
-    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true, this.opacity);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush, false, this.opacity);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
@@ -826,7 +831,7 @@ export class InkLayer {
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
-      this.paint(g, line.pts, line.c, widthOf(line), line.b);
+      this.paint(g, line.pts, line.c, widthOf(line), line.b, false, opacityOf(line));
       if (line.live) tips.push(line);
     }
     // Pointer lights: friends' and mine; while one still glows, the next frame comes.
@@ -955,8 +960,8 @@ export class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, px, brush, shaped = false) {
-    paintStroke(g, pts, color, px, brush, shaped);
+  paint(g, pts, color, px, brush, shaped = false, alpha = 1) {
+    paintStroke(g, pts, color, px, brush, shaped, alpha);
   }
 
   destroy() {
@@ -1035,7 +1040,7 @@ function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
 }
 
 /** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
-function wetPicture(live, kept, color, px) {
+function wetPicture(live, kept, color, px, alpha = 1) {
   if (!live.wet || live.wet.key !== kept.key) {
     const c = live.wet?.canvas || document.createElement("canvas");
     c.width = kept.canvas.width;
@@ -1046,7 +1051,8 @@ function wetPicture(live, kept, color, px) {
   }
   const pts = thinPoints(live.pts);
   if (pts.length < 6) return live.wet.canvas;
-  const look = brushLook("smudge");
+  const base = brushLook("smudge");
+  const look = alpha < 1 ? { ...base, alpha: base.alpha * alpha } : base;
   const size = (px || 4) * (100 / 16) * look.scale;
   const points = strokePoints(pts, { streamline: look.streamline });
   // Only up to the line's last settled point: its very end still moves as the hand goes on.

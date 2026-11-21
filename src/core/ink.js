@@ -64,10 +64,12 @@ export class InkDoc {
         // A style is a name; one this version does not know is drawn as its brush.
         (op.s === undefined || (typeof op.s === "string" && /^[a-z]{1,20}$/.test(op.s))) &&
         (op.q === undefined || op.q === 1) &&
-        (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10));
+        (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10)) &&
+        (op.o === undefined || isInt(op.o, 5, 99));
       if (!ok) return this.setAside(op);
       const stroke = { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 };
       if (op.z) stroke.z = op.z;
+      if (op.o) stroke.o = op.o;
       if (op.s) stroke.s = op.s;
       if (op.q) stroke.q = 1;
       this.byId.set(op.id, stroke);
@@ -188,7 +190,7 @@ export function nearestWidth(px) {
   return px < 2 * Math.SQRT2 ? 1 : px < 4 * Math.SQRT2 ? 2 : 3;
 }
 
-export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false }) {
+export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false, opacity }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
   const op = { t: "stroke", id: clock.next(), pts: shape ? pts.slice(0, MAX_POINTS * 3) : thinToFit(pts), c: color, w: width, by, at };
@@ -205,7 +207,15 @@ export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.n
   if (brush !== "pen") op.b = brush;
   if (style) op.s = style;
   if (shape) op.q = 1;
+  // 불투명 (Procreate's second slider) as a whole percent, 5 to 99; full strength is left out so
+  // devices from before it draw the stroke as they always did.
+  if (Number.isFinite(opacity) && opacity < 0.995) op.o = Math.max(5, Math.min(99, Math.round(opacity * 100)));
   return { ops: [op], atoms: [{ k: "ink+", s: op.id }] };
+}
+
+/** A stroke's 불투명, 0.05 to 1 (1 when it has none of its own). */
+export function opacityOf(stroke) {
+  return stroke?.o ? Math.max(5, Math.min(100, stroke.o)) / 100 : 1;
 }
 
 export function eraseOps(clock, ink, strokeId) {
@@ -227,7 +237,7 @@ export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
     if (!s || s.rm % 2 === 1) continue;
     const gone = eraseOps(clock, ink, id);
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -273,7 +283,7 @@ export function copyStrokesOps(clock, ink, ids, dx, dy, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1) continue;
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...made.ops);
     atoms.push(...made.atoms);
   }
@@ -289,7 +299,7 @@ export function recolorStrokesOps(clock, ink, ids, color, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
     const gone = eraseOps(clock, ink, id);
-    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }

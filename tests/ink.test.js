@@ -231,3 +231,25 @@ test("a stroke keeps the hand's detail to 0.6 px, and a very long one is kept wh
   assert.ok(kept.length / 3 <= 3000, "within a stroke's points: " + kept.length / 3);
   assert.deepEqual(kept.slice(-3), long.slice(-3), "its end is where the hand lifted");
 });
+
+// Procreate's second slider (the owner, 21 November: "프로크리에이트의 그림 그리는 UI"): a stroke's own
+// 불투명, kept as a whole percent; full strength is left out (old devices draw it as before).
+test("a stroke keeps its 불투명; moving, copying and recolouring keep it too", async () => {
+  const { copyStrokesOps, opacityOf } = await import("../src/core/ink.js");
+  const clock = new Clock("a");
+  const ink = new InkDoc();
+  const pts = [0, 0, 50, 100, 0, 50, 200, 0, 50];
+  const faint = strokeOps(clock, ink, { pts, color: "black", width: 2, by: "a", opacity: 0.4 });
+  assert.equal(faint.ops[0].o, 40);
+  assert.equal(strokeOps(clock, ink, { pts, color: "black", width: 2, by: "a", opacity: 1 }).ops[0].o, undefined, "full strength is not written");
+  assert.equal(strokeOps(clock, ink, { pts, color: "black", width: 2, by: "a" }).ops[0].o, undefined);
+  assert.equal(strokeOps(clock, ink, { pts, color: "black", width: 2, by: "a", opacity: 0.01 }).ops[0].o, 5, "never quite gone");
+  ink.apply(faint.ops[0]);
+  const id = faint.ops[0].id;
+  assert.equal(opacityOf(ink.get(id)), 0.4);
+  assert.equal(opacityOf({ pts }), 1, "a stroke without it is full strength");
+  const moved = moveStrokesOps(clock, ink, [id], 10, 10, "a");
+  assert.equal(moved.ops.find((op) => op.t === "stroke").o, 40);
+  assert.equal(copyStrokesOps(clock, ink, [id], 10, 10, "a").ops[0].o, 40);
+  assert.equal(recolorStrokesOps(clock, ink, [id], "red", "a").ops.find((op) => op.t === "stroke").o, 40);
+});
