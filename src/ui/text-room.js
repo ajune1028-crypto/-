@@ -91,6 +91,7 @@ export function mountTextRoom(body, app, session) {
   const selTools = h("div", { class: "sel-tools", id: "sel-tools", hidden: true, role: "toolbar", "aria-label": "고른 글자" });
   let sel = null; // { editor, ch, to } while words are chosen
   // 옮기기: while chosen words are lifted, what they are and where to put them down.
+  let lifted = null; // { editor, ids }
   const moveChip = h("div", { class: "sel-tools move-chip", id: "move-chip", hidden: true, role: "status", "aria-live": "polite" });
   const mic = micSupport();
   let closeSound = null;
@@ -447,7 +448,7 @@ export function mountTextRoom(body, app, session) {
     return row;
   }
   function paintSel() {
-    const show = !!sel && !readOnlyNow() && !pen.tool;
+    const show = !!sel && !lifted && !readOnlyNow() && !pen.tool;
     if (selTools.hidden === show) selTools.hidden = !show;
     if (!show) return;
     selRow ||= buildSel();
@@ -461,7 +462,7 @@ export function mountTextRoom(body, app, session) {
   }
   function drawSel() {
     // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
-    if (selTools.hidden || !sel || readOnlyNow() || pen.tool) {
+    if (selTools.hidden || !sel || lifted || readOnlyNow() || pen.tool) {
       selFrame?.();
       selFrame = null;
       return paintSel();
@@ -530,7 +531,6 @@ export function mountTextRoom(body, app, session) {
   // are one flow, so they go to any place in the writing (this day or another), not to a point on
   // the paper; drawings go anywhere with the 올가미. The words keep who wrote them (their colour) and
   // their 표시, photos and recordings; one undo puts them back.
-  let lifted = null; // { editor, ids }
   function liftSel() {
     if (!sel || readOnlyNow()) return;
     const ed = sel.editor;
@@ -546,15 +546,18 @@ export function mountTextRoom(body, app, session) {
       h("span", { class: "move-what", id: "move-what", text: "‘" + (words.length > 14 ? words.slice(0, 13) + "…" : words) + "’" }),
       h("span", { class: "sel-label", text: "놓을 곳을 누르세요" }),
       h("button", { class: "chip", id: "move-cancel", type: "button", text: "그만", onclick: () => dropLifted() })));
+    // The words stay chosen while 그만 is pressed, as with the chosen words' own row.
+    for (const btn of moveChip.querySelectorAll("button")) btn.addEventListener("pointerdown", (e) => e.preventDefault());
     moveChip.hidden = false;
-    // The next tap in the writing places the caret, which is where they go; until then nothing is chosen.
-    ta.setSelectionRange(b, b);
-    sel = null;
+    // They stay chosen (highlighted) where they are while lifted; the next tap in the writing puts
+    // the caret where they go.
     drawSel();
   }
   function dropLifted() {
+    if (!lifted) return;
     lifted = null;
     moveChip.hidden = true;
+    drawSel();
   }
   /** Puts the lifted words down at `index` of `ed`'s writing. */
   function putDown(ed, index) {
