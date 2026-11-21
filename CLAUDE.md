@@ -133,6 +133,7 @@ npm test                                    # node --test. 단위 테스트 426�
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 190개 남짓. --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
+node tools/owner-take.mjs                   # 사용자 녹음(out/voices/owner/*.f32, 저장소에 없음)을 앱과 같은 길로: 음 개수, 피아노 음이 목소리와 맞는지(SwiftF0·YIN), 피아노를 다시 들어 본 일치
 ```
 
 - 화면 시나리오는 Chrome이나 Edge가 필요하다. 자동으로 찾고, 못 찾으면 `CHROME_BIN`에 실행 파일 경로를 넣는다.
