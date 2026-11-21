@@ -93,6 +93,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **노래**: 기본은 부른 그대로(사용자 녹음 79/79 대 조에 맞춰 51/79; `notesOf`와 카드 `playsSung`가 옛 것도 그렇게 읽음). 조 이름 없음, 음 편집의 '음 다듬기'(`tonalOps`), 숨 음 빼기(`withoutStrays`), 듣기 [원본 | 피아노 | 같이]. 사용자 녹음은 `out/voices/owner/`에만.
   - **붓**: 점 사이 곡선(`throughCurve`, 구심 Catmull-Rom), 0.6px까지 남김(`THIN_UNITS`, 긴 선은 더 솎아 자르지 않음), 손떨림 보정 기본 끔.
   - 빈 값이 화면에 'null'로 나오던 다섯 곳 고침(`mount`), 모든 화면 코드를 훑는 시험 `tests/ui-source.test.js`.
+  - **애니메이션 방 연동**(플립어클립·프로크리에이트·RoughAnimator를 보고, 그림 방의 것을 그대로): 왼쪽 막대에 올가미, 장 띠 앞에 ‹ 1/12 ›(끝에서 흐려짐), **배경** 칸(한 번 그리면 모든 장 밑에: 양파·재생·작은 그림·영상에도, `k:Fbg`), 종이는 배경 칸을 꾹(애니 문서 `paper`), **저장** = 영상(`onePass`, MediaRecorder). 아래 막대는 여섯(빠르기·반복은 칩 '12장/초' 하나와 작은 창). 모든 방의 막대가 360 폭 화면 안에 있는지 보는 시나리오.
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 21일 판: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -128,7 +129,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 425개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 426개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 190개 남짓. --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다
