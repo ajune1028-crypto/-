@@ -278,17 +278,29 @@ h1, h2, p { margin: 0; }
 .home {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* One row exactly the screen's height (not as tall as the rooms): each half's rooms scroll inside
+     it, and its + stays in view however many rooms there are (the owner, 21 November). */
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
-.half { position: relative; min-width: 0; height: 100%; }
+.half { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+/* The title stays; a fine line under it (as tall as home's round buttons on the right, so the two
+   halves' lines meet), and the rooms scroll beneath, fading out before the line and before the
+   buttons at the bottom (the owner, 21 November). */
+.half-head { flex: none; box-sizing: border-box; height: var(--home-head, 6.7rem); padding: 1.5rem 0.75rem 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+.home-wrap.one-row { --home-head: 5.6rem; }
 .half-scroll {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 1.5rem 0.75rem 7.4rem;
+  padding: 0.85rem 0.75rem 7.4rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.4rem, #000 calc(100% - 7.2rem), transparent calc(100% - 3.2rem));
+  mask-image: linear-gradient(to bottom, transparent 0, #000 1.4rem, #000 calc(100% - 7.2rem), transparent calc(100% - 3.2rem));
 }
+.half-scroll > .rooms:first-child, .half-scroll > .empty:first-child { margin-top: 0; }
 .half + .half { box-shadow: var(--split); }
 .half-title { padding: 0 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
 .half-note { margin-top: 0.2rem; padding: 0 0.25rem; font-size: 0.75rem; color: var(--muted); }
@@ -374,7 +386,9 @@ h1, h2, p { margin: 0; }
 }
 .add svg { width: 1.35rem; height: 1.35rem; stroke-width: 2.2; }
 
-.home-top { position: absolute; top: 1.25rem; right: 0.7rem; }
+.home-top { position: absolute; top: 1.25rem; right: 0.7rem; transition: opacity 0.2s var(--ease), visibility 0.2s; }
+/* A window is out: home's round buttons step away, never over it. */
+.home-window .home-top { opacity: 0; visibility: hidden; pointer-events: none; }
 .home-foot {
   position: absolute;
   left: 0;
@@ -1651,6 +1665,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel:not(.floating) .panel-grip { height: 2.15rem; }
 .panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
 .panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
+.panel-ctrl-end { display: flex; gap: 0.15rem; }
 .panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
 .home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
 .home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
@@ -1896,10 +1911,21 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-sheet { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .anim-onion { z-index: 0; }
 #anim-ink { z-index: 1; }
-.anim-show { z-index: 2; background: #fffdf8; border-radius: 0.4rem; }
+.anim-show { z-index: 2; background: var(--paper-c, #fffdf8); border-radius: 0.4rem; }
+.draw-page[data-paper="clear"] .anim-show { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
+.anim-back { z-index: 0; }
+/* ‹ 3/12 ›: stays at the strip's start while it scrolls. */
+.anim-nav { position: sticky; left: 0; z-index: 2; flex: none; display: flex; align-items: center; gap: 0.1rem; align-self: center; padding: 0.15rem 0.2rem; border-radius: 0.8rem; background: color-mix(in srgb, var(--paper) 86%, transparent); box-shadow: 0 0 0 1px var(--glass-edge); }
+.anim-step { display: grid; place-items: center; width: 1.9rem; height: 2.6rem; border: 0; border-radius: 0.6rem; background: transparent; color: var(--ink); font: 800 1.25rem/1 var(--font); }
+.anim-step:active { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.anim-step:disabled { opacity: 0.3; }
+.anim-where { min-width: 2.6rem; text-align: center; font-size: 0.72rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.anim-frame.anim-bg .anim-num { font-size: 0.55rem; }
+.anim-record { position: fixed; left: -10000px; top: 0; pointer-events: none; }
 .anim-strip { display: flex; align-items: flex-end; gap: 0.35rem; width: min(100% - 1rem, 40rem); margin: 0 auto 0.3rem; padding: 0.35rem 0.45rem; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 62%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .anim-strip::-webkit-scrollbar { display: none; }
-.anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: #fffdf8; touch-action: manipulation; }
+.anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: var(--paper-c, #fffdf8); touch-action: manipulation; }
+.anim-strip[data-paper="clear"] .anim-frame { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px; }
 .anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }
 .anim-frame.on { border-color: var(--tint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint) 35%, transparent); }
 .anim-frame.playing { border-color: color-mix(in srgb, var(--tint) 70%, #fff); box-shadow: 0 0 0.8rem color-mix(in srgb, var(--tint) 55%, transparent); }
@@ -1913,6 +1939,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-menu { position: fixed; z-index: 70; display: grid; gap: 0.35rem; padding: 0.5rem; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 80%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .anim-menu-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
 .anim-menu-label { font-size: 0.75rem; font-weight: 700; margin-right: 0.15rem; }
+.anim-menu .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--ink); }
 
 /* 미니게임 (ui/game.js): the menu under the top bar, a small invitation card at the top, and the
    game over a slightly dimmed room, counting 3·2·1 in the middle first. */
@@ -2482,7 +2509,8 @@ __m["src/core/song.js"] = (() => {
 // the harmony (화음) and not to the tune: a clip may leave those out (`chords: false`).
 // A sound may keep, beside its notes (the keys meant, read in the take's key), what was sung plainly
 // where that differs (`sung`: [note index, key] pairs) and the key it was read in (`scale`: [tonic
-// 0-11, minor 0/1]). 부른 그대로 and 조에 맞춰 switch a sound's notes between the two with note edits.
+// 0-11, minor 0/1]). What was sung plays; 음 다듬기 switches a sound's notes to the keys meant (and
+// back) with note edits.
 // A sound's own notes never change; edits lie over them, so every device
 // agrees and every edit can be undone. notesOf(src) gives the result.
 //
@@ -2586,8 +2614,12 @@ function unpackNote([t, d, p, v, h]) {
 function noteInSeconds(n) {
   const out = { t: n.t / 1000, d: n.d / 1000, p: n.p, v: n.v };
   if (n.h) out.h = true;
-  // A copy keeps 부른 그대로 for the notes that now play the key meant.
-  if (n.sung !== undefined && n.p === n.meant) out.s = n.sung;
+  // A copy plays what this one plays: sung plainly, it keeps the key meant beside it (as a take
+  // keeps it); tidied (음 다듬기), it is the key meant alone.
+  if (n.sung !== undefined && n.p === n.sung) {
+    out.p = n.meant;
+    out.s = n.sung;
+  }
   return out;
 }
 /** A song's note (milliseconds) as it is stored. */
@@ -2785,7 +2817,9 @@ class SongDoc {
     if (!src) return [];
     const list = src.notes.map((n, i) => {
       const note = { key: String(i), t: n.t, d: n.d, p: n.p, v: n.v, gone: false, h: !!n.h };
-      if (src.sung && src.sung.has(i)) { note.sung = src.sung.get(i); note.meant = n.p; }
+      // What was sung plays (the owner's own take: 81 of 83 notes are the voice's own sung plainly,
+      // 51 read in the take's key); the key meant stays beside it for 음 다듬기.
+      if (src.sung && src.sung.has(i)) { note.sung = src.sung.get(i); note.meant = n.p; note.p = note.sung; }
       return note;
     });
     for (const a of this.added.values()) if (a.src === srcId) list.push({ key: a.key, t: a.t, d: a.d, p: a.p, v: a.v, gone: false, h: false });
@@ -3344,7 +3378,11 @@ function distToSegment(px, py, ax, ay, bx, by) {
 }
 
 /** Drops points closer than `min` to the last kept one; keeps the ends. */
-function thinPoints(pts, min = 25) {
+// A point is kept when it is this far (stroke units, 0.6 px at 1 rem = 16 px) from the last one kept:
+// the hand's fine detail stays (it was 25, 4 px, and small letters came out in straight pieces).
+const THIN_UNITS = 4;
+
+function thinPoints(pts, min = THIN_UNITS) {
   if (pts.length <= 6) return pts.slice();
   const out = pts.slice(0, 3);
   for (let i = 3; i < pts.length - 3; i += 3) {
@@ -3353,6 +3391,17 @@ function thinPoints(pts, min = 25) {
   }
   out.push(...pts.slice(-3));
   return out;
+}
+
+/** The points thinned as little as fits a stroke (MAX_POINTS): a very long line more, never cut short. */
+function thinToFit(pts) {
+  let min = THIN_UNITS;
+  let kept = thinPoints(pts, min);
+  while (kept.length > MAX_POINTS * 3) {
+    min *= 1.5;
+    kept = thinPoints(pts, min);
+  }
+  return kept;
 }
 
 /** The brush a stroke is drawn with: its style where it has one. */
@@ -3373,7 +3422,7 @@ function nearestWidth(px) {
 function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
-  const op = { t: "stroke", id: clock.next(), pts: (shape ? pts.slice() : thinPoints(pts)).slice(0, MAX_POINTS * 3), c: color, w: width, by, at };
+  const op = { t: "stroke", id: clock.next(), pts: shape ? pts.slice(0, MAX_POINTS * 3) : thinToFit(pts), c: color, w: width, by, at };
   if (Number.isFinite(size)) {
     op.z = Math.round(Math.max(SIZE_MIN, Math.min(SIZE_MAX, size)) * 10);
     op.w = nearestWidth(op.z / 10);
@@ -3497,7 +3546,7 @@ function invertInkOps(ink, clock, atoms, dir) {
   return ops;
 }
 
-return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
+return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, THIN_UNITS, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
 })();
 __m["src/core/board.js"] = (() => {
 // The whiteboard: cards on a big surface, and 잇기 lines that say in which
@@ -3611,41 +3660,43 @@ function songCardData({ duration, notes, peaks, name, blob, scale }) {
   return data;
 }
 
-/** A song card's notes in seconds, each that plays the key meant with what was sung as `s`. */
+/**
+ * A song card's notes in seconds as a song room keeps a take's: the keys meant, with what was sung
+ * as `s` where it differs (so there, too, what was sung plays and 음 다듬기 can reach the keys meant).
+ */
 function cardNotes(d) {
   const notes = d.notes.map(unpackNote);
   for (const [i, k] of d.sung || []) if (notes[i]) notes[i].s = k;
+  for (const [i, k] of d.meant || []) if (notes[i] && notes[i].p !== k) { notes[i].s = notes[i].p; notes[i].p = k; }
   return notes;
+}
+
+/**
+ * A song card's data as it plays: what was sung (the owner's own take: 81 of 83 notes are the voice's
+ * own sung plainly, 51 in the take's key), the keys meant kept as `meant` pairs. Cards kept the other
+ * way (the keys meant, what was sung as `sung`) are read so too.
+ */
+const sungData = new WeakMap();
+function playsSung(d) {
+  if (!d || !Array.isArray(d.sung) || !d.sung.length) return d;
+  let out = sungData.get(d);
+  if (out) return out;
+  const notes = d.notes.map((n) => n.slice());
+  const meant = [];
+  for (const [i, k] of d.sung) {
+    if (!notes[i]) continue;
+    meant.push([i, notes[i][2]]);
+    notes[i][2] = k;
+  }
+  out = { ...d, notes, meant };
+  delete out.sung;
+  sungData.set(d, out);
+  return out;
 }
 
 /** A song card's key ({ tonic, minor }) or null. */
 const cardScale = (d) => (Array.isArray(d.scale) ? { tonic: d.scale[0], minor: d.scale[1] === 1 } : null);
 
-/** "tonal" (plays the keys meant, can switch to 부른 그대로), "sung" (the other way), or null. */
-function cardTonalState(d) {
-  if (d.meant && d.meant.length) return "sung";
-  if (d.sung && d.sung.length) return "tonal";
-  return null;
-}
-
-/** The card's data switched to 조에 맞춰 (toTonal) or 부른 그대로; the other keys kept for switching back. */
-function cardTonalData(d, toTonal) {
-  const from = toTonal ? d.meant : d.sung;
-  if (!from || !from.length) return d;
-  const notes = d.notes.map((n) => n.slice());
-  const other = [];
-  for (const [i, k] of from) {
-    if (!notes[i]) continue;
-    other.push([i, notes[i][2]]);
-    notes[i][2] = k;
-  }
-  const out = { ...d, notes };
-  delete out.sung;
-  delete out.meant;
-  if (toTonal) out.sung = other;
-  else out.meant = other;
-  return out;
-}
 
 /**
  * A song card's data for the part of a sound a clip plays: the clipboard's
@@ -3800,7 +3851,7 @@ class BoardDoc {
   item(id) {
     const it = this.byId.get(id);
     if (!it) return null;
-    const out = { id: it.id, kind: it.kind, data: it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
+    const out = { id: it.id, kind: it.kind, data: it.kind === "song" ? playsSung(it.data) : it.data, by: it.by, rm: it.rm, removed: it.rm % 2 === 1 };
     for (const [k, { v }] of it.fields) out[k] = v;
     return out;
   }
@@ -4358,7 +4409,7 @@ function lassoOrder(board, lassoId) {
   return playOrder(board).filter((card) => insideLoop(loop.pts, card.x + card.w / 2, card.y + SONG_CARD_H / 2));
 }
 
-return { ORDER_COLORS, PASTEL_COLORS, ITEM_KINDS, MAX_PHOTO_CHARS, orderColor, songWidth, songCardData, cardNotes, cardScale, cardTonalState, cardTonalData, cardFromClip, BoardDoc, slotOrder, orderOps, nameSlotOps, playOrder, boardSong, cardsSong, addItemOps, keepOf, keptFields, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, splitCardOps, saveSlotOps, useSlotOps, SONG_CARD_H, insideLoop, closeLoop, lassoOps, moveLassoOps, tintLassoOps, rowLayout, boxLoop, removeLassoOps, itemsInLoop, strokesInLoop, lassoOrder };
+return { ORDER_COLORS, PASTEL_COLORS, ITEM_KINDS, MAX_PHOTO_CHARS, orderColor, songWidth, songCardData, cardNotes, playsSung, cardScale, cardFromClip, BoardDoc, slotOrder, orderOps, nameSlotOps, playOrder, boardSong, cardsSong, addItemOps, keepOf, keptFields, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, splitCardOps, saveSlotOps, useSlotOps, SONG_CARD_H, insideLoop, closeLoop, lassoOps, moveLassoOps, tintLassoOps, rowLayout, boxLoop, removeLassoOps, itemsInLoop, strokesInLoop, lassoOrder };
 })();
 __m["src/core/preview.js"] = (() => {
 // What home shows of a room at a glance (the UI review's 홈 미리보기, which the owner chose): the
@@ -7468,9 +7519,10 @@ __m["src/core/anim.js"] = (() => {
 //   frame  { id, by, at, o? }                 a new frame; o: its place (else after all others)
 //   fset   { id, f: frame id, v: { order?, hold? } }   each field: the later op wins
 //   frm    { id, f: frame id, n }             taken away while n is odd (undo brings it back)
-//   aset   { id, v: { fps?, loop? } }         how it plays: the later op wins
+//   aset   { id, v: { fps?, loop?, paper? } } how it plays and the paper under it: the later op wins
 
 const { cmpId, validId } = __m["src/core/crdt.js"];
+const { PAPERS } = __m["src/core/draw.js"];
 
 const FPS_CHOICES = [6, 8, 12, 24];
 const LOOPS = ["loop", "pingpong", "once"];
@@ -7478,8 +7530,9 @@ const MAX_FRAMES = 240;
 const MAX_HOLD = 8;
 const MAX_UNKNOWN = 300;
 const FRAME_FIELDS = { order: (v) => typeof v === "number" && Number.isFinite(v), hold: (v) => Number.isInteger(v) && v >= 1 && v <= MAX_HOLD };
-const ANIM_FIELDS = { fps: (v) => FPS_CHOICES.includes(v), loop: (v) => LOOPS.includes(v) };
-const DEFAULTS = { fps: 12, loop: "loop" };
+// The paper is the 그림 방's (one of its papers, or 투명): the rooms draw alike (the owner, 21 November: "다 연동").
+const ANIM_FIELDS = { fps: (v) => FPS_CHOICES.includes(v), loop: (v) => LOOPS.includes(v), paper: (v) => PAPERS.some(([k]) => k === v) };
+const DEFAULTS = { fps: 12, loop: "loop", paper: "white" };
 
 /** The drawing document that holds a frame's strokes. */
 function frameDocOf(frameId) {
@@ -7581,7 +7634,7 @@ class AnimDoc {
 
   /** How it plays: { fps, loop }. */
   settings() {
-    return { fps: this.play.get("fps")?.v ?? DEFAULTS.fps, loop: this.play.get("loop")?.v ?? DEFAULTS.loop };
+    return { fps: this.play.get("fps")?.v ?? DEFAULTS.fps, loop: this.play.get("loop")?.v ?? DEFAULTS.loop, paper: this.play.get("paper")?.v ?? DEFAULTS.paper };
   }
 }
 
@@ -7681,6 +7734,16 @@ function timeline(doc) {
   return out;
 }
 
+/**
+ * The frames of one play through (each as many times as it is held), as a saved video shows them:
+ * once from the first to the last; 왕복 there and back, stopping before the first comes again.
+ */
+function onePass(doc) {
+  const line = timeline(doc).map((t) => t.id);
+  if (doc.settings().loop !== "pingpong" || line.length < 3) return line;
+  return [...line, ...line.slice(1, -1).reverse()];
+}
+
 /** The frame shown at a tick, as the animation plays (looping, back and forth, or once). */
 function frameAt(doc, tick) {
   const line = timeline(doc);
@@ -7697,7 +7760,7 @@ function frameAt(doc, tick) {
   return line[i].id;
 }
 
-return { FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD, frameDocOf, AnimDoc, addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, timeline, frameAt };
+return { FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD, frameDocOf, AnimDoc, addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, timeline, onePass, frameAt };
 })();
 __m["src/core/words.js"] = (() => {
 // 그려서 맞히기's words: things anyone can draw in a minute and anyone can name, in plain Korean
@@ -10531,7 +10594,15 @@ class SongPlayer {
     if (until <= this.booked) return;
     const from = this.booked;
     const opts = { ongoing: first };
-    if (this.mode === "original") {
+    if (this.mode === "both") {
+      // 같이: the recording and its piano at once, so one hears whether they agree (the owner, 21
+      // November: "그거랑 내가 준 원본이랑 맞는지"). A clip without its recording here plays as piano alone.
+      for (const ev of song.noteEvents(from, until, opts)) this.playNote(ev);
+      for (const seg of song.audioSegments(from, until, opts)) {
+        const buf = this.audioFor(seg.src);
+        if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
+      }
+    } else if (this.mode === "original") {
       for (const seg of song.audioSegments(from, until, opts)) {
         const buf = this.audioFor(seg.src);
         if (buf) this.playAudio(this.atSpeed(seg.src, buf, seg.speed || 1), seg);
@@ -14055,7 +14126,29 @@ async function voiceNotes(samples, rate, { onProgress = () => {}, periods = true
     if (sung[i] !== keys[i]) note.s = sung[i];
     return note;
   });
-  return { notes, scale: tonic === null ? null : { tonic, minor } };
+  return { notes: withoutStrays(notes), scale: tonic === null ? null : { tonic, minor } };
+}
+
+const STRAY_MS = 0.12; // seconds: shorter than this…
+const STRAY_UNDER = 7; // …and this many semitones under every note sung near it…
+const STRAY_NEAR = 1; // …within this many seconds
+/**
+ * The notes without the breaths: a very short note far under every note sung near it (a breath, or
+ * the voice creaking as a phrase starts; the owner's own take had four, 50-110 ms, about an octave
+ * under the tune) jumps out as a low piano key. A note alone, a long low note and a quick note a
+ * fourth or a fifth down stay. Pitches as sung plainly (`s`, else `p`).
+ */
+function withoutStrays(notes) {
+  const key = (n) => n.s ?? n.p;
+  return notes.filter((n, i) => {
+    if (n.d >= STRAY_MS) return true;
+    const near = [];
+    const prev = notes[i - 1];
+    const next = notes[i + 1];
+    if (prev && n.t - (prev.t + prev.d) <= STRAY_NEAR) near.push(key(prev));
+    if (next && next.t - (n.t + n.d) <= STRAY_NEAR) near.push(key(next));
+    return !near.length || near.some((q) => q - key(n) < STRAY_UNDER);
+  });
 }
 
 /**
@@ -14075,7 +14168,7 @@ async function analyzeSamples(samples, rate, { onProgress = () => {}, chunkSecon
   return result;
 }
 
-return { SOLO_LIMIT, Analyzer, chordsOf, voiceNotes, analyzeSamples };
+return { SOLO_LIMIT, Analyzer, chordsOf, voiceNotes, withoutStrays, analyzeSamples };
 })();
 __m["src/sync/blobs.js"] = (() => {
 // Files kept on this device: recordings (and later photos). Stored in the
@@ -14684,12 +14777,63 @@ function hasPressure(pts) {
   return false;
 }
 
+// Between two points the hand gave, the line goes on a curve through them (a centripetal Catmull-Rom
+// spline: it never loops or overshoots where the points come unevenly), cut into steps this long
+// (stroke units: 2 px at 1 rem = 16 px). A finger at 60-120 Hz gives a point every few pixels, and
+// a small quick letter drawn with straight lines between them came out a polygon (the owner, 21
+// November: "브러쉬가 너무 안 매끄러워"). Eased along even steps, the smoothing is the same at any rate.
+const CURVE_GAP = 12;
+
 /**
- * The line as the brush follows it: each point eased toward the hand by `streamline` (0 follows
- * exactly), the last one where the hand is. Each point: { x, y, p (0..1), vx, vy (the unit step
- * back to the point before), d (that step's length), run (length so far) }.
+ * The points [x, y, p, …] with more between them along a curve through them, at most `gap` apart.
+ * Its `hand` holds, for each point, how far the hand went between the two points it lies between
+ * (how quick it was: what simulated pressure reads).
  */
-function strokePoints(pts, { streamline = 0.5 } = {}) {
+function throughCurve(pts, gap = CURVE_GAP) {
+  const n = Math.floor(pts.length / 3);
+  if (n < 3) return pts;
+  const hand = [0];
+  const at = (i) => {
+    if (i < 0) return [2 * pts[0] - pts[3], 2 * pts[1] - pts[4], pts[2]];
+    if (i >= n) return [2 * pts[3 * n - 3] - pts[3 * n - 6], 2 * pts[3 * n - 2] - pts[3 * n - 5], pts[3 * n - 1]];
+    return [pts[3 * i], pts[3 * i + 1], pts[3 * i + 2]];
+  };
+  const knot = (a, b) => Math.max(1e-4, Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])));
+  const out = [pts[0], pts[1], pts[2]];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    const k = Math.max(1, Math.ceil(len / gap));
+    const t1 = knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3);
+    for (let j = 1; j <= k; j++) {
+      hand.push(len);
+      if (j === k) { out.push(p2[0], p2[1], p2[2]); break; }
+      const t = t1 + ((t2 - t1) * j) / k;
+      const mix = (a, b, ta, tb) => (a * (tb - t) + b * (t - ta)) / (tb - ta);
+      const pt = [0, 1].map((c) => {
+        const a1 = mix(p0[c], p1[c], 0, t1);
+        const a2 = mix(p1[c], p2[c], t1, t2);
+        const a3 = mix(p2[c], p3[c], t2, t3);
+        const b1 = mix(a1, a2, 0, t2);
+        const b2 = mix(a2, a3, t1, t3);
+        return mix(b1, b2, t1, t2);
+      });
+      out.push(pt[0], pt[1], p1[2] + ((p2[2] - p1[2]) * j) / k);
+    }
+  }
+  out.hand = hand;
+  return out;
+}
+
+/**
+ * The line as the brush follows it: on a curve through the hand's points (not for a shape made
+ * exact: `exact`), each point eased toward the hand by `streamline` (0 follows exactly), the last one
+ * where the hand is. Each point: { x, y, p (0..1), vx, vy (the unit step back to the point before),
+ * d (that step's length), run (length so far) }.
+ */
+function strokePoints(input, { streamline = 0.5, exact = false } = {}) {
+  const pts = exact ? input : throughCurve(input);
+  const hand = pts.hand;
   const n = Math.floor(pts.length / 3);
   if (!n) return [];
   const t = 0.15 + (1 - streamline) * 0.85;
@@ -14705,7 +14849,7 @@ function strokePoints(pts, { streamline = 0.5 } = {}) {
     if (x === px && y === py) continue;
     const d = Math.hypot(x - px, y - py);
     run += d;
-    out.push({ x, y, p: pts[i * 3 + 2] / 100, vx: (px - x) / d, vy: (py - y) / d, d, run });
+    out.push({ x, y, p: pts[i * 3 + 2] / 100, vx: (px - x) / d, vy: (py - y) / d, d, run, sd: hand ? hand[i] : d });
     px = x;
     py = y;
   }
@@ -14791,7 +14935,7 @@ function outline(points, { size, thinning = 0.5, smoothing = 0.5, simulate = fal
   const left = [];
   const right = [];
   let prevPressure = simulate ? 0.6 : points[0].p;
-  if (simulate) for (const pt of points.slice(0, 6)) prevPressure = speedPressure(prevPressure, pt.d || 26);
+  if (simulate) for (const pt of points.slice(0, 6)) prevPressure = speedPressure(prevPressure, pt.sd || pt.d || 26);
   let radius = size / 2;
   let prevVx = points[0].vx;
   let prevVy = points[0].vy;
@@ -14805,7 +14949,7 @@ function outline(points, { size, thinning = 0.5, smoothing = 0.5, simulate = fal
     if (!last && total - pt.run < 3) continue;
     let pressure = pt.p;
     if (thinning) {
-      if (simulate) pressure = speedPressure(prevPressure, pt.d);
+      if (simulate) pressure = speedPressure(prevPressure, pt.sd ?? pt.d);
       radius = radiusAt(pressure);
     } else radius = size / 2;
     if (nib) radius *= nibWidth(pt.vx, pt.vy);
@@ -15289,7 +15433,7 @@ function adjustShape(shape, from, to) {
   return { ...shape, pts };
 }
 
-return { BRUSH_LOOKS, brushLook, hasPressure, strokePoints, FINGER_START, fingerFeel, fingerStep, outline, dabs, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, wobble, quickShape, adjustShape };
+return { BRUSH_LOOKS, brushLook, hasPressure, throughCurve, strokePoints, FINGER_START, fingerFeel, fingerStep, outline, dabs, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, wobble, quickShape, adjustShape };
 })();
 __m["src/core/live.js"] = (() => {
 // A line being drawn, sent to friends in small overlapping pieces as it grows (ui/live-ink.js), so
@@ -15896,7 +16040,7 @@ __m["src/ui/ink.js"] = (() => {
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-const { h, icon, iconButton, closeOnOutside } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, closeOnOutside, mount } = __m["src/ui/dom.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } = __m["src/core/ink.js"];
 const { closeLoop, insideLoop: loopHas } = __m["src/core/board.js"];
@@ -16052,7 +16196,8 @@ function paintStroke(g, pts, color, px, brush, shaped = false) {
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
   const real = hasPressure(pts);
-  const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline });
+  // A shape made exact keeps its corners; a fill is its region's rings.
+  const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline, exact: shaped || look.kind === "fill" });
   g.save();
   g.globalCompositeOperation = erase ? "destination-out" : "source-over";
   if (look.kind === "smudge") {
@@ -17104,7 +17249,8 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
     const { el, kind } = pop;
     if (kind === "brush") {
       const shapes = getSettings(store).inkShapes !== false;
-      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 1));
+      // 손떨림 보정 is off at first: it pulls a quick small letter round (6 px off at '약'); who wants it turns it on.
+      const steady = Math.max(0, Math.min(3, getSettings(store).inkSteady ?? 0));
       el.replaceChildren(
         h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
           ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
@@ -17117,7 +17263,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
             onclick: () => { setSetting(store, "inkSteady", (steady + 1) % 4); pop.fill(); } }, "보정 " + STEADY_NAMES[steady])));
     } else if (kind === "color") {
       const recent = (getSettings(store).inkRecent || []).slice(0, 8);
-      el.replaceChildren(
+      mount(el,
         h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
           ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
             style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
@@ -17541,7 +17687,7 @@ function mountTextRoom(body, app, session) {
         },
         host: editor.paper,
         share: liveInk.on(inkDoc),
-        steady: () => getSettings(app.store).inkSteady ?? 1,
+        steady: () => getSettings(app.store).inkSteady ?? 0,
         onPick: (color) => { pen.color = color; setTool(pen.tool); },
         blocked: () => fingers.pinching,
         shapes: () => getSettings(app.store).inkShapes !== false,
@@ -18461,13 +18607,13 @@ class Timeline {
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
-    el.classList.toggle("no-notes", model.mode === "piano" && !!source && !notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
+    el.classList.toggle("no-notes", model.mode !== "original" && !!source && !notes.some((n) => n.t < clip.offset + clip.length && n.t + n.d > clip.offset));
   }
 
   clipInside(clip, source, model, hasAudio, notes) {
     if (!source) return [];
     const parts = [];
-    const piano = model.mode === "piano";
+    const piano = model.mode !== "original";
     const lo = clip.offset;
     const hi = clip.offset + clip.length;
     if (!piano || model.showWave) {
@@ -18941,10 +19087,10 @@ __m["src/ui/note-editor.js"] = (() => {
 // zooms the rows. Edits lie over the recording's notes, so they reach every
 // clip cut from the same recording, and each one can be undone.
 
-const { h, openSheet } = __m["src/ui/dom.js"];
+const { h, openSheet, toast } = __m["src/ui/dom.js"];
 const { watchFingers } = __m["src/ui/fingers.js"];
 const { noteLabel, solfege } = __m["src/audio/notes.js"];
-const { noteSetOps, noteAddOps } = __m["src/core/song.js"];
+const { noteSetOps, noteAddOps, tonalOps } = __m["src/core/song.js"];
 const { snapMs, quantizeNotes } = __m["src/core/beat.js"];
 const { timeText } = __m["src/ui/song-view.js"];
 
@@ -18986,6 +19132,10 @@ function openNoteEditor(root, { song, clipId, clock, commit, preview, canEdit, c
         h("button", { type: "button", class: "chip", id: "roll-row-out", text: "높이 −", onclick: () => zoom(1, 1 / 1.25) }),
         h("button", { type: "button", class: "chip", id: "roll-row-in", text: "높이 +", onclick: () => zoom(1, 1.25) }),
         h("button", { type: "button", class: "chip", id: "quantize", text: "박자 맞추기", onclick: () => quantize() }),
+        // 음 다듬기: the notes sung a little off moved to the ones that fit the song (the keys meant in
+        // the take's key), and back. What was sung plays at first (the owner, 21 November: "조에 맞춰
+        // 내림다장조… 뭔 기능이고?"): this is a tool for whoever wants it, in plain words.
+        h("button", { type: "button", class: "chip", id: "note-tidy", text: "음 다듬기", hidden: true, title: "살짝 빗나간 음을 노래에 어울리는 음으로", onclick: () => tidy() }),
         part, noHarmony,
         del),
       roll, info, list);
@@ -19038,6 +19188,10 @@ function openNoteEditor(root, { song, clipId, clock, commit, preview, canEdit, c
         grid.style.setProperty("--bar-x", phase(b.bar));
       }
       panel.querySelector("#quantize").hidden = !b || !canEdit();
+      const state = song.tonalState(c.src);
+      const tidyBtn = panel.querySelector("#note-tidy");
+      tidyBtn.hidden = !state || !canEdit();
+      tidyBtn.setAttribute("aria-pressed", String(state === "tonal"));
       keys.style.height = grid.style.height;
       // Rows: one per key, the black keys a shade darker, every 도 named.
       const pitches = range2(hi, lo);
@@ -19108,6 +19262,18 @@ function openNoteEditor(root, { song, clipId, clock, commit, preview, canEdit, c
     function choose(n) {
       chosen = n.key;
       preview(n.p, Math.min(1.2, (n.e - n.s) / 1000));
+      draw();
+    }
+
+    /** 음 다듬기 on or off for the whole take, as one step to undo. */
+    function tidy() {
+      const c = layout?.c;
+      if (!c || !canEdit()) return;
+      const on = song.tonalState(c.src) !== "tonal";
+      const made = tonalOps(...ctx().slice(0, 2), c.src, on);
+      if (!made.ops.length) return;
+      commit(made);
+      toast(root, on ? `살짝 빗나간 음 ${made.ops.length}개를 노래에 어울리는 음으로 바꿨어요` : "부른 그대로 돌렸어요", 2600);
       draw();
     }
 
@@ -19353,14 +19519,13 @@ __m["src/ui/song-room.js"] = (() => {
 // and seen; the speed button plays 0.5x to 3x; the tone button switches the
 // piano between 밝게 and 어둡게. Those three are this device's own choice.
 
-const { h, icon, iconButton, segmented, toggle, openSheet, toast, closeOnOutside } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, segmented, toggle, openSheet, toast, closeOnOutside, mount } = __m["src/ui/dom.js"];
 const { currentTheme, onThemeChange } = __m["src/ui/theme.js"];
 const { Timeline, timeText } = __m["src/ui/song-view.js"];
 const { openNoteEditor } = __m["src/ui/note-editor.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { memberColor, personColor, INK, PALETTE } = __m["src/core/paint.js"];
-const { MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan, joinClipOps, joinWithSourceOps, combinedSource, packMs, noteInSeconds, tonalOps } = __m["src/core/song.js"];
-const { keyName } = __m["src/audio/intent.js"];
+const { MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan, joinClipOps, joinWithSourceOps, combinedSource, packMs, noteInSeconds } = __m["src/core/song.js"];
 const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
 const { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } = __m["src/core/beat.js"];
 const { copyItem, clipboardItem } = __m["src/clipboard.js"];
@@ -19459,7 +19624,7 @@ function mountSongRoom(body, app, session, frame) {
     lassoButton.setAttribute("aria-pressed", String(!!on));
     if (on) toast(root, "클립들을 손가락으로 둘러 그리세요", 1800);
   }
-  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"]], settings().songMode, (mode) => setMode(mode), "mode");
+  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "같이", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
   // They lie straight on the room's background: they read it (white, black or a deeper black).
   for (const el of [zoomOut, zoomIn, lassoButton, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
@@ -19818,7 +19983,7 @@ function mountSongRoom(body, app, session, frame) {
     }
     makePlayer(ctx);
     // ▶ does not wait long for the recordings: one not read in a moment plays as piano this time.
-    if (settings().songMode === "original") await Promise.race([loadRecordings(ctx), new Promise((resolve) => setTimeout(resolve, 350))]);
+    if (hearsOriginal()) await Promise.race([loadRecordings(ctx), new Promise((resolve) => setTimeout(resolve, 350))]);
     return ctx;
   }
 
@@ -19926,10 +20091,13 @@ function mountSongRoom(body, app, session, frame) {
     if (alive) placeMenu();
   }
 
+  /** 원본 or 같이: the recordings are heard, so they are read ahead. */
+  function hearsOriginal() { return settings().songMode === "original" || settings().songMode === "both"; }
+
   function setMode(mode) {
     setSetting(app.store, "songMode", mode);
     player?.setMode(mode);
-    if (mode === "original") warmRecordings();
+    if (hearsOriginal()) warmRecordings();
     app.events.emit("settings");
     draw();
   }
@@ -19946,7 +20114,7 @@ function mountSongRoom(body, app, session, frame) {
     const now = settings().songSpeed || 1;
     const speed = SPEEDS[(SPEEDS.indexOf(now) + 1) % SPEEDS.length];
     setSetting(app.store, "songSpeed", speed);
-    if (player && settings().songMode === "original" && speed !== 1) showStatus("빠르기를 맞추는 중…");
+    if (player && hearsOriginal() && speed !== 1) showStatus("빠르기를 맞추는 중…");
     // Stretching a long recording takes a moment; let the words show first.
     setTimeout(() => {
       player?.setSpeed(speed);
@@ -20187,18 +20355,6 @@ function mountSongRoom(body, app, session, frame) {
     session.commit("song", made.ops);
     record(made.atoms);
     return true;
-  }
-
-  /** The clip menu's 조에 맞춰 / 부른 그대로 (the other one than what plays now), or nothing. */
-  function tonalItem(clip) {
-    const state = song.tonalState(clip.src);
-    if (!state || readOnly() || clip.locked) return null;
-    const scale = song.scaleOf(clip.src);
-    const toTonal = state === "sung";
-    const label = toTonal ? "조에 맞춰" + (scale ? " · " + keyName(scale.tonic, scale.minor) : "") : "부른 그대로";
-    const onclick = (e) => { e.stopPropagation(); apply(tonalOps(session.clock, song, clip.src, toTonal)); draw(); };
-    if (wideSide.matches) return h("button", { type: "button", id: "clip-tonal", class: "side-btn", "aria-label": label, onclick }, icon("fork"), h("span", { class: "side-btn-word", text: toTonal ? "조에 맞춰" : "부른 그대로" }));
-    return h("button", { type: "button", id: "clip-tonal", text: label, onclick });
   }
 
   function step(dir) {
@@ -20616,8 +20772,6 @@ function mountSongRoom(body, app, session, frame) {
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
       item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
-      // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
-      tonalItem(clip),
       // Its own 빠르기 (1×, 1.5×, 2×, 3×, 0.5×), on top of the whole song's.
       item("clip-speed", `빠르기 ${clip.speed || 1}×`, () => { apply(setClipOps(session.clock, song, clip.id, { speed: CLIP_SPEEDS[(CLIP_SPEEDS.indexOf(clip.speed || 1) + 1) % CLIP_SPEEDS.length] })); draw(); }, !locked && !readOnly(), "speed"),
       !locked && h("button", { type: "button", id: "clip-tint", class: docked ? "side-btn" : null, onclick: (e) => { e.stopPropagation(); menuView = "tints"; placeMenu(); } },
@@ -20653,7 +20807,7 @@ function mountSongRoom(body, app, session, frame) {
     const key = [clips.length, song.rowCount(), Math.round(song.end() / 100), people.join()].join("|");
     if (rest.dataset.key === key) return;
     rest.dataset.key = key;
-    rest.replaceChildren(
+    mount(rest,
       h("p", { class: "side-title", text: "이 노래" }),
       h("p", { class: "side-facts", text: clips.length ? `클립 ${clips.length}개 · 줄 ${Math.max(1, song.rowCount() - 1)}개 · ${timeText(song.end())}` : "아직 클립이 없어요" }),
       people.length > 0 && h("p", { class: "side-facts", text: people.join(", ") + "이(가) 불렀어요" }),
@@ -20887,7 +21041,7 @@ function mountSongRoom(body, app, session, frame) {
     if (!alive) return;
     roomFiles = files;
     shareMine();
-    if (settings().songMode === "original") warmRecordings();
+    if (hearsOriginal()) warmRecordings();
     draw();
   });
   draw();
@@ -20954,7 +21108,7 @@ __m["src/ui/board-room.js"] = (() => {
 // a drag inside it moves it with its cards, its chip drags just the loop, ✕ takes it
 // off, and it closes itself the shortest way when the end does not reach the start.
 
-const { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint, mount } = __m["src/ui/dom.js"];
 const { watchFingers, watchFingerTaps } = __m["src/ui/fingers.js"];
 const { currentTheme, onThemeChange } = __m["src/ui/theme.js"];
 const { openNoteEditor } = __m["src/ui/note-editor.js"];
@@ -20967,8 +21121,7 @@ const { memberColor, personColor, INK, contrast, PALETTE } = __m["src/core/paint
 const { UndoStack } = __m["src/core/undo.js"];
 const { Clock } = __m["src/core/crdt.js"];
 const { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS, packMs, noteInSeconds, unpackNote } = __m["src/core/song.js"];
-const { addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong, cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps, lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop, tintLassoOps, rowLayout, boxLoop, strokesInLoop, cardTonalState, cardTonalData, cardScale } = __m["src/core/board.js"];
-const { keyName } = __m["src/audio/intent.js"];
+const { addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong, cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps, lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop, tintLassoOps, rowLayout, boxLoop, strokesInLoop } = __m["src/core/board.js"];
 const { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } = __m["src/core/ink.js"];
 const { InkLayer, inkColor, drawInkTools } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
@@ -21225,7 +21378,7 @@ function mountBoardRoom(body, app, session, frame) {
     host: surface,
     ink: () => session.doc(INK_DOC),
     share: liveInk.on(INK_DOC),
-    steady: () => getSettings(app.store).inkSteady ?? 1,
+    steady: () => getSettings(app.store).inkSteady ?? 0,
     onPick: (color) => { pen.color = color; setPen(pen.tool); },
     blocked: () => fingers.pinching,
     shapes: () => getSettings(app.store).inkShapes !== false,
@@ -22077,7 +22230,7 @@ function mountBoardRoom(body, app, session, frame) {
         railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
         // With a loop in hand: only its part (pressed), or the whole board.
         !!focusLoop && railButton("song-focus", "fit", "올가미만", () => { focusOff = !focusOff; draw(); }, { pressed: !focusOff }),
       ],
@@ -22085,7 +22238,7 @@ function mountBoardRoom(body, app, session, frame) {
       lasso: [
         railButton("board-fit", "fit", "모두 보기", () => fitAll()),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", s.songMode === "original" ? "wave" : "note", s.songMode === "original" ? "원본" : "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
         can && railButton("lasso-clear", "eraser", "모두 풀기", () => removeAllLassos()),
       ],
     }[mode];
@@ -22150,12 +22303,6 @@ function mountBoardRoom(body, app, session, frame) {
         }),
         // 화음: the harmony found under the tune, left out or brought back (only when there is some).
         can && item.data.notes.some((n) => n[4] === 1) && one("card-chords", item.chords === false ? "화음 켜기" : "화음 끄기", () => apply(setItemOps(session.clock, board, item.id, { chords: item.chords === false }))),
-        // 조에 맞춰 / 부른 그대로: the keys meant in the take's key, or what was sung plainly (only when they differ).
-        can && cardTonalState(item.data) && (() => {
-          const toTonal = cardTonalState(item.data) === "sung";
-          const sc = cardScale(item.data);
-          return one("card-tonal", toTonal ? "조에 맞춰" + (sc ? " · " + keyName(sc.tonic, sc.minor) : "") : "부른 그대로", () => apply(setItemOps(session.clock, board, item.id, { data: cardTonalData(item.data, toTonal) })));
-        })(),
         tintButton(),
         one("card-copy", "복사", () => copyCard(item.id)),
         can && one("card-delete", "지우기", () => removeSelected()),
@@ -23074,7 +23221,7 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   function toggleSoundMode() {
-    const next = settings().songMode === "original" ? "piano" : "original";
+    const next = { original: "piano", piano: "both", both: "original" }[settings().songMode] || "piano";
     setSetting(app.store, "songMode", next);
     player?.setMode(next);
     draw();
@@ -23101,7 +23248,7 @@ function mountBoardRoom(body, app, session, frame) {
     const paint = () => {
       const saved = new Map(board.slots().map((s) => [s.n, s]));
       const now = JSON.stringify(board.links().map((l) => [l.a, l.b]));
-      menu.replaceChildren(
+      mount(menu,
         h("p", { class: "slot-title", text: "순서 칸" }),
         ...Array.from({ length: count }, (_, i) => {
           const n = i + 1;
@@ -23649,7 +23796,7 @@ function mountBoardRoom(body, app, session, frame) {
     return reading.get(key);
   }
   async function recordingsOf(song, ctx, waitMs = 350) {
-    const original = settings().songMode === "original";
+    const original = settings().songMode === "original" || settings().songMode === "both";
     const wanted = [...song.sources.values()].filter((src) => src.blob && (original || !src.notes?.length));
     const audio = new Map();
     const done = Promise.all(wanted.map((src) => soundOf(src.blob, ctx).then((buf) => { if (buf) audio.set(src.id, buf); })));
@@ -23851,7 +23998,7 @@ function mountBoardRoom(body, app, session, frame) {
     roomFiles = files;
     shareMine();
     // In 원본 the cards' recordings are read ahead (no tap needed to read), so ▶ finds them ready.
-    if (settings().songMode === "original") {
+    if (settings().songMode === "original" || settings().songMode === "both") {
       audioContext({ wake: false }).then((ctx) => {
         if (!ctx || !alive) return;
         for (const item of board.items()) if (item.kind === "song" && item.data?.blob) soundOf(item.data.blob, ctx);
@@ -24390,7 +24537,7 @@ function mountDrawRoom(body, app, session, frame) {
       host: el,
       ink: () => session.doc(name),
       share: liveInk.on(name),
-      steady: () => getSettings(app.store).inkSteady ?? 1,
+      steady: () => getSettings(app.store).inkSteady ?? 0,
       onPick: (color) => { pen.color = color; setTool(pen.tool); },
       pick: (x, y) => colorAt(x, y),
       blocked: () => view.pinching,
@@ -24730,14 +24877,15 @@ __m["src/ui/anim-room.js"] = (() => {
 // shows where each of them is, and their lines appear live on the frame they share. Each frame is its
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
-const { h, icon, iconButton, toast, flashHint, closeOnOutside } = __m["src/ui/dom.js"];
-const { InkLayer, drawInkTools, paintStroke } = __m["src/ui/ink.js"];
+const { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } = __m["src/ui/dom.js"];
+const { InkLayer, drawInkTools, paintStroke, lassoActions } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
 const { watchFingerTaps } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
 const { PAGE_W, PAGE_H } = __m["src/ui/draw-room.js"];
-const { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } = __m["src/core/anim.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf } = __m["src/core/ink.js"];
+const { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } = __m["src/core/anim.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } = __m["src/core/ink.js"];
+const { PAPERS } = __m["src/core/draw.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -24747,6 +24895,10 @@ const { currentTheme } = __m["src/ui/theme.js"];
 const ONION = { before: "#e5484d", after: "#2f9e5b" };
 const LOOP_NAMES = { loop: "반복", pingpong: "왕복", once: "한 번" };
 const MAX_PIXELS = 3.2e6;
+// 배경: one drawing beneath every frame (Procreate's background frame): drawn once, it is under each
+// frame as it is drawn, played, shown small and saved.
+const BG = "bg";
+const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
 
 function mountAnimRoom(body, app, session) {
   const root = app.root;
@@ -24765,19 +24917,35 @@ function mountAnimRoom(body, app, session) {
   let ink = null;
   const view = pageStage(body, { id: "anim", width: PAGE_W, height: PAGE_H, onPinch: () => ink?.cancelTouch() });
   const { page, stage } = view;
+  const back = h("canvas", { class: "anim-sheet anim-back", id: "anim-back", "aria-hidden": "true" });
   const onion = h("canvas", { class: "anim-sheet anim-onion", "aria-hidden": "true" });
   const inkHost = h("div", { class: "draw-layer active", id: "anim-ink" });
   const show = h("canvas", { class: "anim-sheet anim-show", id: "anim-show", hidden: true, "aria-hidden": "true" });
-  page.append(onion, inkHost, show);
+  page.append(back, onion, inkHost, show);
   const curDoc = () => (current ? frameDocOf(current) : "k:F-");
   const share = liveInk.on(curDoc);
+  // 올가미, the same as in 그림 방 and the text room: what is drawn round is held, taken anywhere,
+  // recoloured, copied or rubbed out, on the frame being drawn.
+  let lasso = null;
+  const keepInk = (made) => {
+    const name = curDoc();
+    session.commit(name, made.ops);
+    record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+    if (current) thumbSoon(current);
+  };
   ink = new InkLayer({
     host: inkHost,
     grow: false,
+    onLasso: (info) => lasso?.show(info),
+    onLassoMove: (ids, dx, dy) => {
+      const made = moveStrokesOps(session.clock, session.doc(curDoc()), ids, dx, dy, session.memberId);
+      keepInk(made);
+      return made.ops.filter((o) => o.t === "stroke").map((o) => o.id);
+    },
     maxPixels: MAX_PIXELS,
     ink: () => session.doc(curDoc()),
     share,
-    steady: () => getSettings(app.store).inkSteady ?? 1,
+    steady: () => getSettings(app.store).inkSteady ?? 0,
     blocked: () => view.pinching || !!playing,
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
@@ -24800,6 +24968,8 @@ function mountAnimRoom(body, app, session) {
     },
   });
 
+  lasso = lassoActions({ ink, doc: () => session.doc(curDoc()), clock: session.clock, by: session.memberId, commit: keepInk });
+
   // ---- below the page: the strip of frames, the brushes, the tools ------------------------------
 
   const strip = h("div", { class: "anim-strip", id: "anim-strip", role: "listbox", "aria-label": "장" });
@@ -24812,15 +24982,19 @@ function mountAnimRoom(body, app, session) {
     paintOnion();
     drawTools();
   }, "양파");
-  const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", title: "1초에 몇 장", onclick: () => cycle("fps") });
-  const loopChip = h("button", { class: "chip anim-chip", id: "anim-loop", type: "button", title: "다 돌면 어떻게", onclick: () => cycle("loop") });
-  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, loopChip);
+  // 빠르기 and what happens at the end share one chip and one small menu (Procreate keeps them in its
+  // Animation Assist settings), so the bar fits a 360-wide phone; the paper is held in the 배경 cell,
+  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 영상으로 저장 as the
+  // other drawing rooms save.
+  const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", "aria-haspopup": "menu", title: "재생: 빠르기와 끝나면", onclick: () => playMenu() });
+  const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
+  const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, saveButton);
   body.after(strip, inkTools, toolbar);
 
   function drawTools() {
     const { fps, loop } = doc.settings();
     speedChip.textContent = `${fps}장/초`;
-    loopChip.textContent = LOOP_NAMES[loop];
+    speedChip.setAttribute("aria-label", `재생: 1초에 ${fps}장, 끝나면 ${LOOP_NAMES[loop]}`);
     onionButton.setAttribute("aria-pressed", String(onionOn()));
     playButton.replaceChildren(icon(playing ? "pause" : "play"));
     playButton.setAttribute("aria-label", playing ? "멈춤" : "재생");
@@ -24834,7 +25008,7 @@ function mountAnimRoom(body, app, session) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
-    drawInkTools(inkTools, { pen, setTool, store: app.store, units: () => ink.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -24853,6 +25027,31 @@ function mountAnimRoom(body, app, session) {
     }
   }
 
+  function paintPaper() {
+    const key = doc.settings().paper;
+    page.dataset.paper = key;
+    page.style.setProperty("--paper-c", paperColour(key) || "transparent");
+    strip.dataset.paper = key;
+    strip.style.setProperty("--paper-c", paperColour(key) || "transparent");
+  }
+
+  /** The background under the frame being drawn (not while the background itself is drawn). */
+  function paintBack() {
+    fitCanvas(back);
+    const g = back.getContext("2d");
+    if (!g) return;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, back.width, back.height);
+    back.hidden = current === BG || !!playing;
+    if (!back.hidden) paintFrame(g, BG, back.width, back.height);
+  }
+
+  /** A frame as it is seen: the background, then its own strokes. */
+  function paintWhole(g, id, w, hgt) {
+    paintFrame(g, BG, w, hgt);
+    if (id !== BG) paintFrame(g, id, w, hgt);
+  }
+
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
@@ -24860,6 +25059,8 @@ function mountAnimRoom(body, app, session) {
   }
 
   const neighbours = () => {
+    // Drawing the background, the first frame shows faintly over it (to place the scene).
+    if (current === BG) return { before: doc.frames()[0]?.id || null, after: null };
     const list = doc.frames();
     const i = list.findIndex((f) => f.id === current);
     return { before: i > 0 ? list[i - 1].id : null, after: i >= 0 && i < list.length - 1 ? list[i + 1].id : null };
@@ -24888,7 +25089,7 @@ function mountAnimRoom(body, app, session) {
   function pictureOf(id, w, hgt) {
     const d = session.doc(frameDocOf(id));
     const had = pictures.get(id);
-    if (had && had.version === d.version && had.canvas.width === w && had.canvas.height === hgt) return had.canvas;
+    if (had && had.version === d.version + "/" + session.doc(frameDocOf(BG)).version && had.canvas.width === w && had.canvas.height === hgt) return had.canvas;
     const c = had?.canvas || document.createElement("canvas");
     c.width = w;
     c.height = hgt;
@@ -24896,9 +25097,9 @@ function mountAnimRoom(body, app, session) {
     if (g) {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, w, hgt);
-      paintFrame(g, id, w, hgt);
+      paintWhole(g, id, w, hgt);
     }
-    pictures.set(id, { version: d.version, canvas: c });
+    pictures.set(id, { version: d.version + "/" + session.doc(frameDocOf(BG)).version, canvas: c });
     return c;
   }
 
@@ -24912,6 +25113,7 @@ function mountAnimRoom(body, app, session) {
     inkHost.style.visibility = "hidden";
     fitCanvas(show);
     paintOnion();
+    paintBack();
     setTool(pen.tool);
     drawTools();
     const loop = (now) => {
@@ -24945,6 +25147,7 @@ function mountAnimRoom(body, app, session) {
     inkHost.style.visibility = "";
     for (const cell of strip.querySelectorAll(".anim-frame.playing")) cell.classList.remove("playing");
     paintOnion();
+    paintBack();
     setTool(pen.tool);
     drawTools();
   }
@@ -24966,7 +25169,7 @@ function mountAnimRoom(body, app, session) {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
-    paintFrame(g, id, c.width, c.height);
+    paintWhole(g, id, c.width, c.height);
   }
 
   /** Where friends are: frame id → their colours. */
@@ -24982,13 +25185,41 @@ function mountAnimRoom(body, app, session) {
     return out;
   }
 
+  // ‹ 3/12 ›: to the frame before or after without hunting along the strip (as FlipaClip and
+  // RoughAnimator step through frames); it stays at the strip's start while the strip scrolls.
+  const where = h("span", { class: "anim-where", id: "anim-where" });
+  // 배경 sits before the first frame on the strip, so from it › is frame 1; at either end the
+  // arrow greys out rather than wrapping round (FlipaClip does not wrap either).
+  const stepTo = (by) => {
+    const list = doc.frames();
+    const i = current === BG ? -1 : list.findIndex((f) => f.id === current);
+    const next = list[i + by];
+    if (next) { if (playing) stopPlay(); select(next.id); }
+  };
+  const prevButton = h("button", { class: "anim-step", id: "anim-prev", type: "button", "aria-label": "앞 장", text: "‹", onclick: () => stepTo(-1) });
+  const nextButton = h("button", { class: "anim-step", id: "anim-next", type: "button", "aria-label": "다음 장", text: "›", onclick: () => stepTo(1) });
+  const nav = h("div", { class: "anim-nav", id: "anim-nav" }, prevButton, where, nextButton);
+  const bgThumb = h("canvas", { class: "anim-thumb", width: 54, height: 72, "aria-hidden": "true" });
+  const bgCell = h("button", { class: "anim-frame anim-bg", id: "anim-bg", type: "button", role: "option", data: { frame: BG }, "aria-label": "배경 (모든 장 밑에)" }, bgThumb, h("span", { class: "anim-num", text: "배경" }),
+    h("span", { class: "anim-peers" }));
+  wireCell(bgCell, BG, () => { select(BG); paperMenu(bgCell); });
+  cells.set(BG, { cell: bgCell, thumb: bgThumb });
   const addButton = h("button", { class: "anim-add", id: "anim-add", type: "button", "aria-label": "빈 장 더하기", onclick: () => addFrame() }, icon("plus"));
   const copyButton = h("button", { class: "anim-add", id: "anim-copy", type: "button", "aria-label": "이 장 복제해서 다음 장으로", onclick: () => duplicate() }, icon("copy"));
   function drawStrip() {
     const list = doc.frames();
     const friends = friendsOn();
     const keep = new Set(list.map((f) => f.id));
+    keep.add(BG);
     for (const [id, { cell }] of cells) if (!keep.has(id)) { cell.remove(); cells.delete(id); }
+    strip.append(nav, bgCell);
+    const at = list.findIndex((f) => f.id === current);
+    where.textContent = current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`;
+    prevButton.disabled = current === BG || at <= 0;
+    nextButton.disabled = current !== BG && at >= list.length - 1;
+    bgCell.classList.toggle("on", current === BG);
+    bgCell.setAttribute("aria-selected", String(current === BG));
+    bgCell.querySelector(".anim-peers").replaceChildren(...(friends.get(BG) || []).map((color) => h("i", { style: { background: color } })));
     list.forEach((f, i) => {
       let entry = cells.get(f.id);
       if (!entry) {
@@ -25021,8 +25252,8 @@ function mountAnimRoom(body, app, session) {
     }
   }
 
-  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기. */
-  function wireCell(cell, id) {
+  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). */
+  function wireCell(cell, id, hold = () => frameMenu(cell, id)) {
     let timer = 0;
     let held = false;
     cell.addEventListener("pointerdown", () => {
@@ -25031,7 +25262,7 @@ function mountAnimRoom(body, app, session) {
       timer = setTimeout(() => {
         held = true;
         buzz(app, 8);
-        frameMenu(cell, id);
+        hold();
       }, 480);
     });
     const off = () => clearTimeout(timer);
@@ -25043,10 +25274,38 @@ function mountAnimRoom(body, app, session) {
       if (held) return;
       if (playing) stopPlay();
       select(id);
+      if (id === BG && !getSettings(app.store).animBgSeen) {
+        setSetting(app.store, "animBgSeen", true);
+        flashHint("배경은 모든 장 밑에 깔려요 · 꾹 누르면 종이");
+      }
     });
   }
 
   let closeMenu = null;
+  let menuFor = null;
+  /**
+   * A small menu just above what opened it. A tap outside closes it and touches nothing else; the
+   * bar's own button pressed again closes it too (the bars let a press through, so it asks).
+   */
+  function openMenu(anchor, menu) {
+    closeMenu?.();
+    document.body.append(menu);
+    const r = anchor.getBoundingClientRect();
+    const mr = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
+    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
+    let stop = null;
+    function close() {
+      stop?.();
+      menu.remove();
+      if (closeMenu === close) { closeMenu = null; menuFor = null; }
+    }
+    closeMenu = close;
+    menuFor = anchor;
+    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t), close, menu); }, 0);
+    return close;
+  }
+
   function frameMenu(cell, id) {
     closeMenu?.();
     select(id);
@@ -25063,19 +25322,7 @@ function mountAnimRoom(body, app, session) {
         at > 0 && h("button", { class: "chip", type: "button", id: "anim-menu-left", text: "← 앞으로", onclick: () => { apply(moveFrameOps(session.clock, doc, id, -1)); close(); } }),
         at < list.length - 1 && h("button", { class: "chip", type: "button", id: "anim-menu-right", text: "뒤로 →", onclick: () => { apply(moveFrameOps(session.clock, doc, id, 1)); close(); } }),
         list.length > 1 && h("button", { class: "chip danger", type: "button", id: "anim-menu-remove", text: "지우기", onclick: () => { close(); removeFrame(id); } })));
-    document.body.append(menu);
-    const r = cell.getBoundingClientRect();
-    const mr = menu.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(innerWidth - mr.width - 8, r.left + r.width / 2 - mr.width / 2)) + "px";
-    menu.style.top = Math.max(8, r.top - mr.height - 10) + "px";
-    let stop = null;
-    function close() {
-      stop?.();
-      menu.remove();
-      if (closeMenu === close) closeMenu = null;
-    }
-    closeMenu = close;
-    setTimeout(() => { if (menu.isConnected) stop = closeOnOutside((t) => menu.contains(t), close, menu); }, 0);
+    const close = openMenu(cell, menu);
   }
 
   // ---- frames: choose, add, copy, take away -------------------------------------------------------
@@ -25086,23 +25333,24 @@ function mountAnimRoom(body, app, session) {
       current = id;
       share.detach(ink);
       share.attach(ink);
-      session.load(frameDocOf(id)).then(() => { if (alive && current === id) { ink.render(); paintOnion(); } });
+      session.load(frameDocOf(id)).then(() => { if (alive && current === id) { ink.render(); paintOnion(); paintBack(); } });
       session.setPresencePart("anim", { f: id });
     }
     ink.render();
     paintOnion();
+    paintBack();
     drawStrip();
   }
 
   function addFrame() {
     if (readOnly() || doc.frames().length >= MAX_FRAMES) return;
-    const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current });
+    const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current === BG ? null : current });
     if (apply(made)) select(made.id);
   }
 
   /** The animator's way: the frame copied as the next one, to change a little. */
   function duplicate() {
-    if (readOnly() || !current || doc.frames().length >= MAX_FRAMES) return;
+    if (readOnly() || !current || current === BG || doc.frames().length >= MAX_FRAMES) return;
     const from = session.doc(frameDocOf(current));
     const made = addFrameOps(session.clock, doc, { by: session.memberId, after: current });
     session.commit("anim", made.ops);
@@ -25128,11 +25376,116 @@ function mountAnimRoom(body, app, session) {
     }
   }
 
-  function cycle(key) {
-    const now = doc.settings();
-    const choices = key === "fps" ? FPS_CHOICES : LOOPS;
-    const next = choices[(choices.indexOf(now[key]) + 1) % choices.length];
-    apply(setAnimOps(session.clock, doc, { [key]: next }));
+  /** 종이: the 그림 방's papers (투명 too), under every frame, for everyone; held from the 배경 cell. */
+  function paperMenu(anchor) {
+    if (readOnly()) return;
+    const now = doc.settings().paper;
+    const menu = h("div", { class: "anim-menu", id: "anim-paper-menu", role: "menu" },
+      h("div", { class: "anim-menu-row paper-row", role: "group", "aria-label": "종이" },
+        h("span", { class: "anim-menu-label", text: "종이" }),
+        ...PAPERS.map(([k, c, label]) => h("button", { class: "paper-pick" + (c ? "" : " clear"), type: "button", data: { paper: k }, "aria-pressed": String(k === now), "aria-label": label, title: label,
+          style: c ? { background: c } : {}, onclick: () => { if (k !== now) apply(setAnimOps(session.clock, doc, { paper: k })); close(); } }))));
+    const close = openMenu(anchor, menu);
+  }
+
+  /** 재생: how many frames a second, and at the end 반복·왕복·한 번. Both can be set before it closes. */
+  function playMenu() {
+    if (menuFor === speedChip) return void closeMenu?.();
+    if (readOnly()) return;
+    const rows = () => {
+      const { fps, loop } = doc.settings();
+      return [
+        h("div", { class: "anim-menu-row", role: "group", "aria-label": "1초에" },
+          h("span", { class: "anim-menu-label", text: "1초에" }),
+          ...FPS_CHOICES.map((n) => h("button", { class: "chip", type: "button", data: { fps: String(n) }, "aria-pressed": String(n === fps), text: `${n}장`, onclick: () => pick({ fps: n }) }))),
+        h("div", { class: "anim-menu-row", role: "group", "aria-label": "끝나면" },
+          h("span", { class: "anim-menu-label", text: "끝나면" }),
+          ...LOOPS.map((k) => h("button", { class: "chip", type: "button", data: { loop: k }, "aria-pressed": String(k === loop), text: LOOP_NAMES[k], onclick: () => pick({ loop: k }) }))),
+      ];
+    };
+    const menu = h("div", { class: "anim-menu", id: "anim-play-menu", role: "menu" }, ...rows());
+    const pick = (change) => {
+      apply(setAnimOps(session.clock, doc, change));
+      mount(menu, rows());
+    };
+    openMenu(speedChip, menu);
+  }
+
+  /**
+   * 영상으로 저장 (FlipaClip's MP4): the flipbook once through at its own speed (back and forth once for
+   * 왕복), each frame on its paper with the background beneath, recorded from a canvas.
+   */
+  let saving = false;
+  async function saveVideo() {
+    if (saving) return;
+    const pass = onePass(doc);
+    if (!pass.length) return;
+    const canvas = document.createElement("canvas");
+    if (typeof canvas.captureStream !== "function" || typeof window.MediaRecorder !== "function") return void toast(root, "이 브라우저에서는 영상으로 저장할 수 없어요");
+    saving = true;
+    if (playing) stopPlay();
+    const W = 720;
+    const H = Math.round((W * PAGE_H) / PAGE_W);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.className = "anim-record";
+    document.body.append(canvas);
+    const g = canvas.getContext("2d");
+    const paper = paperColour(doc.settings().paper) || "#ffffff"; // a video has no see-through
+    const draw = (id) => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.fillStyle = paper;
+      g.fillRect(0, 0, W, H);
+      paintWhole(g, id, W, H);
+    };
+    await Promise.all([...new Set(pass), BG].map((id) => session.load(frameDocOf(id))));
+    draw(pass[0]);
+    const { fps } = doc.settings();
+    const type = ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+    let rec;
+    try {
+      rec = new MediaRecorder(canvas.captureStream(fps), type ? { mimeType: type } : {});
+    } catch {
+      canvas.remove();
+      saving = false;
+      return void toast(root, "이 브라우저에서는 영상으로 저장할 수 없어요");
+    }
+    const parts = [];
+    rec.ondataavailable = (e) => { if (e.data?.size) parts.push(e.data); };
+    const stopped = new Promise((resolve) => { rec.onstop = resolve; });
+    saveButton.disabled = true;
+    saveButton.dataset.cap = "저장 중…";
+    rec.start(250);
+    const start = performance.now();
+    let shown = 0;
+    await new Promise((resolve) => {
+      const tick = () => {
+        if (!alive) return resolve();
+        const i = Math.floor(((performance.now() - start) / 1000) * fps);
+        if (i >= pass.length) return resolve();
+        if (i !== shown) { shown = i; draw(pass[i]); }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    setTimeout(() => rec.state !== "inactive" && rec.stop(), 1000 / fps + 150);
+    await stopped;
+    canvas.remove();
+    saving = false;
+    if (!alive) return; // left the room part way: no half a video
+    saveButton.disabled = false;
+    saveButton.dataset.cap = "저장";
+    const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
+    toolbar.dataset.saved = String(blob.size);
+    const url = URL.createObjectURL(blob);
+    const title = session.room.meta("name") || "플립북";
+    const a = h("a", { href: url, download: `${title}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    toast(root, "영상으로 저장했어요");
   }
 
   // ---- changes, undo --------------------------------------------------------------------------------
@@ -25164,10 +25517,11 @@ function mountAnimRoom(body, app, session) {
       else session.commit(name, invertInkOps(session.doc(name), session.clock, list, dir));
     }
     record([]);
-    if (!doc.frame(current) || doc.frame(current).removed) select(doc.frames()[0]?.id);
+    if (current !== BG && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
     drawStrip();
     ink.render();
     paintOnion();
+    paintBack();
   }
 
   // Procreate's taps: two fingers 되돌리기, three 다시하기.
@@ -25182,10 +25536,16 @@ function mountAnimRoom(body, app, session) {
   const offs = [
     session.on("change", ({ doc: name }) => {
       if (name === "anim") {
-        if (current && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
+        if (current && current !== BG && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
         drawStrip();
         drawTools();
         paintOnion();
+        paintPaper();
+      } else if (name === frameDocOf(BG)) {
+        // The background is under every frame: all of them change.
+        for (const id of [BG, ...doc.frames().map((f) => f.id)]) thumbSoon(id);
+        if (current === BG) ink.render();
+        paintBack();
       } else if (name.startsWith("k:F")) {
         const id = name.slice(3);
         thumbSoon(id);
@@ -25199,7 +25559,7 @@ function mountAnimRoom(body, app, session) {
       peersTimer = setTimeout(() => { peersTimer = 0; if (alive) drawStrip(); }, 300);
     }),
   ];
-  const resize = new ResizeObserver(() => { if (!playing) paintOnion(); else fitCanvas(show); });
+  const resize = new ResizeObserver(() => { if (!playing) { paintOnion(); paintBack(); } else fitCanvas(show); });
   resize.observe(page);
 
   session.load("anim").then(async () => {
@@ -25213,6 +25573,8 @@ function mountAnimRoom(body, app, session) {
     }
     const first = doc.frames()[0];
     if (first) select(first.id);
+    paintPaper();
+    session.load(frameDocOf(BG)).then(() => { if (!alive) return; paintBack(); for (const id of [BG, ...doc.frames().map((f) => f.id)]) thumbSoon(id); });
     drawTools();
     view.fit();
   });
@@ -25225,6 +25587,7 @@ function mountAnimRoom(body, app, session) {
       alive = false;
       stopPlay();
       closeMenu?.();
+      lasso?.hide();
       for (const off of offs) off();
       clearTimeout(peersTimer);
       resize.disconnect();
@@ -25358,7 +25721,7 @@ __m["src/ui/reference.js"] = (() => {
 // Removing a recording from the list keeps its sound on the device: a clip or
 // card made from it may still play it.
 
-const { h, icon, openFloat, openSheet, segmented, toast } = __m["src/ui/dom.js"];
+const { h, icon, openFloat, openSheet, segmented, toast, mount } = __m["src/ui/dom.js"];
 const { exampleTake } = __m["src/audio/example.js"];
 const { putSoundInto, reachableRooms } = __m["src/ui/room-actions.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
@@ -25413,7 +25776,7 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
     function drawNotes() {
       const notes = refNotes(app.store);
       const clip = clipboardItem(app.store, "song-clip");
-      list.replaceChildren(
+      mount(list,
         clip && h("p", { class: "help ref-clip", id: "ref-clip", text: `복사해 둔 노래 클립: ${clip.source?.name || "녹음"} · ${(clip.length / 1000).toFixed(1)}초 (노래 방이나 화이트보드에 붙일 수 있어요)` }),
         ...(notes.length ? notes.map((n) => h("div", { class: "ref-note", data: { id: n.id } },
           h("p", { class: "ref-body", text: n.text }),
@@ -26214,7 +26577,7 @@ function relayScreen(ctx) {
         ink: () => session.doc(name),
         grow: false,
         maxPixels: 2.4e6,
-        steady: () => getSettings(app.store).inkSteady ?? 1,
+        steady: () => getSettings(app.store).inkSteady ?? 0,
         shapes: () => getSettings(app.store).inkShapes !== false,
         onShape: () => buzz(app),
         onStroke: ({ pts, color, width, size, brush, shape }) => {
@@ -26447,7 +26810,7 @@ function sketchScreen(ctx) {
       share: live.on(name),
       grow: false,
       maxPixels: 2.4e6,
-      steady: () => getSettings(app.store).inkSteady ?? 1,
+      steady: () => getSettings(app.store).inkSteady ?? 0,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
       onStroke: editable
@@ -26650,7 +27013,7 @@ __m["src/ui/game.js"] = (() => {
 // in a row lit like neon). The result stays in the room (the tally between two people). 설정's
 // 미니게임 off hides the button and lets no invitation in.
 
-const { h, icon, toast } = __m["src/ui/dom.js"];
+const { h, icon, toast, mount } = __m["src/ui/dom.js"];
 const { buzz, chime } = __m["src/ui/chime.js"];
 const { getSettings } = __m["src/identity.js"];
 const { askOps, replyOps, pickOps, stoneOps, quitOps, OMOK_SIZE, RPS, MANY } = __m["src/core/game.js"];
@@ -26791,7 +27154,7 @@ function mountGames(app, session) {
     const left = g.start - Date.now();
     const n = Math.ceil(left / 1000);
     // While counting, 가위바위보 can already be chosen (a hand made ready before "보!").
-    el.replaceChildren(h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
+    mount(el, h("div", { class: "game-count", id: "game-count", text: n > 3 ? "3" : String(n) }), g.kind === "rps" ? rpsBoard(g, true) : null);
     shown.card = null;
     el.classList.add("counting");
     if (shown.lastCount !== n) {
@@ -27960,13 +28323,14 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     floatBtn,
     h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
   if (floating) panel.append(head, body, sizer);
-  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn, floatBtn), body, end, sizer);
+  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn,
+    h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")))), body, end, sizer);
   paintLock();
   root.append(scrim, panel);
-  // Home's round buttons stay above the panel (⋮ pressed again moves it); what the panel holds
-  // starts below them where they would lie over it (at the right and top edges, floating).
+  // Home's round buttons step away while the panel is out, so there is nothing to keep clear of —
+  // unless ⋮ is kept for "다시 누르면 다른 쪽으로": then what the panel holds starts below them.
   const topClear = () => {
-    const t = document.querySelector(".home-top");
+    const t = getSettings(store).panelCycle && document.querySelector(".home-top");
     return t ? Math.ceil(t.getBoundingClientRect().bottom + 6) : 0;
   };
   panel.style.setProperty("--top-clear", topClear() + "px");
@@ -28621,6 +28985,10 @@ function previewOf(room) {
   return svg;
 }
 
+// ⋮ counts as thrown only when it clearly is: this far, and quick (or twice as far).
+const THROW_PX = 40;
+const THROW_SPEED = 0.35; // px per ms
+
 function showHome(app) {
   const root = app.root;
   let alive = true;
@@ -28798,6 +29166,7 @@ function showHome(app) {
       app.store.set(PANEL_MODE, "dock");
     }
     if (panelCtl?.isOpen()) panelCtl.close({ now: true });
+    closeWindows("panel");
     if (!thrown && !view && app.store.get(PANEL_MODE, "dock") === "float") {
       panelCtl = openHomePanel(app, { floating: true, rooms: allRooms, changed: () => draw(), swap });
       return;
@@ -28855,14 +29224,16 @@ function showHome(app) {
       const pull = Math.min(24, d * 0.3);
       btn.style.translate = `${(dx / d) * pull}px ${(dy / d) * pull}px`;
       // Where it would land, shown on the edge before letting go.
-      aim.show(d >= 18 ? throwNow(e.clientX, e.clientY) : null);
+      aim.show(d >= THROW_PX ? throwNow(e.clientX, e.clientY) : null);
     });
     btn.addEventListener("touchmove", (e) => { if (g) e.preventDefault(); }, { passive: false });
     btn.addEventListener("pointercancel", () => { g = null; reset(); });
     btn.addEventListener("pointerup", (e) => {
       if (!g || e.pointerId !== g.id) return;
       g.track.add(e.timeStamp, e.clientX, e.clientY);
-      const hit = throwNow(e.clientX, e.clientY, g.track.velocity(e.timeStamp));
+      const v = g.track.velocity(e.timeStamp);
+      const moved = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
+      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= 2.2 * THROW_PX) ? throwNow(e.clientX, e.clientY, v) : null;
       g = null;
       reset();
       if (!hit) return void openPanel();
@@ -28974,10 +29345,14 @@ function showHome(app) {
     const mine = all.slice().sort((a, b) => Number(stars.has(b.id)) - Number(stars.has(a.id)) || b.at - a.at);
     const known = new Set(app.store.get("rooms", []).map((r) => r.id));
     const elsewhere = others.filter((r) => sideOf(r.kind) === side && !known.has(r.id));
+    // Its title stays where it is; only the rooms scroll, under a fine line, fading out before they
+    // reach it (the owner, 21 November: "제목과 중요한 거 있는 부분에는 영향을 안 끼치게… 제목 근처에 갈수록
+    // 그라데이션으로 안 보이게… 가로선이 있게끔").
     return h("section", { class: "half field " + side, data: { side } },
-      h("div", { class: "half-scroll" },
+      h("div", { class: "half-head" },
         h("h1", { class: "half-title", text: title }),
-        h("p", { class: "half-note", text: note }),
+        h("p", { class: "half-note", text: note })),
+      h("div", { class: "half-scroll" },
         mine.length
           ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
           : h("p", { class: "empty", text: emptyText }),
@@ -28999,7 +29374,7 @@ function showHome(app) {
     // The notice takes its own row above the halves, so it never lies over a button.
     mount(root,
       notice && h("div", { class: "notice", id: "notice", role: "status", text: notice }),
-      h("div", { class: "home-wrap" },
+      h("div", { class: "home-wrap" + (getSettings(app.store).reference ? "" : " one-row") },
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
@@ -29007,13 +29382,13 @@ function showHome(app) {
         // 세로와 레퍼런스의 위치 바꾸고"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
-          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app)),
+          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openRef()),
           // ⋮: 찾기와 집 (its own top-right button turns it into a window of its own and back).
           kebab()),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
-          h("button", { class: "pill rec-pill", id: "home-record", type: "button", "aria-label": "녹음 (모아 두고 방으로 보내기)", onclick: () => openReference(app, { tab: "sounds" }) },
+          h("button", { class: "pill rec-pill", id: "home-record", type: "button", "aria-label": "녹음 (모아 두고 방으로 보내기)", onclick: () => openRef({ tab: "sounds" }) },
             h("span", { class: "dot-rec", "aria-hidden": "true" }), "녹음", refSounds(app.store).length > 0 && h("span", { class: "rec-count", text: String(refSounds(app.store).length) })),
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
     // 찾기와 집 stays open while home draws itself again behind it.
@@ -29022,7 +29397,22 @@ function showHome(app) {
 
   function sheet(title, build) {
     closeSheet?.();
+    closeWindows("sheet");
     closeSheet = openSheet(root, title, build);
+  }
+
+  /**
+   * One window at a time (the owner, 21 November: "찾기 그 기능 나오는 거랑 설정창이랑 안 겹치게 해줘. 누구 하나
+   * 있으면 누구 하나 꺼 주고"): whatever is out besides `keep` goes before another comes.
+   */
+  function closeWindows(keep) {
+    if (keep !== "panel" && panelCtl?.isOpen()) panelCtl.close({ now: true });
+    if (keep !== "reference") document.getElementById("reference")?.close?.();
+    if (keep !== "sheet") closeSheet?.();
+  }
+  function openRef(opts) {
+    if (!document.getElementById("reference")) closeWindows("reference");
+    openReference(app, opts);
   }
 
   function chooseKind(side) {
@@ -29185,10 +29575,22 @@ function showHome(app) {
       if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
+  // While a window is out (a sheet, 레퍼런스, 찾기와 집), home's three round buttons step away: they never
+  // lie over it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The
+  // window closes by its own button or a press outside it; 설정's spot pressed again is outside it.
+  // With 설정's "열린 채 ⋮을 다시 누르면 다른 쪽으로" on, ⋮ is wanted while 찾기와 집 is out: the
+  // buttons stay for it (and the panel keeps clear of them), as before.
+  const windowOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference") ||
+    (document.getElementById("home-panel") && !getSettings(app.store).panelCycle));
+  const watchWindows = new MutationObserver(() => root.classList.toggle("home-window", alive && windowOut()));
+  watchWindows.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+
   return () => {
     alive = false;
     clearTimeout(slowTimer);
     closeSheet?.();
+    watchWindows.disconnect();
+    root.classList.remove("home-window");
   };
 }
 
