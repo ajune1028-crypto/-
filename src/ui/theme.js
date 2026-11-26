@@ -50,15 +50,29 @@ export function onThemeChange(fn) {
  * timeline. Writing sheets keep their 360 column either way.
  */
 export function fitScale() {
+  let lastW = 0;
+  let tallest = 0;
+  const typing = () => {
+    const a = document.activeElement;
+    return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  };
   const set = () => {
     const w = window.innerWidth;
-    const hgt = window.innerHeight;
+    let hgt = window.innerHeight;
+    // The same width and less height while typing: the keyboard, not a new screen (the owner, 21
+    // November: "키보드가 아래에서 나오거나… 렉이 걸린다던가… 정상화가 진짜 이상하고").
+    if (w !== lastW) {
+      lastW = w;
+      tallest = hgt;
+    } else if (hgt < tallest && typing()) hgt = tallest;
+    else tallest = Math.max(tallest, hgt);
     const landscape = w > hgt * 1.05;
-    root.dataset.orient = landscape ? "landscape" : "portrait";
+    const orient = landscape ? "landscape" : "portrait";
+    if (root.dataset.orient !== orient) root.dataset.orient = orient;
     // A phone grows with its width; a tablet or a computer is the phone made bigger (the owner, 21
     // November: "폰에서 화면만 키운 느낌으로"): the same screens, their type and buttons larger.
     const k = landscape ? Math.min(1.35, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.4, Math.max(1.05, w / 600));
-    root.style.setProperty("--k", String(k));
+    if (root.style.getPropertyValue("--k") !== String(k)) root.style.setProperty("--k", String(k));
   };
   set();
   window.addEventListener("resize", set);

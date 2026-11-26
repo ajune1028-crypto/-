@@ -138,6 +138,8 @@ export async function launch({ port = 9333, args = [] } = {}) {
       errors,
       eval: evaluate,
       waitFor,
+      // The screen's size changed (a keyboard taking height, a phone turned): width × height in CSS px.
+      resize: (w, hgt) => s("Emulation.setDeviceMetricsOverride", { width: w, height: hgt, deviceScaleFactor: 2, mobile: false }),
       goto: async (u) => { await s("Page.navigate", { url: u }); await waitFor("document.readyState === 'complete'"); },
       reload: async () => { await s("Page.reload", {}); await sleep(50); await waitFor("document.readyState === 'complete'"); },
       type: (text) => s("Input.insertText", { text }),

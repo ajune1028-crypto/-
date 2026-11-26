@@ -1103,6 +1103,31 @@ scenario("diagnostics: the panel names the transport, what is unsent, and the ve
 });
 
 // The owner: "꽉 채워졌으면", "텍스트를 담고 있는 그것까지 옆으로 늘어나야".
+// The owner (21 November): "키보드가 아래에서 나오거나… 렉이 걸린다던가… 정상화가 진짜 이상하고", "화면이 잠시
+// 불투명하게 하얘진다". The keyboard comes over the app (interactive-widget=resizes-visual) and, where a
+// browser still takes height away while typing, the app keeps its size and its side.
+scenario("keyboard: typing keeps the app's size and side when the screen loses height to the keyboard; the keyboard comes over the app", async ({ open }) => {
+  const page = await open({ width: 1180, height: 820 });
+  assert.match(await page.eval(`document.querySelector('meta[name="viewport"]').content`), /interactive-widget=resizes-visual/);
+  await page.waitFor(q("#home-more"));
+  const look = () => page.eval(`({ k: getComputedStyle(document.documentElement).getPropertyValue("--k"), orient: document.documentElement.dataset.orient, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) })`);
+  const before = await look();
+  await click(page, "#home-more");
+  await page.waitFor(q("#home-search"));
+  await page.eval(`(() => { document.getElementById("home-search").focus(); return true; })()`);
+  await page.resize(1180, 420);
+  await pause(250);
+  assert.deepEqual(await look(), before, "the keyboard took height while typing: nothing grew or shrank");
+  await page.eval(`(() => { document.activeElement.blur(); return true; })()`);
+  await page.resize(1180, 820);
+  await pause(250);
+  assert.deepEqual(await look(), before, "back as it was");
+  // A real change of screen (turned upright) still fits the app to it.
+  await page.resize(820, 1180);
+  await pause(250);
+  assert.equal((await look()).orient, "portrait", "turned: it fits the new screen");
+});
+
 scenario("wide screen: lying down or on a computer the app and the writing take the whole width", async ({ open, out }) => {
   const page = await open({ width: 1280, height: 800 });
   await createRoom(page);
