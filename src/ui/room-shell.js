@@ -23,7 +23,7 @@ import { memberColor, personColor, PALETTE } from "../core/paint.js";
 import { memberOps, makeVerifier, validPin } from "../core/room.js";
 
 /** Theme, and optionally the two colour switches. Shared by home and room settings. */
-export function displaySettings(app, { withColors }) {
+export function displaySettings(app, { withColors, part = "all" }) {
   const settings = getSettings(app.store);
   const change = (key, value) => {
     setSetting(app.store, key, value);
@@ -53,17 +53,20 @@ export function displaySettings(app, { withColors }) {
   const show = (v) => { amountText.textContent = v + "%"; back.hidden = v === 100; };
   const slider = h("input", { class: "tint-amount", id: "tint-amount", type: "range", min: "0", max: "100", step: "5", value: String(amount), "aria-label": "글라스 색 세기",
     oninput: () => { const v = Number(slider.value); show(v); change("tintAmount", v / 100); } });
+  // In parts (home: the look first, the rest one step in, the owner: "설정을 더 간편하고 좋게"); a room shows it all.
+  const look = part === "all" || part === "look";
+  const feel = part === "all" || part === "feel";
   return h("div", { class: "form" },
-    h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
-    h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
-    h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    feel && h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
       h("div", { class: "tint-amount-row" }, slider, amountText, back)),
-    h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
-    toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => change("reference", on)),
-    toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
-    toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
+    part === "all" && toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => change("reference", on)),
+    feel && toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
+    feel && toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }

@@ -157,6 +157,9 @@ export function showHome(app) {
 
   // A room's row says what kind of room it is, so a whiteboard is told from a song room at a glance.
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
+  /** 방 보기: cards (the room's look large, as many side by side as fit) or rows. */
+  const cardView = () => getSettings(app.store).roomView === "cards";
+
   function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
     const house = mine ? houseOf(app.store, room.id) : null;
@@ -558,11 +561,11 @@ export function showHome(app) {
         h("p", { class: "half-note", text: note })),
       h("div", { class: "half-scroll" },
         mine.length
-          ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
+          ? h("div", { class: "rooms" + (cardView() ? " cards" : "") }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
-          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
+          h("div", { class: "rooms" + (cardView() ? " cards" : ""), id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
         ]),
       h("button", { class: "add", id: "add-" + side, type: "button", "aria-label": title + " 방 만들기", onclick: () => chooseKind(side) }, icon("plus")));
   }
@@ -753,24 +756,69 @@ export function showHome(app) {
   }
 
   function openSettings() {
-    const recent = String(getSettings(app.store).recentSearchMax || 5);
-    sheet("설정", (panel) => panel.append(
-      // 나의 고유 코드 first (the owner: "설정에서 잘 보이게").
-      myCodeSection(app, root, (title, build) => sheet(title, build), { onChange: codeChanged }),
-      displaySettings(app, { withColors: false }),
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
-        h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
-          segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
-      // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
-      // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
-        toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
-        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
-      // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
-        toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
-        h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }), diagnostics(app, null))));
+    const settings = getSettings(app.store);
+    const recent = String(settings.recentSearchMax || 5);
+    sheet("설정", (panel) => {
+      // The first page holds what is changed often; the rest is one step in (the owner, 21 November:
+      // "설정을 더 간편하고 좋게"), each page sliding in from the side and '‹ 설정' back (iOS 설정, the
+      // Stack Panel the owner sent).
+      const pages = new Map();
+      const main = h("div", { class: "settings-page", data: { settingsPage: "main" } });
+      const go = (id) => {
+        for (const [key, el] of pages) el.hidden = key !== id;
+        const now = pages.get(id);
+        now.classList.remove("in", "out");
+        void now.offsetWidth;
+        now.classList.add(id === "main" ? "out" : "in");
+        panel.scrollTop = 0;
+      };
+      const page = (id, title, ...children) => {
+        const el = h("div", { class: "settings-page sub", data: { settingsPage: id }, hidden: true },
+          h("button", { class: "settings-back", type: "button", data: { settingsBack: "" }, onclick: () => go("main") }, icon("back"), h("span", { text: "설정" })),
+          h("p", { class: "settings-page-title", text: title }),
+          ...children);
+        pages.set(id, el);
+        return el;
+      };
+      const link = (id, label, hint) => h("button", { class: "settings-link", type: "button", data: { settingsPart: id }, onclick: () => go(id) },
+        h("span", { class: "settings-link-text" }, h("span", { class: "settings-link-label", text: label }), hint && h("span", { class: "settings-link-hint", text: hint })),
+        h("span", { class: "settings-link-go", "aria-hidden": "true", text: "›" }));
+      pages.set("main", main);
+      // 방 보기 (the owner: "방 나열을 카드형으로 바꾸는 설정"): rows, or cards with the room's look large.
+      const roomView = h("div", { class: "row" }, h("span", { class: "label", text: "방 보기" }),
+        segmented([["list", "목록", "room-view-list"], ["cards", "카드", "room-view-cards"]], getSettings(app.store).roomView === "cards" ? "cards" : "list", (v) => {
+          setSetting(app.store, "roomView", v);
+          for (const el of root.querySelectorAll(".rooms")) el.classList.toggle("cards", v === "cards");
+        }, "roomView"));
+      main.append(
+        // 나의 고유 코드 first (the owner: "설정에서 잘 보이게").
+        myCodeSection(app, root, (title, build) => sheet(title, build), { onChange: codeChanged }),
+        displaySettings(app, { withColors: false, part: "look" }),
+        h("div", { class: "form" }, roomView),
+        h("div", { class: "settings-links" },
+          link("feel", "색 세기 · 효과음 · 진동"),
+          link("find", "찾기 · 햇살 · 비서"),
+          link("games", "미니게임"),
+          link("diag", "연결 진단", "문제가 있을 때")));
+      panel.append(main,
+        page("feel", "색 세기 · 효과음 · 진동", displaySettings(app, { withColors: false, part: "feel" })),
+        page("find", "찾기 · 햇살 · 비서",
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
+            h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
+              segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
+          // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
+          // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
+            toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", settings.panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+            h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "비서" }),
+            toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => { setSetting(app.store, "reference", on); app.events.emit("settings"); }))),
+        // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
+        page("games", "미니게임",
+          toggle("games-on", "방에서 친구와 미니게임", settings.games !== false, (on) => setSetting(app.store, "games", on)),
+          h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
+        page("diag", "연결 진단", diagnostics(app, null)));
+    });
   }
 
   draw();

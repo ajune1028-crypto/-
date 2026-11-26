@@ -5577,6 +5577,8 @@ scenario("색 세기: the slider takes my glass colour out of the glass and the 
     const m = c.match(/color\\(srgb ([\\d.]+) ([\\d.]+) ([\\d.]+)/); return m ? "rgb(" + [m[1], m[2], m[3]].map((v) => Math.round(v * 255)).join(", ") + ")" : c; })()`);
   const tinted = await skyColour();
   await click(page, "#home-settings");
+  // One step in: '색 세기 · 효과음 · 진동'.
+  await click(page, '[data-settings-part="feel"]');
   await page.waitFor(q("#tint-amount"));
   assert.equal(await page.eval(`${q("#tint-amount")}.value`), "100", "as it was made at first");
   assert.ok(await page.eval(`${q("#tint-amount-back")}.hidden`), "nothing to put back yet");
@@ -7099,6 +7101,7 @@ scenario("미니게임: 가위바위보 asked from the top bar; the friend's sma
   await click(b, "#back");
   await b.waitFor(q("#home-settings"));
   await click(b, "#home-settings");
+  await click(b, '[data-settings-part="games"]');
   await b.waitFor(q("#games-on"));
   await click(b, "#games-on");
   assert.equal(await b.eval(`window.__app.store.get("settings", {}).games`), false);
@@ -7320,4 +7323,59 @@ scenario("방 비밀번호: a room made with a password is kept sealed; a friend
   await host.waitFor(`window.__app.session && window.__app.session.sheet(${TODAY}.dataset.day).text().includes("같이 쓰는 비밀")`, 10000);
   const sheetOps = await host.eval(`(async () => { const ch = await (await window.__app.ready).openRoom(${JSON.stringify(roomId)}); const docs = await ch.docs(); const day = docs.find((d) => d.startsWith("s:")); const ops = day ? await ch.load(day) : []; ch.close(); return JSON.stringify(ops); })()`);
   assert.ok(sheetOps.length > 20 && !sheetOps.includes("같이") && !sheetOps.includes("비밀"), "the words are stored sealed");
+});
+
+// The owner (21 November): "방 나열을 카드형으로 바꾸는 설정, 설정을 더 간편하고 좋게". 설정's first page is short
+// (my code, look, 방 보기) and the rest is one step in, sliding in and '‹ 설정' back; 카드 shows each room's
+// look large, as many side by side as fit, and is remembered.
+scenario("설정 in pages and 방 보기: the first page is short with the rest one step in ('‹ 설정' back); 카드 shows rooms as cards (the look on top), side by side where there is room, and stays", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.waitFor(q("#home"));
+  await page.eval(`(() => {
+    const rooms = [];
+    for (let i = 0; i < 4; i++) rooms.push({ id: "cardroomaaa" + "bcde"[i], kind: i % 2 ? "creative-song" : "daily-text", name: "방 " + (i + 1), memberId: "m1", at: Date.now() - i * 60000, local: true,
+      preview: i % 2 ? undefined : { t: "text", line: "오늘은 바다에 갔다. 파도가 높았다." } });
+    window.__app.store.set("rooms", rooms);
+    setTimeout(() => location.reload(), 50);
+    return true;
+  })()`);
+  await pause(400);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 4`);
+  await click(page, "#home-settings");
+  await page.waitFor(q('[data-settings-page="main"]'));
+  const first = await page.eval(`(() => {
+    const main = document.querySelector('[data-settings-page="main"]');
+    const words = main.innerText;
+    return { code: !!main.querySelector(".my-code-section"), theme: !!main.querySelector('[data-theme-choice]'), view: !!main.querySelector('[data-room-view]'),
+      tintVisible: !!document.getElementById("tint-amount")?.offsetParent, links: [...main.querySelectorAll("[data-settings-part]")].map((b) => b.dataset.settingsPart), words };
+  })()`);
+  assert.ok(first.code && first.theme && first.view, "the first page: my code, the look and 방 보기: " + JSON.stringify(first).slice(0, 200));
+  assert.equal(first.tintVisible, false, "색 세기 is one step in");
+  assert.deepEqual(first.links, ["feel", "find", "games", "diag"]);
+  await page.shot(out("settings-first-page.png"));
+  // One step in and back.
+  await click(page, '[data-settings-part="find"]');
+  await page.waitFor(`!!document.getElementById("panel-cycle")?.offsetParent && document.querySelector('[data-settings-page="main"]').hidden`, 2000);
+  await click(page, '[data-settings-page="find"] [data-settings-back]');
+  await page.waitFor(`!document.querySelector('[data-settings-page="main"]').hidden && !document.getElementById("panel-cycle").offsetParent`, 2000);
+  // 카드.
+  await click(page, '[data-room-view="cards"]');
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
+  const cards = await page.eval(`(() => {
+    const rows = [...document.querySelectorAll('.half[data-side="daily"] .room-row')];
+    const r = rows[0];
+    const thumb = r.querySelector(".room-thumb").getBoundingClientRect();
+    const name = r.querySelector(".room-name").getBoundingClientRect();
+    return { cards: document.querySelector('.half[data-side="daily"] .rooms').classList.contains("cards"), thumbAbove: thumb.bottom <= name.top + 1, thumbH: thumb.height, thumbW: thumb.width };
+  })()`);
+  assert.ok(cards.cards && cards.thumbAbove && cards.thumbH > cards.thumbW * 0.6, "a card: its look large on top, the name below: " + JSON.stringify(cards));
+  await page.shot(out("home-cards-phone.png"));
+  // Remembered, and side by side on a wide screen.
+  await page.resize(1180, 820);
+  await page.reload();
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 4`);
+  const wide = await page.eval(`(() => { const rows = [...document.querySelectorAll('.half[data-side="daily"] .room-row')].map((r) => r.getBoundingClientRect()); return { n: rows.length, sameLine: rows.length > 1 && Math.abs(rows[0].top - rows[1].top) < 2 }; })()`);
+  assert.ok(wide.sameLine, "cards side by side where there is room: " + JSON.stringify(wide));
+  await page.shot(out("home-cards-wide.png"));
 });
