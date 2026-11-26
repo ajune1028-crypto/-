@@ -201,3 +201,7 @@ https://github.com/storytold/artcraft 를 받아 `frontend/libs/components/paged
 - `PaintSurface.tsx`의 투명 배경(체커보드 무늬)과 배경색 도구 → 그림 방의 '종이'(`src/core/draw.js`의 `PAPERS`·`paperOps`, `src/ui/draw-room.js`).
 - `moodboard/interactions/useSelection.ts`의 올가미 고르기(둘러싼 것 대부분이 들어 있으면 잡힘) → `src/core/ink.js`의 `strokesWithinLoop`(선의 점 절반 넘게 안이거나 가운데가 안).
 
+
+## Squoosh의 공유 받기 (Apache-2.0, 생각만)
+
+`src/sw.js`와 `src/ui/share-in.js`의 '공유로 받기'(녹음 앱의 '공유' → 이 앱, Web Share Target)는 Squoosh(GoogleChromeLabs/squoosh, Apache-2.0)가 공유받은 파일을 받는 방식을 따랐다: manifest의 `share_target`(POST, multipart), 서비스 워커가 그 POST를 받아 앱 주소로 돌려보냄(303). 코드는 옮기지 않았다. 우리는 파일을 메시지로 넘기지 않고 Cache Storage에 두었다가 `?shared=`로 연 앱이 꺼낸다(앱이 늦게 열려도 잃지 않게).

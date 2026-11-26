@@ -1,6 +1,7 @@
 // Writes dist/index.html: one self-contained file for the trial page.
 // Modules are wrapped in dependency order inside one script; the stylesheet is inlined.
 import { serverFrom } from "../src/sync/firebase.js";
+import { appIcon, manifest } from "./icons.mjs";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, posix } from "node:path";
@@ -66,4 +67,14 @@ const outArg = process.argv.slice(2).find((a) => a.startsWith("--out="))?.slice(
 const outFile = outArg || join(root, "dist/index.html");
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, html);
+// Beside it, what the home screen and the share sheet need on a public address (src/ui/share-in.js):
+// the manifest, its icons and the service worker that takes a shared sound in. The page links them
+// only where they can work, so the trial page never asks for them.
+if (!outArg) {
+  const dir = dirname(outFile);
+  writeFileSync(join(dir, "manifest.webmanifest"), JSON.stringify(manifest(), null, 2) + "\n");
+  writeFileSync(join(dir, "sw.js"), readFileSync(join(root, "src/sw.js"), "utf8"));
+  writeFileSync(join(dir, "icon-192.png"), appIcon(192));
+  writeFileSync(join(dir, "icon-512.png"), appIcon(512));
+}
 console.log(`${outArg || "dist/index.html"}: ${order.length} modules, ${Math.round(html.length / 1024)} KB${shareBase ? ", links point to " + shareBase : ""}${server ? ", rooms on " + server : ""}`);

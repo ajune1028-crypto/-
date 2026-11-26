@@ -7533,3 +7533,76 @@ scenario("song ● with the phone's recorder app: held, ● asks how to record; 
   await click(page, "#record-way-app");
   await page.waitFor(`window.__app.store.get("settings", {}).recordWith === "app" && !!document.getElementById("record")`, 3000);
 });
+
+// The owner (26 November): "주변에 같은 색이 있다면 일정 부분이 거기도 약간 투명하게… 어딜 감싸고 있다고 인식되면
+// 그 안 전체까지 다 투명화… 목적이 잘 보이라고… 지금 너무 가까이만 되고 있다". Drawing by a bar: my colour's
+// drawing near the pen shows through the glass over it, and a line closed round something shows all of
+// its inside; when the pen lifts, it goes again gently.
+scenario("엑스레이 wider: a line closed round a spot under the tool bar shows that inside through the bar; my colour's drawing near the pen shows through too; it goes when the pen lifts", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await createBoard(page);
+  await click(page, "#board-pen");
+  const bar = await page.eval(`(() => { const t = document.querySelector(".room .toolbar").getBoundingClientRect(); return { cx: t.left + t.width / 2, top: t.top, bottom: t.bottom, h: t.height }; })()`);
+  // A ring round a spot that is half under the bar: it starts above the bar and comes back to its start.
+  const cx = bar.cx;
+  const cy = bar.top;
+  const R = 70;
+  const at = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  let pt = at(-Math.PI / 2);
+  await page.stylus("down", pt[0], pt[1]);
+  for (let i = 1; i <= 40; i++) {
+    pt = at(-Math.PI / 2 + (i / 40) * 2 * Math.PI * 0.99);
+    await page.stylus("move", pt[0], pt[1]);
+    await pause(12);
+  }
+  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map") && /url\\(/.test(document.querySelector(".room .toolbar").style.getPropertyValue("--xr-map"))`, 3000);
+  const mask = await page.eval(`(() => { const el = document.querySelector(".room .toolbar"); const cs = getComputedStyle(el); return cs.maskImage || cs.webkitMaskImage; })()`);
+  assert.ok(/url\(/.test(mask), "the bar is masked by what shows through: " + mask.slice(0, 80));
+  await page.front();
+  await page.shot(out("xray-wide-loop.png"));
+  await page.stylus("up", pt[0], pt[1]);
+  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
+  // My colour's drawing near the pen: a new line beside the ring under the bar opens the bar there too.
+  const near = [cx + R + 20, bar.top - 30];
+  await page.stylus("down", near[0], near[1]);
+  for (let i = 1; i <= 6; i++) {
+    await page.stylus("move", near[0] - i * 4, near[1] + i * 3);
+    await pause(30);
+  }
+  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map")`, 3000);
+  await page.stylus("up", near[0] - 24, near[1] + 18);
+  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
+});
+
+// The owner (26 November): "다른 진짜 녹음 어플로 들어가서 녹음, 거기도 저장되고 여기로 또 옮겨지고". On a public
+// address the app goes on the home screen; then the phone's recorder app's '공유' lists it, and a sound
+// sent that way is posted to ./share. The service worker keeps it and opens the app, which puts it in
+// 비서's 녹음, ready for '보내기'. (The worker and the manifest are made with the bundle: --dist only.)
+scenario("공유로 받기: a sound shared from the phone's recorder app (posted to ./share as Android does) comes into 비서's 녹음 with its notes; the manifest lists the app for sounds", async ({ open, fixtures, dist }) => {
+  if (!dist) return;
+  const page = await open({ query: "sw=1" });
+  await page.waitFor(`!!document.querySelector('link[rel="manifest"]')`, 3000);
+  const man = await page.eval(`fetch("manifest.webmanifest").then((r) => r.json())`);
+  assert.equal(man.share_target?.action, "./share");
+  assert.equal(man.share_target?.method, "POST");
+  assert.ok(man.share_target.params.files.some((f) => f.name === "sound" && f.accept.includes("audio/*")), "sounds are taken: " + JSON.stringify(man.share_target));
+  assert.ok(man.icons.some((i) => i.sizes === "512x512") && man.icons.some((i) => i.sizes === "192x192"), "icons for the home screen");
+  assert.equal(await page.eval(`fetch("icon-512.png").then((r) => r.ok && r.headers.get("content-type"))`), "image/png");
+  await page.waitFor(`navigator.serviceWorker.ready.then((r) => !!r.active)`, 8000);
+  try {
+    // The share sheet's post, as Chrome on Android makes it for the app on the home screen.
+    await page.eval(`(() => { const f = document.createElement("form"); f.method = "post"; f.enctype = "multipart/form-data"; f.action = "share"; f.id = "share-post"; const i = document.createElement("input"); i.type = "file"; i.name = "sound"; i.id = "share-file"; f.append(i); document.body.append(f); return true; })()`);
+    await page.setFiles("#share-file", [fixtures.doremi]);
+    await page.eval(`(setTimeout(() => document.getElementById("share-post").submit(), 30), true)`);
+    await pause(400);
+    await page.waitFor(`document.readyState === "complete" && window.__app && window.__app.booted`, 8000);
+    // In 비서's 녹음, named after the file, with the notes it holds; the address is plain again.
+    await page.waitFor(`!!document.getElementById("reference")`, 5000);
+    await page.waitFor(`(window.__app.store.get("reference-sounds", []) || []).some((s) => /doremi/.test(s.name || "") && (s.notes || []).length >= 5)`, 20000);
+    assert.ok(!/shared=/.test(await page.eval(`location.search`)), "the address no longer carries the share");
+    await page.waitFor(`caches.open("hamkke-share").then((c) => c.keys()).then((k) => k.length === 0)`, 3000);
+    await page.waitFor(`/녹음 앱에서 받았어요/.test(document.querySelector(".toast")?.textContent || "")`, 6000);
+  } finally {
+    await page.eval(`navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister()))).then(() => true)`).catch(() => {});
+  }
+});

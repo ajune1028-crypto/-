@@ -115,7 +115,7 @@ for (const { name, run } of scenarios) {
   };
   const t0 = Date.now();
   try {
-    await run({ open, out: (file) => join(root, "out", file), fixtures });
+    await run({ open, out: (file) => join(root, "out", file), fixtures, dist });
     const errors = pages.flatMap((p) => p.errors);
     if (errors.length) throw new Error("page errors: " + errors.slice(0, 3).join(" | "));
     console.log(`ok   ${name} (${Date.now() - t0} ms)`);

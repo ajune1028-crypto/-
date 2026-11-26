@@ -13,7 +13,7 @@
 
 import { h, icon, iconButton, closeOnOutside, mount } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, closedLoop } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
@@ -294,6 +294,23 @@ export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1)
 // The glass that floats over a drawing in every room: bars, tools, the frames' strip.
 const XRAY_PARTS = ".bar, .toolbar, .board-top, .board-modes, .board-rail, .ink-tools, .anim-strip";
 const XRAY_NEAR = 56; // px: how near the pen comes before the glass opens around it
+const XRAY_WIDE = 144; // px: how far round the pen my colour's drawing opens the glass too
+const XRAY_CELL = 12; // px: one spot of that drawing
+const XRAY_LOOK = 90; // ms between two looks at what lies round the pen (the pen's own window follows every move)
+const XRAY_PAINT = 40; // ms between two paintings of what shows through while it comes and goes
+const XRAY_IN = 220; // ms for a part to come in
+const XRAY_OUT = 340; // ms for it to go again
+
+let rgbProbe = null;
+/** A colour as the page draws it, [r, g, b]. */
+function rgbOf(css) {
+  rgbProbe ||= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  rgbProbe.clearRect(0, 0, 1, 1);
+  rgbProbe.fillStyle = css;
+  rgbProbe.fillRect(0, 0, 1, 1);
+  const d = rgbProbe.getImageData(0, 0, 1, 1).data;
+  return [d[0], d[1], d[2]];
+}
 
 export class InkLayer {
   /**
@@ -978,14 +995,34 @@ export class InkLayer {
    * while a line is drawn (making every bar fade at each pen-down stuttered the line's start); only the
    * floating glass the pen comes near opens a soft round window around the pen, and closes behind it.
    * Where the glass stands is read once as the pen goes down.
+   *
+   * Wider (the owner, 26 November: "주변에 같은 색이 있다면 일정 부분이 거기도 약간 투명하게… 어딜 감싸고
+   * 있다고 인식되면 그 안 전체까지… 자연스러운 애니메이션으로… 목적이 잘 보이라고… 지금 너무 가까이만"):
+   * my colour's drawing round the pen shows through the glass over it a little, and once the line closes
+   * round something, all of its inside does. Each of those comes in and goes out on its own, softly.
    */
   xrayStart(x, y) {
     const room = this.host.closest(".room");
     const parts = room ? [...room.querySelectorAll(XRAY_PARTS)] : [];
+    // What still shows from the line before (a quick next line) goes out from where it is, not at once.
+    const before = new Map((this.xr || []).map((p) => [p.el, p]));
     // The glass itself, not a box that only holds glass (one window, never two over each other).
     this.xr = parts.filter((el) => !parts.some((o) => o !== el && el.contains(o)))
-      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false })).filter((p) => p.r.width > 0 && p.r.height > 0);
+      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false, mapped: !!before.get(el)?.mapped })).filter((p) => p.r.width > 0 && p.r.height > 0);
+    for (const [el, p] of before) {
+      if (p.mapped && !this.xr.some((q) => q.el === el)) { el.classList.remove("xray-map"); el.style.removeProperty("--xr-map"); }
+    }
     this.xrAt = null;
+    // The pen's own window always; my colour round it with a brush; a closed line with a brush or the 올가미.
+    this.xrWide = this.tool === "pen" && this.brush !== "fill" ? "pen" : this.tool === "lasso" ? "loop" : null;
+    this.xrPts = [[x, y]];
+    this.xrChecked = 0;
+    this.xrFound = null;
+    this.xrLookAt = 0;
+    this.xrUp = false;
+    this.xrSpots ||= new Map();
+    this.xrLoops = (this.xrLoops || []).filter((l) => l.k > 0);
+    for (const l of this.xrLoops) l.on = false;
     this.xrayAt(x, y);
   }
 
@@ -1005,11 +1042,193 @@ export class InkLayer {
         p.el.classList.toggle("xray", near);
       }
     }
+    if (!this.xrWide || this.live?.moving) return;
+    const last = this.xrPts[this.xrPts.length - 1];
+    if (Math.hypot(x - last[0], y - last[1]) > 4) this.xrPts.push([x, y]);
+    // A look a few times a second, and one more just after the pen stops (a line closed and held still).
+    clearTimeout(this.xrLookTimer);
+    const wait = XRAY_LOOK - (performance.now() - this.xrLookAt);
+    if (wait <= 0) this.xrayLook(x, y);
+    else this.xrLookTimer = setTimeout(() => this.xr && !this.xrUp && this.xrayLook(x, y), wait);
   }
 
+  /** What lies round the pen now: my colour's drawing as spots, and the line's inside once it closes. */
+  xrayLook(x, y) {
+    this.xrLookAt = performance.now();
+    if (!this.xrFound) {
+      this.xrFound = closedLoop(this.xrPts, remPx(), this.xrChecked);
+      this.xrChecked = this.xrPts.length;
+      if (this.xrFound) {
+        const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+        for (const [px, py] of this.xrFound) { box.left = Math.min(box.left, px); box.top = Math.min(box.top, py); box.right = Math.max(box.right, px); box.bottom = Math.max(box.bottom, py); }
+        this.xrLoops.push({ pts: this.xrFound, box, k: 0, on: true });
+      }
+    }
+    const seen = new Set();
+    if (this.xrWide === "pen") {
+      for (const s of this.sameInkNear(x, y)) {
+        seen.add(s.key);
+        const was = this.xrSpots.get(s.key);
+        if (was) was.on = true;
+        else this.xrSpots.set(s.key, { ...s, k: 0, on: true });
+      }
+    }
+    for (const [key, s] of this.xrSpots) if (!seen.has(key)) s.on = false;
+    this.xrayRun();
+  }
+
+  /** Brings what shows through in and out, painting it a few times a second until it settles. */
+  xrayRun() {
+    if (this.xrFrame) return;
+    let last = performance.now();
+    let painted = 0;
+    const ease = (thing, dt) => {
+      const to = thing.on && !this.xrUp ? 1 : 0;
+      if (thing.k === to) return false;
+      thing.k = to > thing.k ? Math.min(1, thing.k + dt / XRAY_IN) : Math.max(0, thing.k - dt / XRAY_OUT);
+      return true;
+    };
+    const step = (now) => {
+      this.xrFrame = 0;
+      if (!this.xr) return;
+      const dt = Math.min(64, now - last);
+      last = now;
+      let moving = false;
+      for (const [key, s] of this.xrSpots) {
+        if (ease(s, dt)) moving = true;
+        if (s.k <= 0 && !s.on) this.xrSpots.delete(key);
+      }
+      for (const l of this.xrLoops) if (ease(l, dt)) moving = true;
+      this.xrLoops = this.xrLoops.filter((l) => l.k > 0 || (l.on && !this.xrUp));
+      if (!moving || now - painted >= XRAY_PAINT) {
+        painted = now;
+        this.xrayPaint();
+      }
+      if (moving) this.xrFrame = requestAnimationFrame(step);
+      else if (this.xrUp) this.xrayClear();
+    };
+    this.xrFrame = requestAnimationFrame(step);
+  }
+
+  /** Each glass with something under it gets a small mask of its own (a picture); the others none. */
+  xrayPaint() {
+    const spots = [...this.xrSpots.values()].filter((s) => s.k > 0.01);
+    const loops = this.xrLoops.filter((l) => l.k > 0.01);
+    for (const p of this.xr || []) {
+      const r = p.r;
+      const mine = spots.filter((s) => s.x + s.r > r.left && s.x - s.r < r.right && s.y + s.r > r.top && s.y - s.r < r.bottom);
+      const round = loops.filter(({ box: b }) => b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom);
+      if (!mine.length && !round.length) {
+        if (p.mapped) { p.mapped = false; p.el.classList.remove("xray-map"); p.el.style.removeProperty("--xr-map"); }
+        continue;
+      }
+      const s = 0.25;
+      const cw = Math.max(4, Math.ceil(r.width * s));
+      const ch = Math.max(4, Math.ceil(r.height * s));
+      const cv = (this.xrCanvas ||= document.createElement("canvas"));
+      cv.width = cw;
+      cv.height = ch;
+      const g = cv.getContext("2d");
+      g.fillStyle = "#000";
+      g.fillRect(0, 0, cw, ch);
+      g.globalCompositeOperation = "destination-out";
+      for (const sp of mine) {
+        const gx = (sp.x - r.left) * s;
+        const gy = (sp.y - r.top) * s;
+        const rr = sp.r * s;
+        const grad = g.createRadialGradient(gx, gy, 0, gx, gy, rr);
+        grad.addColorStop(0, `rgba(0,0,0,${0.5 * sp.k})`);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = grad;
+        g.fillRect(gx - rr, gy - rr, rr * 2, rr * 2);
+      }
+      for (const l of round) {
+        g.fillStyle = `rgba(0,0,0,${0.82 * l.k})`;
+        g.beginPath();
+        l.pts.forEach(([lx, ly], i) => (i ? g.lineTo((lx - r.left) * s, (ly - r.top) * s) : g.moveTo((lx - r.left) * s, (ly - r.top) * s)));
+        g.closePath();
+        g.fill();
+      }
+      g.globalCompositeOperation = "source-over";
+      p.el.style.setProperty("--xr-map", `url(${cv.toDataURL()})`);
+      if (!p.mapped) { p.mapped = true; p.el.classList.add("xray-map"); }
+    }
+  }
+
+  /**
+   * My colour's drawing within reach of the pen, as soft spots on a fixed grid (client coordinates), so
+   * a spot keeps its name from one look to the next and can come in and go out by itself. The same
+   * colour, or one only a little different (the owner: "비슷한 류의 아주 조금 차이 나는 거").
+   */
+  sameInkNear(x, y) {
+    const c = this.canvas;
+    const rect = c.getBoundingClientRect();
+    if (!rect.width || !rect.height || !c.width) return [];
+    const R = XRAY_WIDE;
+    const cell = XRAY_CELL;
+    const fine = 4; // looks per cell side: a thin line is never missed between them
+    const i0 = Math.floor((x - R) / cell);
+    const j0 = Math.floor((y - R) / cell);
+    const n = Math.ceil((2 * R) / cell) + 1;
+    const N = n * fine;
+    const probe = (this.xrProbe ||= document.createElement("canvas"));
+    if (probe.width !== N) { probe.width = N; probe.height = N; }
+    const g = probe.getContext("2d", { willReadFrequently: true });
+    g.clearRect(0, 0, N, N);
+    g.imageSmoothingEnabled = false;
+    const sx = c.width / rect.width;
+    const sy = c.height / rect.height;
+    let data;
+    try {
+      g.drawImage(c, (i0 * cell - rect.left) * sx, (j0 * cell - rect.top) * sy, n * cell * sx, n * cell * sy, 0, 0, N, N);
+      data = g.getImageData(0, 0, N, N).data;
+    } catch {
+      return [];
+    }
+    const css = inkColor(this.color, this.fixedInk);
+    const want = (this.xrRgb ||= {})[css] ||= rgbOf(css);
+    const out = [];
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const cx = (i0 + i + 0.5) * cell;
+        const cy = (j0 + j + 0.5) * cell;
+        if (Math.hypot(cx - x, cy - y) > R) continue;
+        let hit = false;
+        for (let v = 0; v < fine && !hit; v++) {
+          for (let u = 0; u < fine && !hit; u++) {
+            const at = ((j * fine + v) * N + i * fine + u) * 4;
+            hit = data[at + 3] >= 60 && Math.hypot(data[at] - want[0], data[at + 1] - want[1], data[at + 2] - want[2]) <= 72;
+          }
+        }
+        if (hit) out.push({ key: i0 + i + "," + (j0 + j), x: cx, y: cy, r: cell * 1.5 });
+      }
+    }
+    return out;
+  }
+
+  /** Pen up: the pen's own window closes at once (as before); what showed through goes out gently. */
   xrayEnd() {
-    for (const p of this.xr || []) if (p.on) p.el.classList.remove("xray");
+    clearTimeout(this.xrLookTimer);
+    if (!this.xr) return;
+    for (const p of this.xr) if (p.on) { p.on = false; p.el.classList.remove("xray"); }
+    this.xrUp = true;
+    if (this.xrSpots?.size || this.xrLoops?.length) this.xrayRun();
+    else this.xrayClear();
+  }
+
+  xrayClear() {
+    clearTimeout(this.xrLookTimer);
+    cancelAnimationFrame(this.xrFrame || 0);
+    this.xrFrame = 0;
+    for (const p of this.xr || []) {
+      if (p.on) p.el.classList.remove("xray");
+      if (p.mapped) { p.el.classList.remove("xray-map"); p.el.style.removeProperty("--xr-map"); }
+    }
     this.xr = null;
+    this.xrPts = null;
+    this.xrFound = null;
+    this.xrSpots = null;
+    this.xrLoops = null;
   }
 
   /** One drawing per frame however many points came. */

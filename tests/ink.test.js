@@ -253,3 +253,28 @@ test("a stroke keeps its 불투명; moving, copying and recolouring keep it too"
   assert.equal(copyStrokesOps(clock, ink, [id], 10, 10, "a").ops[0].o, 40);
   assert.equal(recolorStrokesOps(clock, ink, [id], "red", "a").ops.find((op) => op.t === "stroke").o, 40);
 });
+
+import { closedLoop } from "../src/core/ink.js";
+// 엑스레이, wider (the owner, 26 November: "어딜 감싸고 있다고 약간 인식되면 그 안 전체까지"): a line that comes
+// back to where it began, or crosses itself, closes round something; a plain stroke does not.
+test("a line closes round something when its ends meet or it crosses itself, not when it only goes on", () => {
+  const circle = Array.from({ length: 60 }, (_, i) => [200 + 80 * Math.cos((i / 60) * 2 * Math.PI * 0.97), 200 + 80 * Math.sin((i / 60) * 2 * Math.PI * 0.97)]);
+  assert.ok(closedLoop(circle, 16), "a circle drawn almost round: its ends meet");
+  const straight = Array.from({ length: 40 }, (_, i) => [10 + i * 8, 50]);
+  assert.equal(closedLoop(straight, 16), null, "a straight line closes nothing");
+  // A loop drawn past its start: the line crosses itself.
+  const curl = [...Array.from({ length: 50 }, (_, i) => [300 + 70 * Math.cos(-Math.PI / 2 + (i / 50) * 2.3 * Math.PI), 300 + 70 * Math.sin(-Math.PI / 2 + (i / 50) * 2.3 * Math.PI)])];
+  const loop = closedLoop([[300, 150], [300, 200], ...curl], 16);
+  assert.ok(loop && loop.length > 8, "drawn past its start, it crosses itself and closes");
+  // Looked at while it is drawn, a little at a time (only where it grew): found all the same.
+  const drawn = [[300, 150], [300, 200], ...curl];
+  const thinned = [];
+  for (const p of drawn) if (!thinned.length || Math.hypot(p[0] - thinned[thinned.length - 1][0], p[1] - thinned[thinned.length - 1][1]) > 4) thinned.push(p);
+  let found = null;
+  let since = 0;
+  for (let n = 5; n <= thinned.length && !found; n += 5) {
+    found = closedLoop(thinned.slice(0, n), 16, since);
+    since = n;
+  }
+  assert.ok(found && found.length > 8, "found while being drawn");
+});

@@ -324,3 +324,33 @@ export function invertInkOps(ink, clock, atoms, dir) {
   }
   return ops;
 }
+
+/**
+ * A line that came back on itself: the points it closes round, or null (ends meeting, or crossing itself).
+ * `since`: how many of its points (4 px apart) were looked at before, so a line being drawn is only
+ * looked at where it grew.
+ */
+export function closedLoop(path, rem = 16, since = 0) {
+  const pts = [];
+  for (const p of path) {
+    const q = pts[pts.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 4) pts.push(p);
+  }
+  if (pts.length < 8) return null;
+  const length = (list) => list.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - list[i - 1][0], p[1] - list[i - 1][1]) : 0), 0);
+  const last = pts[pts.length - 1];
+  if (length(pts) > 10 * rem && Math.hypot(last[0] - pts[0][0], last[1] - pts[0][1]) < 2.5 * rem) return pts;
+  const cross = (a, b, c, d) => {
+    const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  };
+  for (let j = Math.max(1, since); j < pts.length; j++) {
+    for (let i = 0; i < j - 2; i++) {
+      if (cross(pts[i], pts[i + 1], pts[j - 1], pts[j])) {
+        const loop = pts.slice(i + 1, j);
+        return length(loop) > 6 * rem ? loop : null;
+      }
+    }
+  }
+  return null;
+}

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const MOCKS = join(dirname(fileURLToPath(import.meta.url)), "..", "tests", "mocks");
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json", ".webmanifest": "application/manifest+json" };
 
 export function serve(root, port) {
   const server = createServer(async (req, res) => {

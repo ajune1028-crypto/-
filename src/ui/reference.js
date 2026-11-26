@@ -31,7 +31,7 @@ import { solfege } from "../audio/notes.js";
  * insert(text): the room takes a note; insertSound(sound): the room takes a recording
  * (a song room as a clip, a whiteboard as a card). Either may be missing.
  */
-export function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null } = {}) {
+export function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null, incoming = null } = {}) {
   // Its button opens it and, pressed again, closes it. Asked for a tab (home's 녹음), it opens there.
   const open = document.getElementById("reference");
   if (open && !tab) return void open.close?.();
@@ -313,6 +313,21 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     show(first);
     drawNotes();
     drawSounds();
+
+    // 공유로 받기: sounds sent here from the phone's recorder app ('공유' → this app) go in one after
+    // another, as a picked file does (ui/share-in.js); then '보내기' takes them into a room.
+    if (incoming?.length) {
+      (async () => {
+        let came = 0;
+        for (const file of incoming) {
+          while (busy) await new Promise((r) => setTimeout(r, 120));
+          const before = refSounds(app.store).length;
+          await importFile(file);
+          if (refSounds(app.store).length > before) came++;
+        }
+        if (came) toast(app.root, came > 1 ? `녹음 앱에서 ${came}개를 받았어요. '보내기'로 방에 넣어요` : "녹음 앱에서 받았어요. '보내기'로 방에 넣어요", 3600);
+      })();
+    }
 
     // 내 방: my other rooms, to look into and bring things from into this room.
     function drawRooms() {

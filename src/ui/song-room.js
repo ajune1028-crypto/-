@@ -38,6 +38,7 @@ import { buzz } from "./chime.js";
 import { shareTake, takeSound } from "./share-take.js";
 import { reachableRooms, meIn } from "./room-actions.js";
 import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused, isApple } from "./sound-in.js";
+import { shareInHint } from "./share-in.js";
 import { RoomSession } from "../sync/session.js";
 import { addItemOps, cardFromClip, keptFields, setItemOps } from "../core/board.js";
 
@@ -669,6 +670,7 @@ export function mountSongRoom(body, app, session, frame) {
       h("p", { class: "help small", text: apple
         ? "아이폰·아이패드는 웹에서 음성 메모 앱을 바로 열 수 없어요(애플이 막아 둠). 음성 메모에서 녹음 → 공유 → '파일에 저장' 한 뒤 여기서 골라요."
         : "녹음 앱으로 녹음하면 녹음은 그 앱에도 남고, 마치면 지금 자리에 들어와요." }),
+      ...(apple || !shareInHint() ? [] : [h("p", { class: "help small", id: "record-way-share", text: shareInHint() })]),
       h("p", { class: "help small", text: "고른 대로 기억해요. ● 를 꾹 누르면 다시 골라요." }));
     body.append(menu);
     if (r) {

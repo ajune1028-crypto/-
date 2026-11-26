@@ -1646,6 +1646,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
+/* Wider: what shows through a glass (my colour's drawing near the pen, the inside of a closed line) is
+   a small picture of its own (ink.js xrayMap); with the pen's window, both at once. */
+.xray-map { -webkit-mask-image: var(--xr-map); mask-image: var(--xr-map); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.xray.xray-map { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map);
+  -webkit-mask-size: auto, 100% 100%; mask-size: auto, 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }

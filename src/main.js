@@ -13,6 +13,8 @@ import { BlobStore } from "./sync/blobs.js";
 import { startMyPlace } from "./sync/me-place.js";
 import { sealedTransport } from "./sync/sealed.js";
 import { keyFromText } from "./core/lock.js";
+import { offerShareIn, takeShared } from "./ui/share-in.js";
+import { openReference } from "./ui/reference.js";
 
 export const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -164,6 +166,12 @@ export function boot(root) {
   });
   render();
   app.booted = true;
+  // On a public address: the home screen and the share sheet. A sound sent from the phone's recorder
+  // app ('공유' → this app) comes into 비서's 녹음, over whatever is open.
+  offerShareIn();
+  takeShared().then((files) => {
+    if (files.length) openReference(app, { tab: "sounds", incoming: files });
+  });
 }
 
 boot(document.getElementById("app"));
