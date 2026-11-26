@@ -74,10 +74,13 @@ export function setSetting(store, key, value) {
  * Puts a room on this device's list. `people` are the colours of who is in it (home shows
  * them: the door says who is behind it); told without them, the entry keeps the ones it had.
  */
-export function rememberRoom(store, { id, kind, name, memberId, local, people, preview }, now = Date.now()) {
+export function rememberRoom(store, { id, kind, name, memberId, local, people, preview, key }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
+  // A room with a password: the key this device made from it (core/lock.js), kept for good.
+  const kept = key ?? (i >= 0 ? rooms[i].key : undefined);
+  if (typeof kept === "string" && kept) entry.key = kept;
   if (local || (i >= 0 && rooms[i].local)) entry.local = true;
   const known = Array.isArray(people) ? people : i >= 0 ? rooms[i].people : null;
   if (known?.length) entry.people = known.slice(0, 6);

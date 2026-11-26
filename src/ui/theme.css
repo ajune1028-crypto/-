@@ -380,8 +380,10 @@ h1, h2, p { margin: 0; }
 .add svg { width: 1.35rem; height: 1.35rem; stroke-width: 2.2; }
 
 .home-top { position: absolute; top: 1.25rem; right: 0.7rem; transition: opacity 0.2s var(--ease), visibility 0.2s; }
-/* A window is out: home's round buttons step away, never over it. */
-.home-window .home-top { opacity: 0; visibility: hidden; pointer-events: none; }
+/* A window out (설정, 비서) only covers what it lies over: home's round buttons never disappear (the
+   owner, 26 November: "비서와 설정 누를 때 아이콘 3개 사라지는 거 없애 주고"); they go under the window's
+   layer, so a sheet's veil lies over them like everything else and a press there closes the sheet. */
+.home-window .home-top { z-index: 5; }
 .home-foot {
   position: absolute;
   left: 0;

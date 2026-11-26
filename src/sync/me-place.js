@@ -29,7 +29,7 @@ function deviceOf(store) {
 export function thingsOf(store) {
   const things = new Map();
   for (const r of store.get("rooms", [])) {
-    if (r && typeof r.id === "string" && !r.local) things.set("room:" + r.id, { kind: r.kind || null, name: r.name || "", memberId: r.memberId || null, at: r.at || 0 });
+    if (r && typeof r.id === "string" && !r.local) things.set("room:" + r.id, { kind: r.kind || null, name: r.name || "", memberId: r.memberId || null, at: r.at || 0, ...(r.key ? { key: r.key } : {}) });
   }
   for (const h of store.get("houses", [])) {
     if (h && typeof h.id === "string") things.set("house:" + h.id, { name: h.name, color: h.color, icon: h.icon, rooms: Array.isArray(h.rooms) ? h.rooms.slice() : [], at: h.at || 0 });
@@ -52,10 +52,10 @@ export function putOn(store, view, { keep = false } = {}) {
   const rooms = [];
   for (const r of had) {
     const v = there.has(r.id) ? view.rooms.find((x) => x.id === r.id) : null;
-    if (v) rooms.push({ ...r, kind: v.kind ?? r.kind, name: v.name ?? r.name, memberId: v.memberId ?? r.memberId, at: Math.max(r.at || 0, v.at || 0) });
+    if (v) rooms.push({ ...r, kind: v.kind ?? r.kind, name: v.name ?? r.name, memberId: v.memberId ?? r.memberId, at: Math.max(r.at || 0, v.at || 0), ...(v.key || r.key ? { key: v.key || r.key } : {}) });
     else if (r.local || keep) rooms.push(r);
   }
-  for (const v of view.rooms) if (!byId.has(v.id)) rooms.push({ id: v.id, kind: v.kind, name: v.name, memberId: v.memberId, at: v.at || Date.now() });
+  for (const v of view.rooms) if (!byId.has(v.id)) rooms.push({ id: v.id, kind: v.kind, name: v.name, memberId: v.memberId, at: v.at || Date.now(), ...(v.key ? { key: v.key } : {}) });
   store.set("rooms", rooms);
 
   const houses = new Map((keep ? store.get("houses", []) : []).map((h) => [h.id, h]));

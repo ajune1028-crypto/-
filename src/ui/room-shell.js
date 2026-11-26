@@ -4,9 +4,11 @@ import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { fileOps } from "../core/files.js";
 import { fromBase64 } from "../core/b64.js";
-import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } from "./dom.js";
+import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast, formBox } from "./dom.js";
 import { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
+import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
+import { sealedTransport, isLockedRoom, keyOpens } from "../sync/sealed.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { watchContrast } from "./contrast.js";
@@ -103,15 +105,57 @@ export function showRoom(app, roomId) {
     if (alive && !app.session) mount(root, centered("opening", "방을 여는 중이에요", "아직 연결 중"));
   }, 2000);
 
+  // A room with a password (core/lock.js) asks for it once on this device; the key it makes is kept.
+  let newKey = null;
+  function askPassword(base) {
+    clearTimeout(slowTimer);
+    return new Promise((resolve) => {
+      const input = h("input", { class: "input", id: "room-password-in", type: "password", maxLength: 64, autocomplete: "current-password", "aria-label": "방 비밀번호" });
+      const error = h("p", { class: "error", id: "room-password-error", role: "alert" });
+      const button = h("button", { class: "btn", id: "room-password-go", type: "button", text: "들어가기", onclick: () => submit() });
+      mount(root, centered("locked", "비밀번호가 있는 방이에요", "이 방을 만든 사람에게 비밀번호를 물어보세요.", formBox(() => submit(), input, error, button)));
+      setTimeout(() => input.focus(), 60);
+      async function submit() {
+        if (button.disabled) return;
+        if (!validRoomPassword(input.value)) return void (error.textContent = "비밀번호는 4자 이상이에요.");
+        button.disabled = true;
+        error.textContent = "";
+        button.textContent = "확인하는 중…";
+        try {
+          const key = await roomKeyFrom(input.value, roomId);
+          if (await keyOpens(base, roomId, key)) return resolve(key);
+          error.textContent = "비밀번호가 달라요. 다시 확인해 주세요.";
+        } catch (err) {
+          console.warn(err);
+          error.textContent = "확인하지 못했어요. 다시 해 주세요.";
+        }
+        if (!alive) return resolve(null);
+        button.disabled = false;
+        button.textContent = "들어가기";
+      }
+    });
+  }
+
   (async () => {
     const transport = await app.transportFor(roomId);
     if (!alive) return;
     if (app.handoff && app.handoff.roomId === roomId) session = app.handoff;
     else {
-      const opened = new RoomSession({ transport, roomId, store: app.store });
-      const result = await opened.open();
+      let opened = new RoomSession({ transport, roomId, store: app.store });
+      let result = await opened.open();
       if (!alive) return void opened.close();
       if (result === "missing") return void mount(root, centered("missing", "방을 찾을 수 없어요", "코드나 링크를 다시 확인해 주세요."));
+      // Nothing readable in it and no key here: a room with a password.
+      if (!opened.room.meta("kind") && !roomEntry(app.store, roomId)?.key && await isLockedRoom(transport, roomId).catch(() => false)) {
+        opened.close();
+        const key = await askPassword(transport);
+        if (!alive || !key) return;
+        newKey = await keyText(key);
+        mount(root, centered("opening", "방을 여는 중이에요", null));
+        opened = new RoomSession({ transport: sealedTransport(transport, roomId, key), roomId, store: app.store });
+        result = await opened.open();
+        if (!alive) return void opened.close();
+      }
       session = opened;
     }
     app.handoff = null;
@@ -136,7 +180,7 @@ export function showRoom(app, roomId) {
     // out when the room is left or the app goes to the background.
     const remember = (withPreview = false) => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
-      people: session.room.members().map((m) => m.color),
+      people: session.room.members().map((m) => m.color), ...(newKey ? { key: newKey } : {}),
       ...(withPreview ? { preview: previewNow() } : {}),
     });
     remember();
@@ -371,6 +415,7 @@ export function showRoom(app, roomId) {
             h("span", { class: "code", id: "invite-code", style: { flex: "1" }, text: roomId }),
             h("button", { class: "btn small quiet", id: "copy-invite-code", type: "button", text: "코드 복사",
               onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") }))),
+        roomEntry(app.store, roomId)?.key && h("p", { class: "help", id: "invite-password", text: "비밀번호가 있는 방이에요. 친구에게 주소와 함께 비밀번호도 알려 주세요." }),
         app.shareBase() && h("p", { class: "help", id: "invite-note", text: "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요." }),
         h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));
     });

@@ -11,6 +11,8 @@ import { showRoom } from "./ui/room-shell.js";
 import { roomLink } from "./core/room.js";
 import { BlobStore } from "./sync/blobs.js";
 import { startMyPlace } from "./sync/me-place.js";
+import { sealedTransport } from "./sync/sealed.js";
+import { keyFromText } from "./core/lock.js";
 
 export const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -103,7 +105,17 @@ export function boot(root) {
     local: () => (localTransport ||= new LocalTransport({ ns })),
     transportFor: async (roomId) => {
       const shared = await app.ready;
-      return roomEntry(store, roomId)?.local ? app.local() : shared;
+      const entry = roomEntry(store, roomId);
+      const base = entry?.local ? app.local() : shared;
+      // A room with a password opens through its sealed channel, with the key this device keeps.
+      if (entry?.key) {
+        try {
+          return sealedTransport(base, roomId, await keyFromText(entry.key));
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+      return base;
     },
   };
   window.__app = app;

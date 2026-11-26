@@ -12,6 +12,8 @@ import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from ".
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { myCode, myCodeSection, openMyCodeIntro } from "./my-code.js";
+import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
+import { sealedTransport } from "../sync/sealed.js";
 import { refSounds } from "../reference.js";
 import { getSettings, setSetting } from "../identity.js";
 import { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } from "../houses.js";
@@ -633,16 +635,22 @@ export function showHome(app) {
       const room = inputRow("room-name", "방 이름", { maxLength: 30, placeholder: "예: 우리 둘" });
       const me = inputRow("my-name", "내 별명", { maxLength: 20, value: last.name || "" });
       const pin = inputRow("my-pin", "개인 식별 코드 (숫자 5자리, 안 정해도 돼요)", { maxLength: 5, inputMode: "numeric", value: last.pin || "" });
+      // 방 비밀번호 (the owner, 21 November: "들어갈 때 비밀번호도 정할 수 있게"): a real lock (core/lock.js).
+      const password = inputRow("room-password", "방 비밀번호 (안 정해도 돼요)", { type: "password", maxLength: 64, autocomplete: "new-password", placeholder: "4자 이상" });
       const error = h("p", { class: "error", id: "form-error", role: "alert" });
       const status = h("p", { class: "help", id: "form-status", role: "status" });
       const button = h("button", { class: "btn", id: "create-room", type: "button", text: "방 만들기", onclick: submit });
       panel.append(formBox(submit, room.row, me.row, pin.row,
-        h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }), error, button, status));
+        h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }),
+        password.row,
+        h("p", { class: "help", text: "정하면 주소만으로는 들어올 수 없고, 들어올 때 이 비밀번호를 물어요. 방에 쓴 것은 비밀번호로 잠겨서 오가요." }),
+        error, button, status));
 
-      /** Makes the room on one transport and opens it. */
-      async function make(transport, id, roomName) {
-        await transport.createRoom({ id, kind, name: roomName });
-        const session = new RoomSession({ transport, roomId: id, store: app.store });
+      /** Makes the room on one transport and opens it (through its sealed channel when it has a key). */
+      async function make(transport, id, roomName, key) {
+        // A locked room's name stays inside it; what lists rooms sees only that it is locked.
+        await transport.createRoom({ id, kind, name: key ? "비밀번호가 있는 방" : roomName });
+        const session = new RoomSession({ transport: key ? sealedTransport(transport, id, key) : transport, roomId: id, store: app.store });
         try {
           if ((await session.open()) !== "ok") throw new Error("room did not open");
         } catch (err) {
@@ -660,19 +668,28 @@ export function showHome(app) {
         if (!roomName) return void (error.textContent = "방 이름을 적어 주세요.");
         if (!myName) return void (error.textContent = "내 별명을 적어 주세요.");
         if (code && !validPin(code)) return void (error.textContent = "개인 식별 코드는 숫자 5자리예요.");
+        const pw = password.input.value;
+        if (pw.trim() && !validRoomPassword(pw)) return void (error.textContent = "방 비밀번호는 4자 이상이에요.");
         error.textContent = "";
         button.disabled = true;
         try {
           status.textContent = "연결하는 중…";
           const shared = await app.ready;
           const id = newRoomId();
+          let key = null;
+          let keyKept = null;
+          if (pw.trim()) {
+            status.textContent = "비밀번호로 잠그는 중…";
+            key = await roomKeyFrom(pw, id);
+            keyKept = await keyText(key);
+          }
           const sharedKind = shared.info().kind;
           let session;
           // A room made while this view has no shared store lives on this device only.
           let local = sharedKind === "local" && app.limited;
           status.textContent = "방을 만드는 중…";
           try {
-            session = await make(shared, id, roomName);
+            session = await make(shared, id, roomName, key);
             if (sharedKind !== "local") app.limited = false;
           } catch (err) {
             if (sharedKind === "local") throw err;
@@ -682,14 +699,14 @@ export function showHome(app) {
             shared.dropRoom?.(id);
             app.limited = true;
             local = true;
-            session = await make(app.local(), id, roomName);
+            session = await make(app.local(), id, roomName, key);
           }
           const memberId = newMemberId();
           session.commit("room", createRoomOps(session.clock, {
             kind, name: roomName, tz: localZone(), now: Date.now(), memberId, memberName: myName,
             pin: code ? await makeVerifier(code) : null, color: myPeopleColor(getSettings(app.store)) ?? 0,
           }));
-          rememberRoom(app.store, { id, kind, name: roomName, memberId, local });
+          rememberRoom(app.store, { id, kind, name: roomName, memberId, local, ...(keyKept ? { key: keyKept } : {}) });
           app.store.set("last", { name: myName, pin: code });
           app.handoff = session;
           app.fresh = local ? null : id;
@@ -793,11 +810,12 @@ export function showHome(app) {
       if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
-  // While a window is out (a sheet, 비서), home's three round buttons step away: they never lie over
-  // it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The window
-  // closes by its own button or a press outside it; 설정's spot pressed again is outside it. While
-  // 햇살's own window is out, only 햇살 stays where it was and still answers (the owner: "걍 아이콘들 다
-  // 가리고서 거기에 있던 그 아이콘만 보이게"), whatever 설정 says: that setting is only what its tap does.
+  // A window out (a sheet, 비서) only covers what it lies over: home's three round buttons stay where
+  // they are (the owner, 26 November: "비서와 설정 누를 때 아이콘 3개 사라지는 거 없애 주고"; before,
+  // 21 November, they stepped away). A sheet closes by its own button or a press outside it, and
+  // 설정's spot pressed again is outside it. While 햇살's own window is out, only 햇살 stays above it
+  // and still answers (the owner: "그 햇살창만 안 가려지게"), whatever 설정 says: that setting is only
+  // what its tap does.
   const sheetOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference"));
   const sunOut = () => !!document.getElementById("home-panel");
   const watchWindows = new MutationObserver(() => {

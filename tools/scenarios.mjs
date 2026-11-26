@@ -185,9 +185,10 @@ scenario("home with many rooms: each half's rooms scroll by a finger, its + and 
 });
 
 // The owner (21 November): titles stay and the rooms fade out under a fine line before them; one window
-// at a time (찾기와 집, 설정, 레퍼런스: one out closes the other); while one is out home's three round
-// buttons step away; 설정's spot pressed again closes it; a tap on ⋮ that slides a little is a tap.
-scenario("home windows: the titles stay while the rooms scroll and fade under a line; one window at a time; the round buttons step away while one is out; 설정 pressed again closes; a sliding tap on ⋮ never moves 찾기와 집", async ({ open, out }) => {
+// at a time (찾기와 집, 설정, 레퍼런스: one out closes the other); 설정's spot pressed again closes it; a tap
+// on ⋮ that slides a little is a tap. While a window is out home's three round buttons stay where they
+// are (26 November: "비서와 설정 누를 때 아이콘 3개 사라지는 거 없애 주고").
+scenario("home windows: the titles stay while the rooms scroll and fade under a line; one window at a time; the round buttons stay while one is out; 설정 pressed again closes; a sliding tap on ⋮ never moves 찾기와 집", async ({ open, out }) => {
   const page = await open({ width: 390, height: 760 });
   await page.waitFor(q("#home"));
   await page.eval(`(() => {
@@ -218,10 +219,11 @@ scenario("home windows: the titles stay while the rooms scroll and fade under a 
   const buttons = await page.eval(`(() => { const t = document.querySelector(".home-top").getBoundingClientRect(); const head = document.querySelector('.half[data-side="creative"] .half-head').getBoundingClientRect(); return { buttonsBottom: t.bottom, headBottom: head.bottom }; })()`);
   assert.ok(buttons.buttonsBottom <= buttons.headBottom + 1, "the round buttons sit inside the title area: " + JSON.stringify(buttons));
   await page.shot(out("home-titles-stay.png"));
-  // 설정: the buttons step away; its spot pressed again closes it.
+  // 설정: the buttons stay (the sheet's veil lies over them); its spot pressed again closes it.
   await click(page, "#home-settings");
   await page.waitFor(`document.querySelector(".scrim:not(.closing)")`);
-  await page.waitFor(`getComputedStyle(document.querySelector(".home-top")).visibility === "hidden"`, 2000);
+  await pause(400);
+  assert.ok(await page.eval(`(() => { const t = getComputedStyle(document.querySelector(".home-top")); return t.visibility === "visible" && Number(t.opacity) > 0.95; })()`), "the round buttons are still there with 설정 out");
   const spot = await page.eval(`(() => { const r = document.getElementById("home-settings").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
   await page.tap(spot[0], spot[1]);
   await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
@@ -229,7 +231,8 @@ scenario("home windows: the titles stay while the rooms scroll and fade under a 
   // 레퍼런스, then 찾기와 집 (by the 녹음 button's 레퍼런스 too): never two at once.
   await click(page, "#home-reference");
   await page.waitFor(q("#reference"));
-  await page.waitFor(`getComputedStyle(document.querySelector(".home-top")).visibility === "hidden"`, 2000);
+  await pause(400);
+  assert.ok(await page.eval(`(() => { const t = getComputedStyle(document.querySelector(".home-top")); const r = document.getElementById("home-settings").getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return t.visibility === "visible" && Number(t.opacity) > 0.95 && !!hit && !!hit.closest("#home-settings"); })()`), "with 비서 out the round buttons stay and can be pressed");
   assert.ok(!(await page.eval(`document.querySelector("#ref-list")?.textContent.includes("null")`)), "no stray word in 레퍼런스");
   await page.eval(`(() => { document.getElementById("reference").close(); return true; })()`);
   await page.waitFor(`!${q("#reference")} && getComputedStyle(document.querySelector(".home-top")).visibility === "visible"`, 2000);
@@ -7276,4 +7279,45 @@ scenario("나의 고유 코드: two devices with one code - the other device's c
   // The iPad forgets the room; the phone loses it too.
   await pad.eval(`(() => { const st = window.__app.store; st.set("rooms", st.get("rooms", []).filter((r) => r.id !== ${JSON.stringify(roomId)})); })()`);
   await phone.waitFor(`!window.__app.store.get("rooms", []).some((r) => r.id === ${JSON.stringify(roomId)})`, 12000);
+});
+
+// 방 비밀번호 (the owner, 21 November: "집과 방은 주소… 들어갈 때 비밀번호도 정할 수 있게"): a real lock.
+scenario("방 비밀번호: a room made with a password is kept sealed; a friend with the address is asked for it, a wrong one is refused, the right one lets them in and they write together", async ({ open, out }) => {
+  const host = await open({ dev: "a", width: 390, height: 844 });
+  await click(host, "#add-daily");
+  await click(host, '[data-kind="daily-text"]');
+  await fill(host, "#room-name", "우리 비밀 일기");
+  await fill(host, "#my-name", "가람");
+  await fill(host, "#room-password", "우리 집이야");
+  await click(host, "#create-room");
+  await host.waitFor(`location.hash.startsWith("#r-") && ${q("#room-title")}`, 15000);
+  await host.waitFor(q("#invite-password"), 5000);
+  const roomId = await host.eval("location.hash.slice(3)");
+  assert.ok(await host.eval(`!!window.__app.store.get("rooms", []).find((r) => r.id === ${JSON.stringify(roomId)}).key`), "this device keeps the room's key");
+  await click(host, "#invite-done");
+  // What the store holds is sealed: no name, no words.
+  const stored = await host.eval(`(async () => { const ch = await (await window.__app.ready).openRoom(${JSON.stringify(roomId)}); const ops = await ch.load("room"); ch.close(); return JSON.stringify(ops); })()`);
+  assert.ok(!stored.includes("우리 비밀 일기") && !stored.includes("가람") && /"s":"v1\./.test(stored), "sealed: " + stored.slice(0, 160));
+
+  const friend = await open({ dev: "b", width: 390, height: 844, hash: "r-" + roomId });
+  await friend.waitFor(q("#room-password-in"), 10000);
+  await friend.shot(out("room-password-ask.png"));
+  await click(friend, "#room-password-in");
+  await friend.type("틀린 비밀번호");
+  await click(friend, "#room-password-go");
+  await friend.waitFor(`/달라요/.test(document.getElementById("room-password-error").textContent)`, 15000);
+  await friend.eval(`(() => { const f = document.getElementById("room-password-in"); f.value = ""; })()`);
+  await click(friend, "#room-password-in");
+  await friend.type("우리 집이야");
+  await click(friend, "#room-password-go");
+  // In: the join form (a name), then the room with its real name.
+  await joinNew(friend, { name: "보라" });
+  await friend.waitFor(`/우리 비밀 일기/.test(${q("#room-title")}.textContent)`, 15000);
+  assert.ok(await friend.eval(`!!window.__app.store.get("rooms", []).find((r) => r.id === ${JSON.stringify(roomId)}).key`), "the friend's device keeps the key: asked only once");
+  // They write together: the friend's line reaches the host, sealed on its way.
+  await focusEnd(friend);
+  await friend.type("같이 쓰는 비밀");
+  await host.waitFor(`window.__app.session && window.__app.session.sheet(${TODAY}.dataset.day).text().includes("같이 쓰는 비밀")`, 10000);
+  const sheetOps = await host.eval(`(async () => { const ch = await (await window.__app.ready).openRoom(${JSON.stringify(roomId)}); const docs = await ch.docs(); const day = docs.find((d) => d.startsWith("s:")); const ops = day ? await ch.load(day) : []; ch.close(); return JSON.stringify(ops); })()`);
+  assert.ok(sheetOps.length > 20 && !sheetOps.includes("같이") && !sheetOps.includes("비밀"), "the words are stored sealed");
 });
