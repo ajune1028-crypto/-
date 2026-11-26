@@ -317,11 +317,13 @@ export function nextFrame(fn) {
 }
 
 /** Bottom sheet inside the app column. Returns a function that closes it. */
-export function openSheet(root, title, build) {
+export function openSheet(root, title, build, { side = false } = {}) {
   // A close button in the head: one tap, always (the owner: "한 번 누르면 안 나가지고").
   const shut = h("button", { class: "icon-btn sheet-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back"));
   const panel = h("section", { class: "panel", role: "dialog", "aria-modal": "true", "aria-label": title }, h("div", { class: "sheet-head" }, h("h2", { text: title }), shut));
-  const scrim = h("div", { class: "scrim" }, panel);
+  // From the side (a room's details, the owner, 22 November: "드로어처럼 옆에서… 잘 볼 수 있게"): it
+  // slides in from the right edge over the whole height and is pushed back the same way.
+  const scrim = h("div", { class: "scrim" + (side ? " side-sheet" : "") }, panel);
   const onKey = (event) => { if (event.key === "Escape") close(); };
   const closers = [];
   let closing = false;
@@ -347,30 +349,33 @@ export function openSheet(root, title, build) {
     // Caught while still sliding in: it stops where it is and follows the finger from there.
     for (const a of panel.getAnimations()) a.finish();
     const inField = !!e.target.closest?.("input, textarea, select, [contenteditable='true']");
-    pull = panel.scrollTop <= 0 && !inField ? { y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
+    pull = (side || panel.scrollTop <= 0) && !inField ? { x: t.clientX, y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
   }, { passive: true });
   panel.addEventListener("touchmove", (e) => {
     if (!pull || e.touches.length !== 1) return;
-    const dy = e.touches[0].clientY - pull.y;
-    if (!pull.on && (dy < 6 || panel.scrollTop > 0)) {
-      if (dy < -4) pull = null; // a push up scrolls the content as usual
+    // A drawer goes back to its side; a sheet goes down.
+    const dx = e.touches[0].clientX - pull.x;
+    const dy = side ? dx : e.touches[0].clientY - pull.y;
+    const across = side ? Math.abs(e.touches[0].clientY - pull.y) : Math.abs(dx);
+    if (!pull.on && (dy < 6 || (!side && panel.scrollTop > 0) || (side && across > dy))) {
+      if (dy < -4 || (side && across > 10)) pull = null; // the other way scrolls the content as usual
       return;
     }
     pull.on = true;
     pull.dy = Math.max(0, dy);
     e.preventDefault();
     panel.style.transition = "none";
-    panel.style.transform = `translateY(${pull.dy}px)`;
-    scrim.style.setProperty("--pull", String(Math.min(1, pull.dy / Math.max(1, panel.offsetHeight))));
+    panel.style.transform = side ? `translateX(${pull.dy}px)` : `translateY(${pull.dy}px)`;
+    scrim.style.setProperty("--pull", String(Math.min(1, pull.dy / Math.max(1, side ? panel.offsetWidth : panel.offsetHeight))));
   }, { passive: false });
   const letGo = () => {
     if (!pull?.on) return void (pull = null);
     const speed = pull.dy / Math.max(1, performance.now() - pull.at);
-    const far = pull.dy > panel.offsetHeight * 0.28 || speed > 0.6;
+    const far = pull.dy > (side ? panel.offsetWidth : panel.offsetHeight) * 0.28 || speed > 0.6;
     pull = null;
     panel.style.transition = "";
     if (far) {
-      panel.style.transform = "translateY(105%)";
+      panel.style.transform = side ? "translateX(105%)" : "translateY(105%)";
       close();
     } else {
       panel.style.transform = "";

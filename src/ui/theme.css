@@ -333,6 +333,9 @@ h1, h2, p { margin: 0; }
 .room-thumb .room-preview-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 0.7rem; line-height: 1.35; }
 .room-thumb .room-preview-song { height: auto; }
 .room-thumb .room-preview-board { width: auto; height: auto; background: none; }
+/* A drawing on its own paper: the lines as drawn, on white, whatever 밝게/어둡게 says (the drawing rooms' paper). */
+.room-thumb .room-preview-draw { width: auto; height: auto; border-radius: 0.45rem; background: #fdfdfb; }
+.room-preview-draw { width: 4.6rem; height: 2.76rem; border-radius: 0.45rem; background: #fdfdfb; }
 .room-logo { position: absolute; left: 0.35rem; top: 0.35rem; z-index: 1; display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--tint) 30%, var(--paper)); box-shadow: 0 2px 6px color-mix(in srgb, var(--tint) 28%, transparent); }
 .room-logo svg { width: 0.85rem; height: 0.85rem; }
 .room-thumb.no-preview { height: 2.3rem; }
@@ -1554,6 +1557,15 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .card-wave { display: block; width: 100%; height: 2.2rem; margin-top: 0.25rem; overflow: visible; }
 .card-wave path { fill: color-mix(in srgb, var(--c, var(--accent)) 55%, var(--ink)); opacity: 0.75; }
 .card-wave.under { position: absolute; left: 0.55rem; right: 0.55rem; bottom: 0.45rem; width: auto; margin: 0; opacity: 0.45; pointer-events: none; }
+/* A drawer (a room's details): from the right edge over the whole height, like a settings drawer. */
+.scrim.side-sheet, html[data-orient="landscape"] .scrim.side-sheet { align-items: stretch; justify-content: flex-end; }
+.scrim.side-sheet > .panel, html[data-orient="landscape"] .scrim.side-sheet > .panel { width: min(88%, 25rem); height: 100%; max-height: none; border-radius: 1.6rem 0 0 1.6rem; padding-top: calc(0.8rem + env(safe-area-inset-top)); padding-bottom: calc(1.4rem + env(safe-area-inset-bottom)); animation: side-sheet-in 0.34s var(--ease); }
+.scrim.side-sheet.closing > .panel { animation: side-sheet-out 0.26s var(--ease) forwards; }
+.scrim.side-sheet > .panel::before { display: none; }
+.scrim.side-sheet .sheet-close svg { rotate: -90deg; }
+@keyframes side-sheet-in { from { transform: translateX(100%); } }
+@keyframes side-sheet-out { to { transform: translateX(105%); } }
+@media (prefers-reduced-motion: reduce) { .scrim.side-sheet > .panel, .scrim.side-sheet.closing > .panel { animation: none; } }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }

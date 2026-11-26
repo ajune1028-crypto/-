@@ -10,7 +10,9 @@ import { showJoin } from "./join.js";
 import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { watchContrast } from "./contrast.js";
-import { textPreview, songPreview, boardPreview } from "../core/preview.js";
+import { textPreview, songPreview, boardPreview, drawPreview } from "../core/preview.js";
+import { inkDocOf } from "../core/draw.js";
+import { frameDocOf } from "../core/anim.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { keepRoomWords } from "../houses.js";
@@ -311,6 +313,21 @@ export function showRoom(app, roomId) {
       }
       if (kind === "creative-song") return session.isLoaded("song") ? songPreview(session.doc("song")) : undefined;
       if (kind === "creative-board") return session.isLoaded("board") ? boardPreview(session.doc("board")) : undefined;
+      // 그림 방: its layers as they show; 애니메이션 방: its first page over its background (the owner,
+      // 21 November: "그림 모드나 애니 모드도 미리보기도 나오게").
+      if (kind === "creative-draw") {
+        if (!session.isLoaded("draw")) return undefined;
+        const layers = session.doc("draw").layers();
+        if (layers.some((l) => !session.isLoaded(inkDocOf(l.id)))) return undefined;
+        return drawPreview(layers.map((l) => ({ visible: l.visible !== false, strokes: session.doc(inkDocOf(l.id)).strokes() })));
+      }
+      if (kind === "creative-anim") {
+        if (!session.isLoaded("anim")) return undefined;
+        const first = session.doc("anim").frames()[0];
+        const docs = [frameDocOf("bg"), first && frameDocOf(first.id)].filter(Boolean);
+        if (docs.some((d) => !session.isLoaded(d))) return undefined;
+        return drawPreview(docs.map((d) => ({ visible: true, strokes: session.doc(d).strokes() })));
+      }
     } catch (err) {
       console.warn(err);
     }

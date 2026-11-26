@@ -6,6 +6,7 @@ import { duplicateRoom, putIntoBoard, putRoomIntoSong, roomHistory } from "./roo
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
 import { validPreview } from "../core/preview.js";
+import { inkColor } from "./ink.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { dayKey, dayLabel, hourLabel } from "../core/time.js";
@@ -105,6 +106,28 @@ function previewOf(room) {
       p.notes.map(([x, w, y]) => h("span", { class: "pv-note", style: { left: pct(x), width: pct(w), top: 8 + y * 0.62 + "%" } })));
   }
   const NS = "http://www.w3.org/2000/svg";
+  if (p.t === "draw") {
+    // The drawing's own lines in their own colours (a black line kept as it was drawn).
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "room-preview room-preview-draw");
+    svg.setAttribute("viewBox", "0 0 100 60");
+    svg.setAttribute("aria-hidden", "true");
+    for (const [c, w, filled, ...pts] of p.lines) {
+      const line = document.createElementNS(NS, filled ? "polygon" : "polyline");
+      line.setAttribute("points", pts.join(" "));
+      const colour = inkColor(c, true);
+      line.setAttribute(filled ? "fill" : "stroke", colour);
+      if (filled) line.setAttribute("stroke", "none");
+      else {
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke-width", String(w));
+        line.setAttribute("stroke-linecap", "round");
+        line.setAttribute("stroke-linejoin", "round");
+      }
+      svg.append(line);
+    }
+    return svg;
+  }
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("class", "room-preview room-preview-board");
   svg.setAttribute("viewBox", "0 0 100 60");
@@ -513,7 +536,7 @@ export function showHome(app) {
               h("button", { class: "btn", type: "button", id: "room-new-house", text: "새 집 짓기", onclick: () => { close(); openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } }); } }));
           } }),
         h("button", { class: "btn quiet", type: "button", id: "room-forget", text: "목록에서 빼기", onclick: () => { forgetRoom(app.store, room.id); close(); draw(); toast(root, "목록에서 뺐어요. 방은 그대로 있어요"); } })));
-    });
+    }, { side: true });
   }
 
   function half(side, title, note, emptyText) {
@@ -574,10 +597,10 @@ export function showHome(app) {
     if (panelCtl?.isOpen()) root.append(...panelCtl.nodes);
   }
 
-  function sheet(title, build) {
+  function sheet(title, build, opts) {
     closeSheet?.();
     closeWindows("sheet");
-    closeSheet = openSheet(root, title, build);
+    closeSheet = openSheet(root, title, build, opts);
   }
 
   /**

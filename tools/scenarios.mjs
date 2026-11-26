@@ -5338,6 +5338,18 @@ scenario("home 집 고르기: held, a room raises a small planet with my houses 
   await page.release(m[0], m[1]);
   await page.waitFor(q("#room-actions #room-open"), 3000);
   assert.ok(!(await page.eval(q("#house-dock"))), "no planet from it");
+  // The room's details come in from the side, like a settings drawer (the owner, 22 November).
+  await pause(400);
+  const drawer = await page.eval(`(() => { const s = document.querySelector(".scrim.side-sheet"); const p = s?.querySelector(".panel").getBoundingClientRect(); return p ? { right: p.right, left: p.left, top: p.top, bottom: p.bottom } : null; })()`);
+  assert.ok(drawer && Math.abs(drawer.right - 390) < 2 && drawer.left > 30 && drawer.top <= 1 && drawer.bottom >= 843, "a drawer at the right, the whole height: " + JSON.stringify(drawer));
+  await page.shot(out("room-drawer.png"));
+  // Pushed back to its side, it goes.
+  const mid = [drawer.left + 60, 400];
+  await page.front();
+  await page.touch("start", [mid]);
+  for (let i = 1; i <= 8; i++) await page.touch("move", [[mid[0] + i * 25, mid[1] + 2]]);
+  await page.touch("end");
+  await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
 });
 
 // The owner (21 November): thrown to the very end of an edge the light did not start where it was
@@ -5710,6 +5722,45 @@ scenario("그림 방 ink keeps its colour in 밝게 and 어둡게: a black line 
   await pause(300);
   const light = await inkAt();
   assert.ok(light < 200 && Math.abs(light - dark) < 30, "the same in 밝게: " + [dark, light]);
+});
+
+// The owner (21 November): "그림 모드나 애니 모드도 미리보기도 나오게 해 줘라".
+scenario("home previews for 그림 방 and 애니메이션 방: what was drawn shows on home in its own colours", async ({ open, out }) => {
+  const a = await open({ width: 420, height: 860 });
+  const make = async (kind, name) => {
+    await click(a, "#add-creative");
+    await click(a, `[data-kind="${kind}"]`);
+    await fill(a, "#room-name", name);
+    await fill(a, "#my-name", "가람");
+    await click(a, "#create-room");
+    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+    await click(a, "#invite-done");
+  };
+  const stroke = async (sel) => {
+    await a.waitFor(q(sel));
+    const p = await a.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+    await pickColor(a, "red");
+    await a.press(p.x + p.w * 0.2, p.y + p.h * 0.3);
+    for (let i = 1; i <= 10; i++) await a.moveTo(p.x + p.w * (0.2 + 0.05 * i), p.y + p.h * (0.3 + 0.02 * i));
+    await a.release(p.x + p.w * 0.7, p.y + p.h * 0.5);
+  };
+  await make("creative-draw", "그림 미리보기");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  await stroke("#draw-page");
+  await a.waitFor(`window.__app.session.doc("k:L" + window.__app.session.doc("draw").layers()[0].id).strokes().length === 1`);
+  await click(a, "#back");
+  await a.waitFor(q("#home"));
+  await make("creative-anim", "애니 미리보기");
+  await stroke("#anim-page");
+  await pause(300);
+  await click(a, "#back");
+  await a.waitFor(q("#home"));
+  const shown = await a.eval(`[...document.querySelectorAll(".room-row")].map((r) => ({ name: r.querySelector(".room-name").textContent, lines: r.querySelectorAll(".room-preview-draw polyline, .room-preview-draw polygon").length, colour: r.querySelector(".room-preview-draw polyline")?.getAttribute("stroke") || "" }))`);
+  const draw = shown.find((r) => r.name === "그림 미리보기");
+  const anim = shown.find((r) => r.name === "애니 미리보기");
+  assert.ok(draw && draw.lines === 1 && /^#|rgb/.test(draw.colour), "그림 방 shows its line: " + JSON.stringify(shown));
+  assert.ok(anim && anim.lines >= 1, "애니메이션 방 shows its first page: " + JSON.stringify(shown));
+  await a.shot(out("home-draw-previews.png"));
 });
 
 scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden and made see-through shows the same for both; undo takes a layer away", async ({ open, out }) => {
