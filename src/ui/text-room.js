@@ -19,7 +19,8 @@ import { keepRawTake, takeWhere } from "./keep-take.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { dayKey } from "../core/time.js";
-import { getSettings, setSetting } from "../identity.js";
+import { getSettings, setSetting, roomEntry } from "../identity.js";
+import { copyItem } from "../clipboard.js";
 import { buzz } from "./chime.js";
 import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
@@ -184,6 +185,17 @@ export function mountTextRoom(body, app, session) {
     e.preventDefault();
     setPageZoom(pageZoom * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
   };
+  // Words copied here (the phone's own 복사, or a keyboard's) also go into 비서's 바구니, to be put into
+  // any room later.
+  const onCopy = (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLTextAreaElement) || !box.classList.contains("typing")) return;
+    const text = box.value.slice(box.selectionStart, box.selectionEnd);
+    if (!text.trim()) return;
+    copyItem(app.store, { kind: "text", text: text.slice(0, 4000) }, { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "daily-text" });
+  };
+  body.addEventListener("copy", onCopy);
+  body.addEventListener("cut", onCopy);
   body.addEventListener("touchstart", onTouchStart, { passive: true });
   body.addEventListener("touchmove", onTouchMove, { passive: false });
   body.addEventListener("touchend", onTouchEnd);
@@ -863,6 +875,8 @@ export function mountTextRoom(body, app, session) {
     stopPhotoWatch();
     photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);
+    body.removeEventListener("copy", onCopy);
+    body.removeEventListener("cut", onCopy);
     body.removeEventListener("touchmove", onTouchMove);
     body.removeEventListener("touchend", onTouchEnd);
     body.removeEventListener("wheel", onWheel);
@@ -881,6 +895,17 @@ export function mountTextRoom(body, app, session) {
     inkTools.remove();
     list.remove();
   };
-  return { close, insertText };
+  return {
+    close,
+    insertText,
+    /** 비서's 바구니: words, and a whiteboard's text cards as lines. */
+    takes(item) {
+      return item.kind === "text" || (item.kind === "board-items" && (item.items || []).some((i) => i.kind === "note" && (i.data?.text || "").trim()));
+    },
+    put(item) {
+      const text = item.kind === "text" ? item.text : item.items.filter((i) => i.kind === "note" && (i.data?.text || "").trim()).sort((a, b) => a.dy - b.dy || a.dx - b.dx).map((i) => i.data.text).join("\n");
+      if (text) insertText(text);
+    },
+  };
 }
 

@@ -111,7 +111,8 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - **나의 고유 코드**(`core/me.js`, `ui/my-code.js`, `sync/me-place.js`): 처음 열면 시트(?dev는 건너뜀, `?welcome=1`), 설정 맨 위(가려진 채), 다른 코드 넣기(확인 글자로 틀림을 바로 잡음), 같은 코드의 기기끼리 방·집·별·설정이 맞춰짐(칸마다 마지막에 바꾼 것이 이김, 지운 것도 기억). 방 비밀번호는 다음(비밀번호를 정한 방만 진짜 잠금).
   - **오후·저녁**: 방 비밀번호(`core/lock.js`, `sync/sealed.js`: 정한 방만 모든 op와 presence가 PBKDF2→AES-GCM 열쇠로 잠겨 오감), 비서·설정을 열어도 홈 아이콘 셋은 그대로(창 층 아래), 설정을 쪽으로 나눔(첫 쪽은 짧게), 방 보기 목록|카드, 움직임(`ui/motion.js`: 모드 이름이 잠깐 흐트러졌다 자리 잡기, 숫자 굴러 들어오기, 복사 체크, 별 터짐), 노래 방 벤토(`songTiles`: 옆 패널 격자와 폰 메뉴가 같은 칸 목록, 꾹 = 편집).
   - **밤**: 친구에게 원본이 꼭 감(`MAX_FILE_PARTS` 240: 16 kHz로 15분, 더 길면 8 kHz로 30분; 방을 나가도 보내기가 끝날 때까지 연결 유지; 받는 쪽은 '원본 받는 중 37%'). 듣기 '같이' → '둘 다'. ● 녹음: 꾹 = 어떻게 녹음할까요(여기서 바로 · 폰 녹음 앱 · 아이폰은 음성 메모에서), 고른 대로 기억, 폰은 처음 ●에 묻는다. **그릴 때 비침 넓게**(`ui/ink.js`의 `xrayLook`·`sameInkNear`·`xrayPaint`, `core/ink.js` `closedLoop`): 펜 둘레 9rem의 내 색(비슷한 색까지) 그림 위 유리가 반쯤, 선이 닫히면 그 안 전체가 거의 비침, 칸마다 서서히. **공유로 받기**(`src/sw.js`, `ui/share-in.js`, `tools/icons.mjs`): 공개 주소에서 홈 화면에 추가하면 녹음 앱의 '공유' 목록에 이 앱이 나오고, 받은 녹음은 비서 녹음으로(안드로이드 크롬; 시험판·로컬은 아무것도 안 함).
-  - 다음(검토 10절): 사용자에게 '같이'의 길(Firebase 또는 브라우저끼리) 물음 → 비서 바구니·노트 → 화면의 층(그림·애니 방을 프로크리에이트처럼) → 움직임 참고 → 이스터 에그(햇살 100번 던지기, 마지막).
+  - **비서 1단계**(`src/clipboard.js`의 바구니, `src/reference.js`의 노트, `ui/reference.js`): 탭 노트 · 바구니 · 녹음 · 내 방. 어느 방의 '복사'든 바구니에 쌓이고(새것이 앞), 다른 방에서 '여기에 놓기'(방마다 `takes`·`put`). 노트는 한 장, □ 할 일, 지금 줄 '여기에 놓기'.
+  - 다음(검토 10절): 사용자에게 '같이'의 길(Firebase 또는 브라우저끼리) 물음 → 그림 올가미 '복사'로 그림도 바구니에 → 화면의 층(그림·애니 방을 프로크리에이트처럼) → 움직임 참고 → 이스터 에그(햇살 100번 던지기, 마지막).
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
 - **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 26일 밤 판 v23: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
@@ -148,7 +149,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 446개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 451개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
 node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 210개 남짓(시나리오는 `dist`를 받아 묶음본에서만 도는 것도 있음: 공유로 받기). --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다. 옆에 manifest.webmanifest·sw.js·아이콘 두 장(공유로 받기)도

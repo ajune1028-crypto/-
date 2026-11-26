@@ -2275,3 +2275,13 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .day-menu .chip svg { width: 0.95rem; height: 0.95rem; }
 .day-menu-help, .day-menu-who { margin: 0; font-size: 0.78rem; color: var(--muted); }
 .day-menu-who { color: var(--ink); font-weight: 700; }
+/* 비서 노트: one sheet of my own, written straight on. Its own class: never .input, never .typing. */
+.note-sheet { display: block; box-sizing: border-box; width: 100%; min-height: 8.5rem; max-height: 40vh; padding: 0.85rem 0.95rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: var(--paper); color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.65; resize: vertical; outline: none; box-shadow: var(--glass-shine); }
+.note-sheet:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge)); }
+.note-actions { margin-top: 0.5rem; }
+/* 비서 바구니: what I copied anywhere, newest first. */
+.ref-basket-item { padding: 0.6rem 0.75rem 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.05rem; background: var(--card-bg); box-shadow: var(--glass-shine), 0 4px 14px color-mix(in srgb, var(--tint) 12%, transparent); }
+.ref-basket-item .pick-head { justify-content: flex-start; align-items: center; gap: 0.45rem; }
+.ref-basket-item .pick-name { overflow-wrap: anywhere; }
+.basket-icon { display: inline-flex; flex: none; width: 1.55rem; height: 1.55rem; align-items: center; justify-content: center; border-radius: 0.55rem; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.basket-icon svg { width: 0.95rem; height: 0.95rem; }

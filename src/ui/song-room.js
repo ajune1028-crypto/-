@@ -23,7 +23,7 @@ import {
 } from "../core/song.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } from "../core/beat.js";
-import { copyItem, clipboardItem } from "../clipboard.js";
+import { copyItem, clipboardItem, newestOf } from "../clipboard.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { Analyzer, analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
@@ -40,7 +40,7 @@ import { reachableRooms, meIn } from "./room-actions.js";
 import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused, isApple } from "./sound-in.js";
 import { shareInHint } from "./share-in.js";
 import { RoomSession } from "../sync/session.js";
-import { addItemOps, cardFromClip, keptFields, setItemOps } from "../core/board.js";
+import { addItemOps, cardFromClip, keptFields, setItemOps, cardNotes, cardScale } from "../core/board.js";
 
 const MIN_TAKE_MS = 250;
 const PRESENCE_EVERY_MS = 120;
@@ -1098,7 +1098,7 @@ export function mountSongRoom(body, app, session, frame) {
         return { dx: c.start - from, dy: c.lane - top, offset: c.offset, length: c.length, speed: c.speed || 1, tint: c.tint ?? null, muted: !!c.muted, src: c.src,
           source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) } };
       }),
-    });
+    }, fromHere());
     toast(root, `클립 ${clips.length}개를 복사했어요. 클립을 눌러 '붙여넣기'로 넣어요`, 2600);
   }
 
@@ -1132,9 +1132,46 @@ export function mountSongRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length, speed: clip.speed || 1, tint: clip.tint ?? null,
       source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) },
-    });
+    }, fromHere());
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
     draw();
+  }
+
+  /** Where a copy came from, for 비서's 바구니. */
+  function fromHere() {
+    return { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-song" };
+  }
+
+  /**
+   * 여기에 놓기 of a whiteboard's song cards (비서's 바구니): clips one after another on one row from the
+   * playhead, each with its own speed, colour and mute; one undo takes them all away.
+   */
+  function pasteCards(cards) {
+    if (readOnly() || !cards.length) return;
+    const total = cards.reduce((n, c) => n + Math.round(c.data.dur / (c.speed || 1)), 0);
+    const row = song.freeRow(playhead, Math.max(1, total), selectedRow);
+    if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요");
+    let at = playhead;
+    const atoms = [];
+    let last = null;
+    for (const card of cards) {
+      if (!song.canAddClip()) break;
+      const d = card.data;
+      const src = sourceOp(session.clock, song, { duration: d.dur / 1000, notes: cardNotes(d), scale: cardScale(d) || undefined, peaks: d.peaks || "", by: session.memberId, at: Date.now(), blob: d.blob || undefined, name: d.name || undefined });
+      const clip = addClipOps(session.clock, song, { src: src.id, row, start: at, length: d.dur, by: session.memberId, at: Date.now() });
+      session.commit("song", [src, ...clip.ops]);
+      atoms.push(...clip.atoms);
+      const looks = { ...((card.speed || 1) !== 1 && CLIP_SPEEDS.includes(card.speed) ? { speed: card.speed } : {}), ...(Number.isInteger(card.tint) && card.tint >= 0 && card.tint <= 7 ? { tint: card.tint } : {}), ...(card.muted ? { muted: true } : {}) };
+      if (Object.keys(looks).length) session.commit("song", setClipOps(session.clock, song, clip.id, looks).ops);
+      at += Math.round(d.dur / (card.speed || 1));
+      last = clip.id;
+    }
+    record(atoms);
+    selectedRow = row;
+    if (last) {
+      select(last);
+      timeline.revealClip(last);
+    }
   }
 
   function pasteClip() {
@@ -1347,7 +1384,7 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec, soloClip === clip.id ? "stop" : "play"),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id), "scissors"),
       item("clip-copy", "복사", () => copyClip(clip.id), true, "copy"),
-      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
+      item("clip-paste", "붙여넣기", () => (newestOf(app.store, ["song-clip", "song-clips"])?.kind === "song-clips" ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
       item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
@@ -1744,6 +1781,17 @@ export function mountSongRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 비서's 바구니: what this room takes (clips, and a whiteboard's song cards as clips). */
+    takes(item) {
+      if (readOnly()) return false;
+      return item.kind === "song-clip" || item.kind === "song-clips" || (item.kind === "board-items" && (item.items || []).some((i) => i.kind === "song"));
+    },
+    /** …and puts down here (it is already the newest of its kind, so 붙여넣기 takes it). */
+    put(item) {
+      if (item.kind === "song-clip") pasteClip();
+      else if (item.kind === "song-clips") pasteGroup();
+      else if (item.kind === "board-items") pasteCards(item.items.filter((i) => i.kind === "song").sort((a, b) => a.dx - b.dx || a.dy - b.dy));
+    },
     /** 레퍼런스 → 이 방에 붙이기: a recording becomes a clip at the playhead (its sound is already on this device). */
     insertSound(memo) {
       if (readOnly() || !song.canAddClip()) return void toast(root, "여기에는 붙일 수 없어요");

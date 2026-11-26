@@ -37,7 +37,7 @@ import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorS
 import { InkLayer, inkColor, drawInkTools } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
-import { clipboardItem, copyItem } from "../clipboard.js";
+import { clipboardItem, copyItem, newestOf } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
 import { audioContext, SongPlayer } from "../audio/engine.js";
 import { decodeWav, encodeWav } from "../audio/wav.js";
@@ -53,7 +53,7 @@ import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
 import { toBase64, fromBase64 } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
 import { RoomSession } from "../sync/session.js";
-import { getSettings, setSetting } from "../identity.js";
+import { getSettings, setSetting, roomEntry } from "../identity.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 // Far out to see a big board whole, near in to draw small (the owner: "축소를 완전 많이").
@@ -722,7 +722,7 @@ export function mountBoardRoom(body, app, session, frame) {
       if (soloLasso === id) stopPlaying();
       apply(removeLassoOps(session.clock, board, id));
     } });
-    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 맡기기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
+    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 넣기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
     // 곡·글·그림·전체: what the loop's actions take.
     const kind = h("button", { type: "button", class: "lasso-kind", id: "lasso-kind-" + id, "aria-label": "올가미가 다룰 것 (곡, 글, 그림, 전체)", onclick: () => { if (!chipDragged) openKinds(id, chip); } });
     const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, kind, more, remove);
@@ -812,7 +812,7 @@ export function mountBoardRoom(body, app, session, frame) {
         songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
         can && pasteable && one("lasso-paste", "붙여넣기", () => pasteIntoLoop(id)),
         one("lasso-copy", "복사", () => copyLasso(loopHolds(id))),
-        one("lasso-ref", "비서에게 맡기기", () => lassoToReference(loopHolds(id).cards)),
+        one("lasso-ref", "비서에게 넣기", () => lassoToReference(loopHolds(id))),
         can && one("lasso-delete", "지우기", () => deleteLasso(loopHolds(id))),
       ].filter(Boolean));
     };
@@ -987,11 +987,19 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   /** The cards as they stand relative to each other, ready to be put down elsewhere. */
+  /** Where a copy came from, for 비서's 바구니. */
+  function fromHere() {
+    return { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-board" };
+  }
+
   /** The cards (and drawings) as they stand to each other, ready to be put down elsewhere. */
-  function copyLasso({ cards: items, strokes = [] }) {
+  function copyLasso({ cards: items, strokes = [] }, { quiet = false } = {}) {
     const ink = session.doc(INK_DOC);
     const lines = strokes.map((sid) => ink.get(sid)).filter(Boolean);
-    if (!items.length && !lines.length) return void toast(root, "올가미 안에 고른 것이 없어요");
+    if (!items.length && !lines.length) {
+      toast(root, "올가미 안에 고른 것이 없어요");
+      return false;
+    }
     // The group's corner, in board pixels (drawings count in INK_UNITs).
     const xs = [...items.map((i) => i.x), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 0).map((v) => v / INK_UNIT))];
     const ys = [...items.map((i) => i.y), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 1).map((v) => v / INK_UNIT))];
@@ -1001,8 +1009,9 @@ export function mountBoardRoom(body, app, session, frame) {
       kind: "board-items",
       items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) })),
       strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, ...(l.z ? { z: l.z } : {}), b: l.b || "pen", ...(l.s ? { s: l.s } : {}), ...(l.q ? { q: 1 } : {}) })),
-    });
-    toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
+    }, fromHere());
+    if (!quiet) toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
+    return true;
   }
 
   function deleteLasso({ cards: items, strokes = [] }) {
@@ -1028,8 +1037,9 @@ export function mountBoardRoom(body, app, session, frame) {
   function pasteIntoLoop(id) {
     const loop = board.lassos().find((l) => l.id === id);
     if (!loop || readOnly()) return;
-    const group = clipboardItem(app.store, "board-items");
-    const clip = !group && clipboardItem(app.store, "song-clip");
+    const newest = newestOf(app.store, ["board-items", "song-clip"]);
+    const group = newest?.kind === "board-items" ? newest : null;
+    const clip = newest?.kind === "song-clip" ? newest : null;
     if (!group && !clip) return void toast(root, "복사한 것이 없어요");
     const list = group ? group.items : [{ kind: "song", dx: 0, dy: 0, data: cardFromClip(clip), speed: clip.speed, tint: clip.tint }];
     const inside = itemsInLoop(board, id);
@@ -1077,20 +1087,18 @@ export function mountBoardRoom(body, app, session, frame) {
     toast(root, `올가미에 ${made.items.length + made.strokes}개를 붙였어요`);
   }
 
-  /** Song cards go to 레퍼런스 as recordings, text as notes (on this device only, as all of 레퍼런스). */
-  function lassoToReference(items) {
-    let n = 0;
-    for (const i of items) {
-      if (i.kind === "note" && (i.text || "").trim()) {
-        addRefNote(app.store, i.text);
-        n++;
-      } else if (i.kind === "song") {
-        const d = i.data;
-        addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob });
-        n++;
-      }
+  /**
+   * 비서에게 넣기: what the loop holds goes into 비서's 바구니 as one thing (as a copy does), to be put
+   * into any room later; its song cards are among 비서's recordings too (every recording in one place).
+   */
+  function lassoToReference(held) {
+    if (!copyLasso(held, { quiet: true })) return;
+    for (const i of held.cards) {
+      if (i.kind !== "song") continue;
+      const d = i.data;
+      addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob });
     }
-    toast(root, n ? `비서에게 ${n}개를 맡겼어요` : "비서에게 맡길 글이나 노래 카드가 없어요", 3000);
+    toast(root, "비서의 바구니에 넣었어요. 다른 방에서 '여기에 놓기'로 꺼내요", 3200);
   }
 
   /** Takes every loop off (one undo step). */
@@ -2041,9 +2049,10 @@ export function mountBoardRoom(body, app, session, frame) {
   }
 
   function addSong() {
-    const group = clipboardItem(app.store, "board-items");
-    if (group) return void pasteGroup(group.items, { strokes: group.strokes || [] });
-    const item = clipboardItem(app.store, "song-clip");
+    // The newer of a copied group and a copied clip.
+    const newest = newestOf(app.store, ["board-items", "song-clip"]);
+    if (newest?.kind === "board-items") return void pasteGroup(newest.items, { strokes: newest.strokes || [] });
+    const item = newest?.kind === "song-clip" ? newest : null;
     if (!item) return void toast(root, "노래 방에서 클립을 '복사'하면 여기에 붙일 수 있어요. '내 노래'에서 골라도 돼요.", 4200);
     const data = cardFromClip(item);
     placeCard(data, keptFields("song", item, data));
@@ -2114,7 +2123,7 @@ export function mountBoardRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: id, offset: 0, length: d.dur, speed: board.item(id).speed || 1, tint: board.item(id).tint ?? null,
       source: { duration: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob, name: d.name },
-    });
+    }, fromHere());
     toast(root, "복사했어요. 노래 방이나 다른 화이트보드에 붙일 수 있어요", 2600);
   }
 
@@ -2944,6 +2953,27 @@ export function mountBoardRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 비서's 바구니: a whiteboard takes everything there is (cards, clips as song cards, words as a text card). */
+    takes(item) {
+      return !readOnly() && ["board-items", "song-clip", "song-clips", "text"].includes(item.kind);
+    },
+    put(item) {
+      if (item.kind === "board-items") pasteGroup(item.items || [], { strokes: item.strokes || [] });
+      else if (item.kind === "song-clip") {
+        const data = cardFromClip(item);
+        placeCard(data, keptFields("song", item, data));
+      } else if (item.kind === "song-clips") {
+        // One under another, in the order they stood (a loop's 순서 정리 lays them in a row).
+        const clips = (item.clips || []).slice().sort((a, b) => a.dx - b.dx || a.dy - b.dy);
+        pasteGroup(clips.map((c, i) => {
+          const data = cardFromClip(c);
+          return { kind: "song", dx: 0, dy: i * 110, data, ...keptFields("song", c, data) };
+        }));
+      } else if (item.kind === "text") {
+        const at = spotFor("note");
+        apply(addItemOps(session.clock, board, { kind: "note", x: at.x, y: at.y, data: { text: item.text }, by: session.memberId }));
+      }
+    },
     /** 레퍼런스 → 이 방에 붙이기, a recording: a song card (its sound is already on this device). */
     insertSound(memo) {
       placeCard(songCardData({ duration: memo.dur, notes: memo.notes, peaks: memo.peaks, name: memo.name, blob: memo.blob, scale: memo.scale }));

@@ -14,8 +14,8 @@ import { kindInfo } from "./kinds.js";
 import { RoomSession } from "../sync/session.js";
 import { timeText } from "./song-view.js";
 import { KEEP_RATE, soundPickers, pickerHelp, micRefused, micReason, elsewhere, isApple } from "./sound-in.js";
-import { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } from "../reference.js";
-import { clipboardItem } from "../clipboard.js";
+import { refSounds, addRefSound, removeRefSound, refNote, setRefNote, noteFromMemos, addToNote, toggleTodo, flipTodoAt, lineAt } from "../reference.js";
+import { basketItems, takeFromBasket, removeFromBasket, describeItem, onBasketChange } from "../clipboard.js";
 import { MAX_TAKE_MS, unpackNote } from "../core/song.js";
 import { audioContext } from "../audio/engine.js";
 import { analyzeSamples } from "../audio/analyze.js";
@@ -29,9 +29,10 @@ import { solfege } from "../audio/notes.js";
 
 /**
  * insert(text): the room takes a note; insertSound(sound): the room takes a recording
- * (a song room as a clip, a whiteboard as a card). Either may be missing.
+ * (a song room as a clip, a whiteboard as a card). Either may be missing. takes(item) / put(item):
+ * whether the room takes a thing from the 바구니, and puts it down in its own form.
  */
-export function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null, incoming = null } = {}) {
+export function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null, incoming = null, takes = null, put = null } = {}) {
   // Its button opens it and, pressed again, closes it. Asked for a tab (home's 녹음), it opens there.
   const open = document.getElementById("reference");
   if (open && !tab) return void open.close?.();
@@ -44,12 +45,16 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
   // What it opens on: asked for, else what this room takes (a song room: recordings; a page of
   // words: notes), else where I was last.
   const here = insertSound && !insert ? "sounds" : insert && !insertSound ? "notes" : null;
-  const first = tab || here || getSettings(app.store).refTab || "notes";
+  const was = getSettings(app.store).refTab;
+  const first = tab || here || (["notes", "basket", "sounds", "rooms"].includes(was) ? was : "notes");
   openFloat(app.root, { id: "reference", title: "비서", pos, dock }, (panel, close, onClose) => {
-    const list = h("div", { class: "ref-list", id: "ref-list" });
+    const basket = h("div", { class: "ref-list ref-basket", id: "ref-basket" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
-    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 2, placeholder: "가사, 코드, 떠오른 말…" });
+    // 노트: one sheet of my own, written straight on (the old memos move into it once).
+    noteFromMemos(app.store);
+    const sheet = h("textarea", { class: "note-sheet", id: "ref-note", rows: 6, spellcheck: false, "aria-label": "노트", placeholder: "떠오른 것, 가사, 할 일… 그냥 이어 써요." });
+    sheet.value = refNote(app.store);
     let busy = false;
     let audio = null; // the recording being heard: { id, el, url }
 
@@ -58,19 +63,57 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       status.hidden = !text;
     };
 
+    let saving = 0;
+    const saveNote = () => {
+      clearTimeout(saving);
+      saving = setTimeout(() => setRefNote(app.store, sheet.value), 250);
+    };
+    sheet.addEventListener("input", saveNote);
+    sheet.addEventListener("blur", () => setRefNote(app.store, sheet.value));
+    // A tap on a line's □ ticks it, on ☑ unticks it (as in Apple's and Samsung's notes).
+    sheet.addEventListener("click", () => {
+      const at = sheet.selectionStart;
+      if (at !== sheet.selectionEnd) return;
+      const flipped = flipTodoAt(sheet.value, at);
+      if (flipped === null) return;
+      sheet.value = flipped;
+      sheet.setSelectionRange(at, at);
+      setRefNote(app.store, flipped);
+    });
+    const stay = (e) => e.preventDefault(); // the buttons leave the keyboard and the caret where they are
     function drawNotes() {
-      const notes = refNotes(app.store);
-      const clip = clipboardItem(app.store, "song-clip");
-      mount(list,
-        clip && h("p", { class: "help ref-clip", id: "ref-clip", text: `복사해 둔 노래 클립: ${clip.source?.name || "녹음"} · ${(clip.length / 1000).toFixed(1)}초 (노래 방이나 화이트보드에 붙일 수 있어요)` }),
-        ...(notes.length ? notes.map((n) => h("div", { class: "ref-note", data: { id: n.id } },
-          h("p", { class: "ref-body", text: n.text }),
-          h("div", { class: "ref-actions" },
-            insert && h("button", { class: "chip primary", type: "button", data: { put: n.id }, onclick: () => { insert(n.text); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
-            h("button", { class: "chip", type: "button", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }, icon("copy"), "복사"),
-            h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }, "지우기"))))
-          : [h("p", { class: "help ref-empty", text: "떠오른 것을 적어 두면, 같이 하는 중에 꺼내 쓸 수 있어요." })]));
+      sheet.value = refNote(app.store);
     }
+
+    /** 바구니: what I copied anywhere, newest first; 여기에 놓기 where this room takes it. */
+    function drawBasket() {
+      const all = basketItems(app.store);
+      mount(basket, ...(all.length ? all.map((e) => {
+        const what = describeItem(e.item);
+        const can = !!(takes && put && takes(e.item));
+        return h("div", { class: "ref-basket-item", data: { id: e.id } },
+          h("div", { class: "pick-head" }, h("span", { class: "basket-icon", "aria-hidden": "true" }, icon(what.icon)), h("span", { class: "pick-name", text: what.text })),
+          h("p", { class: "ref-from", text: [e.from?.name && `'${e.from.name}'에서`, new Date(e.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })].filter(Boolean).join(" · ") }),
+          h("div", { class: "ref-actions" },
+            can && h("button", { class: "chip primary", type: "button", data: { putBasket: e.id }, onclick: () => {
+              const item = takeFromBasket(app.store, e.id);
+              if (!item) return;
+              try {
+                put(item);
+                toast(app.root, "여기에 놓았어요");
+              } catch (err) {
+                console.warn(err);
+                toast(app.root, "놓지 못했어요", 3000);
+              }
+              drawBasket();
+            } }, icon("plus"), "여기에 놓기"),
+            h("button", { class: "chip danger", type: "button", data: { dropBasket: e.id }, "aria-label": "바구니에서 빼기", onclick: () => { removeFromBasket(app.store, e.id); drawBasket(); } }, "빼기")));
+      }) : [h("p", { class: "help ref-empty", id: "ref-basket-empty", text: "방에서 '복사'한 것이 여기 모여요. 다른 방에서 '여기에 놓기'로 꺼내요." })]));
+    }
+    // A copy made while it is open shows at once.
+    const offBasket = onBasketChange(() => {
+      if (!basketPart.hidden) drawBasket();
+    });
 
     /** A recording's notes as small bars by pitch, named when there is room. */
     function bars(s) {
@@ -285,31 +328,40 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
     const waysWhy = !mic.ok && h("div", { class: "ref-why" },
       h("p", { class: "help warn", id: "ref-mic-reason", text: micReason(mic.reason) }),
       mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root: app.root, prefix: "ref-" })));
-    // A note goes in like a message: write, then the round button beside it.
+    // 노트: the sheet, □ 할 일 for the caret's line, and 여기에 놓기 (the chosen words, or the caret's line).
     const notesPart = h("div", { class: "ref-part", id: "ref-notes" },
-      h("div", { class: "ref-compose" }, area,
-        h("button", { class: "ref-send", id: "ref-add", type: "button", "aria-label": "메모 남기기", onclick: () => {
-          if (!area.value.trim()) return;
-          addRefNote(app.store, area.value.trim());
-          area.value = "";
-          drawNotes();
-        } }, "남기기")),
-      list);
+      sheet,
+      h("div", { class: "ref-actions note-actions" },
+        h("button", { class: "chip", type: "button", id: "ref-todo", onpointerdown: stay, onclick: () => {
+          const r = toggleTodo(sheet.value, sheet.selectionStart);
+          sheet.value = r.text;
+          sheet.setSelectionRange(r.caret, r.caret);
+          setRefNote(app.store, r.text);
+        } }, "□ 할 일"),
+        insert && h("button", { class: "chip primary", type: "button", id: "ref-note-put", onpointerdown: stay, onclick: () => {
+          const chosen = sheet.value.slice(sheet.selectionStart, sheet.selectionEnd).trim();
+          const words = chosen ? chosen.replace(/^[□☑] /gm, "") : lineAt(sheet.value, sheet.selectionStart);
+          if (!words) return void toast(app.root, "놓을 줄에 커서를 두거나 글을 골라 주세요", 2600);
+          insert(words);
+          toast(app.root, "여기에 놓았어요");
+        } }, icon("plus"), "여기에 놓기")));
     const soundsPart = h("div", { class: "ref-part", id: "ref-sounds-part" }, ...inputs, ways, waysWhy, status, sounds);
     const roomsPart = h("div", { class: "ref-part", id: "ref-rooms" });
-    const parts = { notes: notesPart, sounds: soundsPart, rooms: roomsPart };
+    const basketPart = h("div", { class: "ref-part", id: "ref-basket-part" }, basket);
+    const parts = { notes: notesPart, basket: basketPart, sounds: soundsPart, rooms: roomsPart };
     const show = (which) => {
       for (const [k, el] of Object.entries(parts)) el.hidden = k !== which;
       setSetting(app.store, "refTab", which);
       if (which === "rooms" && !roomsPart.childElementCount) drawRooms();
+      if (which === "basket") drawBasket();
       // The first time the recordings are looked at and there are none, the example goes in.
       if (which === "sounds" && !refSounds(app.store).length && !app.store.get("exampleTake", false)) addExample();
     };
-    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], first, (v) => show(v), "refTab");
+    const tabs = segmented([["notes", "노트", "ref-tab-notes"], ["basket", "바구니", "ref-tab-basket"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], first, (v) => show(v), "refTab");
     tabs.classList.add("ref-tabs");
     // What it is, in a line: mine alone, at hand while together (the owner: "나 혼자만 볼 수 있는 거…
     // 같이 하면서도 도움되게… 비서 느낌").
-    panel.append(h("p", { class: "ref-sub", text: roomId ? "나만 보는 주머니 · 꺼내서 이 방에 놓아요" : "나만 보는 주머니 · 모아 두고 방으로 보내요" }), tabs, notesPart, soundsPart, roomsPart);
+    panel.append(h("p", { class: "ref-sub", text: roomId ? "나만 보는 주머니 · 꺼내서 이 방에 놓아요" : "나만 보는 주머니 · 모아 두고 방으로 보내요" }), tabs, notesPart, basketPart, soundsPart, roomsPart);
     show(first);
     drawNotes();
     drawSounds();
@@ -342,7 +394,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       }) : [h("p", { class: "help", text: "다른 방이 아직 없어요." })]));
     }
 
-    /** A room's words, clips and cards, each with 가져오기 where this room can take it. */
+    /** A room's words, clips and cards, each with 여기에 놓기 where this room can take it. */
     async function lookInto(room, box) {
       box.replaceChildren(h("p", { class: "help", text: "불러오는 중…" }));
       let other = null;
@@ -383,16 +435,19 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       } finally {
         other?.close();
       }
-      const take = (f) => (f.text ? insert && (() => { insert(f.text); toast(app.root, "가져왔어요"); }) : insertSound && (() => { insertSound(f.sound); toast(app.root, "가져왔어요"); }));
+      const take = (f) => (f.text ? insert && (() => { insert(f.text); toast(app.root, "여기에 놓았어요"); }) : insertSound && (() => { insertSound(f.sound); toast(app.root, "여기에 놓았어요"); }));
       box.replaceChildren(...(found.length ? found.slice(0, 40).map((f, i) => {
         const act = take(f);
         return h("div", { class: "ref-item" },
           h("p", { text: f.text || `♪ ${f.sound.name} · ${timeText(f.sound.dur * 1000)}` }),
-          act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "가져오기", onclick: act }),
-          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "비서 메모에 넣었어요"); } }));
+          act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "여기에 놓기", onclick: act }),
+          f.text && h("button", { class: "chip", type: "button", text: "노트에", onclick: () => { addToNote(app.store, f.text); drawNotes(); toast(app.root, "노트에 적었어요"); } }));
       }) : [h("p", { class: "help", text: "가져올 것이 아직 없어요" })]));
     }
     onClose(() => {
+      offBasket();
+      clearTimeout(saving);
+      setRefNote(app.store, sheet.value);
       stopPickers();
       stopHearing();
       if (recording) {

@@ -3772,7 +3772,7 @@ scenario("whiteboard 노래 모드: cut a card where it is tapped, mute it, edit
   // 복사: the card is on the device clipboard, as a song clip.
   await click(page, ".card.song");
   await click(page, "#card-copy");
-  assert.equal(await page.eval(`window.__app.store.get("clipboard", null)?.kind`), "song-clip");
+  assert.equal(await page.eval(`window.__app.store.get("basket", [])[0]?.item?.kind`), "song-clip");
   // 소리 넣기: a file straight onto the board.
   await click(page, "#board-add-sound");
   await page.waitFor(q("#board-add-file"));
@@ -4058,11 +4058,13 @@ scenario("whiteboard: text is plain text with a colour and a size; the 올가미
   const more = `[id="lasso-more-${loopId}"]`;
   await click(page, more);
   await click(page, "#lasso-copy");
-  assert.equal(await page.eval(`window.__app.store.get("clipboard", null)?.items?.length`), 2);
+  assert.equal(await page.eval(`window.__app.store.get("basket", [])[0]?.item?.items?.length`), 2, "the copy is the newest in 비서's 바구니");
   await click(page, more);
   await click(page, "#lasso-ref");
-  assert.ok(await page.eval(`window.__app.store.get("reference-notes", []).some((n) => n.text === "가사 첫 줄") || JSON.stringify(window.__app.store.get("reference", [])).includes("가사 첫 줄")`), "the text is a 레퍼런스 note");
-  assert.equal(await page.eval(`window.__app.store.get("reference-sounds", []).length`), 1, "the song is a 레퍼런스 recording");
+  // 비서에게 넣기: the two as one thing in the 바구니 (the same as the copy: one entry), the song also among the recordings.
+  assert.equal(await page.eval(`window.__app.store.get("basket", []).filter((e) => e.item.kind === "board-items").length`), 1, "the same thing is in the basket once");
+  assert.ok(await page.eval(`JSON.stringify(window.__app.store.get("basket", [])[0].item).includes("가사 첫 줄")`), "the text card is in it");
+  assert.equal(await page.eval(`window.__app.store.get("reference-sounds", []).length`), 1, "the song is a 비서 recording");
   await click(page, more);
   await click(page, "#lasso-delete");
   await page.waitFor(`${board}.items().length === 0`);
@@ -4411,18 +4413,27 @@ scenario("레퍼런스 floats over the room (no dark around it), moves by its he
   await page.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "song" && i.data.notes.length === 5)`);
 });
 
-scenario("레퍼런스: private notes from home and from a room; put into the room only when asked; the switch hides it", async ({ open }) => {
+scenario("비서 노트: one sheet of my own, a line made a to-do with □ and ticked by a tap on it; put into the room only when asked (the line, without its mark); the switch hides it", async ({ open, out }) => {
   const [a, b] = await together(open);
   await click(a, "#room-reference");
-  await a.waitFor(q("#ref-text"));
-  await fill(a, "#ref-text", "후렴: 같이 걷던 길");
-  await click(a, "#ref-add");
-  await a.waitFor(`document.querySelector("#ref-list .ref-body")?.textContent === "후렴: 같이 걷던 길"`);
+  await click(a, "#ref-tab-notes");
+  await a.waitFor(q("#ref-note"));
+  await click(a, "#ref-note");
+  await a.type("후렴: 같이 걷던 길");
+  await click(a, "#ref-todo");
+  await a.waitFor(`document.getElementById("ref-note").value === "□ 후렴: 같이 걷던 길"`);
+  await a.waitFor(`window.__app.store.get("reference-note", "") === "□ 후렴: 같이 걷던 길"`, 3000);
+  // A tap on the □ ticks it.
+  await a.eval(`(() => { const t = document.getElementById("ref-note"); t.focus(); t.setSelectionRange(1, 1); t.dispatchEvent(new MouseEvent("click", { bubbles: true })); return true; })()`);
+  await a.waitFor(`document.getElementById("ref-note").value === "☑ 후렴: 같이 걷던 길"`);
+  await a.front();
+  await a.shot(out("ref-note.png"));
   // Private: nothing reached the room yet, so the other device has nothing.
   const day = await a.eval(`${TODAY}.dataset.day`);
   assert.equal(await b.eval(`window.__app.session.sheet("${day}").text()`), "");
-  await click(a, "#ref-list [data-put]");
+  await click(a, "#ref-note-put");
   await b.waitFor(`window.__app.session.sheet("${day}").text().includes("후렴: 같이 걷던 길")`);
+  assert.ok(!(await b.eval(`window.__app.session.sheet("${day}").text().includes("☑")`)), "the line goes without its mark");
   // Turned off in settings: gone from the room bar.
   await click(a, "#room-settings");
   await a.waitFor(q("#set-reference"));
@@ -4736,7 +4747,7 @@ scenario("song 올가미: drawn round two clips it gathers them; together they m
   await click(page, "#group-play");
   // Copy, then 지우기, then ✕.
   await click(page, "#group-copy");
-  await page.waitFor(`window.__app.store.get("clipboard")?.kind === "song-clips" || JSON.stringify(window.__app.store.get("clipboard") || "").includes("song-clips")`);
+  await page.waitFor(`window.__app.store.get("basket", [])[0]?.item?.kind === "song-clips"`);
   await click(page, "#group-delete");
   await page.waitFor(`${song}.layout().length === 0 && !document.getElementById("group-menu")`);
   await click(page, "#undo");
@@ -7425,7 +7436,7 @@ scenario("song 벤토: held, the side panel's tiles shake to be arranged - '−'
   await pause(700);
   await page.release(at[0], at[1]);
   await page.waitFor(`document.getElementById("clip-menu").classList.contains("editing")`, 2000);
-  assert.equal(await page.eval(`window.__app.store.get("clipboard", null)`), null, "held, 복사 did not copy");
+  assert.equal(await page.eval(`window.__app.store.get("basket", []).length`), 0, "held, 복사 did not copy");
   // '−' puts 복사 away; it waits below with '+'.
   await click(page, '#clip-copy [data-tile-off]');
   await page.waitFor(`!document.getElementById("clip-copy") && !!document.querySelector('[data-tile-back="clip-copy"]')`, 2000);
@@ -7605,4 +7616,53 @@ scenario("공유로 받기: a sound shared from the phone's recorder app (posted
   } finally {
     await page.eval(`navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister()))).then(() => true)`).catch(() => {});
   }
+});
+
+// 비서's 바구니 (검토 9절, the day's plan 6): every copy also piles up in the basket, and 여기에 놓기 puts
+// any of them into the room I am in, in that room's form - two steps for "the other room's thing here".
+scenario("비서 바구니: a clip copied in one song room goes into another with 여기에 놓기; words copied in a text room go into a whiteboard as a text card; newest first, each once; only what a room can take shows 여기에 놓기", async ({ open, fixtures, out }) => {
+  const page = await open();
+  await createSongRoom(page, { room: "첫 노래" });
+  await importSound(page, fixtures.doremi);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-copy");
+  await page.waitFor(`window.__app.store.get("basket", []).length === 1`);
+  await click(page, "#back");
+  // Another song room: the basket holds the clip, and 여기에 놓기 brings it in with its notes.
+  await createSongRoom(page, { room: "둘째 노래" });
+  await click(page, "#room-reference");
+  await click(page, "#ref-tab-basket");
+  await page.waitFor(`document.querySelectorAll("#ref-basket .ref-basket-item").length === 1 && /도레미|doremi|녹음|초/.test(document.querySelector("#ref-basket .ref-basket-item").textContent)`);
+  await click(page, "#ref-basket [data-put-basket]");
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
+  assert.ok(await page.eval(`window.__app.session.doc("song").layout().length === 1`), "the clip is in this room");
+  await click(page, "#reference-close");
+  await click(page, "#back");
+  // A text room: words copied there (the phone's own 복사) go into the basket too.
+  await createRoom(page, { room: "일기" });
+  await focusEnd(page);
+  await page.type("같이 걷던 길");
+  await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "같이 걷던 길"`);
+  await page.eval(`(() => { const t = document.querySelector(".sheet.today textarea.typing"); t.focus(); t.setSelectionRange(0, t.value.length); return document.execCommand("copy"); })()`);
+  await page.waitFor(`window.__app.store.get("basket", [])[0]?.item?.text === "같이 걷던 길"`, 3000);
+  // In the text room the clip cannot go in: no 여기에 놓기 for it; the words can.
+  await click(page, "#room-reference");
+  await click(page, "#ref-tab-basket");
+  await page.waitFor(`document.querySelectorAll("#ref-basket .ref-basket-item").length === 2`);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#ref-basket .ref-basket-item")].map((el) => !!el.querySelector("[data-put-basket]"))`), [true, false], "newest first; only what this room takes can be put here");
+  await click(page, "#reference-close");
+  await click(page, "#back");
+  // A whiteboard takes both: the words become a text card.
+  await createBoard(page, { room: "모으는 보드" });
+  await click(page, "#room-reference");
+  await click(page, "#ref-tab-basket");
+  await page.waitFor(`document.querySelectorAll("#ref-basket [data-put-basket]").length === 2`);
+  await page.front();
+  await page.shot(out("ref-basket.png"));
+  await click(page, "#ref-basket .ref-basket-item:first-child [data-put-basket]");
+  await page.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "note" && i.text === "같이 걷던 길")`);
+  await click(page, "#ref-basket .ref-basket-item:nth-child(2) [data-put-basket]");
+  await page.waitFor(`window.__app.session.doc("board").items().some((i) => i.kind === "song" && i.data.notes.length >= 5)`);
+  // Taken out, it came to the front (what 붙이기 puts down next).
+  assert.equal(await page.eval(`window.__app.store.get("basket", [])[0].item.kind`), "song-clip");
 });
