@@ -5544,10 +5544,12 @@ scenario("home top: 설정 and 햇살 side by side; under them 비서 alone at t
     assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, width + ": no second icon");
     assert.ok(Math.abs(at.set.t - at.more.t) < 1 && at.set.r <= at.more.l + 0.5, width + ": 설정 then 햇살 in a row: " + JSON.stringify(at));
     assert.ok(at.ref.t >= at.more.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1, width + ": 비서 under 햇살, at the right end: " + JSON.stringify(at));
-    // A sun drawn in lines like the others (no yellow core), a little bigger than its neighbours.
-    const sun = await page.eval(`(() => { const c = document.querySelector("#home-more svg circle"); return c ? { r: Number(c.getAttribute("r")), fill: getComputedStyle(c).fill } : null; })()`);
-    assert.ok(sun && sun.r >= 5 && /none|rgba\(0, 0, 0, 0\)/.test(sun.fill), width + ": 햇살 is a sun in lines: " + JSON.stringify(sun));
-    assert.ok(at.more.r - at.more.l > at.set.r - at.set.l + 2, width + ": 햇살 is bigger than 설정: " + JSON.stringify(at));
+    // A sun drawn in lines like the others (no yellow core), at its first size: the same button as its
+    // neighbours (the owner, 26 November: "태양 크기 키운거 원래대로").
+    const sun = await page.eval(`(() => { const c = document.querySelector("#home-more svg circle"); const s = document.querySelector("#home-more svg").getBoundingClientRect(); const o = document.querySelector("#home-settings svg").getBoundingClientRect(); return c ? { r: Number(c.getAttribute("r")), fill: getComputedStyle(c).fill, w: s.width, ow: o.width } : null; })()`);
+    assert.ok(sun && Math.abs(sun.r - 4.3) < 0.01 && /none|rgba\(0, 0, 0, 0\)/.test(sun.fill), width + ": 햇살 is a sun in lines, its first size: " + JSON.stringify(sun));
+    assert.ok(Math.abs(sun.w - sun.ow) < 0.5, width + ": the sun is drawn as big as 설정's icon: " + JSON.stringify(sun));
+    assert.ok(Math.abs((at.more.r - at.more.l) - (at.set.r - at.set.l)) < 0.5, width + ": 햇살 is the same size as 설정: " + JSON.stringify(at));
     assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }

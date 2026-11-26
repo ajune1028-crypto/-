@@ -24,8 +24,9 @@ const ICONS = {
   record: '<circle cx="12" cy="12" r="6.3" fill="currentColor" stroke="none"/>',
   stop: '<rect x="6.6" y="6.6" width="10.8" height="10.8" rx="2.4" fill="currentColor" stroke="none"/>',
   start: '<path d="M6.5 5.5v13"/><path d="M18 5.8v12.4L9.6 12z" fill="currentColor" stroke="none"/>',
-  // 햇살 (the owner: "찾기와 집 … 햇살로, 아이콘은 안에 해 태양으로"): a warm core and its rays.
-  sunshine: '<circle cx="12" cy="12" r="5.2"/><path d="M12 1.6v2.5M12 19.9v2.5M1.6 12h2.5M19.9 12h2.5M4.65 4.65l1.75 1.75M17.6 17.6l1.75 1.75M4.65 19.35l1.75-1.75M17.6 6.4l1.75-1.75"/>',
+  // 햇살 (the owner: "찾기와 집 … 햇살로, 아이콘은 안에 해 태양으로"): a sun in lines, its first size (the
+  // owner, 26 November: "태양 크기 키운거 원래대로"; no yellow inside: "안을 노란색으로 하지 말고 원래대로").
+  sunshine: '<circle cx="12" cy="12" r="4.3"/><path d="M12 1.9v2.9M12 19.2v2.9M1.9 12h2.9M19.2 12h2.9M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"/>',
   sun: '<circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5l1.5 1.5M17 17l1.5 1.5M5.5 18.5L7 17M17 7l1.5-1.5"/>',
   moon: '<path d="M19.5 14.6A7.6 7.6 0 019.4 4.5a7.6 7.6 0 1010.1 10.1z"/>',
   upload: '<path d="M12 15V4.5M7.6 8.8L12 4.4l4.4 4.4"/><path d="M5 14.2v4.3A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5v-4.3"/>',
