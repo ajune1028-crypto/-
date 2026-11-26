@@ -3,6 +3,7 @@
 // the browser refuses storage.
 
 import { validPreview } from "./core/preview.js";
+import { newMyCode, normalizeCode, validCode, formatCode } from "./core/me.js";
 
 export const DEFAULT_SETTINGS = {
   theme: "system", colors: true, mixing: true,
@@ -94,4 +95,33 @@ export function roomEntry(store, id) {
 
 export function forgetRoom(store, id) {
   store.set("rooms", store.get("rooms", []).filter((r) => r.id !== id));
+}
+
+// 나의 고유 코드 (core/me.js): made the first time it is asked for, kept on this device. `shown` is
+// whether it has been handed over (the sheet on the first open); `was` keeps the codes it had before.
+
+export function myCodeOf(store) {
+  let me = store.get("me", null);
+  if (!me || typeof me.code !== "string" || !validCode(me.code)) {
+    me = { code: newMyCode(), at: Date.now(), shown: false };
+    store.set("me", me);
+  }
+  return me;
+}
+
+export function markMyCodeShown(store) {
+  const me = myCodeOf(store);
+  if (!me.shown) store.set("me", { ...me, shown: true });
+}
+
+/** Another device's code becomes this device's; what this device keeps goes along into that universe. */
+export function adoptMyCode(store, code) {
+  const me = myCodeOf(store);
+  const norm = normalizeCode(code);
+  if (!validCode(norm) || normalizeCode(me.code) === norm) return false;
+  store.set("me", { code: formatCode(norm), at: Date.now(), shown: true, was: [...(me.was || []), me.code].slice(-3) });
+  // A new universe: this device meets it as for the first time.
+  store.set("meLedger", null);
+  store.set("mePushed", null);
+  return true;
 }

@@ -1566,6 +1566,24 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @keyframes side-sheet-in { from { transform: translateX(100%); } }
 @keyframes side-sheet-out { to { transform: translateX(105%); } }
 @media (prefers-reduced-motion: reduce) { .scrim.side-sheet > .panel, .scrim.side-sheet.closing > .panel { animation: none; } }
+/* 나의 고유 코드: four groups of letters handed over like the key of a new home, each settling into
+   place in turn; in 설정 hidden as dots until 보기. Long pressed it can be copied (main.js). */
+.my-code-motto { margin: 0.1rem 0 0.9rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.my-code { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; margin: 0.2rem 0 1rem; }
+.my-code-group { display: inline-block; padding: 0.52rem 0.62rem; border-radius: 0.8rem; border: 1px solid var(--glass-edge); background: var(--well); color: var(--ink);
+  font: 800 1.16rem/1 ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace; letter-spacing: 0.1em; -webkit-user-select: text; user-select: text;
+  animation: code-settle 0.5s var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.my-code.masked .my-code-group { color: var(--muted); -webkit-user-select: none; user-select: none; animation: none; }
+@keyframes code-settle { from { opacity: 0; transform: translateY(0.45rem) scale(0.96); filter: blur(3px); } }
+@media (prefers-reduced-motion: reduce) { .my-code-group { animation: none; } }
+.my-code-words { margin: 0 0 0.45rem; font-size: 0.95rem; line-height: 1.55; }
+.my-code-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+.my-code-actions .btn { flex: 1; }
+.my-code-have { display: block; margin: 0.9rem auto 0; }
+.my-code-input { font: 800 1.08rem/1.2 ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
+.my-code-section { margin-bottom: 1.1rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--line); }
+.my-code-section .my-code { justify-content: flex-start; margin: 0.35rem 0 0.5rem; }
+.my-code-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.55rem; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }

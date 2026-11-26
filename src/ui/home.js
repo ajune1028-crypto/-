@@ -11,6 +11,7 @@ import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
+import { myCode, myCodeSection, openMyCodeIntro } from "./my-code.js";
 import { refSounds } from "../reference.js";
 import { getSettings, setSetting } from "../identity.js";
 import { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } from "../houses.js";
@@ -737,6 +738,8 @@ export function showHome(app) {
   function openSettings() {
     const recent = String(getSettings(app.store).recentSearchMax || 5);
     sheet("설정", (panel) => panel.append(
+      // 나의 고유 코드 first (the owner: "설정에서 잘 보이게").
+      myCodeSection(app, root, (title, build) => sheet(title, build), { onChange: codeChanged }),
       displaySettings(app, { withColors: false }),
       h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
         h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
@@ -754,6 +757,19 @@ export function showHome(app) {
   }
 
   draw();
+  // Another device's code typed in: this device meets that universe; whatever it brings, home shows.
+  function codeChanged() {
+    app.me?.restart();
+    draw();
+  }
+  const offMe = app.events.on("me-changed", () => {
+    if (alive && !root.querySelector(".scrim:not(.closing)")) draw();
+  });
+  // The first time the app opens, 나의 고유 코드 is handed over once the home has come up (the owner,
+  // 21 November: "처음 이 앱을 들어왔을 때 생기는… 코드"). Tests open with ?dev and skip it.
+  const welcome = app.welcome && !myCode(app.store).shown && setTimeout(() => {
+    if (alive && !document.querySelector(".scrim:not(.closing)")) openMyCodeIntro(app, root, (title, build) => sheet(title, build), { onChange: codeChanged });
+  }, 450);
   const slowTimer = setTimeout(() => {
     if (!app.connecting) return;
     slow = true;
@@ -762,8 +778,9 @@ export function showHome(app) {
   app.ready
     .then((transport) => transport.listRooms().then(
       (list) => {
-        others = list;
-        app.trace("rooms: " + list.length);
+        // 나의 고유 코드's place is not a room to show.
+        others = list.filter((r) => r.kind !== "me");
+        app.trace("rooms: " + others.length);
       },
       (err) => {
         console.warn(err);
@@ -793,6 +810,8 @@ export function showHome(app) {
   return () => {
     alive = false;
     clearTimeout(slowTimer);
+    clearTimeout(welcome);
+    offMe();
     closeSheet?.();
     watchWindows.disconnect();
     root.classList.remove("home-window", "home-sun-out");

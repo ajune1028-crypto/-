@@ -7167,3 +7167,113 @@ scenario("song start card: the three ways in show no stray words", async ({ open
   const words = await page.eval(`document.querySelector(".start, #song-start, .song-start")?.textContent || document.body.innerText`);
   assert.ok(!/false|true|undefined|null/.test(words), "no stray words: " + words.slice(0, 200));
 });
+
+// ---- 나의 고유 코드 ------------------------------------------------------------------
+import { newMyCode, validCode as validMyCode, normalizeCode as normMyCode } from "../src/core/me.js";
+
+// The owner, 21 November: "처음 이 앱을 들어왔을 때 생기는 좀 복잡한 코드… '이건 당신의 식별 코드입니다. 이걸
+// 안다면 당신의 모든 것들을 어디에서나 로그인할 수 있습니다'… 설정에서 잘 보이게".
+scenario("나의 고유 코드: the first open hands it over (four groups, what it is, 복사, 알겠어요), never again after; 설정 keeps it hidden until 보기", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844, query: "welcome=1" });
+  await page.waitFor(q(".my-code-sheet .my-code"), 6000);
+  const intro = await page.eval(`(() => {
+    const sheet = document.querySelector(".my-code-sheet");
+    return { code: [...sheet.querySelectorAll(".my-code-group")].map((g) => g.textContent).join("-"), words: sheet.innerText, title: sheet.querySelector("h2")?.textContent };
+  })()`);
+  assert.equal(intro.title, "나의 고유 코드");
+  assert.match(intro.code, /^[2-9A-HJKMNP-Z]{4}(-[2-9A-HJKMNP-Z]{4}){3}$/, "four groups of letters nobody mixes up: " + intro.code);
+  assert.ok(validMyCode(intro.code), "its check letter is right: " + intro.code);
+  assert.ok(/작은 우주를 기록해 보자/.test(intro.words) && /어디서든/.test(intro.words) && /보여 주지 마세요/.test(intro.words), "what it is, in plain words: " + intro.words);
+  assert.ok(await page.eval(`!!document.getElementById("my-code-have")`), "the way in for a code from another device");
+  await pause(900); // the sheet has come up and each group has settled
+  await page.shot(out("my-code-intro.png"));
+  await click(page, "#my-code-copy");
+  await page.waitFor(`[...document.querySelectorAll(".toast")].some((t) => /복사/.test(t.textContent))`, 3000);
+  await click(page, "#my-code-ok");
+  await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 3000);
+  // Opened again: not handed over a second time, and the code is the same one.
+  await page.reload();
+  await page.waitFor("window.__app && window.__app.booted");
+  await pause(900);
+  assert.equal(await page.eval(`!!document.querySelector(".my-code-sheet")`), false, "handed over once only");
+  await click(page, "#home-settings");
+  await page.waitFor(q(".my-code-section"));
+  const top = await page.eval(`(() => { const s = document.querySelector(".my-code-section"); const first = s.parentElement.querySelector(".section"); return { first: first === s, text: s.querySelector(".my-code").innerText }; })()`);
+  assert.ok(top.first, "나의 고유 코드 is the first thing in 설정");
+  assert.ok(!top.text.includes(intro.code.slice(0, 4)) && /••••/.test(top.text), "hidden until asked: " + top.text);
+  await click(page, "#my-code-see");
+  const seen = await page.eval(`[...document.querySelectorAll(".my-code-section .my-code-group")].map((g) => g.textContent).join("-")`);
+  assert.equal(seen, intro.code, "보기 shows the same code");
+  await pause(900);
+  await page.shot(out("my-code-settings.png"));
+});
+
+scenario("나의 고유 코드: a code from another device typed with one letter wrong is caught; typed right (any case, spaces) it becomes this device's", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await click(page, "#home-settings");
+  await click(page, "#my-code-other");
+  await page.waitFor(q("#my-code-field"));
+  const theirs = normMyCode(newMyCode());
+  const letters = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  const wrongAt = 6;
+  const wrong = theirs.slice(0, wrongAt) + letters[(letters.indexOf(theirs[wrongAt]) + 1) % letters.length] + theirs.slice(wrongAt + 1);
+  assert.ok(!validMyCode(wrong));
+  await click(page, "#my-code-field");
+  await page.type(wrong.toLowerCase());
+  await page.waitFor(`/한 글자가 다른/.test(document.getElementById("my-code-note").textContent)`, 3000);
+  assert.equal(await page.eval(`document.getElementById("my-code-use").disabled`), true, "the wrong code cannot be used");
+  assert.match(await page.eval(`document.getElementById("my-code-field").value`), /^[2-9A-HJKMNP-Z]{4}(-[2-9A-HJKMNP-Z]{4}){3}$/, "typed in lower case, it reads in four groups of capitals");
+  await page.shot(out("my-code-wrong.png"));
+  // Cleared and typed right, with spaces.
+  await page.eval(`(() => { const f = document.getElementById("my-code-field"); f.value = ""; f.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await click(page, "#my-code-field");
+  await page.type(theirs.match(/.{4}/g).join(" ").toLowerCase());
+  await page.waitFor(`document.getElementById("my-code-use").disabled === false`, 3000);
+  assert.match(await page.eval(`document.getElementById("my-code-note").textContent`), /맞는 코드/);
+  await click(page, "#my-code-use");
+  await page.waitFor(`[...document.querySelectorAll(".toast")].some((t) => /같은 우주/.test(t.textContent))`, 3000);
+  const kept = await page.eval(`window.__app.store.get("me", null)`);
+  assert.equal(normMyCode(kept.code), theirs, "this device now has their code");
+  assert.ok(Array.isArray(kept.was) && kept.was.length === 1, "the code it had is kept aside: " + JSON.stringify(kept));
+  await click(page, "#home-settings");
+  await click(page, "#my-code-see");
+  assert.equal(await page.eval(`[...document.querySelectorAll(".my-code-section .my-code-group")].map((g) => g.textContent).join("")`), theirs);
+});
+
+// Two devices with one code (the owner: "어디에서나… 당신의 모든 것들"): the phone makes a room and turns
+// 어둡게 on; the iPad types the phone's code and gets that room (as the same person) and 어둡게; a room
+// the iPad forgets goes from the phone too.
+scenario("나의 고유 코드: two devices with one code - the other device's code typed in brings its rooms (as the same person) and its look; a room forgotten on one goes from the other", async ({ open, out }) => {
+  const phone = await open({ dev: "a", width: 390, height: 844 });
+  const roomId = await createSongRoom(phone, { room: "우리 둘의 노래", name: "가람" });
+  await phone.eval(`location.hash = ""`);
+  await phone.waitFor(q("#home-settings"));
+  await click(phone, "#home-settings");
+  await click(phone, '[data-theme-choice="dark"]');
+  await click(phone, "#my-code-see");
+  const code = await phone.eval(`[...document.querySelectorAll(".my-code-section .my-code-group")].map((g) => g.textContent).join("-")`);
+  assert.ok(validMyCode(code), "the phone's code: " + code);
+  const phoneMember = await phone.eval(`window.__app.store.get("rooms", []).find((r) => r.id === ${JSON.stringify(roomId)}).memberId`);
+  // The phone's place holds what it has.
+  await phone.waitFor(`window.__app.me.status().kind === "ok" && window.__app.store.get("mePushed", null) && /room:/.test(window.__app.store.get("mePushed", ""))`, 8000);
+
+  const pad = await open({ dev: "b", width: 820, height: 1180 });
+  await pad.waitFor(q("#home-settings"));
+  assert.equal(await pad.eval(`document.documentElement.dataset.theme`) === "dark", false, "the iPad starts in its own look");
+  await click(pad, "#home-settings");
+  await click(pad, "#my-code-other");
+  await click(pad, "#my-code-field");
+  await pad.type(code);
+  await pad.waitFor(`document.getElementById("my-code-use").disabled === false`, 3000);
+  await click(pad, "#my-code-use");
+  await pad.waitFor(`window.__app.store.get("rooms", []).some((r) => r.id === ${JSON.stringify(roomId)})`, 10000);
+  await pad.waitFor(`document.documentElement.dataset.theme === "dark"`, 5000);
+  const padRoom = await pad.eval(`window.__app.store.get("rooms", []).find((r) => r.id === ${JSON.stringify(roomId)})`);
+  assert.equal(padRoom.name, "우리 둘의 노래");
+  assert.equal(padRoom.memberId, phoneMember, "the same person in that room on both devices");
+  await pad.waitFor(`[...document.querySelectorAll(".room-row, .room-card")].some((r) => /우리 둘의 노래/.test(r.textContent))`, 5000);
+  await pad.shot(out("my-code-two-devices.png"));
+  // The iPad forgets the room; the phone loses it too.
+  await pad.eval(`(() => { const st = window.__app.store; st.set("rooms", st.get("rooms", []).filter((r) => r.id !== ${JSON.stringify(roomId)})); })()`);
+  await phone.waitFor(`!window.__app.store.get("rooms", []).some((r) => r.id === ${JSON.stringify(roomId)})`, 12000);
+});

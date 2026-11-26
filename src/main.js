@@ -10,6 +10,7 @@ import { showHome } from "./ui/home.js";
 import { showRoom } from "./ui/room-shell.js";
 import { roomLink } from "./core/room.js";
 import { BlobStore } from "./sync/blobs.js";
+import { startMyPlace } from "./sync/me-place.js";
 
 export const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -77,6 +78,8 @@ export function boot(root) {
     // Recordings kept on this device. Test devices get their own.
     blobs: new BlobStore(dev ? `hamkke-files-${dev}-${ns}` : "hamkke-files"),
     transport: null, limited: false, connecting: true, session: null, handoff: null, fresh: null, booted: false,
+    // 나의 고유 코드 is handed over on the first open; test devices (?dev) skip it unless ?welcome=1.
+    welcome: !dev || params.get("welcome") === "1",
     /** The published page's own address, when the build names one (the trial page). */
     shareBase: () => document.querySelector('meta[name="share-base"]')?.content || null,
     linkFor: (roomId) => roomLink(app.shareBase() || location.href, roomId),
@@ -116,6 +119,17 @@ export function boot(root) {
     return transport;
   });
 
+  // 나의 고유 코드's place: my rooms, houses, stars and settings from every device with the code.
+  app.me = startMyPlace({ store, ready: app.ready, events: app.events, isLimited: () => app.limited });
+  app.events.on("me-changed", ({ settings }) => {
+    if (!settings?.length) return;
+    const now = getSettings(store);
+    if (settings.includes("theme")) applyTheme(now.theme);
+    if (settings.includes("accent")) applyAccent(now.accent);
+    if (settings.includes("tintAmount")) applyTintAmount(now.tintAmount);
+    if (settings.includes("textScale")) applyTextScale(now.textScale);
+  });
+
   let leave = null;
   function render() {
     leave?.();
@@ -133,7 +147,7 @@ export function boot(root) {
   // blue): anything but a field to write in, or the link and code meant to be copied, takes none.
   document.addEventListener("selectstart", (e) => {
     const el = e.target?.nodeType === 1 ? e.target : e.target?.parentElement;
-    if (el?.closest?.("input, textarea, [contenteditable='true'], .link-box, .code")) return;
+    if (el?.closest?.("input, textarea, [contenteditable='true'], .link-box, .code, .my-code:not(.masked)")) return;
     e.preventDefault();
   });
   render();
