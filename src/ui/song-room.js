@@ -160,6 +160,17 @@ export function mountSongRoom(body, app, session, frame) {
   const SIDE_MIN = 11;
   const SIDE_MAX = 26;
   const sideLook = () => ({ w: 15, locked: false, hidden: false, ...(getSettings(app.store).songSide || {}) });
+  // 벤토 (the owner, 21 November: "벤토 그리드… 기능 숨기기·다시 넣기, 꾹 누르면 편집, 크기"): one list of a
+  // clip's tiles - their order, the ones put away, the wide ones - for both the side panel's grid and
+  // the phone's floating menu (the same tiles at every size; the grid packs with no holes, as
+  // gridstack's compact does, by the grid's own dense flow).
+  const tileLook = () => {
+    const t = getSettings(app.store).songTiles || {};
+    const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+    return { order: list(t.order), hidden: list(t.hidden), wide: list(t.wide) };
+  };
+  const saveTiles = (patch) => setSetting(app.store, "songTiles", { ...tileLook(), ...patch });
+  let tileEdit = false;
   const saveSide = (patch) => setSetting(app.store, "songSide", { ...sideLook(), ...patch });
   const sideLock = h("button", { class: "side-lock", id: "side-lock", type: "button", onclick: (e) => { e.stopPropagation(); saveSide({ locked: !sideLook().locked }); paintSide(); buzz(app, 8); } }, icon("lock"));
   const sideHide = h("button", { class: "side-hide", id: "side-hide", type: "button", "aria-label": "옆 패널 숨기기", title: "옆 패널 숨기기", onclick: (e) => { e.stopPropagation(); saveSide({ hidden: true }); paintSide(); } }, icon("hideRight"));
@@ -1211,6 +1222,7 @@ export function mountSongRoom(body, app, session, frame) {
   // The small menu by a chosen clip.
   function placeMenu() {
     if (!selected || rec) {
+      tileEdit = false;
       menu?.stopGuard?.();
       menu?.remove();
       menu = null;
@@ -1227,6 +1239,7 @@ export function mountSongRoom(body, app, session, frame) {
     if (!menu) {
       menu = h("div", { class: "clip-menu" + (docked ? " side" : ""), id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
       (docked ? side : body).append(menu);
+      watchTiles(menu);
       // A tap anywhere else only puts the menu away; the chosen clip, the time bar (to place
       // the playhead for 분할) and the tool bars still work. At the side it covers nothing, so a
       // tap elsewhere does what it does (another clip is chosen at once).
@@ -1277,6 +1290,7 @@ export function mountSongRoom(body, app, session, frame) {
       item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly(), "lock"),
       item("clip-delete", "삭제", () => deleteClip(clip.id), !locked, "trash"),
     ].filter(Boolean));
+    arrangeTiles(docked);
     if (docked) return;
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
@@ -1286,6 +1300,123 @@ export function mountSongRoom(body, app, session, frame) {
     if (top < 4) top = box.bottom - area.top + 6;
     menu.style.left = left + "px";
     menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
+  }
+
+  /** The clip's tiles in the order kept, without the ones put away; while editing, what can be changed. */
+  function arrangeTiles(docked) {
+    if (!menu) return;
+    const look = tileLook();
+    const tiles = [...menu.children].filter((el) => el.tagName === "BUTTON" && /^clip-/.test(el.id) && !/^clip-tint-/.test(el.id));
+    const rank = new Map(tiles.map((el, i) => [el.id, look.order.includes(el.id) ? look.order.indexOf(el.id) : 1000 + i]));
+    const off = [];
+    for (const el of tiles.sort((a, b) => rank.get(a.id) - rank.get(b.id))) {
+      if (look.hidden.includes(el.id)) {
+        off.push(el);
+        el.remove();
+        continue;
+      }
+      el.classList.toggle("wide", docked && look.wide.includes(el.id));
+      el.dataset.tile = el.id;
+      menu.append(el);
+      if (tileEdit) el.append(h("span", { class: "tile-minus", data: { tileOff: el.id }, "aria-label": "빼기", text: "−" }));
+    }
+    menu.classList.toggle("editing", tileEdit);
+    if (!tileEdit) return;
+    const word = (el) => el.getAttribute("aria-label") || el.textContent.replace(/^[▶■] /, "");
+    menu.append(h("div", { class: "tile-edit-foot", id: "tile-edit-foot" },
+      ...off.map((el) => h("button", { type: "button", class: "chip tile-back", data: { tileBack: el.id }, text: "+ " + word(el),
+        onclick: (e) => { e.stopPropagation(); saveTiles({ hidden: tileLook().hidden.filter((id) => id !== el.id) }); placeMenu(); } })),
+      h("p", { class: "help small tile-help", text: docked ? "끌어서 순서, 톡 누르면 크게·작게" : "끌어서 순서" }),
+      h("button", { type: "button", class: "btn small", id: "tile-done", text: "완료", onclick: (e) => { e.stopPropagation(); tileEdit = false; placeMenu(); } })));
+  }
+
+  /**
+   * 꾹 on a tile (half a second) is editing, as a phone's home screen: tiles shake; '−' puts one away;
+   * dragged onto another it goes before it; tapped in the grid it turns wide or narrow. While editing
+   * a tile's own action does not happen.
+   */
+  function watchTiles(el) {
+    let hold = null;
+    let drag = null;
+    const tileAt = (x, y) => document.elementFromPoint(x, y)?.closest?.("#clip-menu [data-tile]") || null;
+    el.addEventListener("click", (e) => {
+      if (!tileEdit && !hold?.fired) return;
+      if (e.target.closest?.("#tile-edit-foot")) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (hold?.fired) hold = null;
+    }, true);
+    el.addEventListener("pointerdown", (e) => {
+      const tile = e.target.closest?.("[data-tile]");
+      if (!tile || (e.pointerType === "mouse" && e.button !== 0)) return;
+      if (tileEdit) {
+        // Whether it began on the tile's '−' (once the tile holds the pointer, every event is the tile's).
+        drag = { id: e.pointerId, tile, x: e.clientX, y: e.clientY, moved: false, off: !!e.target.closest?.("[data-tile-off]") };
+        try { tile.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        return;
+      }
+      clearTimeout(hold?.timer);
+      hold = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => {
+        if (!hold || readOnly()) return;
+        hold.fired = true;
+        tileEdit = true;
+        buzz(app, 12);
+        placeMenu();
+      }, 500) };
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (hold && e.pointerId === hold.id && !hold.fired && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 8) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      drag.moved = true;
+      drag.tile.classList.add("dragging");
+      drag.tile.style.translate = `${dx}px ${dy}px`;
+    });
+    const up = (e) => {
+      if (hold && e.pointerId === hold.id && !hold.fired) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+      if (!drag || e.pointerId !== drag.id) return;
+      const { tile, moved, off } = drag;
+      drag = null;
+      tile.classList.remove("dragging");
+      tile.style.translate = "";
+      const ids = [...menu.querySelectorAll("[data-tile]")].map((t) => t.dataset.tile);
+      if (moved) {
+        tile.style.visibility = "hidden";
+        const onto = tileAt(e.clientX, e.clientY);
+        tile.style.visibility = "";
+        if (onto && onto !== tile) {
+          const rest = ids.filter((id) => id !== tile.dataset.tile);
+          rest.splice(rest.indexOf(onto.dataset.tile), 0, tile.dataset.tile);
+          saveTiles({ order: [...rest, ...tileLook().hidden.filter((id) => !rest.includes(id))] });
+        }
+      } else if (off) {
+        saveTiles({ hidden: [...new Set([...tileLook().hidden, tile.dataset.tile])], order: [...ids, ...tileLook().hidden.filter((id) => !ids.includes(id))] });
+      } else if (wideSide.matches) {
+        const wide = tileLook().wide;
+        saveTiles({ wide: wide.includes(tile.dataset.tile) ? wide.filter((id) => id !== tile.dataset.tile) : [...wide, tile.dataset.tile] });
+      }
+      placeMenu();
+    };
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", (e) => {
+      if (drag && e.pointerId === drag.id) {
+        drag.tile.classList.remove("dragging");
+        drag.tile.style.translate = "";
+        drag = null;
+      }
+      if (hold && e.pointerId === hold.id) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+    });
   }
 
   /** The side panel with nothing chosen: what the song is, and how to see a clip here. */

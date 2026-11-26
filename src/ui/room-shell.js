@@ -7,6 +7,7 @@ import { fromBase64 } from "../core/b64.js";
 import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast, formBox } from "./dom.js";
 import { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
+import { drawCheck } from "./motion.js";
 import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
 import { sealedTransport, isLockedRoom, keyOpens } from "../sync/sealed.js";
 import { kindInfo, sideOf } from "./kinds.js";
@@ -388,9 +389,9 @@ export function showRoom(app, roomId) {
     return () => {};
   }
 
-  function copy(text, done, failed) {
+  function copy(text, done, failed, button = null) {
     // The clipboard may refuse (it does in some frames); the text stays on screen to long-press.
-    Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => toast(root, done), () => toast(root, failed));
+    Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => { drawCheck(button); toast(root, done); }, () => toast(root, failed));
   }
 
   function openInvite() {
@@ -412,12 +413,12 @@ export function showRoom(app, roomId) {
         h("div", { class: "btn-row" },
           canSend && h("button", { class: "btn", id: "send-link", type: "button", text: "보내기", onclick: send }),
           h("button", { class: canSend ? "btn quiet" : "btn", id: "copy-link", type: "button", text: "링크 복사",
-            onclick: () => copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요") })),
+            onclick: (e) => copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요", e.currentTarget) })),
         h("div", { class: "row" }, h("span", { class: "label", text: "링크 대신 홈의 '코드로 들어가기'에 넣는 방 코드" }),
           h("div", { class: "with-btn", style: { alignItems: "center" } },
             h("span", { class: "code", id: "invite-code", style: { flex: "1" }, text: roomId }),
             h("button", { class: "btn small quiet", id: "copy-invite-code", type: "button", text: "코드 복사",
-              onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") }))),
+              onclick: (e) => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요", e.currentTarget) }))),
         roomEntry(app.store, roomId)?.key && h("p", { class: "help", id: "invite-password", text: "비밀번호가 있는 방이에요. 친구에게 주소와 함께 비밀번호도 알려 주세요." }),
         app.shareBase() && h("p", { class: "help", id: "invite-note", text: "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요." }),
         h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));

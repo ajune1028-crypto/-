@@ -7379,3 +7379,88 @@ scenario("설정 in pages and 방 보기: the first page is short with the rest 
   assert.ok(wide.sameLine, "cards side by side where there is room: " + JSON.stringify(wide));
   await page.shot(out("home-cards-wide.png"));
 });
+
+// The owner's motion references (22 November: "모드 바꿀 때 사람 말이 아닌 것 같은 느낌을 아주 조금", "절대로
+// 뭐 바꾸지 말고 시스템을"): a chosen mode's name settles out of a brief scramble drawn over it while
+// the words stay the words; a starred room's star pops.
+scenario("motion: a chosen mode's name settles out of a brief scramble (its words never change), and is plain again at once; a star turned on pops", async ({ open }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.waitFor(q("#home-settings"));
+  await click(page, "#home-settings");
+  await page.waitFor(q('[data-theme-choice="dark"]'));
+  await page.eval(`(() => {
+    window.__seen = [];
+    const b = document.querySelector('[data-theme-choice="dark"]');
+    const watch = new MutationObserver(() => window.__seen.push({ cls: b.classList.contains("decoding"), scramble: b.dataset.scramble || null, text: b.textContent }));
+    watch.observe(b, { attributes: true, attributeFilter: ["class", "data-scramble"] });
+    window.__stopSeen = () => watch.disconnect();
+    return true;
+  })()`);
+  await click(page, '[data-theme-choice="dark"]');
+  await pause(500);
+  const seen = await page.eval(`(() => { window.__stopSeen(); return window.__seen; })()`);
+  assert.ok(seen.some((s) => s.cls && s.scramble && s.scramble !== "어둡게"), "a scramble was drawn over it: " + JSON.stringify(seen.slice(0, 4)));
+  assert.ok(seen.every((s) => s.text === "어둡게"), "its words never changed");
+  assert.equal(await page.eval(`document.querySelector('[data-theme-choice="dark"]').classList.contains("decoding")`), false, "plain again at once");
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
+  await page.eval(`(() => { window.__app.store.set("rooms", [{ id: "starroomaaaa", kind: "daily-text", name: "별 방", memberId: "m1", at: Date.now(), local: true }]); setTimeout(() => location.reload(), 50); return true; })()`);
+  await pause(400);
+  await page.waitFor(`window.__app?.booted && document.querySelector('.room-star[data-star="starroomaaaa"]')`);
+  await click(page, '.room-star[data-star="starroomaaaa"]');
+  await page.waitFor(`document.querySelector('.room-star[data-star="starroomaaaa"]')?.classList.contains("bursting")`, 1500);
+});
+
+// 벤토 (the owner, 21 November: "벤토 그리드… 기능 숨기기·다시 넣기, 꾹 누르면 편집, 크기"): the clip's tiles
+// at the side are mine to arrange, and the phone's floating menu keeps the same tiles.
+scenario("song 벤토: held, the side panel's tiles shake to be arranged - '−' puts one away, '+' brings it back, a tap makes a tile wide, dragged onto another it goes before it; 완료 keeps it, and the phone's menu has the same tiles", async ({ open, fixtures, out }) => {
+  const page = await open({ width: 1180, height: 820 });
+  await createSongRoom(page);
+  await importSound(page, fixtures.doremi);
+  await page.waitFor(q("#song-side #clip-menu #clip-copy"));
+  const centre = (sel) => page.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  // Held: editing, and the tile's own action does not happen.
+  let at = await centre("#clip-copy");
+  await page.press(at[0], at[1]);
+  await pause(700);
+  await page.release(at[0], at[1]);
+  await page.waitFor(`document.getElementById("clip-menu").classList.contains("editing")`, 2000);
+  assert.equal(await page.eval(`window.__app.store.get("clipboard", null)`), null, "held, 복사 did not copy");
+  // '−' puts 복사 away; it waits below with '+'.
+  await click(page, '#clip-copy [data-tile-off]');
+  await page.waitFor(`!document.getElementById("clip-copy") && !!document.querySelector('[data-tile-back="clip-copy"]')`, 2000);
+  // A tap makes 음 편집 wide (two columns).
+  await click(page, "#clip-notes");
+  await page.waitFor(`document.getElementById("clip-notes").classList.contains("wide")`, 2000);
+  const wide = await page.eval(`(() => { const a = document.getElementById("clip-notes").getBoundingClientRect(); const b = document.getElementById("clip-send").getBoundingClientRect(); return { a: a.width, b: b.width }; })()`);
+  assert.ok(wide.a > wide.b * 1.7, "wide is two tiles wide: " + JSON.stringify(wide));
+  // 보내기 dragged onto ▶ 듣기 goes before it.
+  at = await centre("#clip-send");
+  const to = await centre("#clip-play");
+  await page.press(at[0], at[1]);
+  for (let i = 1; i <= 6; i++) await page.moveTo(at[0] + ((to[0] - at[0]) * i) / 6, at[1] + ((to[1] - at[1]) * i) / 6);
+  await page.release(to[0], to[1]);
+  await page.waitFor(`(() => { const ids = [...document.querySelectorAll("#clip-menu [data-tile]")].map((t) => t.id); return ids.indexOf("clip-send") >= 0 && ids.indexOf("clip-send") < ids.indexOf("clip-play"); })()`, 2000);
+  await page.shot(out("song-bento-editing.png"));
+  // '+' brings 복사 back, then away again for the phone; 완료.
+  await click(page, '[data-tile-back="clip-copy"]');
+  await page.waitFor(`!!document.getElementById("clip-copy")`, 2000);
+  await click(page, '#clip-copy [data-tile-off]');
+  await page.waitFor(`!document.getElementById("clip-copy")`, 2000);
+  await click(page, "#tile-done");
+  await page.waitFor(`!document.getElementById("clip-menu").classList.contains("editing") && !document.querySelector(".tile-minus")`, 2000);
+  const kept = await page.eval(`window.__app.store.get("settings", {}).songTiles`);
+  assert.ok(kept.hidden.includes("clip-copy") && kept.wide.includes("clip-notes"), "kept: " + JSON.stringify(kept));
+  // Out of editing a tap does its own thing again (▶ 듣기 plays).
+  await page.shot(out("song-bento.png"));
+  // The phone's floating menu: the same tiles, in the same order.
+  await page.resize(390, 844);
+  await pause(400);
+  if (!(await page.eval(`!!document.getElementById("clip-menu") && !document.getElementById("clip-menu").classList.contains("side")`))) {
+    const c = await centre(".clip");
+    await page.tap(c[0], c[1]);
+  }
+  await page.waitFor(`!!document.getElementById("clip-menu") && !document.getElementById("clip-menu").classList.contains("side")`, 3000);
+  const phone = await page.eval(`[...document.querySelectorAll("#clip-menu [data-tile]")].map((t) => t.id)`);
+  assert.ok(!phone.includes("clip-copy") && phone.indexOf("clip-send") >= 0 && phone.indexOf("clip-send") < phone.indexOf("clip-play"), "the phone's menu keeps the same tiles: " + phone);
+});

@@ -7,6 +7,7 @@
 // shows where each of them is, and their lines appear live on the frame they share. Each frame is its
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
+import { rollTo } from "./motion.js";
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
 import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
@@ -124,7 +125,7 @@ export function mountAnimRoom(body, app, session) {
 
   function drawTools() {
     const { fps, loop } = doc.settings();
-    speedChip.textContent = `${fps}장/초`;
+    rollTo(speedChip, `${fps}장/초`);
     speedChip.setAttribute("aria-label", `재생: 1초에 ${fps}장, 끝나면 ${LOOP_NAMES[loop]}`);
     onionButton.setAttribute("aria-pressed", String(onionOn()));
     playButton.replaceChildren(icon(playing ? "pause" : "play"));
@@ -345,7 +346,7 @@ export function mountAnimRoom(body, app, session) {
     for (const [id, { cell }] of cells) if (!keep.has(id)) { cell.remove(); cells.delete(id); }
     strip.append(nav, bgCell);
     const at = list.findIndex((f) => f.id === current);
-    where.textContent = current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`;
+    rollTo(where, current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`);
     prevButton.disabled = current === BG || at <= 0;
     nextButton.disabled = current !== BG && at >= list.length - 1;
     bgCell.classList.toggle("on", current === BG);

@@ -1,5 +1,7 @@
 // Small helpers for building the screens. Text always goes in as text, never as markup.
 
+import { decodeLabel } from "./motion.js";
+
 const ICONS = {
   back: '<path d="M15 5l-7 7 7 7"/>',
   more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
@@ -233,7 +235,12 @@ export function segmented(options, current, onPick, attr) {
   for (const [value, label, id] of options) {
     const data = { value };
     if (attr) data[attr] = value;
-    el.append(h("button", { type: "button", id, data, text: label, onclick: () => { paint(value); onPick(value); } }));
+    el.append(h("button", { type: "button", id, data, text: label, onclick: (e) => {
+      const changed = e.currentTarget.getAttribute("aria-pressed") !== "true";
+      paint(value);
+      onPick(value);
+      if (changed) decodeLabel(e.currentTarget);
+    } }));
   }
   paint(current);
   flowingPill(el);

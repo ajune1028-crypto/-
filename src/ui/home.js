@@ -12,6 +12,7 @@ import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from ".
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { myCode, myCodeSection, openMyCodeIntro } from "./my-code.js";
+import { burst } from "./motion.js";
 import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
 import { sealedTransport } from "../sync/sealed.js";
 import { refSounds } from "../reference.js";
@@ -195,6 +196,7 @@ export function showHome(app) {
         const on = toggleStar(app.store, room.id);
         buzz(app);
         draw();
+        if (on) burst(root.querySelector(`.room-star[data-star="${room.id}"]`));
         toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600);
       } }, icon("star"));
     // Held, the room lifts and the houses come up as a small world from below (ui/house-arc.js);

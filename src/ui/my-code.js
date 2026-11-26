@@ -5,6 +5,7 @@
 // another device. After that it lives at the top of 설정, hidden until asked for.
 
 import { h, toast, formBox } from "./dom.js";
+import { drawCheck } from "./motion.js";
 import { normalizeCode, validCode, formatCode, CODE_LENGTH } from "../core/me.js";
 import { myCodeOf, markMyCodeShown, adoptMyCode } from "../identity.js";
 
@@ -19,10 +20,10 @@ function codeLetters(code, { masked = false } = {}) {
     ...groups.map((g, i) => h("span", { class: "my-code-group", style: { "--i": i } }, masked ? "••••" : g)));
 }
 
-function copyCode(root, code) {
+function copyCode(root, code, button = null) {
   Promise.resolve()
     .then(() => navigator.clipboard.writeText(formatCode(code)))
-    .then(() => toast(root, "코드를 복사했어요. 나만 아는 곳에 두세요"), () => toast(root, "복사가 막혀 있어요. 코드를 길게 눌러 복사해 주세요"));
+    .then(() => { drawCheck(button); toast(root, "코드를 복사했어요. 나만 아는 곳에 두세요"); }, () => toast(root, "복사가 막혀 있어요. 코드를 길게 눌러 복사해 주세요"));
 }
 
 /**
@@ -40,7 +41,7 @@ export function openMyCodeIntro(app, root, sheet, { onChange } = {}) {
       h("p", { class: "my-code-words", text: "이건 당신만의 코드예요. 이 코드를 알면 어디서든 당신의 방과 집, 모든 것을 그대로 열 수 있어요." }),
       h("p", { class: "help", text: "다른 사람에게는 보여 주지 마세요. 설정 맨 위에서 언제든 다시 볼 수 있어요." }),
       h("div", { class: "my-code-actions" },
-        h("button", { class: "btn quiet", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+        h("button", { class: "btn quiet", id: "my-code-copy", type: "button", text: "복사", onclick: (e) => copyCode(root, me.code, e.currentTarget) }),
         h("button", { class: "btn", id: "my-code-ok", type: "button", text: "알겠어요", onclick: () => close() })),
       h("button", {
         class: "link-btn my-code-have", id: "my-code-have", type: "button", text: "다른 기기에서 쓰던 코드가 있어요",
@@ -101,6 +102,6 @@ export function myCodeSection(app, root, sheet, { onChange } = {}) {
     slot,
     h("p", { class: "help small", text: "이 코드를 알면 어디서든 당신의 모든 것을 열 수 있어요. 다른 사람에게는 보여 주지 마세요." }),
     h("div", { class: "my-code-chips" }, see,
-      h("button", { class: "chip", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+      h("button", { class: "chip", id: "my-code-copy", type: "button", text: "복사", onclick: (e) => copyCode(root, me.code, e.currentTarget) }),
       h("button", { class: "chip", id: "my-code-other", type: "button", text: "다른 코드 넣기", onclick: () => openEnterCode(app, root, sheet, { onChange }) })));
 }
