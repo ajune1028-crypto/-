@@ -390,8 +390,10 @@ h1, h2, p { margin: 0; }
 .add svg { width: 1.35rem; height: 1.35rem; stroke-width: 2.2; }
 
 .home-top { position: absolute; top: 1.25rem; right: 0.7rem; transition: opacity 0.2s var(--ease), visibility 0.2s; }
-/* A window is out: home's round buttons step away, never over it. */
-.home-window .home-top { opacity: 0; visibility: hidden; pointer-events: none; }
+/* A window out (설정, 비서) only covers what it lies over: home's round buttons never disappear (the
+   owner, 26 November: "비서와 설정 누를 때 아이콘 3개 사라지는 거 없애 주고"); they go under the window's
+   layer, so a sheet's veil lies over them like everything else and a press there closes the sheet. */
+.home-window .home-top { z-index: 5; }
 .home-foot {
   position: absolute;
   left: 0;
@@ -1576,6 +1578,48 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @keyframes side-sheet-in { from { transform: translateX(100%); } }
 @keyframes side-sheet-out { to { transform: translateX(105%); } }
 @media (prefers-reduced-motion: reduce) { .scrim.side-sheet > .panel, .scrim.side-sheet.closing > .panel { animation: none; } }
+/* 나의 고유 코드: four groups of letters handed over like the key of a new home, each settling into
+   place in turn; in 설정 hidden as dots until 보기. Long pressed it can be copied (main.js). */
+.my-code-motto { margin: 0.1rem 0 0.9rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.my-code { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; margin: 0.2rem 0 1rem; }
+.my-code-group { display: inline-block; padding: 0.52rem 0.62rem; border-radius: 0.8rem; border: 1px solid var(--glass-edge); background: var(--well); color: var(--ink);
+  font: 800 1.16rem/1 ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace; letter-spacing: 0.1em; -webkit-user-select: text; user-select: text;
+  animation: code-settle 0.5s var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.my-code.masked .my-code-group { color: var(--muted); -webkit-user-select: none; user-select: none; animation: none; }
+@keyframes code-settle { from { opacity: 0; transform: translateY(0.45rem) scale(0.96); filter: blur(3px); } }
+@media (prefers-reduced-motion: reduce) { .my-code-group { animation: none; } }
+.my-code-words { margin: 0 0 0.45rem; font-size: 0.95rem; line-height: 1.55; }
+.my-code-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+.my-code-actions .btn { flex: 1; }
+.my-code-have { display: block; margin: 0.9rem auto 0; }
+.my-code-input { font: 800 1.08rem/1.2 ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
+.my-code-section { margin-bottom: 1.1rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--line); }
+.my-code-section .my-code { justify-content: flex-start; margin: 0.35rem 0 0.5rem; }
+.my-code-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.55rem; }
+/* 설정 in pages: the first short, the rest one step in, sliding in from the side ('‹ 설정' back). */
+.settings-page > .form + .form { margin-top: 0.85rem; }
+.settings-links { display: flex; flex-direction: column; margin-top: 1.1rem; border-top: 1px solid var(--line); }
+.settings-link { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; min-height: 3rem; padding: 0.55rem 0.2rem; border-bottom: 1px solid var(--line); text-align: left; color: var(--ink); }
+.settings-link-text { display: flex; flex-direction: column; gap: 0.1rem; }
+.settings-link-label { font-size: 0.92rem; font-weight: 700; }
+.settings-link-hint { font-size: 0.72rem; color: var(--muted); }
+.settings-link-go { font-size: 1.35rem; line-height: 1; color: var(--muted); }
+.settings-back { display: inline-flex; align-items: center; gap: 0.15rem; margin: 0 0 0.4rem -0.35rem; padding: 0.3rem 0.4rem; border-radius: 0.7rem; font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+.settings-back svg { width: 1rem; height: 1rem; }
+.settings-page-title { margin: 0 0 0.8rem; font-size: 1.05rem; font-weight: 800; }
+.settings-page.in { animation: page-in 0.32s var(--ease); }
+.settings-page.out { animation: page-back 0.28s var(--ease); }
+@keyframes page-in { from { opacity: 0; transform: translateX(1.6rem); } }
+@keyframes page-back { from { opacity: 0; transform: translateX(-1.2rem); } }
+@media (prefers-reduced-motion: reduce) { .settings-page.in, .settings-page.out { animation: none; } }
+/* 방 보기: 카드 - the room's look large on top, its name and when below, as many side by side as fit. */
+.rooms.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.6rem; }
+.rooms.cards .room-row { gap: 0.35rem; padding: 0.5rem 0.5rem 0.6rem; }
+.rooms.cards .room-thumb { order: -1; height: auto; aspect-ratio: 4 / 3; }
+.rooms.cards .room-thumb.no-preview { height: auto; aspect-ratio: 4 / 3; }
+.rooms.cards .room-thumb .room-preview { inset: 2.2rem 0.55rem 0.55rem 0.55rem; }
+.rooms.cards .room-thumb .room-preview-text { -webkit-line-clamp: 5; }
+.rooms.cards .room-name { font-size: 0.88rem; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
@@ -4662,12 +4706,213 @@ function validPreview(p) {
 
 return { textPreview, songPreview, boardPreview, drawPreview, validPreview };
 })();
+__m["src/core/me.js"] = (() => {
+// 나의 고유 코드 (the owner, 21 November: "처음 이 앱을 들어왔을 때 생기는 좀 복잡한 코드… '이건 당신의
+// 식별 코드입니다. 이걸 안다면 당신의 모든 것들을 어디에서나 로그인할 수 있습니다'… 구글에서든 어디든").
+// Made once on a device; typed on another device it brings everything of mine there: my rooms (and
+// who I am in each), my houses, my stars, my settings, 비서's notes. No login: the code is the key.
+//
+// The code itself never leaves the device. Where my things are kept is a room whose id is a hash of
+// the code (placeOf), and what is kept there is sealed with a key made from the code (sealFor:
+// PBKDF2 → AES-GCM), so only someone who has the code can find it or read it. Each device adds what
+// it holds now; everything kept comes together the same way whatever the order (mergeBundles).
+
+// Letters and digits nobody mixes up: no 0/O, 1/I/L.
+const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const CODE_LENGTH = 16;
+const GROUP = 4;
+
+const subtle = () => globalThis.crypto.subtle;
+
+// The last letter checks the others, the way an ISBN-10 does (weights 1, 2, 3, … and a prime
+// modulus; public, written here from its description). Syncthing's Luhn mod N needs an even alphabet
+// and ours has 31 letters, a prime, which suits the weighted sum: every letter typed wrong and every
+// swap of two neighbours changes the sum, so a mistyped code is caught before it opens an empty
+// universe.
+function weightedSum(letters) {
+  let sum = 0;
+  for (let i = 0; i < letters.length; i++) sum += (i + 1) * ALPHABET.indexOf(letters[i]);
+  return sum % ALPHABET.length;
+}
+function checkLetter(letters) {
+  // Σ i·dᵢ over all sixteen must be 0 (mod 31); the sixteenth weighs 16, and 16 × 2 = 32 ≡ 1.
+  const n = ALPHABET.length;
+  return ALPHABET[(n - ((2 * weightedSum(letters)) % n)) % n];
+}
+
+/** A new code, e.g. "7KQ4-M2XD-9PFA-3WNE": fifteen random letters (31^15, about 2^74) and a check letter. */
+function newMyCode() {
+  const out = [];
+  const bytes = new Uint8Array(64);
+  while (out.length < CODE_LENGTH - 1) {
+    globalThis.crypto.getRandomValues(bytes);
+    for (const b of bytes) {
+      // Only below 248 (8 × 31), so every letter is as likely as any other.
+      if (b < 248 && out.length < CODE_LENGTH - 1) out.push(ALPHABET[b % 31]);
+    }
+  }
+  return formatCode(out.join("") + checkLetter(out.join("")));
+}
+
+/** The code as letters only, upper case (typed with spaces, dashes or in lower case is the same). */
+function normalizeCode(text) {
+  return String(text || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+}
+
+function validCode(text) {
+  const norm = normalizeCode(text);
+  return norm.length === CODE_LENGTH && [...norm].every((c) => ALPHABET.includes(c)) && weightedSum(norm) === 0;
+}
+
+/** In four groups: "7KQ4-M2XD-9PFA-3WNE". */
+function formatCode(norm) {
+  const s = normalizeCode(norm);
+  const parts = [];
+  for (let i = 0; i < s.length; i += GROUP) parts.push(s.slice(i, i + GROUP));
+  return parts.join("-");
+}
+
+const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+
+/** The room where my things are kept: twelve letters from a hash of the code, never the code. */
+async function placeOf(code) {
+  const digest = new Uint8Array(await subtle().digest("SHA-256", new TextEncoder().encode("hamkke-me:" + normalizeCode(code))));
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const byte of digest) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5 && out.length < 12) {
+      out += BASE32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+const keys = new Map();
+async function keyOf(code) {
+  const norm = normalizeCode(code);
+  if (!keys.has(norm)) {
+    const base = await subtle().importKey("raw", new TextEncoder().encode(norm), "PBKDF2", false, ["deriveKey"]);
+    keys.set(norm, subtle().deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode("hamkke-me-seal"), iterations: 120000 },
+      base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]));
+  }
+  return keys.get(norm);
+}
+
+const toB64 = (bytes) => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const fromB64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+/** What I keep, sealed with my code: "v1." + base64 of a fresh iv and the AES-GCM sealed JSON. */
+async function sealFor(code, value) {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const data = new Uint8Array(await subtle().encrypt({ name: "AES-GCM", iv }, await keyOf(code), new TextEncoder().encode(JSON.stringify(value))));
+  const all = new Uint8Array(iv.length + data.length);
+  all.set(iv);
+  all.set(data, iv.length);
+  return "v1." + toB64(all);
+}
+
+/** Opened with my code; null when it is not mine (another code) or not whole. */
+async function openFor(code, sealed) {
+  try {
+    if (typeof sealed !== "string" || !sealed.startsWith("v1.")) return null;
+    const all = fromB64(sealed.slice(3));
+    const plain = await subtle().decrypt({ name: "AES-GCM", iv: all.subarray(0, 12) }, await keyOf(code), all.subarray(12));
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    return null;
+  }
+}
+
+// What every device keeps of mine is a set of registers, one per thing: "room:<id>", "house:<id>",
+// "star:<id>", "set:<setting>". Each holds the value and when this universe last changed it; a thing
+// taken away is a register too (gone), so a room forgotten on one device stays forgotten everywhere
+// until it is entered again later, and an older device cannot bring it back. The newest write wins
+// (the LWW-element-set of the CRDT literature, Shapiro et al. 2011); ties go the same way everywhere.
+
+const keyOrder = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+const later = (it, was) => !was || it.at > was.at || (it.at === was.at && JSON.stringify(it) > JSON.stringify(was));
+
+/** Every device's registers as one: the newest of each. The same result in any order, any number of times. */
+function mergeBundles(list) {
+  const best = new Map();
+  for (const b of list) {
+    for (const it of b && Array.isArray(b.items) ? b.items : []) {
+      if (!it || typeof it.key !== "string" || !Number.isFinite(it.at)) continue;
+      if (later(it, best.get(it.key))) best.set(it.key, it);
+    }
+  }
+  return { items: [...best.values()].sort(keyOrder) };
+}
+
+/**
+ * This device's things now, as registers. `things` maps a key to its value as it stands; `ledger`
+ * is what was written before ({ key: { at, h, gone } }). A changed value is written `now`, an
+ * unchanged one keeps its time, one no longer there is written gone `now`. Returns the registers
+ * and the ledger to keep.
+ */
+function itemsNow(things, ledger = {}, now = Date.now()) {
+  const items = [];
+  const next = {};
+  for (const [key, v] of things) {
+    const h = JSON.stringify(v);
+    const was = ledger[key];
+    const at = was && !was.gone && was.h === h ? was.at : now;
+    next[key] = { at, h };
+    items.push({ key, at, v });
+  }
+  for (const [key, was] of Object.entries(ledger)) {
+    if (next[key]) continue;
+    const at = was.gone ? was.at : now;
+    next[key] = { at, gone: true };
+    items.push({ key, at, gone: true });
+  }
+  return { items: items.sort(keyOrder), ledger: next };
+}
+
+/** The ledger that says "this device already has exactly these" (after the universe was put on it). */
+function ledgerOf(items) {
+  const out = {};
+  for (const it of items) out[it.key] = it.gone ? { at: it.at, gone: true } : { at: it.at, h: JSON.stringify(it.v) };
+  return out;
+}
+
+/** The registers read back as rooms, houses, stars and settings; a forgotten room leaves its house and its star. */
+function viewOf(items) {
+  const out = { rooms: [], houses: [], stars: [], settings: {} };
+  for (const it of items) {
+    if (it.gone) continue;
+    const cut = it.key.indexOf(":");
+    const kind = it.key.slice(0, cut);
+    const id = it.key.slice(cut + 1);
+    if (kind === "room") out.rooms.push({ ...it.v, id });
+    else if (kind === "house") out.houses.push({ ...it.v, id });
+    else if (kind === "star") out.stars.push(id);
+    else if (kind === "set") out.settings[id] = it.v;
+  }
+  const gone = new Set(items.filter((it) => it.gone && it.key.startsWith("room:")).map((it) => it.key.slice(5)));
+  out.houses = out.houses.map((h) => ({ ...h, rooms: (h.rooms || []).filter((r) => !gone.has(r)) }));
+  out.stars = out.stars.filter((id) => !gone.has(id));
+  return out;
+}
+
+return { CODE_LENGTH, newMyCode, normalizeCode, validCode, formatCode, placeOf, sealFor, openFor, mergeBundles, itemsNow, ledgerOf, viewOf };
+})();
 __m["src/identity.js"] = (() => {
 // What this device remembers: which rooms it has entered and as whom, the last
 // name and personal code typed, and display settings. Works from memory when
 // the browser refuses storage.
 
 const { validPreview } = __m["src/core/preview.js"];
+const { newMyCode, normalizeCode, validCode, formatCode } = __m["src/core/me.js"];
 
 const DEFAULT_SETTINGS = {
   theme: "system", colors: true, mixing: true,
@@ -4738,10 +4983,13 @@ function setSetting(store, key, value) {
  * Puts a room on this device's list. `people` are the colours of who is in it (home shows
  * them: the door says who is behind it); told without them, the entry keeps the ones it had.
  */
-function rememberRoom(store, { id, kind, name, memberId, local, people, preview }, now = Date.now()) {
+function rememberRoom(store, { id, kind, name, memberId, local, people, preview, key }, now = Date.now()) {
   const rooms = store.get("rooms", []);
   const entry = { id, kind, name, memberId, at: now };
   const i = rooms.findIndex((r) => r.id === id);
+  // A room with a password: the key this device made from it (core/lock.js), kept for good.
+  const kept = key ?? (i >= 0 ? rooms[i].key : undefined);
+  if (typeof kept === "string" && kept) entry.key = kept;
   if (local || (i >= 0 && rooms[i].local)) entry.local = true;
   const known = Array.isArray(people) ? people : i >= 0 ? rooms[i].people : null;
   if (known?.length) entry.people = known.slice(0, 6);
@@ -4761,7 +5009,36 @@ function forgetRoom(store, id) {
   store.set("rooms", store.get("rooms", []).filter((r) => r.id !== id));
 }
 
-return { DEFAULT_SETTINGS, openStore, getSettings, setSetting, rememberRoom, roomEntry, forgetRoom };
+// 나의 고유 코드 (core/me.js): made the first time it is asked for, kept on this device. `shown` is
+// whether it has been handed over (the sheet on the first open); `was` keeps the codes it had before.
+
+function myCodeOf(store) {
+  let me = store.get("me", null);
+  if (!me || typeof me.code !== "string" || !validCode(me.code)) {
+    me = { code: newMyCode(), at: Date.now(), shown: false };
+    store.set("me", me);
+  }
+  return me;
+}
+
+function markMyCodeShown(store) {
+  const me = myCodeOf(store);
+  if (!me.shown) store.set("me", { ...me, shown: true });
+}
+
+/** Another device's code becomes this device's; what this device keeps goes along into that universe. */
+function adoptMyCode(store, code) {
+  const me = myCodeOf(store);
+  const norm = normalizeCode(code);
+  if (!validCode(norm) || normalizeCode(me.code) === norm) return false;
+  store.set("me", { code: formatCode(norm), at: Date.now(), shown: true, was: [...(me.was || []), me.code].slice(-3) });
+  // A new universe: this device meets it as for the first time.
+  store.set("meLedger", null);
+  store.set("mePushed", null);
+  return true;
+}
+
+return { DEFAULT_SETTINGS, openStore, getSettings, setSetting, rememberRoom, roomEntry, forgetRoom, myCodeOf, markMyCodeShown, adoptMyCode };
 })();
 __m["src/sync/transport.js"] = (() => {
 // The promise between the app and whatever carries its ops.
@@ -10294,6 +10571,147 @@ function showJoin(app, session, onDone) {
 }
 
 return { showJoin };
+})();
+__m["src/core/lock.js"] = (() => {
+// A room with a password (the owner, 21 November: "집과 방은 주소… 들어갈 때 비밀번호도 정할 수 있게"):
+// a real lock, not a screen that says no. The room's key is made from its password (PBKDF2-SHA256,
+// 600,000 rounds, salted with the room's id, as Trystero makes its room keys) and every op and every
+// presence of the room travels sealed with it (AES-GCM, a fresh 12-byte iv each time, as Excalidraw
+// seals what its rooms send). Whoever stores or carries the room sees sealed letters only; a wrong
+// password opens nothing. The password itself is never kept: this device keeps the key it made.
+
+const ROUNDS = 600000;
+const subtle = () => globalThis.crypto.subtle;
+
+const toB64 = (bytes) => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const fromB64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+/** A password a room can have: four letters or more (any letters, spaces at the ends ignored). */
+function validRoomPassword(text) {
+  return typeof text === "string" && text.trim().length >= 4 && text.trim().length <= 64;
+}
+
+/** The room's key from its password. Slow on purpose (about a second on a phone), once per device. */
+async function roomKeyFrom(password, roomId) {
+  const base = await subtle().importKey("raw", new TextEncoder().encode(String(password).trim()), "PBKDF2", false, ["deriveKey"]);
+  return subtle().deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode("hamkke-room:" + roomId), iterations: ROUNDS },
+    base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+/** The key as text, to keep on this device (and in 나의 고유 코드's sealed bundle). */
+async function keyText(key) {
+  return toB64(new Uint8Array(await subtle().exportKey("raw", key)));
+}
+
+async function keyFromText(text) {
+  return subtle().importKey("raw", fromB64(text), { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+/** A value sealed with the key: "v1." + base64 of the iv and the AES-GCM sealed JSON. */
+async function sealValue(key, value) {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const data = new Uint8Array(await subtle().encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(value))));
+  const all = new Uint8Array(iv.length + data.length);
+  all.set(iv);
+  all.set(data, iv.length);
+  return "v1." + toB64(all);
+}
+
+/** The value back, or null when this key cannot open it (another room's, a wrong password, cut short). */
+async function openValue(key, sealed) {
+  try {
+    if (typeof sealed !== "string" || !sealed.startsWith("v1.")) return null;
+    const all = fromB64(sealed.slice(3));
+    const plain = await subtle().decrypt({ name: "AES-GCM", iv: all.subarray(0, 12) }, key, all.subarray(12));
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    return null;
+  }
+}
+
+/** An op of a locked room as it travels: { s: "v1.…" } and nothing else. */
+const isSealed = (op) => !!op && typeof op === "object" && typeof op.s === "string" && op.s.startsWith("v1.") && Object.keys(op).length === 1;
+
+return { validRoomPassword, roomKeyFrom, keyText, keyFromText, sealValue, openValue, isSealed };
+})();
+__m["src/sync/sealed.js"] = (() => {
+// A locked room's channel (core/lock.js): ops and presence go out sealed with the room's key and come
+// in opened. What this key cannot open (written before the room was locked, another room's, a forged
+// op) is left out, so nothing unsealed ever mixes into a locked room. Everything else about the
+// transport stays as it is: the app talks to the same promise (transport.js).
+
+const { sealValue, openValue, isSealed } = __m["src/core/lock.js"];
+
+function sealedChannel(channel, key) {
+  const open = async (ops) => (await Promise.all((ops || []).map((op) => (isSealed(op) ? openValue(key, op.s) : null)))).filter((op) => op && typeof op === "object");
+  let presenceOut = 0;
+  let presenceIn = 0;
+  return {
+    docs: () => channel.docs(),
+    load: async (docId) => open(await channel.load(docId)),
+    append: async (docId, ops) => channel.append(docId, await Promise.all(ops.map(async (op) => ({ s: await sealValue(key, op) })))),
+    subscribe: (fn) => channel.subscribe((docId, ops) => {
+      open(ops).then((plain) => {
+        if (plain.length) fn(docId, plain);
+      });
+    }),
+    setPresence: (state) => {
+      const n = ++presenceOut;
+      sealValue(key, state).then((s) => {
+        if (n === presenceOut) channel.setPresence({ s });
+      });
+    },
+    onPresence: (fn) => channel.onPresence((peers) => {
+      const n = ++presenceIn;
+      Promise.all(peers.map(async (p) => ({ ...p, state: (p.state && typeof p.state.s === "string" ? await openValue(key, p.state.s) : null) || {} })))
+        .then((opened) => {
+          if (n === presenceIn) fn(opened);
+        });
+    }),
+    onStatus: (fn) => channel.onStatus(fn),
+    close: () => channel.close(),
+  };
+}
+
+/** The same transport, but the locked room opens through its sealed channel. */
+function sealedTransport(transport, roomId, key) {
+  const wrapped = Object.create(transport);
+  wrapped.openRoom = async (id) => {
+    const channel = await transport.openRoom(id);
+    return channel && id === roomId ? sealedChannel(channel, key) : channel;
+  };
+  return wrapped;
+}
+
+/** Whether a room is locked, from its first ops as stored (a locked room's ops are all sealed). */
+async function isLockedRoom(transport, roomId) {
+  const channel = await transport.openRoom(roomId);
+  if (!channel) return null;
+  try {
+    const ops = await channel.load("room");
+    return ops.length > 0 && ops.every(isSealed);
+  } finally {
+    channel.close();
+  }
+}
+
+/** Whether a key opens a locked room (its first sealed op opens with it). */
+async function keyOpens(transport, roomId, key) {
+  const channel = await transport.openRoom(roomId);
+  if (!channel) return false;
+  try {
+    const first = (await channel.load("room")).find(isSealed);
+    return !!first && (await openValue(key, first.s)) !== null;
+  } finally {
+    channel.close();
+  }
+}
+
+return { sealedChannel, sealedTransport, isLockedRoom, keyOpens };
 })();
 __m["src/ui/fingers.js"] = (() => {
 // Two fingers on a surface always mean zoom, never an edit.
@@ -27988,9 +28406,11 @@ const { shrinkPhoto } = __m["src/ui/photo.js"];
 const { watchPickers } = __m["src/ui/picker-watch.js"];
 const { fileOps } = __m["src/core/files.js"];
 const { fromBase64 } = __m["src/core/b64.js"];
-const { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast } = __m["src/ui/dom.js"];
+const { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast, formBox } = __m["src/ui/dom.js"];
 const { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } = __m["src/ui/theme.js"];
 const { showJoin } = __m["src/ui/join.js"];
+const { roomKeyFrom, keyText, validRoomPassword } = __m["src/core/lock.js"];
+const { sealedTransport, isLockedRoom, keyOpens } = __m["src/sync/sealed.js"];
 const { kindInfo, sideOf } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
 const { watchContrast } = __m["src/ui/contrast.js"];
@@ -28005,7 +28425,7 @@ const { memberColor, personColor, PALETTE } = __m["src/core/paint.js"];
 const { memberOps, makeVerifier, validPin } = __m["src/core/room.js"];
 
 /** Theme, and optionally the two colour switches. Shared by home and room settings. */
-function displaySettings(app, { withColors }) {
+function displaySettings(app, { withColors, part = "all" }) {
   const settings = getSettings(app.store);
   const change = (key, value) => {
     setSetting(app.store, key, value);
@@ -28035,17 +28455,20 @@ function displaySettings(app, { withColors }) {
   const show = (v) => { amountText.textContent = v + "%"; back.hidden = v === 100; };
   const slider = h("input", { class: "tint-amount", id: "tint-amount", type: "range", min: "0", max: "100", step: "5", value: String(amount), "aria-label": "글라스 색 세기",
     oninput: () => { const v = Number(slider.value); show(v); change("tintAmount", v / 100); } });
+  // In parts (home: the look first, the rest one step in, the owner: "설정을 더 간편하고 좋게"); a room shows it all.
+  const look = part === "all" || part === "look";
+  const feel = part === "all" || part === "feel";
   return h("div", { class: "form" },
-    h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "화면 밝기" }),
       segmented([["system", "기기 설정"], ["light", "밝게"], ["dark", "어둡게"]], settings.theme, (v) => change("theme", v), "themeChoice")),
-    h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
-    h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "글라스 색 (밝게·어둡게 모두 같은 색)" }), accents),
+    feel && h("div", { class: "row" }, h("span", { class: "label", text: "색 세기 (줄이면 밝게는 흰색, 어둡게는 검정이 늘어요)" }),
       h("div", { class: "tint-amount-row" }, slider, amountText, back)),
-    h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
+    look && h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
-    toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => change("reference", on)),
-    toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
-    toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
+    part === "all" && toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => change("reference", on)),
+    feel && toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
+    feel && toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
     withColors && toggle("set-mixing", "색 섞기", settings.mixing, (on) => change("mixing", on)));
 }
@@ -28087,15 +28510,57 @@ function showRoom(app, roomId) {
     if (alive && !app.session) mount(root, centered("opening", "방을 여는 중이에요", "아직 연결 중"));
   }, 2000);
 
+  // A room with a password (core/lock.js) asks for it once on this device; the key it makes is kept.
+  let newKey = null;
+  function askPassword(base) {
+    clearTimeout(slowTimer);
+    return new Promise((resolve) => {
+      const input = h("input", { class: "input", id: "room-password-in", type: "password", maxLength: 64, autocomplete: "current-password", "aria-label": "방 비밀번호" });
+      const error = h("p", { class: "error", id: "room-password-error", role: "alert" });
+      const button = h("button", { class: "btn", id: "room-password-go", type: "button", text: "들어가기", onclick: () => submit() });
+      mount(root, centered("locked", "비밀번호가 있는 방이에요", "이 방을 만든 사람에게 비밀번호를 물어보세요.", formBox(() => submit(), input, error, button)));
+      setTimeout(() => input.focus(), 60);
+      async function submit() {
+        if (button.disabled) return;
+        if (!validRoomPassword(input.value)) return void (error.textContent = "비밀번호는 4자 이상이에요.");
+        button.disabled = true;
+        error.textContent = "";
+        button.textContent = "확인하는 중…";
+        try {
+          const key = await roomKeyFrom(input.value, roomId);
+          if (await keyOpens(base, roomId, key)) return resolve(key);
+          error.textContent = "비밀번호가 달라요. 다시 확인해 주세요.";
+        } catch (err) {
+          console.warn(err);
+          error.textContent = "확인하지 못했어요. 다시 해 주세요.";
+        }
+        if (!alive) return resolve(null);
+        button.disabled = false;
+        button.textContent = "들어가기";
+      }
+    });
+  }
+
   (async () => {
     const transport = await app.transportFor(roomId);
     if (!alive) return;
     if (app.handoff && app.handoff.roomId === roomId) session = app.handoff;
     else {
-      const opened = new RoomSession({ transport, roomId, store: app.store });
-      const result = await opened.open();
+      let opened = new RoomSession({ transport, roomId, store: app.store });
+      let result = await opened.open();
       if (!alive) return void opened.close();
       if (result === "missing") return void mount(root, centered("missing", "방을 찾을 수 없어요", "코드나 링크를 다시 확인해 주세요."));
+      // Nothing readable in it and no key here: a room with a password.
+      if (!opened.room.meta("kind") && !roomEntry(app.store, roomId)?.key && await isLockedRoom(transport, roomId).catch(() => false)) {
+        opened.close();
+        const key = await askPassword(transport);
+        if (!alive || !key) return;
+        newKey = await keyText(key);
+        mount(root, centered("opening", "방을 여는 중이에요", null));
+        opened = new RoomSession({ transport: sealedTransport(transport, roomId, key), roomId, store: app.store });
+        result = await opened.open();
+        if (!alive) return void opened.close();
+      }
       session = opened;
     }
     app.handoff = null;
@@ -28120,7 +28585,7 @@ function showRoom(app, roomId) {
     // out when the room is left or the app goes to the background.
     const remember = (withPreview = false) => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
-      people: session.room.members().map((m) => m.color),
+      people: session.room.members().map((m) => m.color), ...(newKey ? { key: newKey } : {}),
       ...(withPreview ? { preview: previewNow() } : {}),
     });
     remember();
@@ -28355,6 +28820,7 @@ function showRoom(app, roomId) {
             h("span", { class: "code", id: "invite-code", style: { flex: "1" }, text: roomId }),
             h("button", { class: "btn small quiet", id: "copy-invite-code", type: "button", text: "코드 복사",
               onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") }))),
+        roomEntry(app.store, roomId)?.key && h("p", { class: "help", id: "invite-password", text: "비밀번호가 있는 방이에요. 친구에게 주소와 함께 비밀번호도 알려 주세요." }),
         app.shareBase() && h("p", { class: "help", id: "invite-note", text: "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요." }),
         h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));
     });
@@ -28460,6 +28926,116 @@ function showRoom(app, roomId) {
 }
 
 return { displaySettings, diagnostics, BACKGROUNDS, showRoom };
+})();
+__m["src/ui/my-code.js"] = (() => {
+// 나의 고유 코드 on screen (the owner, 21 November: "처음 이 앱을 들어왔을 때 생기는 좀 복잡한 코드…
+// '이건 당신의 식별 코드입니다. 이걸 안다면 당신의 모든 것들을 어디에서나 로그인할 수 있습니다'… 설정에서
+// 잘 보이게"). The first time the app opens it is handed over like the key of a new home: the code in
+// four groups, two plain lines on what it is, 복사 and 알겠어요, and the way in for a code from
+// another device. After that it lives at the top of 설정, hidden until asked for.
+
+const { h, toast, formBox } = __m["src/ui/dom.js"];
+const { normalizeCode, validCode, formatCode, CODE_LENGTH } = __m["src/core/me.js"];
+const { myCodeOf, markMyCodeShown, adoptMyCode } = __m["src/identity.js"];
+
+const myCode = myCodeOf;
+const markShown = markMyCodeShown;
+const adoptCode = adoptMyCode;
+
+/** The code as four groups of letters, or four groups of dots while it is hidden. */
+function codeLetters(code, { masked = false } = {}) {
+  const groups = formatCode(code).split("-");
+  return h("div", { class: "my-code" + (masked ? " masked" : ""), "aria-label": masked ? "가려진 나의 고유 코드" : "나의 고유 코드 " + formatCode(code) },
+    ...groups.map((g, i) => h("span", { class: "my-code-group", style: { "--i": i } }, masked ? "••••" : g)));
+}
+
+function copyCode(root, code) {
+  Promise.resolve()
+    .then(() => navigator.clipboard.writeText(formatCode(code)))
+    .then(() => toast(root, "코드를 복사했어요. 나만 아는 곳에 두세요"), () => toast(root, "복사가 막혀 있어요. 코드를 길게 눌러 복사해 주세요"));
+}
+
+/**
+ * The first time the app opens: the code, what it is, and the way in for a code from another device.
+ * `sheet(title, build)` opens a sheet the way the caller's screen does (one window at a time).
+ */
+function openMyCodeIntro(app, root, sheet, { onChange } = {}) {
+  const me = myCode(app.store);
+  return sheet("나의 고유 코드", (panel, close, onClose) => {
+    panel.classList.add("my-code-sheet");
+    onClose?.(() => markShown(app.store));
+    panel.append(
+      h("p", { class: "my-code-motto", text: "작은 우주를 기록해 보자" }),
+      codeLetters(me.code),
+      h("p", { class: "my-code-words", text: "이건 당신만의 코드예요. 이 코드를 알면 어디서든 당신의 방과 집, 모든 것을 그대로 열 수 있어요." }),
+      h("p", { class: "help", text: "다른 사람에게는 보여 주지 마세요. 설정 맨 위에서 언제든 다시 볼 수 있어요." }),
+      h("div", { class: "my-code-actions" },
+        h("button", { class: "btn quiet", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+        h("button", { class: "btn", id: "my-code-ok", type: "button", text: "알겠어요", onclick: () => close() })),
+      h("button", {
+        class: "link-btn my-code-have", id: "my-code-have", type: "button", text: "다른 기기에서 쓰던 코드가 있어요",
+        onclick: () => { markShown(app.store); openEnterCode(app, root, sheet, { onChange }); },
+      }));
+  });
+}
+
+/** A code from another device, typed in: one letter wrong is caught by its check letter. */
+function openEnterCode(app, root, sheet, { onChange } = {}) {
+  return sheet("다른 코드 넣기", (panel, close) => {
+    panel.classList.add("my-code-sheet");
+    const input = h("input", {
+      class: "input my-code-input", id: "my-code-field", type: "text", autocomplete: "off", autocapitalize: "characters",
+      spellcheck: "false", inputmode: "text", placeholder: "XXXX-XXXX-XXXX-XXXX", "aria-label": "나의 고유 코드",
+    });
+    const plain = "다른 기기의 설정 맨 위에 있는 코드를 그대로 쳐요. 대문자·소문자, 빈칸은 상관없어요.";
+    const note = h("p", { class: "help", id: "my-code-note", text: plain });
+    const go = h("button", { class: "btn", id: "my-code-use", type: "button", text: "이 코드로", disabled: true, onclick: () => use() });
+    input.addEventListener("input", () => {
+      const norm = normalizeCode(input.value).slice(0, CODE_LENGTH);
+      const shaped = formatCode(norm);
+      if (input.value !== shaped) input.value = shaped;
+      const full = norm.length === CODE_LENGTH;
+      const ok = full && validCode(norm);
+      go.disabled = !ok;
+      note.textContent = !full ? plain : ok ? "맞는 코드예요." : "한 글자가 다른 것 같아요. 다시 봐 주세요.";
+      note.classList.toggle("warn", full && !ok);
+    });
+    function use() {
+      if (!adoptCode(app.store, input.value)) {
+        if (validCode(input.value)) close(); // the code this device already has
+        return;
+      }
+      close();
+      // Home is drawn again first (a toast is part of the screen it replaces), then it says what happened.
+      onChange?.();
+      toast(root, "이 기기도 같은 우주예요. 이 기기의 방과 집은 그대로 함께 가요");
+    }
+    panel.append(formBox(use, input, note, h("div", { class: "my-code-actions" }, go)));
+    setTimeout(() => input.focus(), 80);
+  });
+}
+
+/** The top of 설정: the code hidden until 보기, 복사, and 다른 코드 넣기. */
+function myCodeSection(app, root, sheet, { onChange } = {}) {
+  const me = myCode(app.store);
+  let shown = false;
+  const slot = h("div", { class: "my-code-slot" });
+  const paint = () => slot.replaceChildren(codeLetters(me.code, { masked: !shown }));
+  paint();
+  const see = h("button", {
+    class: "chip", id: "my-code-see", type: "button", text: "보기",
+    onclick: () => { shown = !shown; see.textContent = shown ? "가리기" : "보기"; paint(); },
+  });
+  return h("div", { class: "section my-code-section" },
+    h("p", { class: "section-title", text: "나의 고유 코드" }),
+    slot,
+    h("p", { class: "help small", text: "이 코드를 알면 어디서든 당신의 모든 것을 열 수 있어요. 다른 사람에게는 보여 주지 마세요." }),
+    h("div", { class: "my-code-chips" }, see,
+      h("button", { class: "chip", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+      h("button", { class: "chip", id: "my-code-other", type: "button", text: "다른 코드 넣기", onclick: () => openEnterCode(app, root, sheet, { onChange }) })));
+}
+
+return { myCode, openMyCodeIntro, openEnterCode, myCodeSection };
 })();
 __m["src/ui/edge-glow.js"] = (() => {
 // The light at the screen's edge where something is thrown. The owner (17 November): "안 보이는 공이
@@ -29707,6 +30283,9 @@ const { RoomSession } = __m["src/sync/session.js"];
 const { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } = __m["src/core/room.js"];
 const { SIDES, kindsOf, sideOf, kindInfo } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
+const { myCode, myCodeSection, openMyCodeIntro } = __m["src/ui/my-code.js"];
+const { roomKeyFrom, keyText, validRoomPassword } = __m["src/core/lock.js"];
+const { sealedTransport } = __m["src/sync/sealed.js"];
 const { refSounds } = __m["src/reference.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { starred, toggleStar, houses, putInHouse, houseOf, takeOutOfHouse } = __m["src/houses.js"];
@@ -29850,6 +30429,9 @@ function showHome(app) {
 
   // A room's row says what kind of room it is, so a whiteboard is told from a song room at a glance.
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
+  /** 방 보기: cards (the room's look large, as many side by side as fit) or rows. */
+  const cardView = () => getSettings(app.store).roomView === "cards";
+
   function roomRow(room, when, mine = false) {
     const kind = kindInfo(room.kind);
     const house = mine ? houseOf(app.store, room.id) : null;
@@ -30251,11 +30833,11 @@ function showHome(app) {
         h("p", { class: "half-note", text: note })),
       h("div", { class: "half-scroll" },
         mine.length
-          ? h("div", { class: "rooms" }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
+          ? h("div", { class: "rooms" + (cardView() ? " cards" : "") }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
-          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
+          h("div", { class: "rooms" + (cardView() ? " cards" : ""), id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
         ]),
       h("button", { class: "add", id: "add-" + side, type: "button", "aria-label": title + " 방 만들기", onclick: () => chooseKind(side) }, icon("plus")));
   }
@@ -30328,16 +30910,22 @@ function showHome(app) {
       const room = inputRow("room-name", "방 이름", { maxLength: 30, placeholder: "예: 우리 둘" });
       const me = inputRow("my-name", "내 별명", { maxLength: 20, value: last.name || "" });
       const pin = inputRow("my-pin", "개인 식별 코드 (숫자 5자리, 안 정해도 돼요)", { maxLength: 5, inputMode: "numeric", value: last.pin || "" });
+      // 방 비밀번호 (the owner, 21 November: "들어갈 때 비밀번호도 정할 수 있게"): a real lock (core/lock.js).
+      const password = inputRow("room-password", "방 비밀번호 (안 정해도 돼요)", { type: "password", maxLength: 64, autocomplete: "new-password", placeholder: "4자 이상" });
       const error = h("p", { class: "error", id: "form-error", role: "alert" });
       const status = h("p", { class: "help", id: "form-status", role: "status" });
       const button = h("button", { class: "btn", id: "create-room", type: "button", text: "방 만들기", onclick: submit });
       panel.append(formBox(submit, room.row, me.row, pin.row,
-        h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }), error, button, status));
+        h("p", { class: "help", text: "코드가 있으면 다른 기기에서도 같은 사람, 같은 색으로 들어올 수 있어요." }),
+        password.row,
+        h("p", { class: "help", text: "정하면 주소만으로는 들어올 수 없고, 들어올 때 이 비밀번호를 물어요. 방에 쓴 것은 비밀번호로 잠겨서 오가요." }),
+        error, button, status));
 
-      /** Makes the room on one transport and opens it. */
-      async function make(transport, id, roomName) {
-        await transport.createRoom({ id, kind, name: roomName });
-        const session = new RoomSession({ transport, roomId: id, store: app.store });
+      /** Makes the room on one transport and opens it (through its sealed channel when it has a key). */
+      async function make(transport, id, roomName, key) {
+        // A locked room's name stays inside it; what lists rooms sees only that it is locked.
+        await transport.createRoom({ id, kind, name: key ? "비밀번호가 있는 방" : roomName });
+        const session = new RoomSession({ transport: key ? sealedTransport(transport, id, key) : transport, roomId: id, store: app.store });
         try {
           if ((await session.open()) !== "ok") throw new Error("room did not open");
         } catch (err) {
@@ -30355,19 +30943,28 @@ function showHome(app) {
         if (!roomName) return void (error.textContent = "방 이름을 적어 주세요.");
         if (!myName) return void (error.textContent = "내 별명을 적어 주세요.");
         if (code && !validPin(code)) return void (error.textContent = "개인 식별 코드는 숫자 5자리예요.");
+        const pw = password.input.value;
+        if (pw.trim() && !validRoomPassword(pw)) return void (error.textContent = "방 비밀번호는 4자 이상이에요.");
         error.textContent = "";
         button.disabled = true;
         try {
           status.textContent = "연결하는 중…";
           const shared = await app.ready;
           const id = newRoomId();
+          let key = null;
+          let keyKept = null;
+          if (pw.trim()) {
+            status.textContent = "비밀번호로 잠그는 중…";
+            key = await roomKeyFrom(pw, id);
+            keyKept = await keyText(key);
+          }
           const sharedKind = shared.info().kind;
           let session;
           // A room made while this view has no shared store lives on this device only.
           let local = sharedKind === "local" && app.limited;
           status.textContent = "방을 만드는 중…";
           try {
-            session = await make(shared, id, roomName);
+            session = await make(shared, id, roomName, key);
             if (sharedKind !== "local") app.limited = false;
           } catch (err) {
             if (sharedKind === "local") throw err;
@@ -30377,14 +30974,14 @@ function showHome(app) {
             shared.dropRoom?.(id);
             app.limited = true;
             local = true;
-            session = await make(app.local(), id, roomName);
+            session = await make(app.local(), id, roomName, key);
           }
           const memberId = newMemberId();
           session.commit("room", createRoomOps(session.clock, {
             kind, name: roomName, tz: localZone(), now: Date.now(), memberId, memberName: myName,
             pin: code ? await makeVerifier(code) : null, color: myPeopleColor(getSettings(app.store)) ?? 0,
           }));
-          rememberRoom(app.store, { id, kind, name: roomName, memberId, local });
+          rememberRoom(app.store, { id, kind, name: roomName, memberId, local, ...(keyKept ? { key: keyKept } : {}) });
           app.store.set("last", { name: myName, pin: code });
           app.handoff = session;
           app.fresh = local ? null : id;
@@ -30431,25 +31028,85 @@ function showHome(app) {
   }
 
   function openSettings() {
-    const recent = String(getSettings(app.store).recentSearchMax || 5);
-    sheet("설정", (panel) => panel.append(
-      displaySettings(app, { withColors: false }),
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
-        h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
-          segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
-      // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
-      // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
-        toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
-        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
-      // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
-        toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
-        h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "연결 진단" }), diagnostics(app, null))));
+    const settings = getSettings(app.store);
+    const recent = String(settings.recentSearchMax || 5);
+    sheet("설정", (panel) => {
+      // The first page holds what is changed often; the rest is one step in (the owner, 21 November:
+      // "설정을 더 간편하고 좋게"), each page sliding in from the side and '‹ 설정' back (iOS 설정, the
+      // Stack Panel the owner sent).
+      const pages = new Map();
+      const main = h("div", { class: "settings-page", data: { settingsPage: "main" } });
+      const go = (id) => {
+        for (const [key, el] of pages) el.hidden = key !== id;
+        const now = pages.get(id);
+        now.classList.remove("in", "out");
+        void now.offsetWidth;
+        now.classList.add(id === "main" ? "out" : "in");
+        panel.scrollTop = 0;
+      };
+      const page = (id, title, ...children) => {
+        const el = h("div", { class: "settings-page sub", data: { settingsPage: id }, hidden: true },
+          h("button", { class: "settings-back", type: "button", data: { settingsBack: "" }, onclick: () => go("main") }, icon("back"), h("span", { text: "설정" })),
+          h("p", { class: "settings-page-title", text: title }),
+          ...children);
+        pages.set(id, el);
+        return el;
+      };
+      const link = (id, label, hint) => h("button", { class: "settings-link", type: "button", data: { settingsPart: id }, onclick: () => go(id) },
+        h("span", { class: "settings-link-text" }, h("span", { class: "settings-link-label", text: label }), hint && h("span", { class: "settings-link-hint", text: hint })),
+        h("span", { class: "settings-link-go", "aria-hidden": "true", text: "›" }));
+      pages.set("main", main);
+      // 방 보기 (the owner: "방 나열을 카드형으로 바꾸는 설정"): rows, or cards with the room's look large.
+      const roomView = h("div", { class: "row" }, h("span", { class: "label", text: "방 보기" }),
+        segmented([["list", "목록", "room-view-list"], ["cards", "카드", "room-view-cards"]], getSettings(app.store).roomView === "cards" ? "cards" : "list", (v) => {
+          setSetting(app.store, "roomView", v);
+          for (const el of root.querySelectorAll(".rooms")) el.classList.toggle("cards", v === "cards");
+        }, "roomView"));
+      main.append(
+        // 나의 고유 코드 first (the owner: "설정에서 잘 보이게").
+        myCodeSection(app, root, (title, build) => sheet(title, build), { onChange: codeChanged }),
+        displaySettings(app, { withColors: false, part: "look" }),
+        h("div", { class: "form" }, roomView),
+        h("div", { class: "settings-links" },
+          link("feel", "색 세기 · 효과음 · 진동"),
+          link("find", "찾기 · 햇살 · 비서"),
+          link("games", "미니게임"),
+          link("diag", "연결 진단", "문제가 있을 때")));
+      panel.append(main,
+        page("feel", "색 세기 · 효과음 · 진동", displaySettings(app, { withColors: false, part: "feel" })),
+        page("find", "찾기 · 햇살 · 비서",
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기" }),
+            h("div", { class: "row" }, h("span", { class: "label", text: "최근 검색 보이기" }),
+              segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
+          // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
+          // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
+            toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", settings.panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+            h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
+          h("div", { class: "section" }, h("p", { class: "section-title", text: "비서" }),
+            toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => { setSetting(app.store, "reference", on); app.events.emit("settings"); }))),
+        // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
+        page("games", "미니게임",
+          toggle("games-on", "방에서 친구와 미니게임", settings.games !== false, (on) => setSetting(app.store, "games", on)),
+          h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
+        page("diag", "연결 진단", diagnostics(app, null)));
+    });
   }
 
   draw();
+  // Another device's code typed in: this device meets that universe; whatever it brings, home shows.
+  function codeChanged() {
+    app.me?.restart();
+    draw();
+  }
+  const offMe = app.events.on("me-changed", () => {
+    if (alive && !root.querySelector(".scrim:not(.closing)")) draw();
+  });
+  // The first time the app opens, 나의 고유 코드 is handed over once the home has come up (the owner,
+  // 21 November: "처음 이 앱을 들어왔을 때 생기는… 코드"). Tests open with ?dev and skip it.
+  const welcome = app.welcome && !myCode(app.store).shown && setTimeout(() => {
+    if (alive && !document.querySelector(".scrim:not(.closing)")) openMyCodeIntro(app, root, (title, build) => sheet(title, build), { onChange: codeChanged });
+  }, 450);
   const slowTimer = setTimeout(() => {
     if (!app.connecting) return;
     slow = true;
@@ -30458,8 +31115,9 @@ function showHome(app) {
   app.ready
     .then((transport) => transport.listRooms().then(
       (list) => {
-        others = list;
-        app.trace("rooms: " + list.length);
+        // 나의 고유 코드's place is not a room to show.
+        others = list.filter((r) => r.kind !== "me");
+        app.trace("rooms: " + others.length);
       },
       (err) => {
         console.warn(err);
@@ -30472,11 +31130,12 @@ function showHome(app) {
       if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
-  // While a window is out (a sheet, 비서), home's three round buttons step away: they never lie over
-  // it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The window
-  // closes by its own button or a press outside it; 설정's spot pressed again is outside it. While
-  // 햇살's own window is out, only 햇살 stays where it was and still answers (the owner: "걍 아이콘들 다
-  // 가리고서 거기에 있던 그 아이콘만 보이게"), whatever 설정 says: that setting is only what its tap does.
+  // A window out (a sheet, 비서) only covers what it lies over: home's three round buttons stay where
+  // they are (the owner, 26 November: "비서와 설정 누를 때 아이콘 3개 사라지는 거 없애 주고"; before,
+  // 21 November, they stepped away). A sheet closes by its own button or a press outside it, and
+  // 설정's spot pressed again is outside it. While 햇살's own window is out, only 햇살 stays above it
+  // and still answers (the owner: "그 햇살창만 안 가려지게"), whatever 설정 says: that setting is only
+  // what its tap does.
   const sheetOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference"));
   const sunOut = () => !!document.getElementById("home-panel");
   const watchWindows = new MutationObserver(() => {
@@ -30489,6 +31148,8 @@ function showHome(app) {
   return () => {
     alive = false;
     clearTimeout(slowTimer);
+    clearTimeout(welcome);
+    offMe();
     closeSheet?.();
     watchWindows.disconnect();
     root.classList.remove("home-window", "home-sun-out");
@@ -30496,6 +31157,217 @@ function showHome(app) {
 }
 
 return { whenText, showHome };
+})();
+__m["src/sync/me-place.js"] = (() => {
+// 나의 고유 코드's place: where my rooms, houses, stars and settings meet from every device that has
+// the code (the owner, 21 November: "이걸 안다면 당신의 모든 것들을 어디에서나"). The place is a room
+// whose id is a hash of the code (placeOf), and all it holds is one sealed bundle per device
+// (sealFor), so only the code finds it or reads it. Each device writes its registers (core/me.js);
+// opening the place puts the newest of everything on this device.
+//
+// Where nothing is shared (the public address before its server), there is no place: everything stays
+// on this device and 설정 says so.
+
+const { placeOf, sealFor, openFor, mergeBundles, itemsNow, ledgerOf, viewOf } = __m["src/core/me.js"];
+const { myCodeOf } = __m["src/identity.js"];
+
+const DOC = "bundles";
+/** Settings that are mine wherever I am. Where a bar or panel stands, and a device's own delay fix, stay on the device. */
+const SHARED_SETTINGS = ["theme", "accent", "textScale", "tintAmount", "colors", "mixing", "songMode", "pianoTone", "showWave", "songSpeed",
+  "metronome", "snap", "grid", "countIn", "inkBrush", "inkEraser", "inkSteady", "inkShapes", "reference", "panelCycle", "games", "recentSearchMax",
+  "soundEffects", "haptics", "lineColors", "animOnion", "boardText", "roomView"];
+
+function deviceOf(store) {
+  let id = store.get("meDevice", null);
+  if (typeof id !== "string" || !id) {
+    id = "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    store.set("meDevice", id);
+  }
+  return id;
+}
+
+/** This device's things as register values ("이 기기만" rooms stay here: no other device could open them). */
+function thingsOf(store) {
+  const things = new Map();
+  for (const r of store.get("rooms", [])) {
+    if (r && typeof r.id === "string" && !r.local) things.set("room:" + r.id, { kind: r.kind || null, name: r.name || "", memberId: r.memberId || null, at: r.at || 0, ...(r.key ? { key: r.key } : {}) });
+  }
+  for (const h of store.get("houses", [])) {
+    if (h && typeof h.id === "string") things.set("house:" + h.id, { name: h.name, color: h.color, icon: h.icon, rooms: Array.isArray(h.rooms) ? h.rooms.slice() : [], at: h.at || 0 });
+  }
+  for (const id of store.get("homeStars", [])) if (typeof id === "string") things.set("star:" + id, true);
+  const raw = store.get("settings", {}) || {};
+  for (const k of SHARED_SETTINGS) if (raw[k] !== undefined) things.set("set:" + k, raw[k]);
+  return things;
+}
+
+/**
+ * The universe put on this device. What only this device knows of a room (its preview, its people,
+ * the rooms kept only here) stays. With `keep`, rooms, houses and stars this device has and the
+ * universe does not are kept too (the first meeting). Returns the names of the settings that changed.
+ */
+function putOn(store, view, { keep = false } = {}) {
+  const had = store.get("rooms", []);
+  const byId = new Map(had.map((r) => [r.id, r]));
+  const there = new Set(view.rooms.map((r) => r.id));
+  const rooms = [];
+  for (const r of had) {
+    const v = there.has(r.id) ? view.rooms.find((x) => x.id === r.id) : null;
+    if (v) rooms.push({ ...r, kind: v.kind ?? r.kind, name: v.name ?? r.name, memberId: v.memberId ?? r.memberId, at: Math.max(r.at || 0, v.at || 0), ...(v.key || r.key ? { key: v.key || r.key } : {}) });
+    else if (r.local || keep) rooms.push(r);
+  }
+  for (const v of view.rooms) if (!byId.has(v.id)) rooms.push({ id: v.id, kind: v.kind, name: v.name, memberId: v.memberId, at: v.at || Date.now(), ...(v.key ? { key: v.key } : {}) });
+  store.set("rooms", rooms);
+
+  const houses = new Map((keep ? store.get("houses", []) : []).map((h) => [h.id, h]));
+  for (const v of view.houses) houses.set(v.id, { id: v.id, name: v.name, color: v.color, icon: v.icon, rooms: v.rooms || [], at: v.at || 0 });
+  store.set("houses", [...houses.values()]);
+
+  const stars = new Set([...(keep ? store.get("homeStars", []) : []), ...view.stars]);
+  store.set("homeStars", [...stars]);
+
+  const raw = { ...(store.get("settings", {}) || {}) };
+  const changed = [];
+  for (const [k, v] of Object.entries(view.settings)) {
+    if (!SHARED_SETTINGS.includes(k) || JSON.stringify(raw[k]) === JSON.stringify(v)) continue;
+    raw[k] = v;
+    changed.push(k);
+  }
+  if (changed.length) store.set("settings", raw);
+  return changed;
+}
+
+/**
+ * Keeps this device and the code's place together while the app runs. `events` hears "me-changed"
+ * ({ settings }) whenever the universe changed something here. Returns { status(), restart(), stop() }.
+ */
+function startMyPlace({ store, ready, events, isLimited = () => false, pollMs = 2500 }) {
+  let run = 0;
+  let state = { kind: "starting", at: 0 };
+  let channel = null;
+  let unsubscribe = null;
+  let poll = null;
+  let soon = null;
+  let busy = null;
+  let lastThings = "";
+
+  const say = (kind) => {
+    state = { kind, at: Date.now() };
+    events?.emit("me-status", state);
+  };
+
+  async function begin() {
+    const mine = ++run;
+    stopChannel();
+    const transport = await ready;
+    if (mine !== run) return;
+    if (!transport || isLimited()) return say("device");
+    const code = myCodeOf(store).code;
+    const place = await placeOf(code);
+    try {
+      channel = await transport.openRoom(place);
+      if (!channel) {
+        await transport.createRoom({ id: place, kind: "me", name: "" });
+        channel = await transport.openRoom(place);
+      }
+    } catch (err) {
+      console.warn(err);
+      return say("error");
+    }
+    if (mine !== run || !channel) return say(channel ? "starting" : "error");
+    unsubscribe = channel.subscribe((docId) => {
+      if (docId === DOC) later(150);
+    });
+    poll = setInterval(() => {
+      const now = JSON.stringify([...thingsOf(store)]);
+      if (now !== lastThings) later(600);
+    }, pollMs);
+    await sync(code);
+  }
+
+  function later(ms) {
+    clearTimeout(soon);
+    soon = setTimeout(() => sync(myCodeOf(store).code), ms);
+  }
+
+  async function sync(code) {
+    if (!channel) return;
+    if (busy) return busy.then(() => later(50));
+    const mine = run;
+    busy = (async () => {
+      say("syncing");
+      const ops = await channel.load(DOC);
+      const newest = new Map();
+      for (const op of ops) {
+        if (!op || op.t !== "b" || typeof op.dev !== "string") continue;
+        const was = newest.get(op.dev);
+        if (!was || op.at > was.at || (op.at === was.at && op.sealed > was.sealed)) newest.set(op.dev, op);
+      }
+      const me = deviceOf(store);
+      const theirs = (await Promise.all([...newest.values()].filter((op) => op.dev !== me).map((op) => openFor(code, op.sealed)))).filter(Boolean);
+      if (mine !== run) return;
+      let ledger = store.get("meLedger", null);
+      const changed = new Set();
+      const seen = () => JSON.stringify([store.get("rooms", []), store.get("houses", []), store.get("homeStars", [])]);
+      const before = seen();
+      if (!ledger) {
+        // The first meeting with this universe: what it already holds wins over what this device has
+        // (a new device's plain settings must not undo the ones chosen elsewhere); what only this
+        // device has joins it.
+        const there = mergeBundles(theirs);
+        for (const k of putOn(store, viewOf(there.items), { keep: true })) changed.add(k);
+        ledger = ledgerOf(there.items);
+      }
+      const now = itemsNow(thingsOf(store), ledger, Date.now());
+      const all = mergeBundles([...theirs, { items: now.items }]);
+      for (const k of putOn(store, viewOf(all.items))) changed.add(k);
+      const settled = itemsNow(thingsOf(store), ledgerOf(all.items), Date.now());
+      store.set("meLedger", settled.ledger);
+      lastThings = JSON.stringify([...thingsOf(store)]);
+      const bundle = { items: settled.items };
+      const said = JSON.stringify(bundle);
+      if (store.get("mePushed", null) !== said) {
+        await channel.append(DOC, [{ t: "b", dev: me, at: Date.now(), sealed: await sealFor(code, bundle) }]);
+        store.set("mePushed", said);
+      }
+      say("ok");
+      if (changed.size || seen() !== before) events?.emit("me-changed", { settings: [...changed] });
+    })().catch((err) => {
+      console.warn(err);
+      say("error");
+      if (mine === run) later(8000);
+    }).finally(() => {
+      busy = null;
+    });
+    return busy;
+  }
+
+  function stopChannel() {
+    clearInterval(poll);
+    clearTimeout(soon);
+    unsubscribe?.();
+    unsubscribe = null;
+    try {
+      channel?.close();
+    } catch {
+      // already closed
+    }
+    channel = null;
+  }
+
+  begin();
+  return {
+    status: () => state,
+    restart: () => begin(),
+    syncNow: () => sync(myCodeOf(store).code),
+    stop: () => {
+      run++;
+      stopChannel();
+    },
+  };
+}
+
+return { SHARED_SETTINGS, thingsOf, putOn, startMyPlace };
 })();
 __m["src/main.js"] = (() => {
 // Start-up: choose how ops travel, then show home or a room.
@@ -30510,6 +31382,9 @@ const { showHome } = __m["src/ui/home.js"];
 const { showRoom } = __m["src/ui/room-shell.js"];
 const { roomLink } = __m["src/core/room.js"];
 const { BlobStore } = __m["src/sync/blobs.js"];
+const { startMyPlace } = __m["src/sync/me-place.js"];
+const { sealedTransport } = __m["src/sync/sealed.js"];
+const { keyFromText } = __m["src/core/lock.js"];
 
 const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -30577,6 +31452,8 @@ function boot(root) {
     // Recordings kept on this device. Test devices get their own.
     blobs: new BlobStore(dev ? `hamkke-files-${dev}-${ns}` : "hamkke-files"),
     transport: null, limited: false, connecting: true, session: null, handoff: null, fresh: null, booted: false,
+    // 나의 고유 코드 is handed over on the first open; test devices (?dev) skip it unless ?welcome=1.
+    welcome: !dev || params.get("welcome") === "1",
     /** The published page's own address, when the build names one (the trial page). */
     shareBase: () => document.querySelector('meta[name="share-base"]')?.content || null,
     linkFor: (roomId) => roomLink(app.shareBase() || location.href, roomId),
@@ -30600,7 +31477,17 @@ function boot(root) {
     local: () => (localTransport ||= new LocalTransport({ ns })),
     transportFor: async (roomId) => {
       const shared = await app.ready;
-      return roomEntry(store, roomId)?.local ? app.local() : shared;
+      const entry = roomEntry(store, roomId);
+      const base = entry?.local ? app.local() : shared;
+      // A room with a password opens through its sealed channel, with the key this device keeps.
+      if (entry?.key) {
+        try {
+          return sealedTransport(base, roomId, await keyFromText(entry.key));
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+      return base;
     },
   };
   window.__app = app;
@@ -30614,6 +31501,17 @@ function boot(root) {
     app.limited = limited;
     app.connecting = false;
     return transport;
+  });
+
+  // 나의 고유 코드's place: my rooms, houses, stars and settings from every device with the code.
+  app.me = startMyPlace({ store, ready: app.ready, events: app.events, isLimited: () => app.limited });
+  app.events.on("me-changed", ({ settings }) => {
+    if (!settings?.length) return;
+    const now = getSettings(store);
+    if (settings.includes("theme")) applyTheme(now.theme);
+    if (settings.includes("accent")) applyAccent(now.accent);
+    if (settings.includes("tintAmount")) applyTintAmount(now.tintAmount);
+    if (settings.includes("textScale")) applyTextScale(now.textScale);
   });
 
   let leave = null;
@@ -30633,7 +31531,7 @@ function boot(root) {
   // blue): anything but a field to write in, or the link and code meant to be copied, takes none.
   document.addEventListener("selectstart", (e) => {
     const el = e.target?.nodeType === 1 ? e.target : e.target?.parentElement;
-    if (el?.closest?.("input, textarea, [contenteditable='true'], .link-box, .code")) return;
+    if (el?.closest?.("input, textarea, [contenteditable='true'], .link-box, .code, .my-code:not(.masked)")) return;
     e.preventDefault();
   });
   render();
