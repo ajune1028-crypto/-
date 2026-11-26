@@ -18,7 +18,8 @@ export const MAX_LAYERS = 16;
 // at all (see-through, shown as a checkerboard and kept so in a saved image).
 export const PAPERS = [["white", "#fffdf8", "흰 종이"], ["cream", "#fbf6e9", "미색"], ["grey", "#e9eaee", "회색"], ["sky", "#e6f0fb", "하늘"], ["pink", "#fbe9ef", "분홍"], ["black", "#17181c", "검정"], ["clear", null, "투명"]];
 const MAX_UNKNOWN = 300;
-const FIELDS = ["name", "opacity", "visible", "mode", "order"];
+// lock: 알파 잠금 (new strokes only over what the layer has); clip: 클리핑 (seen only where the layer below has ink).
+const FIELDS = ["name", "opacity", "visible", "mode", "order", "lock", "clip"];
 
 /** The drawing document that holds a layer's strokes. */
 export function inkDocOf(layerId) {
@@ -33,6 +34,8 @@ const fieldOk = {
   visible: (v) => typeof v === "boolean",
   mode: (v) => BLEND_MODES.includes(v),
   order: (v) => typeof v === "number" && Number.isFinite(v),
+  lock: (v) => typeof v === "boolean",
+  clip: (v) => typeof v === "boolean",
 };
 
 export class DrawDoc {
@@ -119,7 +122,7 @@ export class DrawDoc {
     const l = this.byId.get(id);
     if (!l) return null;
     const f = (k, d) => (l.fields.has(k) ? l.fields.get(k).v : d);
-    return { id: l.id, by: l.by, at: l.at, removed: l.rm % 2 === 1, rm: l.rm, name: f("name", l.name), visible: f("visible", true), opacity: f("opacity", 1), mode: f("mode", "source-over"), order: f("order", counterOf(l.id)) };
+    return { id: l.id, by: l.by, at: l.at, removed: l.rm % 2 === 1, rm: l.rm, name: f("name", l.name), visible: f("visible", true), opacity: f("opacity", 1), mode: f("mode", "source-over"), order: f("order", counterOf(l.id)), lock: f("lock", false), clip: f("clip", false) };
   }
 
   /** The layers there are, bottom first. A layer made without a name is called by its place. */

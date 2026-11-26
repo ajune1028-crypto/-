@@ -10,6 +10,7 @@
 //   "song-clips"  { room, clips: [{ dx, dy, offset, length, speed, tint, muted, src, source }] }
 //   "board-items" { items: [{ kind, dx, dy, data, … }], strokes: [{ pts, c, w, … }] }
 //   "text"        { text }
+//   "ink"         { strokes: [{ pts (screen px as seen, from their corner), c, w, z, b, s, q, o }] }
 
 const BASKET = "basket";
 const LEGACY = "clipboard";
@@ -122,6 +123,9 @@ export function describeItem(item) {
       const cards = item.items?.length || 0;
       const strokes = item.strokes?.length || 0;
       return { icon: "board", text: [cards && `카드 ${cards}개`, strokes && `그림 ${strokes}획`].filter(Boolean).join(" · ") || "빈 묶음" };
+    }
+    case "ink": {
+      return { icon: "pen", text: `그림 ${item.strokes?.length || 0}획` };
     }
     case "text": {
       const flat = String(item.text || "").replace(/\s+/g, " ").trim();

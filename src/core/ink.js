@@ -65,13 +65,16 @@ export class InkDoc {
         (op.s === undefined || (typeof op.s === "string" && /^[a-z]{1,20}$/.test(op.s))) &&
         (op.q === undefined || op.q === 1) &&
         (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10)) &&
-        (op.o === undefined || isInt(op.o, 5, 99));
+        (op.o === undefined || isInt(op.o, 5, 99)) &&
+        // 알파 잠금: drawn inside what its layer already had (a 그림 방 layer's lock).
+        (op.a === undefined || op.a === 1);
       if (!ok) return this.setAside(op);
       const stroke = { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 };
       if (op.z) stroke.z = op.z;
       if (op.o) stroke.o = op.o;
       if (op.s) stroke.s = op.s;
       if (op.q) stroke.q = 1;
+      if (op.a) stroke.a = 1;
       this.byId.set(op.id, stroke);
       this.done(op);
       for (const waiting of this.waiting.get(op.id) || []) this.apply(waiting);
@@ -190,7 +193,7 @@ export function nearestWidth(px) {
   return px < 2 * Math.SQRT2 ? 1 : px < 4 * Math.SQRT2 ? 2 : 3;
 }
 
-export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false, opacity }) {
+export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false, opacity, inside = false }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
   const op = { t: "stroke", id: clock.next(), pts: shape ? pts.slice(0, MAX_POINTS * 3) : thinToFit(pts), c: color, w: width, by, at };
@@ -210,6 +213,8 @@ export function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.n
   // 불투명 (Procreate's second slider) as a whole percent, 5 to 99; full strength is left out so
   // devices from before it draw the stroke as they always did.
   if (Number.isFinite(opacity) && opacity < 0.995) op.o = Math.max(5, Math.min(99, Math.round(opacity * 100)));
+  // 알파 잠금: only over what its layer already had (devices from before it draw it plainly).
+  if (inside) op.a = 1;
   return { ops: [op], atoms: [{ k: "ink+", s: op.id }] };
 }
 
@@ -237,7 +242,7 @@ export function moveStrokesOps(clock, ink, ids, dx, dy, by) {
     if (!s || s.rm % 2 === 1) continue;
     const gone = eraseOps(clock, ink, id);
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s), inside: !!s.a });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -283,7 +288,7 @@ export function copyStrokesOps(clock, ink, ids, dx, dy, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1) continue;
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s), inside: !!s.a });
     ops.push(...made.ops);
     atoms.push(...made.atoms);
   }
@@ -299,7 +304,7 @@ export function recolorStrokesOps(clock, ink, ids, color, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
     const gone = eraseOps(clock, ink, id);
-    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s), inside: !!s.a });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -353,4 +358,91 @@ export function closedLoop(path, rem = 16, since = 0) {
     }
   }
   return null;
+}
+
+/** Stroke units per whiteboard pixel (as on a sheet: hundredths of a 16 px rem). */
+export const BOARD_INK_UNIT = 100 / 16;
+
+/**
+ * Strokes to carry to another room (비서's 바구니, the day's plan 6.8): their points as the screen px
+ * they were seen at (units ÷ unitsPerPx), from their own top left; colour, width, brush, shape and
+ * 불투명 as they were. Rubbed-out strokes and the eraser's own are left.
+ */
+export function carryStrokes(ink, ids, unitsPerPx) {
+  const list = ids.map((id) => ink.get(id)).filter((s) => s && s.rm % 2 !== 1 && s.b !== "erase");
+  if (!list.length) return [];
+  let x0 = Infinity;
+  let y0 = Infinity;
+  for (const s of list) {
+    for (let i = 0; i < s.pts.length; i += 3) {
+      if (s.pts[i] < x0) x0 = s.pts[i];
+      if (s.pts[i + 1] < y0) y0 = s.pts[i + 1];
+    }
+  }
+  const k = unitsPerPx > 0 ? unitsPerPx : 1;
+  const px = (v) => Math.round(v * 10) / 10;
+  return list.map((s) => ({
+    pts: s.pts.map((v, i) => (i % 3 === 0 ? px((v - x0) / k) : i % 3 === 1 ? px((v - y0) / k) : v)),
+    c: s.c,
+    w: s.w,
+    ...(s.z ? { z: s.z } : {}),
+    b: s.b || "pen",
+    ...(s.s ? { s: s.s } : {}),
+    ...(s.q ? { q: 1 } : {}),
+    ...(opacityOf(s) < 1 ? { o: Math.round(opacityOf(s) * 100) } : {}),
+  }));
+}
+
+/**
+ * Carried strokes put down in a layer whose units are px × unitsPerPx, their middle at (cx, cy):
+ * new strokes of mine, one undo. `color` may change each stroke's colour on the way (a 그림 방's
+ * black stays black).
+ */
+export function landStrokesOps(clock, ink, carried, unitsPerPx, cx, cy, by, color = (c) => c) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const s of carried) {
+    for (let i = 0; i < (s.pts?.length || 0); i += 3) {
+      x0 = Math.min(x0, s.pts[i]);
+      x1 = Math.max(x1, s.pts[i]);
+      y0 = Math.min(y0, s.pts[i + 1]);
+      y1 = Math.max(y1, s.pts[i + 1]);
+    }
+  }
+  if (!Number.isFinite(x0)) return { ops: [], atoms: [] };
+  const k = unitsPerPx > 0 ? unitsPerPx : 1;
+  const ox = cx - ((x0 + x1) / 2) * k;
+  const oy = cy - ((y0 + y1) / 2) * k;
+  const ops = [];
+  const atoms = [];
+  for (const s of carried) {
+    if (!Array.isArray(s.pts) || s.pts.length < 3) continue;
+    const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(ox + v * k) : i % 3 === 1 ? Math.round(oy + v * k) : v));
+    const made = strokeOps(clock, ink, { pts, color: color(s.c), width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: s.o ? s.o / 100 : undefined });
+    ops.push(...made.ops);
+    atoms.push(...made.atoms);
+  }
+  return { ops, atoms };
+}
+
+/**
+ * 아래로 합치기 (그림 방): the strokes of a layer go into the layer below, in their order and on top of
+ * what it had, each as it was; the layer above is left empty. Two docs change: { into, from }, each
+ * { ops, atoms } for its own doc (one undo takes both back).
+ */
+export function mergeStrokesOps(clock, above, below, by) {
+  const into = { ops: [], atoms: [] };
+  const from = { ops: [], atoms: [] };
+  clock.atLeast(Math.max(above.maxN, below.maxN));
+  for (const s of above.strokes()) {
+    const made = strokeOps(clock, below, { pts: s.pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: true, opacity: opacityOf(s), inside: !!s.a });
+    into.ops.push(...made.ops);
+    into.atoms.push(...made.atoms);
+    const gone = eraseOps(clock, above, s.id);
+    from.ops.push(...gone.ops);
+    from.atoms.push(...gone.atoms);
+  }
+  return { into, from };
 }

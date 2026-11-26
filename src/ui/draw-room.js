@@ -10,12 +10,13 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried } from "./ink.js";
+import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, opacityOf, moveStrokesOps } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, opacityOf, moveStrokesOps, mergeStrokesOps } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
-import { getSettings, setSetting } from "../identity.js";
+import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { buzz } from "./chime.js";
 
 /** The page, in stroke units (hundredths of a rem): 22.5 × 30 rem, a phone's width at 1×. */
@@ -75,6 +76,10 @@ export function mountDrawRoom(body, app, session, frame) {
     let lasso = null;
     const ink = new InkLayer({
       fixedInk: true,
+      // 알파 잠금: new lines only over what this layer has; 클리핑: shown only where the layer below has ink.
+      inside: () => !!doc.layer(layer.id)?.lock,
+      clipTo: () => clipBase(layer.id),
+      afterRender: () => { for (const above of clippedAbove(layer.id)) above.ink.render(); },
       // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
       onLasso: (info) => lasso?.show(info),
       onLassoMove: (ids, dx, dy) => {
@@ -93,9 +98,9 @@ export function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
+      onStroke: ({ pts, color, width, size, brush, shape, opacity, inside }) => {
         if (readOnly()) return;
-        const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
+        const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, inside, by: session.memberId });
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
@@ -108,8 +113,9 @@ export function mountDrawRoom(body, app, session, frame) {
         thumbSoon(layer.id);
       },
     });
-    lasso = lassoActions({ ink, doc: () => session.doc(name), clock: session.clock, by: session.memberId, commit: keepInk });
-    entry = { el, ink };
+    const kit = { ink, doc: () => session.doc(name), clock: session.clock, by: session.memberId, commit: keepInk };
+    lasso = lassoActions({ ...kit, carry: carryInk });
+    entry = { el, ink, kit };
     hosts.set(layer.id, entry);
     session.load(name).then(() => { if (alive) { ink.render(); thumbSoon(layer.id); } });
     return entry;
@@ -149,7 +155,16 @@ export function mountDrawRoom(body, app, session, frame) {
       const { el, ink } = layerHost(layer);
       el.style.opacity = String(layer.opacity);
       el.style.mixBlendMode = layer.mode === "source-over" ? "normal" : layer.mode;
-      el.hidden = !layer.visible;
+      const base = layer.clip ? baseOf(list, list.indexOf(layer)) : null;
+      el.hidden = !layer.visible || (layer.clip && !!base && !base.visible);
+      // Clipped now (or to another layer) than when last drawn: drawn again (here or from a friend).
+      const entry = hosts.get(layer.id);
+      const clipKey = layer.clip ? "clip:" + (base?.id || "") : "";
+      if (entry && entry.clipKey !== clipKey) {
+        const was = entry.clipKey;
+        entry.clipKey = clipKey;
+        if (was !== undefined) requestAnimationFrame(() => entry.ink.render());
+      }
       el.classList.toggle("active", layer.id === active);
       page.append(el); // in order, bottom first
       const tool = layer.id === active && layer.visible && !readOnly() ? pen.tool : null;
@@ -164,6 +179,13 @@ export function mountDrawRoom(body, app, session, frame) {
   function setTool(tool) {
     pen.tool = tool;
     drawLayers();
+  }
+
+  /** Drawings copied with the 올가미 go into 비서's 바구니, to be put into another room. */
+  function carryInk(strokes) {
+    if (!strokes.length) return;
+    copyItem(app.store, { kind: "ink", strokes }, { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-draw" });
+    toast(root, `그림 ${strokes.length}획을 복사했어요. 다른 방에서 비서의 '여기에 놓기'로 꺼내요`, 3200);
   }
 
   // ---- the layers panel -----------------------------------------------------------------------
@@ -198,7 +220,56 @@ export function mountDrawRoom(body, app, session, frame) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
     g.setTransform(c.width / PAGE_W, 0, 0, c.height / PAGE_H, 0, 0);
-    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s), !!s.a);
+  }
+
+  /** The layer a clipping layer is clipped to: the nearest one below that is not clipping itself (as in Procreate). */
+  function baseOf(list, i) {
+    let j = i - 1;
+    while (j >= 0 && list[j].clip) j--;
+    return j >= 0 ? list[j] : null;
+  }
+
+  /** 클리핑: the canvas a layer is clipped to, or null. */
+  function clipBase(id) {
+    const list = doc.layers();
+    const i = list.findIndex((l) => l.id === id);
+    if (i <= 0 || !list[i].clip) return null;
+    const base = baseOf(list, i);
+    return base ? hosts.get(base.id)?.ink.canvas || null : null;
+  }
+
+  /** The clipping layers resting on this one (they are drawn again after it). */
+  function clippedAbove(id) {
+    const list = doc.layers();
+    const i = list.findIndex((l) => l.id === id);
+    if (i < 0 || list[i].clip) return [];
+    const out = [];
+    for (let j = i + 1; j < list.length && list[j].clip; j++) {
+      const entry = hosts.get(list[j].id);
+      if (entry) out.push(entry);
+    }
+    return out;
+  }
+
+  /** 아래로 합치기: this layer's lines go into the layer below (on top of its own), and this layer goes; one undo. */
+  function mergeDown(layer) {
+    const list = doc.layers();
+    const i = list.findIndex((l) => l.id === layer.id);
+    if (i <= 0 || readOnly()) return;
+    const below = list[i - 1];
+    const fromName = inkDocOf(layer.id);
+    const intoName = inkDocOf(below.id);
+    const made = mergeStrokesOps(session.clock, session.doc(fromName), session.doc(intoName), session.memberId);
+    session.commit(intoName, made.into.ops);
+    session.commit(fromName, made.from.ops);
+    const gone = removeLayerOps(session.clock, doc, layer.id);
+    session.commit("draw", gone.ops);
+    record([...made.into.atoms.map((a) => ({ ...a, doc: intoName })), ...made.from.atoms.map((a) => ({ ...a, doc: fromName })), ...gone.atoms.map((a) => ({ ...a, doc: "draw" }))]);
+    active = below.id;
+    drawLayers();
+    thumbSoon(below.id);
+    toast(root, `'${below.name}'에 합쳤어요 (되돌리기로 나눠요)`);
   }
 
   function drawPanel() {
@@ -216,7 +287,10 @@ export function mountDrawRoom(body, app, session, frame) {
         const row = h("div", { class: "layer-row" + (on ? " active" : ""), data: { layer: layer.id } },
           h("button", { class: "layer-pick", type: "button", "aria-pressed": String(on), "aria-label": layer.name + (on ? " (그리는 레이어)" : " 고르기"), onclick: () => { active = layer.id; drawLayers(); } },
             thumb, h("span", { class: "layer-name", text: layer.name }),
-            layer.mode !== "source-over" && h("span", { class: "layer-mode", text: BLEND_NAMES[layer.mode] })),
+            layer.mode !== "source-over" && h("span", { class: "layer-mode", text: BLEND_NAMES[layer.mode] }),
+            // 알파 잠금 and 클리핑 at a glance (as Procreate marks them).
+            layer.lock && h("span", { class: "layer-mode", data: { mark: "lock" }, text: "알파 잠금" }),
+            layer.clip && h("span", { class: "layer-mode", data: { mark: "clip" }, text: "↳ 클리핑" })),
           h("button", { class: "icon-btn layer-eye", type: "button", data: { eye: layer.id }, "aria-pressed": String(layer.visible), "aria-label": layer.visible ? "숨기기" : "보이기",
             onclick: () => change(layer.id, { visible: !layer.visible }) }, icon(layer.visible ? "eye" : "eyeOff")));
         if (on && can) row.append(layerControls(layer, list));
@@ -251,6 +325,9 @@ export function mountDrawRoom(body, app, session, frame) {
         h("button", { class: "chip", id: "layer-up", type: "button", disabled: at === 0, onclick: () => apply(moveLayerOps(session.clock, doc, layer.id, 1)) }, "↑ 위로"),
         h("button", { class: "chip", id: "layer-down", type: "button", disabled: at === list.length - 1, onclick: () => apply(moveLayerOps(session.clock, doc, layer.id, -1)) }, "↓ 아래로"),
         h("button", { class: "chip", id: "layer-rename", type: "button", onclick: () => rename(layer) }, "이름"),
+        h("button", { class: "chip", id: "layer-lock", type: "button", "aria-pressed": String(!!layer.lock), title: "칠한 곳 안에만 그려요", onclick: () => change(layer.id, { lock: !layer.lock }) }, "알파 잠금"),
+        h("button", { class: "chip", id: "layer-clip", type: "button", "aria-pressed": String(!!layer.clip), disabled: at === list.length - 1, title: "아래 레이어에 그린 곳 안에만 보여요", onclick: () => change(layer.id, { clip: !layer.clip }) }, "클리핑"),
+        h("button", { class: "chip", id: "layer-merge", type: "button", disabled: at === list.length - 1, onclick: () => mergeDown(layer) }, "아래로 합치기"),
         h("button", { class: "chip danger", id: "layer-remove", type: "button", disabled: list.length <= 1, onclick: () => { apply(removeLayerOps(session.clock, doc, layer.id)); toast(root, "레이어를 지웠어요 (되돌리기로 살려요)"); } }, "지우기")));
   }
 
@@ -349,14 +426,24 @@ export function mountDrawRoom(body, app, session, frame) {
       g.fillStyle = paper;
       g.fillRect(0, 0, w, hgt);
     }
-    for (const layer of doc.layers()) {
-      if (!layer.visible) continue;
+    const layers = doc.layers();
+    let below = null; // the last layer's own picture (a clipping layer above keeps only where it has ink)
+    for (const layer of layers) {
       const one = document.createElement("canvas");
       one.width = w;
       one.height = hgt;
       const lg = one.getContext("2d");
       lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s), !!s.a);
+      const base = below;
+      below = layer.clip ? below : { canvas: one, visible: layer.visible };
+      if (layer.clip && base) {
+        if (!base.visible) continue;
+        lg.setTransform(1, 0, 0, 1, 0, 0);
+        lg.globalCompositeOperation = "destination-in";
+        lg.drawImage(base.canvas, 0, 0);
+      }
+      if (!layer.visible) continue;
       g.globalAlpha = layer.opacity;
       g.globalCompositeOperation = layer.mode;
       g.drawImage(one, 0, 0);
@@ -400,6 +487,17 @@ export function mountDrawRoom(body, app, session, frame) {
   drawLayers();
 
   return {
+    /** 비서's 바구니: drawings (from any room, a whiteboard's too) land on the layer being drawn on. */
+    takes(item) {
+      return !readOnly() && ((item.kind === "ink" && !!item.strokes?.length) || (item.kind === "board-items" && !!item.strokes?.length));
+    },
+    put(item) {
+      const layer = doc.layers().find((l) => l.id === active);
+      if (!layer) return;
+      const entry = layerHost(layer);
+      setTool("lasso");
+      landInk(entry.kit, item.kind === "ink" ? item.strokes : boardStrokesCarried(item.strokes));
+    },
     close() {
       alive = false;
       stopOutside?.();

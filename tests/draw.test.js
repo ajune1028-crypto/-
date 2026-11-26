@@ -115,3 +115,53 @@ test("the paper: white to begin with, one of a few or clear, the latest change w
   for (const op of invertDrawOps(doc, a, mine.atoms, "undo")) doc.apply(op);
   assert.equal(doc.paper(), other.paper());
 });
+
+import { InkDoc, strokeOps, moveStrokesOps, copyStrokesOps, recolorStrokesOps, mergeStrokesOps } from "../src/core/ink.js";
+// 그림 방's layers as a pro keeps them (the day's plan 7): 알파 잠금 and 클리핑 are a layer's own, kept
+// for everyone; a stroke drawn on a locked layer says so itself, so it stays inside what was there
+// even after the layer is unlocked; 아래로 합치기 moves the strokes into the layer below.
+test("a layer's 알파 잠금 and 클리핑 are kept for everyone; a locked stroke stays so when moved, copied or recoloured", () => {
+  const clock = new Clock("a");
+  const doc = new DrawDoc();
+  const base = apply(doc, addLayerOps(clock, doc, { by: "a" }));
+  const top = apply(doc, addLayerOps(clock, doc, { by: "a" }));
+  assert.equal(doc.layer(top.id).lock, false);
+  assert.equal(doc.layer(top.id).clip, false);
+  apply(doc, setLayerOps(clock, doc, top.id, { lock: true, clip: true }));
+  assert.equal(doc.layer(top.id).lock, true);
+  assert.equal(doc.layer(top.id).clip, true);
+  assert.equal(doc.layer(base.id).clip, false);
+  const ink = new InkDoc();
+  const made = strokeOps(clock, ink, { pts: [0, 0, 50, 100, 0, 50], color: "red", width: 2, by: "a", inside: true });
+  for (const op of made.ops) ink.apply(op);
+  const id = made.ops[0].id;
+  assert.equal(ink.get(id).a, 1, "the stroke drawn on a locked layer says so");
+  const moved = moveStrokesOps(clock, ink, [id], 10, 10, "a");
+  for (const op of moved.ops) ink.apply(op);
+  const now = ink.strokes()[0];
+  assert.equal(now.a, 1, "moved, it stays inside");
+  const copied = copyStrokesOps(clock, ink, [now.id], 5, 5, "a");
+  const recolored = recolorStrokesOps(clock, ink, [now.id], "blue", "a");
+  assert.equal(copied.ops[0].a, 1);
+  assert.equal(recolored.ops.find((o) => o.t === "stroke").a, 1);
+});
+
+test("아래로 합치기: the strokes of a layer go into the layer below, on top of what it had, and leave the layer above (one undo each side)", () => {
+  const clock = new Clock("a");
+  const below = new InkDoc();
+  const above = new InkDoc();
+  const b1 = strokeOps(clock, below, { pts: [0, 0, 50, 10, 0, 50], color: "black", width: 2, by: "a" });
+  for (const op of b1.ops) below.apply(op);
+  const a1 = strokeOps(clock, above, { pts: [0, 5, 50, 10, 5, 50], color: "red", width: 3, by: "a", inside: true, opacity: 0.5 });
+  for (const op of a1.ops) above.apply(op);
+  const made = mergeStrokesOps(clock, above, below, "a");
+  for (const op of made.into.ops) below.apply(op);
+  for (const op of made.from.ops) above.apply(op);
+  assert.equal(above.strokes().length, 0, "nothing is left above");
+  const list = below.strokes();
+  assert.equal(list.length, 2);
+  assert.equal(list[1].c, "red", "it lies on top of what was below");
+  assert.equal(list[1].a, 1);
+  assert.equal(list[1].o, 50);
+  assert.ok(made.into.atoms.length && made.from.atoms.length);
+});

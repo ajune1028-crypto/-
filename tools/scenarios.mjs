@@ -7666,3 +7666,119 @@ scenario("비서 바구니: a clip copied in one song room goes into another wit
   // Taken out, it came to the front (what 붙이기 puts down next).
   assert.equal(await page.eval(`window.__app.store.get("basket", [])[0].item.kind`), "song-clip");
 });
+
+// The day's plan 6.8: drawings go into 비서's 바구니 too (the drawing 올가미's 복사), and land in another
+// room's drawing at the size they were seen at, held by the 올가미 there to be taken where they go.
+scenario("비서 바구니 for drawings: a line in a 그림 방 copied with the 올가미 goes onto a whiteboard and into a text room with 여기에 놓기, held by the 올가미 there", async ({ open }) => {
+  const a = await open({ width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "그린 것");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const y = box.y + box.h * 0.3;
+  await a.press(box.x + box.w * 0.3, y);
+  for (let i = 1; i <= 10; i++) await a.moveTo(box.x + box.w * (0.3 + 0.04 * i), y + i * 2);
+  await a.release(box.x + box.w * 0.7, y + 20);
+  const layer = await a.eval(`window.__app.session.doc("draw").layers()[0].id`);
+  await a.waitFor(`window.__app.session.doc("k:L${layer}").strokes().length === 1`);
+  await click(a, "#ink-lasso");
+  const ring = [[0.22, 0.24], [0.78, 0.24], [0.78, 0.4], [0.22, 0.4], [0.22, 0.245]].map(([u, v]) => [box.x + box.w * u, box.y + box.h * v]);
+  await a.press(...ring[0]);
+  for (let k = 1; k < ring.length; k++) for (let j = 1; j <= 5; j++) await a.moveTo(ring[k - 1][0] + ((ring[k][0] - ring[k - 1][0]) * j) / 5, ring[k - 1][1] + ((ring[k][1] - ring[k - 1][1]) * j) / 5);
+  await a.release(...ring.at(-1));
+  await a.waitFor(`${q("#ink-lasso-menu")}?.textContent.includes("그림 1")`, 3000);
+  await click(a, "#ink-lasso-carry");
+  await a.waitFor(`window.__app.store.get("basket", [])[0]?.item?.kind === "ink" && window.__app.store.get("basket", [])[0].item.strokes.length === 1`);
+  await click(a, "#ink-lasso-off");
+  await click(a, "#back");
+  // A whiteboard: the line goes onto it.
+  await createBoard(a, { room: "그림 모으는 보드" });
+  await click(a, "#room-reference");
+  await click(a, "#ref-tab-basket");
+  await a.waitFor(`/그림 1획/.test(document.querySelector("#ref-basket .ref-basket-item")?.textContent || "")`);
+  await click(a, "#ref-basket [data-put-basket]");
+  await a.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`);
+  await click(a, "#reference-close");
+  await click(a, "#back");
+  // A text room: it lands on today's sheet, held by the 올가미 (to be taken where it should go).
+  await createRoom(a, { room: "그림 일기" });
+  await click(a, "#room-reference");
+  await click(a, "#ref-tab-basket");
+  await click(a, "#ref-basket [data-put-basket]");
+  const day = await a.eval(`${TODAY}.dataset.day`);
+  await a.waitFor(`window.__app.session.doc("k:${day}").strokes().length === 1`);
+  await a.waitFor(`${q("#ink-lasso-menu")}?.textContent.includes("그림 1")`, 3000);
+});
+
+// The day's plan 7: 그림 방's layers as a pro keeps them - 알파 잠금 keeps new lines inside what the
+// layer has, 클리핑 shows a layer only where the layer below has ink, 아래로 합치기 puts a layer's lines
+// into the one below (one undo brings them back).
+scenario("그림 방 레이어: 알파 잠금 keeps a new line inside what the layer has; 클리핑 shows the layer above only where the layer below has ink; 아래로 합치기 puts its lines into the one below, and undo brings the layer back", async ({ open, out }) => {
+  const a = await open({ width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "레이어 연습");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (y, x0 = 0.3, x1 = 0.7) => {
+    await a.press(box.x + box.w * x0, box.y + box.h * y);
+    for (let i = 1; i <= 10; i++) await a.moveTo(box.x + box.w * (x0 + ((x1 - x0) * i) / 10), box.y + box.h * y);
+    await a.release(box.x + box.w * x1, box.y + box.h * y);
+  };
+  const layers = `window.__app.session.doc("draw").layers()`;
+  const strokesOf = (i) => `window.__app.session.doc("k:L" + ${layers}[${i}].id).strokes()`;
+  // How much ink a layer's canvas shows in a box of the page (fractions).
+  const inkIn = (i, x0, y0, x1, y1) => a.eval(`(() => { const id = ${layers}[${i}].id; const c = document.querySelector('.draw-layer[data-layer="' + id + '"] canvas'); const r = c.getBoundingClientRect(); const p = document.getElementById("draw-page").getBoundingClientRect(); const sx = c.width / r.width, sy = c.height / r.height; const X0 = Math.round((p.left + p.width * ${x0} - r.left) * sx), Y0 = Math.round((p.top + p.height * ${y0} - r.top) * sy), X1 = Math.round((p.left + p.width * ${x1} - r.left) * sx), Y1 = Math.round((p.top + p.height * ${y1} - r.top) * sy); const d = c.getContext("2d").getImageData(X0, Y0, Math.max(1, X1 - X0), Math.max(1, Y1 - Y0)).data; let n = 0; for (let k = 3; k < d.length; k += 4) if (d[k] > 20) n++; return n; })()`);
+  // A thick base line across the middle of the bottom layer.
+  await line(0.4);
+  await a.waitFor(`${strokesOf(0)}.length === 1`);
+  // 알파 잠금 on the bottom layer: a line across it (and past it) only shows where the base line is.
+  await click(a, "#draw-layers");
+  await a.waitFor(q("#layer-lock"));
+  await click(a, "#layer-lock");
+  await a.waitFor(`${layers}[0].lock === true && ${q("#layer-lock")}?.getAttribute("aria-pressed") === "true"`);
+  await click(a, "#draw-layers");
+  await a.waitFor(`document.getElementById("layers-panel").hidden`);
+  // Down across the base line: only the crossing shows.
+  await a.press(box.x + box.w * 0.5, box.y + box.h * 0.25);
+  for (let i = 1; i <= 10; i++) await a.moveTo(box.x + box.w * 0.5, box.y + box.h * (0.25 + 0.03 * i));
+  await a.release(box.x + box.w * 0.5, box.y + box.h * 0.55);
+  await a.waitFor(`${strokesOf(0)}.length === 2 && ${strokesOf(0)}[1].a === 1`);
+  await a.front();
+  await pause(150);
+  assert.equal(await inkIn(0, 0.48, 0.27, 0.52, 0.35), 0, "above the base line the locked line does not show");
+  // 클리핑: a new layer above, clipped: its wide line shows only over the base layer's ink.
+  await click(a, "#draw-layers");
+  await click(a, "#layer-add");
+  await a.waitFor(`${layers}.length === 2`);
+  await a.waitFor(q("#layer-clip"));
+  await click(a, "#layer-clip");
+  await a.waitFor(`${layers}[1].clip === true`);
+  await click(a, "#draw-layers");
+  await a.waitFor(`document.getElementById("layers-panel").hidden`);
+  // (Clear of the tools' rail at the left edge.)
+  await line(0.4, 0.18, 0.88);
+  await a.waitFor(`${strokesOf(1)}.length === 1`);
+  await a.front();
+  await pause(150);
+  assert.equal(await inkIn(1, 0.19, 0.38, 0.27, 0.42), 0, "left of the base line the clipped line does not show");
+  assert.ok((await inkIn(1, 0.4, 0.38, 0.6, 0.42)) > 0, "over the base line it shows");
+  await a.shot(out("draw-layers-clip.png"));
+  // 아래로 합치기: its line goes into the layer below; undo brings the layer and its line back.
+  await click(a, "#draw-layers");
+  await a.waitFor(q("#layer-merge"));
+  await a.shot(out("draw-layers-panel.png"));
+  await click(a, "#layer-merge");
+  await a.waitFor(`${layers}.length === 1 && ${strokesOf(0)}.length === 3`);
+  await click(a, "#draw-undo");
+  await a.waitFor(`${layers}.length === 2 && ${strokesOf(0)}.length === 2 && ${strokesOf(1)}.length === 1`);
+});

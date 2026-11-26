@@ -13,7 +13,7 @@
 
 import { h, icon, iconButton, closeOnOutside, mount } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, closedLoop } from "../core/ink.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, closedLoop, carryStrokes, landStrokesOps, BOARD_INK_UNIT } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
@@ -170,7 +170,8 @@ function fillOutline(g, poly) {
  */
 /** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
 /** alpha: the stroke's own 불투명 (0.05 to 1), on top of what the brush itself lays down. */
-export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1) {
+/** inside: 알파 잠금 - only over what is already drawn there (source-atop). */
+export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1, inside = false) {
   if (!pts || pts.length < 3) return;
   const base = brushLook(brush);
   const look = alpha < 1 ? { ...base, alpha: base.alpha * alpha } : base;
@@ -181,7 +182,7 @@ export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1)
   // A shape made exact keeps its corners; a fill is its region's rings.
   const points = strokePoints(pts, { streamline: shaped ? 0 : look.streamline, exact: shaped || look.kind === "fill" });
   g.save();
-  g.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  g.globalCompositeOperation = erase ? "destination-out" : inside ? "source-atop" : "source-over";
   if (look.kind === "smudge") {
     smudgeAlong(g, points, size, look, real);
     g.restore();
@@ -348,8 +349,13 @@ export class InkLayer {
    * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
    * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null, fixedInk = false }) {
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null, fixedInk = false, inside = () => false, clipTo = () => null, afterRender = null }) {
     this.fixedInk = fixedInk; // 그림 방, 애니메이션 방: black stays black in 어둡게
+    // 그림 방's layers: 알파 잠금 (new strokes only over what the layer has), 클리핑 (shown only where
+    // the canvas clipTo() gives has ink), and a word after each drawing (a clipping layer above redraws).
+    this.inside = inside;
+    this.clipTo = clipTo;
+    this.afterRender = afterRender;
     this.host = host;
     this.onLasso = onLasso;
     this.onLassoMove = onLassoMove;
@@ -678,8 +684,9 @@ export class InkLayer {
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
       const size = this.size || undefined;
       const opacity = this.opacity < 1 ? this.opacity : undefined;
-      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true, opacity });
-      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush, opacity });
+      const inside = live?.brush !== "erase" && !!this.inside();
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true, opacity, inside });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush, opacity, inside });
       if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
@@ -750,7 +757,7 @@ export class InkLayer {
     const inv = kept.t.inverse();
     const pts = ringsToPoints(rings.filter((r) => r.length >= 3), ([x, y]) => { const p = inv.transformPoint({ x, y }); return [p.x, p.y]; });
     if (pts.length < 9) return;
-    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined });
+    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined, inside: !!this.inside() });
     this.render();
   }
 
@@ -847,7 +854,7 @@ export class InkLayer {
       if (kept && kept.key === key && kept.doc === ink && !shift && last && strokes.length === kept.count + 1 && (kept.count === 0 || strokes[strokes.length - 2]?.id === kept.lastId)) {
         const pg = kept.canvas.getContext("2d");
         pg.setTransform(t);
-        this.paint(pg, last.pts, last.c, widthOf(last), brushOf(last), !!last.q, opacityOf(last));
+        this.paint(pg, last.pts, last.c, widthOf(last), brushOf(last), !!last.q, opacityOf(last), !!last.a);
         Object.assign(kept, { version, count: strokes.length, lastId: last.id });
       } else {
         const pic = kept?.canvas || document.createElement("canvas");
@@ -857,7 +864,7 @@ export class InkLayer {
         pg.setTransform(t);
         for (const s of strokes) {
           const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-          this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+          this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s), !!s.a);
         }
         this.kept = { key, version, canvas: pic, doc: ink, t, count: strokes.length, lastId: last?.id ?? null };
       }
@@ -870,8 +877,9 @@ export class InkLayer {
     g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px(), this.opacity) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true, this.opacity);
-    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush, false, this.opacity);
+    const locked = !!this.inside();
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true, this.opacity, locked);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush, false, this.opacity, locked);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
@@ -893,7 +901,17 @@ export class InkLayer {
       else if (this.light.ended) this.light = null;
     }
     if (tips.length) this.paintTips(g, tips);
+    // 클리핑: only where the layer below has ink (its canvas is the same size, laid over the same page).
+    const base = this.clipTo();
+    if (base && base.width === c.width && base.height === c.height) {
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = "destination-in";
+      g.drawImage(base, 0, 0);
+      g.restore();
+    }
     if (glowing) this.renderSoon();
+    this.afterRender?.();
   }
 
   paintRope(g, live) {
@@ -1251,8 +1269,8 @@ export class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, px, brush, shaped = false, alpha = 1) {
-    paintStroke(g, pts, this.fixedInk ? fixedInk(color) : color, px, brush, shaped, alpha);
+  paint(g, pts, color, px, brush, shaped = false, alpha = 1, inside = false) {
+    paintStroke(g, pts, this.fixedInk ? fixedInk(color) : color, px, brush, shaped, alpha, inside);
   }
 
   destroy() {
@@ -1605,11 +1623,12 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
 
 /**
  * The 올가미's few actions beside what it holds (the text room, 그림 방; the whiteboard's 올가미 for the
- * idea, kept to what drawings on a page want): 색, 복제 (beside it, held), 지우기, and ✕ to let go. What it
- * holds is moved by drawing it anywhere. commit(made) keeps a change ({ ops, atoms }, one undo).
+ * idea, kept to what drawings on a page want): 색, 복제 (beside it, held), 복사 (into 비서's 바구니, to
+ * put into another room: carry(strokes)), 지우기, and ✕ to let go. What it holds is moved by drawing it
+ * anywhere. commit(made) keeps a change ({ ops, atoms }, one undo).
  */
 let lassoMenuNow = null;
-export function lassoActions({ ink, doc, clock, by, commit }) {
+export function lassoActions({ ink, doc, clock, by, commit, carry = null }) {
   let colours = false;
   const hide = () => {
     if (lassoMenuNow?.ink === ink) {
@@ -1640,6 +1659,7 @@ export function lassoActions({ ink, doc, clock, by, commit }) {
         : [h("span", { class: "ink-lasso-count", text: `그림 ${ids.length}` }),
           chip("ink-lasso-color", "색", () => { colours = true; show(ink.selectionInfo()); }),
           chip("ink-lasso-copy", "복제", () => keep({ ...copyStrokesOps(clock, doc(), ids, 300, 300, by), copied: true }, true)),
+          carry && chip("ink-lasso-carry", "복사", () => carry(carryStrokes(doc(), ids, ink.unitsPerPx()))),
           chip("ink-lasso-delete", "지우기", () => {
             const all = ids.map((id) => eraseOps(clock, doc(), id));
             keep({ ops: all.flatMap((m) => m.ops), atoms: all.flatMap((m) => m.atoms) }, false);
@@ -1655,6 +1675,43 @@ export function lassoActions({ ink, doc, clock, by, commit }) {
     el.style.top = (r.top - ht - 10 >= 8 ? r.top - ht - 10 : Math.min(innerHeight - ht - 8, r.bottom + 10)) + "px";
   }
   return { show, hide };
+}
+
+/** A whiteboard's drawings (in its units, from a copied group's corner) as strokes to carry: screen px at its own size. */
+export function boardStrokesCarried(strokes) {
+  return (strokes || []).map((s) => ({ ...s, pts: s.pts.map((v, i) => (i % 3 === 2 ? v : Math.round((v / BOARD_INK_UNIT) * 10) / 10)) }));
+}
+
+/**
+ * 비서's 바구니 → this drawing (the day's plan 6.8): carried strokes put down in the middle of what shows
+ * of it, at the size they were seen at, and held by the 올가미 so the finger takes them where they
+ * should go (one undo). The room turns its 올가미 on first. Returns whether anything landed.
+ */
+export function landInk({ ink, doc, clock, by, commit }, carried) {
+  if (!carried?.length) return false;
+  const r = ink.host.getBoundingClientRect();
+  const left = Math.max(r.left, 0);
+  const right = Math.min(r.right, innerWidth);
+  const top = Math.max(r.top, 0);
+  const bottom = Math.min(r.bottom, innerHeight);
+  const mx = right > left ? (left + right) / 2 : r.left + r.width / 2;
+  const my = bottom > top ? (top + bottom) / 2 : r.top + r.height / 2;
+  const [cx, cy] = ink.point({ clientX: mx, clientY: my, pointerType: "mouse", pressure: 0 });
+  const unit = ink.unitsPerPx();
+  const made = landStrokesOps(clock, doc(), carried, unit, cx, cy, by, ink.fixedInk ? fixedInk : (c) => c);
+  if (!made.ops.length) return false;
+  commit(made);
+  const fresh = made.ops.filter((o) => o.t === "stroke");
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const op of fresh) {
+    for (let i = 0; i < op.pts.length; i += 3) {
+      x0 = Math.min(x0, op.pts[i]); x1 = Math.max(x1, op.pts[i]);
+      y0 = Math.min(y0, op.pts[i + 1]); y1 = Math.max(y1, op.pts[i + 1]);
+    }
+  }
+  const pad = 12 * unit;
+  ink.setSelection(fresh.map((o) => o.id), [x0 - pad, y0 - pad, x1 + pad, y0 - pad, x1 + pad, y1 + pad, x0 - pad, y1 + pad]);
+  return true;
 }
 
 /** The one small tools window open now (brushes, colours or the eraser's way). */

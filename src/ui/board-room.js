@@ -2953,12 +2953,17 @@ export function mountBoardRoom(body, app, session, frame) {
   draw();
 
   return {
-    /** 비서's 바구니: a whiteboard takes everything there is (cards, clips as song cards, words as a text card). */
+    /** 비서's 바구니: a whiteboard takes everything there is (cards, clips as song cards, words as a text card, drawings). */
     takes(item) {
-      return !readOnly() && ["board-items", "song-clip", "song-clips", "text"].includes(item.kind);
+      return !readOnly() && ["board-items", "song-clip", "song-clips", "text", "ink"].includes(item.kind);
     },
     put(item) {
       if (item.kind === "board-items") pasteGroup(item.items || [], { strokes: item.strokes || [] });
+      else if (item.kind === "ink") {
+        // At the size it was seen at: screen px into this board's units as it is zoomed now.
+        const unit = boardInk?.unitsPerPx() || INK_UNIT;
+        pasteGroup([], { strokes: (item.strokes || []).map((s) => ({ ...s, pts: s.pts.map((v, i) => (i % 3 === 2 ? v : Math.round(v * unit))) })) });
+      }
       else if (item.kind === "song-clip") {
         const data = cardFromClip(item);
         placeCard(data, keptFields("song", item, data));

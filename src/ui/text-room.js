@@ -22,7 +22,7 @@ import { dayKey } from "../core/time.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { copyItem } from "../clipboard.js";
 import { buzz } from "./chime.js";
-import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions } from "./ink.js";
+import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions, landInk, boardStrokesCarried } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } from "../core/ink.js";
 
@@ -185,6 +185,13 @@ export function mountTextRoom(body, app, session) {
     e.preventDefault();
     setPageZoom(pageZoom * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
   };
+  /** Drawings copied with the 올가미 go into 비서's 바구니, to be put into another room. */
+  function carryInk(strokes) {
+    if (!strokes.length) return;
+    copyItem(app.store, { kind: "ink", strokes }, { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "daily-text" });
+    toast(app.root, `그림 ${strokes.length}획을 복사했어요. 다른 방에서 비서의 '여기에 놓기'로 꺼내요`, 3200);
+  }
+
   // Words copied here (the phone's own 복사, or a keyboard's) also go into 비서's 바구니, to be put into
   // any room later.
   const onCopy = (e) => {
@@ -323,7 +330,8 @@ export function mountTextRoom(body, app, session) {
           record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
         },
       });
-      lasso = lassoActions({ ink: editor.ink, doc: () => session.doc(inkDoc), clock: session.clock, by: session.memberId, commit: keepInk });
+      editor.inkKit = { ink: editor.ink, doc: () => session.doc(inkDoc), clock: session.clock, by: session.memberId, commit: keepInk };
+      lasso = lassoActions({ ...editor.inkKit, carry: carryInk });
       editor.ink.setTool(pen.tool);
       editor.ink.setStyle(pen);
       session.load(inkDoc).then(() => editor.ink?.render());
@@ -898,13 +906,22 @@ export function mountTextRoom(body, app, session) {
   return {
     close,
     insertText,
-    /** 비서's 바구니: words, and a whiteboard's text cards as lines. */
+    /** 비서's 바구니: words, drawings, and a whiteboard's text cards (as lines) and drawings. */
     takes(item) {
-      return item.kind === "text" || (item.kind === "board-items" && (item.items || []).some((i) => i.kind === "note" && (i.data?.text || "").trim()));
+      if (item.kind === "text" || (item.kind === "ink" && item.strokes?.length)) return true;
+      return item.kind === "board-items" && ((item.items || []).some((i) => i.kind === "note" && (i.data?.text || "").trim()) || !!item.strokes?.length);
     },
     put(item) {
-      const text = item.kind === "text" ? item.text : item.items.filter((i) => i.kind === "note" && (i.data?.text || "").trim()).sort((a, b) => a.dy - b.dy || a.dx - b.dx).map((i) => i.data.text).join("\n");
+      const notes = item.kind === "board-items" ? (item.items || []).filter((i) => i.kind === "note" && (i.data?.text || "").trim()) : [];
+      const text = item.kind === "text" ? item.text : notes.sort((a, b) => a.dy - b.dy || a.dx - b.dx).map((i) => i.data.text).join("\n");
       if (text) insertText(text);
+      // Drawings land on today's sheet, held by the 올가미 to be taken where they should go.
+      const strokes = item.kind === "ink" ? item.strokes : item.kind === "board-items" ? boardStrokesCarried(item.strokes) : [];
+      const kit = editors.get(today)?.inkKit;
+      if (strokes?.length && kit) {
+        setTool("lasso");
+        landInk(kit, strokes);
+      }
     },
   };
 }

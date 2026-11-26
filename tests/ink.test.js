@@ -278,3 +278,33 @@ test("a line closes round something when its ends meet or it crosses itself, not
   }
   assert.ok(found && found.length > 8, "found while being drawn");
 });
+
+import { carryStrokes, landStrokesOps } from "../src/core/ink.js";
+// 비서's 바구니 for drawings (the day's plan 6.8): strokes carried to another room keep the size they
+// were seen at - points as screen px from their own corner - and land in the middle of where they go.
+test("strokes carried to another room keep the size they were seen at and land with their middle where asked", () => {
+  const clock = new Clock("a");
+  const ink = new InkDoc();
+  const one = strokeOps(clock, ink, { pts: [100, 200, 50, 300, 200, 50], color: "blue", width: 2, by: "a", shape: true });
+  for (const op of one.ops) ink.apply(op);
+  const two = strokeOps(clock, ink, { pts: [100, 400, 50, 140, 420, 50], color: "#ff0000", width: 3, size: 12, by: "a", shape: true, opacity: 0.5 });
+  for (const op of two.ops) ink.apply(op);
+  // Seen at 2 units a px (a sheet at some zoom): 200 units across = 100 px.
+  const carried = carryStrokes(ink, [one.ops[0].id, two.ops[0].id], 2);
+  assert.deepEqual(carried[0].pts, [0, 0, 50, 100, 0, 50]);
+  assert.deepEqual(carried[1].pts.slice(0, 2), [0, 100]);
+  assert.equal(carried[0].c, "blue");
+  assert.equal(carried[1].z, 120, "its own size goes along");
+  assert.equal(carried[1].o, 50, "and its 불투명");
+  // Landed where 5 units are a px, its middle at (1000, 1000): 100 px × 110 px → 500 × 550 units.
+  const other = new InkDoc();
+  const made = landStrokesOps(new Clock("b"), other, carried, 5, 1000, 1000, "b");
+  for (const op of made.ops) other.apply(op);
+  const pts = other.strokes().flatMap((s) => s.pts.filter((_, i) => i % 3 !== 2));
+  const xs = pts.filter((_, i) => i % 2 === 0);
+  const ys = pts.filter((_, i) => i % 2 === 1);
+  assert.deepEqual([Math.min(...xs), Math.max(...xs)], [750, 1250]);
+  assert.deepEqual([Math.min(...ys), Math.max(...ys)], [725, 1275]);
+  assert.equal(other.strokes().length, 2);
+  assert.ok(made.atoms.length >= 2, "one undo takes them away");
+});

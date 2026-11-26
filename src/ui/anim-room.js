@@ -9,7 +9,8 @@
 
 import { rollTo } from "./motion.js";
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk, landInk, boardStrokesCarried } from "./ink.js";
+import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
@@ -18,7 +19,7 @@ import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, inv
 import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } from "../core/ink.js";
 import { PAPERS } from "../core/draw.js";
 import { UndoStack } from "../core/undo.js";
-import { getSettings, setSetting } from "../identity.js";
+import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { buzz } from "./chime.js";
 import { memberColor, personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
@@ -100,7 +101,14 @@ export function mountAnimRoom(body, app, session) {
     },
   });
 
-  lasso = lassoActions({ ink, doc: () => session.doc(curDoc()), clock: session.clock, by: session.memberId, commit: keepInk });
+  const inkKit = { ink, doc: () => session.doc(curDoc()), clock: session.clock, by: session.memberId, commit: keepInk };
+  /** Drawings copied with the 올가미 go into 비서's 바구니, to be put into another room. */
+  const carryInk = (strokes) => {
+    if (!strokes.length) return;
+    copyItem(app.store, { kind: "ink", strokes }, { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-anim" });
+    toast(root, `그림 ${strokes.length}획을 복사했어요. 다른 방에서 비서의 '여기에 놓기'로 꺼내요`, 3200);
+  };
+  lasso = lassoActions({ ...inkKit, carry: carryInk });
 
   // ---- below the page: the strip of frames, the brushes, the tools ------------------------------
 
@@ -716,6 +724,15 @@ export function mountAnimRoom(body, app, session) {
   drawStrip();
 
   return {
+    /** 비서's 바구니: drawings (from any room, a whiteboard's too) land on the frame being drawn. */
+    takes(item) {
+      return !readOnly() && !!current && ((item.kind === "ink" && !!item.strokes?.length) || (item.kind === "board-items" && !!item.strokes?.length));
+    },
+    put(item) {
+      if (!current) return;
+      setTool("lasso");
+      landInk(inkKit, item.kind === "ink" ? item.strokes : boardStrokesCarried(item.strokes));
+    },
     close() {
       alive = false;
       stopPlay();
