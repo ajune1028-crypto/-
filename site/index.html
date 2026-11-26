@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-visual">
 <title>같이 쓰는 방 시험판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -343,6 +343,9 @@ h1, h2, p { margin: 0; }
 .room-thumb .room-preview-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 0.7rem; line-height: 1.35; }
 .room-thumb .room-preview-song { height: auto; }
 .room-thumb .room-preview-board { width: auto; height: auto; background: none; }
+/* A drawing on its own paper: the lines as drawn, on white, whatever 밝게/어둡게 says (the drawing rooms' paper). */
+.room-thumb .room-preview-draw { width: auto; height: auto; border-radius: 0.45rem; background: #fdfdfb; }
+.room-preview-draw { width: 4.6rem; height: 2.76rem; border-radius: 0.45rem; background: #fdfdfb; }
 .room-logo { position: absolute; left: 0.35rem; top: 0.35rem; z-index: 1; display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--tint) 30%, var(--paper)); box-shadow: 0 2px 6px color-mix(in srgb, var(--tint) 28%, transparent); }
 .room-logo svg { width: 0.85rem; height: 0.85rem; }
 .room-thumb.no-preview { height: 2.3rem; }
@@ -995,7 +998,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
 /* The tools' rail (ArtCraft's paint page side toolbar; Procreate's and ibisPaint's size bar): slim glass
-   at the left edge, the middle of the screen, icons only; it fades while a line is drawn. */
+   at the left edge, the middle of the screen, icons only; where the pen comes near it, it opens around the pen. */
 .ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
 .ink-tools.rail::-webkit-scrollbar { display: none; }
 .room[data-kind] > .ink-tools.rail { position: fixed; }
@@ -1557,9 +1560,25 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .room[data-bar-size="3"] .board-modes button { min-height: 3.2rem; font-size: 1.05rem; }
 .room[data-modes-icons="true"] .board-modes button svg { width: 1.2rem; height: 1.2rem; }
 .room[data-modes-icons="true"] .board-modes { width: auto; }
-/* While the pen is on the board, everything over it steps back. */
-.room.inking-now > .bar, .room.inking-now .board-top, .room.inking-now .board-rail, .room.inking-now > .toolbar, .room.inking-now .ink-tools { opacity: 0.12; transition: opacity 0.2s var(--ease); }
-.room > .bar, .board-top, .board-rail, .room > .toolbar, .ink-tools { transition: opacity 0.35s var(--ease); }
+/* Four fingers tapped (Procreate's 전체 화면): the tools step out of the way until four fingers again. */
+.room > .bar, .room .toolbar, .room .board-top, .room .board-rail, .room .ink-tools, .room .anim-strip { transition: opacity 0.25s var(--ease); }
+.room.bare > .bar, .room.bare .toolbar, .room.bare .board-top, .room.bare .board-rail, .room.bare .ink-tools, .room.bare .anim-strip { opacity: 0; pointer-events: none; }
+/* A song card's own recording (원본), the notes over it in 같이: as the song room shows it. */
+.card-wave { display: block; width: 100%; height: 2.2rem; margin-top: 0.25rem; overflow: visible; }
+.card-wave path { fill: color-mix(in srgb, var(--c, var(--accent)) 55%, var(--ink)); opacity: 0.75; }
+.card-wave.under { position: absolute; left: 0.55rem; right: 0.55rem; bottom: 0.45rem; width: auto; margin: 0; opacity: 0.45; pointer-events: none; }
+/* A drawer (a room's details): from the right edge over the whole height, like a settings drawer. */
+.scrim.side-sheet, html[data-orient="landscape"] .scrim.side-sheet { align-items: stretch; justify-content: flex-end; }
+.scrim.side-sheet > .panel, html[data-orient="landscape"] .scrim.side-sheet > .panel { width: min(88%, 25rem); height: 100%; max-height: none; border-radius: 1.6rem 0 0 1.6rem; padding-top: calc(0.8rem + env(safe-area-inset-top)); padding-bottom: calc(1.4rem + env(safe-area-inset-bottom)); animation: side-sheet-in 0.34s var(--ease); }
+.scrim.side-sheet.closing > .panel { animation: side-sheet-out 0.26s var(--ease) forwards; }
+.scrim.side-sheet > .panel::before { display: none; }
+.scrim.side-sheet .sheet-close svg { rotate: -90deg; }
+@keyframes side-sheet-in { from { transform: translateX(100%); } }
+@keyframes side-sheet-out { to { transform: translateX(105%); } }
+@media (prefers-reduced-motion: reduce) { .scrim.side-sheet > .panel, .scrim.side-sheet.closing > .panel { animation: none; } }
+/* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
+   character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
+.xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }
@@ -1625,6 +1644,8 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .in-houses svg { width: 1rem; height: 1rem; }
 .home-kebab { touch-action: none; transition: scale 0.15s var(--ease), background 0.2s var(--ease); }
 .home-kebab.charging { scale: 1.14; background: color-mix(in srgb, var(--tint) 24%, transparent); }
+/* 햇살 is the same size as 설정 and 비서 beside it (the owner, 26 November: "태양 크기 키운거 원래대로"):
+   three icons in one quiet row; the sun is known by its rays, not by being bigger. */
 
 /* A house: one deep colour of glass, a ㅅ roof, a small chimney, a white icon inside. */
 .house-shape { position: relative; display: block; width: 100%; aspect-ratio: 1; filter: drop-shadow(0 7px 10px color-mix(in srgb, var(--house, #888) 36%, transparent)); }
@@ -1637,9 +1658,36 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .house-plan { display: grid; place-items: center; border: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 1.1rem; color: var(--muted); filter: none; }
 .house-plan svg { width: 38%; height: 38%; }
 
-.house-dock { position: fixed; left: 0.6rem; right: 0.6rem; bottom: calc(0.8rem + env(safe-area-inset-bottom)); z-index: 80; max-width: 36rem; margin-inline: auto; padding: 0.55rem 0.8rem 0.7rem; border-radius: 1.4rem; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 74%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; }
-.dock-hint { margin-bottom: 0.35rem; font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
-.dock-row { display: flex; justify-content: center; gap: 0.8rem; overflow: hidden; }
+/* The world of houses (ui/house-arc.js): the top third of a big circle rising from the bottom, its
+   rings drawn out from the middle, the houses standing on its rim, + at the top. */
+.house-arc { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+.arc-world { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.arc-face { filter: drop-shadow(0 -12px 30px color-mix(in srgb, var(--tint) 26%, transparent)); }
+.arc-glow-top { stop-color: color-mix(in srgb, var(--paper) 90%, var(--tint)); stop-opacity: 0.95; }
+.arc-glow-edge { stop-color: color-mix(in srgb, var(--paper) 66%, var(--tint)); stop-opacity: 0.92; }
+.arc-ring { fill: none; stroke: color-mix(in srgb, var(--tint) 70%, var(--ink)); stroke-width: 1.1; stroke-dasharray: 1; stroke-linecap: round; opacity: 0.45; }
+.arc-ring.rim { stroke-width: 2; opacity: 0.85; }
+/* A house on the planet: its foot on the ground, standing out from the middle like a house on a small
+   world; its name on the ground under it. Held over, it grows and lights up to take the room in. */
+.house-arc .dock-house { position: absolute; left: 0; top: 0; display: block; width: 0; height: 0; padding: 0; border: 0; background: none; color: var(--ink); pointer-events: auto; transform-origin: 0 0; }
+.house-arc .dock-house.far { pointer-events: none; }
+.house-arc .dock-body { position: absolute; left: 0; bottom: -0.15rem; display: block; width: var(--hw); translate: -50% 0; scale: var(--s); transform-origin: 50% 100%; transition: scale 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), translate 0.24s var(--ease), filter 0.24s var(--ease); }
+.house-arc .dock-body .house-shape { filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--house, #888) 30%, transparent)); }
+.house-arc .dock-body .house-plan { aspect-ratio: 1; border-radius: 0.9rem 0.9rem 0.35rem 0.35rem; background: color-mix(in srgb, var(--paper) 40%, transparent); }
+.house-arc .dock-name { position: absolute; left: 0; top: 0.3rem; max-width: none; width: calc(var(--hw) * var(--s) + 0.8rem); translate: -50% 0; text-align: center; font-size: 0.64rem; font-weight: 750; color: var(--ink); opacity: 0.78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity 0.2s var(--ease); }
+.house-arc .dock-house.over .dock-body { scale: calc(var(--s) * 1.32); translate: -50% -0.35rem; filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--tint) 65%, transparent)); }
+.house-arc .dock-house.over .dock-name { opacity: 1; }
+.arc-air { fill: none; stroke: color-mix(in srgb, var(--tint) 50%, transparent); stroke-width: 10; opacity: 0.32; filter: blur(6px); }
+.arc-ground circle { fill: color-mix(in srgb, var(--tint) 50%, var(--ink)); opacity: 0.16; }
+.dock-hint { font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
+.arc-hint { position: absolute; left: 0; right: 0; bottom: calc(0.9rem + env(safe-area-inset-bottom)); margin: 0; font-size: 0.78rem; color: var(--ink); opacity: 0.72; }
+/* The world itself is frosted glass in my colour: home's buttons below it do not show through. */
+.arc-glass { position: absolute; border-radius: 50%; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 78%, var(--tint) 10%); box-shadow: var(--glass-shine), 0 -14px 36px color-mix(in srgb, var(--tint) 24%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+.arc-face { opacity: 0.55; }
+.arc-catcher { position: fixed; inset: 0; z-index: 79; }
+/* Waiting for a tap, the planet itself can be slid to turn it (its round glass takes the finger). */
+.house-arc.choosing .arc-glass { pointer-events: auto; touch-action: none; cursor: grab; }
+.house-arc.choosing .dock-house { touch-action: none; }
 .dock-house { flex: none; display: grid; justify-items: center; gap: 0.15rem; width: 4rem; pointer-events: auto; transition: transform 0.2s var(--ease); }
 .dock-house.over { transform: translateY(-6px) scale(1.16); }
 .dock-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; font-weight: 700; }
@@ -1656,20 +1704,21 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel[data-edge="bottom"] { bottom: 0; border-radius: 1.6rem 1.6rem 0 0; }
 .home-panel[data-edge="top"] { top: 0; border-radius: 0 0 1.6rem 1.6rem; }
 /* The grip: a bar across the panel's inner end (on a side panel, across its top). */
-.panel-grip { flex: none; display: grid; place-items: center; height: 1.7rem; touch-action: none; cursor: grab; }
+.panel-grip { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 1.7rem; padding: 0 max(0.35rem, var(--sun-r, 0px)) 0 max(0.35rem, var(--sun-l, 0px)); touch-action: none; cursor: grab; }
+/* The window's bar holds its lock (left), the bar itself (middle) and its other two buttons (right). */
+.panel-grip > .panel-lock { justify-self: start; }
+.panel-grip > .grip-bar { justify-self: center; }
+.panel-grip > .panel-ctrl-end { justify-self: end; }
+.panel-grip .icon-btn, .home-panel .float-head .icon-btn { width: 1.9rem; height: 1.9rem; cursor: pointer; }
 .grip-bar { width: 2.6rem; height: 0.32rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, transparent); }
 .home-panel[data-edge="top"] .panel-grip { order: 2; }
 .home-panel[data-edge="left"] .panel-grip { margin-top: env(safe-area-inset-top); }
-.home-panel[data-edge="right"] .panel-grip { margin-top: max(env(safe-area-inset-top), var(--top-clear, 0px)); }
-/* Its lock (top left) and the way between edge and window (top right), on the grip's row. */
+.home-panel[data-edge="right"] .panel-grip { margin-top: env(safe-area-inset-top); }
 .home-panel:not(.floating) .panel-grip { height: 2.15rem; }
-.panel-ctrl { position: absolute; z-index: 3; top: 0.12rem; left: 0.35rem; right: 0.35rem; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
-.panel-ctrl .icon-btn { pointer-events: auto; width: 1.9rem; height: 1.9rem; }
 .panel-ctrl-end { display: flex; gap: 0.15rem; }
-.panel-ctrl .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
-.home-panel[data-edge="left"] .panel-ctrl { top: calc(env(safe-area-inset-top) + 0.12rem); }
-.home-panel[data-edge="right"] .panel-ctrl, .home-panel[data-edge="top"] .panel-ctrl { top: calc(max(env(safe-area-inset-top), var(--top-clear, 0px)) + 0.12rem); }
-.home-panel[data-edge="bottom"] .panel-ctrl { right: 2rem; }
+.panel-grip .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+/* A bottom window's ┐ is at the bar's right end: the buttons stop short of it. */
+.home-panel[data-edge="bottom"] .panel-grip { padding-right: max(2rem, var(--sun-r, 0px)); }
 .home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
 .home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
 /* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
@@ -1690,16 +1739,28 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel.compact.wide .home-panel-body { overflow-y: hidden; overflow-x: auto; overscroll-behavior-x: contain; }
 .home-panel.compact.wide .house-grid { display: flex; flex-direction: row; gap: 0.6rem; width: max-content; }
 .home-panel.compact.wide .house-tile { width: 4.6rem; flex: none; }
-.home-panel.floating.compact .float-title { display: none; }
+/* The floating window: its bar (no name over it), its two sides to draw it wider or narrower. */
+.home-panel .float-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.3rem; padding: 0.3rem max(0.4rem, var(--sun-r, 0px)) 0.15rem max(0.4rem, var(--sun-l, 0px)); }
+.home-panel .float-head > .panel-lock { justify-self: start; }
+.home-panel .float-head > .grip-bar { justify-self: center; }
+.home-panel .float-head > .panel-ctrl-end { justify-self: end; }
+.panel-side { position: absolute; z-index: 4; top: 2.4rem; bottom: 2rem; width: 0.8rem; touch-action: none; cursor: ew-resize; }
+.panel-side.left { left: 0; }
+.panel-side.right { right: 0; }
+.panel-side::before { content: ""; position: absolute; top: 50%; translate: 0 -50%; width: 0.22rem; height: 2.4rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 16%, transparent); transition: background 0.2s var(--ease), height 0.2s var(--ease); }
+.panel-side.left::before { left: 0.2rem; }
+.panel-side.right::before { right: 0.2rem; }
+.panel-side:hover::before, .home-panel.sizing .panel-side::before { height: 3.2rem; background: var(--tint); }
 .home-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.9rem; padding: 0.9rem 1rem calc(1.4rem + env(safe-area-inset-bottom)); }
 .home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: 0.4rem; }
-.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(max(calc(0.9rem + env(safe-area-inset-top)), var(--top-clear, 0px)) + 1.7rem); padding-bottom: 0.3rem; }
-.search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; }
-.search-icon { position: absolute; left: 0.8rem; top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
+.home-panel[data-edge="top"] .home-panel-body { padding-top: calc(0.9rem + env(safe-area-inset-top)); padding-bottom: 0.3rem; }
+/* Under 햇살 (a small screen, a window at the top or the right) the search row makes room for it. */
+.search-row { position: relative; display: flex; align-items: center; gap: 0.45rem; padding-right: var(--sun-r, 0px); padding-left: var(--sun-l, 0px); }
+.search-icon { position: absolute; left: calc(0.8rem + var(--sun-l, 0px)); top: 50%; translate: 0 -50%; display: grid; color: var(--muted); pointer-events: none; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
 .search-row .search-input { flex: 1; min-width: 0; height: 2.7rem; padding-left: 2.4rem; border-radius: 999px; }
 .search-row .search-modes { flex: none; width: auto; }
-.search-modes button { padding: 0 0.75rem; }
+.search-modes button { padding: 0 0.75rem; white-space: nowrap; }
 .search-results { display: flex; flex-direction: column; gap: 0.35rem; }
 .search-results:empty { display: none; }
 .search-hit { display: grid; gap: 0.12rem; width: 100%; padding: 0.6rem 0.8rem; text-align: left; border-radius: 0.95rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
@@ -1761,8 +1822,14 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-top .icon-btn svg { width: 1.12rem; height: 1.12rem; }
 /* ⋮ (찾기와 집) at the right end, under 레퍼런스, nothing empty beside it (the owner, 21 November);
    with 레퍼런스 off it stands beside 설정. */
-.home-top .home-kebab { grid-column: 2; }
-.home-top:not(:has(#home-reference)) .home-kebab { grid-row: 1; }
+/* 설정 · 햇살 on the top row, 비서 under 햇살 (the owner, 21 November: "찾기와 집을 레퍼런스 아이콘 위로"). */
+.home-top #home-reference { grid-column: 2; }
+/* 햇살's window is out: it covers what it covers, as a window does, and the round buttons it lies over
+   are under it; only 햇살 stays above it and answers (the owner, 21 November: "사라지고 숨기는 게 아니라
+   창 나온 거는 원래 다 가려지는데, 그 햇살 창만 안 가려지게"). */
+.home-sun-out .home-top { z-index: auto; }
+.home-sun-out .home-top > * { position: relative; z-index: 60; }
+.home-sun-out .home-top > .home-kebab { z-index: 64; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
@@ -1890,12 +1957,18 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .cw-swatch { width: 1.05rem; height: 1.05rem; padding: 0; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
 
 /* A side panel's inner edge (끝자락): a strip that takes the same throw as the grip, its small bar a hint. */
-.panel-end { display: none; position: absolute; top: 0; bottom: 0; width: 1.15rem; touch-action: none; cursor: grab; place-items: center; }
-.home-panel[data-edge="right"] .panel-end { display: grid; left: 0; }
-.home-panel[data-edge="left"] .panel-end { display: grid; right: 0; }
-.panel-end .grip-bar { width: 0.3rem; height: 2.6rem; }
-.home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
-.home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
+.panel-end { display: none; position: absolute; top: 0; bottom: 0; width: 2.5rem; touch-action: none; cursor: grab; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem; }
+.home-panel[data-edge="right"] .panel-end { display: flex; left: 0; }
+.home-panel[data-edge="left"] .panel-end { display: flex; right: 0; }
+.panel-end .grip-bar { width: 0.3rem; height: 2.6rem; margin: 0.25rem 0; }
+.panel-end .panel-ctrl-end { flex-direction: column; gap: 0.2rem; }
+.panel-end .icon-btn { width: 1.9rem; height: 1.9rem; cursor: pointer; }
+.panel-end .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+.home-panel[data-edge="right"] .home-panel-body { padding-left: 2.6rem; }
+.home-panel[data-edge="left"] .home-panel-body { padding-right: 2.6rem; }
+/* A side window has no bar across its top (its bar is its inner edge): what it holds starts at the top. */
+.home-panel[data-edge="left"] .panel-grip, .home-panel[data-edge="right"] .panel-grip { display: none; }
+.home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: calc(0.9rem + env(safe-area-inset-top)); }
 .home-panel.held { transition: none; }
 /* 투명 종이: the checkerboard every drawing app shows for nothing behind (ArtCraft's paint page too). */
 .draw-page[data-paper="clear"], .paper-swatch.clear, .paper-pick.clear { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
@@ -1999,8 +2072,9 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* A narrow panel (half a phone): the search field gets its own line, 이름·내용 under it, smaller houses. */
 .home-panel-body { container-type: inline-size; }
 @container (max-width: 17rem) {
-  .search-row { flex-wrap: wrap; }
-  .search-row .search-input { flex-basis: 100%; }
+  /* Only the field's own line makes room for 햇살; 이름·내용 under it keep the whole width. */
+  .search-row { flex-wrap: wrap; padding-right: 0; padding-left: 0; }
+  .search-row .search-input { flex: 1 1 100%; max-width: calc(100% - var(--sun-r, 0px) - var(--sun-l, 0px)); margin-left: var(--sun-l, 0px); }
   .search-row .search-icon { top: 1.35rem; }
   .search-row .search-modes { flex: 1; }
   .house-grid { grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); gap: 0.8rem 0.45rem; }
@@ -3295,10 +3369,12 @@ class InkDoc {
         // A style is a name; one this version does not know is drawn as its brush.
         (op.s === undefined || (typeof op.s === "string" && /^[a-z]{1,20}$/.test(op.s))) &&
         (op.q === undefined || op.q === 1) &&
-        (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10));
+        (op.z === undefined || isInt(op.z, SIZE_MIN * 10, SIZE_MAX * 10)) &&
+        (op.o === undefined || isInt(op.o, 5, 99));
       if (!ok) return this.setAside(op);
       const stroke = { id: op.id, pts: op.pts, c: op.c, w: op.w, b: op.b || "pen", by: op.by, at: op.at, rm: 0 };
       if (op.z) stroke.z = op.z;
+      if (op.o) stroke.o = op.o;
       if (op.s) stroke.s = op.s;
       if (op.q) stroke.q = 1;
       this.byId.set(op.id, stroke);
@@ -3419,7 +3495,7 @@ function nearestWidth(px) {
   return px < 2 * Math.SQRT2 ? 1 : px < 4 * Math.SQRT2 ? 2 : 3;
 }
 
-function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false }) {
+function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), brush = "pen", style, shape = false, opacity }) {
   clock.atLeast(ink.maxN);
   // A shape's points are already few and exact (thinning would cut its corners).
   const op = { t: "stroke", id: clock.next(), pts: shape ? pts.slice(0, MAX_POINTS * 3) : thinToFit(pts), c: color, w: width, by, at };
@@ -3436,7 +3512,15 @@ function strokeOps(clock, ink, { pts, color, width, size, by, at = Date.now(), b
   if (brush !== "pen") op.b = brush;
   if (style) op.s = style;
   if (shape) op.q = 1;
+  // 불투명 (Procreate's second slider) as a whole percent, 5 to 99; full strength is left out so
+  // devices from before it draw the stroke as they always did.
+  if (Number.isFinite(opacity) && opacity < 0.995) op.o = Math.max(5, Math.min(99, Math.round(opacity * 100)));
   return { ops: [op], atoms: [{ k: "ink+", s: op.id }] };
+}
+
+/** A stroke's 불투명, 0.05 to 1 (1 when it has none of its own). */
+function opacityOf(stroke) {
+  return stroke?.o ? Math.max(5, Math.min(100, stroke.o)) / 100 : 1;
 }
 
 function eraseOps(clock, ink, strokeId) {
@@ -3458,7 +3542,7 @@ function moveStrokesOps(clock, ink, ids, dx, dy, by) {
     if (!s || s.rm % 2 === 1) continue;
     const gone = eraseOps(clock, ink, id);
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -3504,7 +3588,7 @@ function copyStrokesOps(clock, ink, ids, dx, dy, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1) continue;
     const pts = s.pts.map((v, i) => (i % 3 === 0 ? Math.round(v + dx) : i % 3 === 1 ? Math.round(v + dy) : v));
-    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...made.ops);
     atoms.push(...made.atoms);
   }
@@ -3520,7 +3604,7 @@ function recolorStrokesOps(clock, ink, ids, color, by) {
     const s = ink.get(id);
     if (!s || s.rm % 2 === 1 || s.c === color || s.b === "erase") continue;
     const gone = eraseOps(clock, ink, id);
-    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q });
+    const made = strokeOps(clock, ink, { pts: s.pts, color, width: s.w, size: s.z ? s.z / 10 : undefined, by, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s) });
     ops.push(...gone.ops, ...made.ops);
     atoms.push(...gone.atoms, ...made.atoms);
   }
@@ -3546,7 +3630,7 @@ function invertInkOps(ink, clock, atoms, dir) {
   return ops;
 }
 
-return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, THIN_UNITS, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
+return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, THIN_UNITS, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, opacityOf, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
 })();
 __m["src/core/board.js"] = (() => {
 // The whiteboard: cards on a big surface, and 잇기 lines that say in which
@@ -4503,6 +4587,58 @@ function boardPreview(board) {
   return { t: "board", cards };
 }
 
+const MAX_LINES = 40;
+const MAX_POINTS = 15;
+const DRAW_SCALE = 0.2; // a small doodle is drawn larger, never more than this
+const round1 = (v) => Math.round(v * 10) / 10;
+
+/**
+ * A drawing (그림 방's layers, or 애니메이션 방's first page over its background) as a few of its
+ * lines within 100 × 60, as the board's map: `layers` from the bottom up, each { strokes, visible }.
+ * Each line is [colour, width, filled (1) or not (0), x, y, x, y, …]. Rubbing out is left out; with
+ * many lines, the newest. The colour is kept as it was drawn (home reads it as the room does).
+ */
+function drawPreview(layers) {
+  const lines = [];
+  for (const layer of layers || []) {
+    if (!layer || layer.visible === false) continue;
+    for (const s of layer.strokes || []) {
+      if (!s || s.b === "erase" || !Array.isArray(s.pts) || s.pts.length < 3 || typeof s.c !== "string") continue;
+      lines.push(s);
+    }
+  }
+  if (!lines.length) return null;
+  const kept = lines.slice(-MAX_LINES);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const s of kept) {
+    for (let i = 0; i + 1 < s.pts.length; i += 3) {
+      x0 = Math.min(x0, s.pts[i]);
+      x1 = Math.max(x1, s.pts[i]);
+      y0 = Math.min(y0, s.pts[i + 1]);
+      y1 = Math.max(y1, s.pts[i + 1]);
+    }
+  }
+  const scale = Math.min(MAP_W / Math.max(1, x1 - x0), MAP_H / Math.max(1, y1 - y0), DRAW_SCALE);
+  const ox = (MAP_W - (x1 - x0) * scale) / 2;
+  const oy = (MAP_H - (y1 - y0) * scale) / 2;
+  const at = (x, y) => [round1(Math.max(0, Math.min(MAP_W, ox + (x - x0) * scale))), round1(Math.max(0, Math.min(MAP_H, oy + (y - y0) * scale)))];
+  return {
+    t: "draw",
+    lines: kept.map((s) => {
+      const n = Math.floor(s.pts.length / 3);
+      const step = Math.max(1, Math.ceil((n - 1) / (MAX_POINTS - 1)));
+      const thick = s.z ? s.z / 10 : [4, 8, 16][s.w] ?? 8;
+      const out = [s.c.slice(0, 24), round1(Math.max(0.5, Math.min(4, thick * scale))), s.s === "fill" ? 1 : 0];
+      for (let i = 0; i < n - 1; i += step) out.push(...at(s.pts[i * 3], s.pts[i * 3 + 1]));
+      out.push(...at(s.pts[(n - 1) * 3], s.pts[(n - 1) * 3 + 1]));
+      return out;
+    }),
+  };
+}
+
 const nums = (a, n) => Array.isArray(a) && a.length === n && a.every((v) => Number.isFinite(v));
 
 /** True for a preview home may draw (what is kept on the device is read back with care). */
@@ -4513,6 +4649,10 @@ function validPreview(p) {
     return Array.isArray(p.notes) && p.notes.length <= 64 && p.notes.every((n) => nums(n, 3)) &&
       (p.clips === undefined || (Array.isArray(p.clips) && p.clips.length <= 32 && p.clips.every((c) => nums(c, 3))));
   }
+  if (p.t === "draw") {
+    return Array.isArray(p.lines) && p.lines.length <= 48 && p.lines.every((l) => Array.isArray(l) && l.length >= 5 && l.length <= 3 + 2 * 16 &&
+      typeof l[0] === "string" && l[0].length <= 24 && l.slice(1).every((v) => Number.isFinite(v)));
+  }
   if (p.t === "board") {
     return Array.isArray(p.cards) && p.cards.length <= 32 &&
       p.cards.every((c) => Array.isArray(c) && c.length === 5 && nums(c.slice(0, 4), 4) && ["s", "n", "p"].includes(c[4]));
@@ -4520,7 +4660,7 @@ function validPreview(p) {
   return false;
 }
 
-return { textPreview, songPreview, boardPreview, validPreview };
+return { textPreview, songPreview, boardPreview, drawPreview, validPreview };
 })();
 __m["src/identity.js"] = (() => {
 // What this device remembers: which rooms it has entered and as whom, the last
@@ -6210,15 +6350,29 @@ function onThemeChange(fn) {
  * timeline. Writing sheets keep their 360 column either way.
  */
 function fitScale() {
+  let lastW = 0;
+  let tallest = 0;
+  const typing = () => {
+    const a = document.activeElement;
+    return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  };
   const set = () => {
     const w = window.innerWidth;
-    const hgt = window.innerHeight;
+    let hgt = window.innerHeight;
+    // The same width and less height while typing: the keyboard, not a new screen (the owner, 21
+    // November: "키보드가 아래에서 나오거나… 렉이 걸린다던가… 정상화가 진짜 이상하고").
+    if (w !== lastW) {
+      lastW = w;
+      tallest = hgt;
+    } else if (hgt < tallest && typing()) hgt = tallest;
+    else tallest = Math.max(tallest, hgt);
     const landscape = w > hgt * 1.05;
-    root.dataset.orient = landscape ? "landscape" : "portrait";
-    // A phone grows with its width; a tablet or a computer keeps a comfortable size and uses
-    // its extra room for more of the board, the timeline and the page (the app fills the screen).
-    const k = landscape ? Math.min(1.2, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.25, Math.max(1.05, w / 640));
-    root.style.setProperty("--k", String(k));
+    const orient = landscape ? "landscape" : "portrait";
+    if (root.dataset.orient !== orient) root.dataset.orient = orient;
+    // A phone grows with its width; a tablet or a computer is the phone made bigger (the owner, 21
+    // November: "폰에서 화면만 키운 느낌으로"): the same screens, their type and buttons larger.
+    const k = landscape ? Math.min(1.35, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.4, Math.max(1.05, w / 600));
+    if (root.style.getPropertyValue("--k") !== String(k)) root.style.setProperty("--k", String(k));
   };
   set();
   window.addEventListener("resize", set);
@@ -6340,6 +6494,9 @@ const ICONS = {
   record: '<circle cx="12" cy="12" r="6.3" fill="currentColor" stroke="none"/>',
   stop: '<rect x="6.6" y="6.6" width="10.8" height="10.8" rx="2.4" fill="currentColor" stroke="none"/>',
   start: '<path d="M6.5 5.5v13"/><path d="M18 5.8v12.4L9.6 12z" fill="currentColor" stroke="none"/>',
+  // 햇살 (the owner: "찾기와 집 … 햇살로, 아이콘은 안에 해 태양으로"): a sun in lines, its first size (the
+  // owner, 26 November: "태양 크기 키운거 원래대로"; no yellow inside: "안을 노란색으로 하지 말고 원래대로").
+  sunshine: '<circle cx="12" cy="12" r="4.3"/><path d="M12 1.9v2.9M12 19.2v2.9M1.9 12h2.9M19.2 12h2.9M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"/>',
   sun: '<circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5l1.5 1.5M17 17l1.5 1.5M5.5 18.5L7 17M17 7l1.5-1.5"/>',
   moon: '<path d="M19.5 14.6A7.6 7.6 0 019.4 4.5a7.6 7.6 0 1010.1 10.1z"/>',
   upload: '<path d="M12 15V4.5M7.6 8.8L12 4.4l4.4 4.4"/><path d="M5 14.2v4.3A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5v-4.3"/>',
@@ -6631,11 +6788,13 @@ function nextFrame(fn) {
 }
 
 /** Bottom sheet inside the app column. Returns a function that closes it. */
-function openSheet(root, title, build) {
+function openSheet(root, title, build, { side = false } = {}) {
   // A close button in the head: one tap, always (the owner: "한 번 누르면 안 나가지고").
   const shut = h("button", { class: "icon-btn sheet-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("back"));
   const panel = h("section", { class: "panel", role: "dialog", "aria-modal": "true", "aria-label": title }, h("div", { class: "sheet-head" }, h("h2", { text: title }), shut));
-  const scrim = h("div", { class: "scrim" }, panel);
+  // From the side (a room's details, the owner, 22 November: "드로어처럼 옆에서… 잘 볼 수 있게"): it
+  // slides in from the right edge over the whole height and is pushed back the same way.
+  const scrim = h("div", { class: "scrim" + (side ? " side-sheet" : "") }, panel);
   const onKey = (event) => { if (event.key === "Escape") close(); };
   const closers = [];
   let closing = false;
@@ -6661,30 +6820,33 @@ function openSheet(root, title, build) {
     // Caught while still sliding in: it stops where it is and follows the finger from there.
     for (const a of panel.getAnimations()) a.finish();
     const inField = !!e.target.closest?.("input, textarea, select, [contenteditable='true']");
-    pull = panel.scrollTop <= 0 && !inField ? { y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
+    pull = (side || panel.scrollTop <= 0) && !inField ? { x: t.clientX, y: t.clientY, at: performance.now(), dy: 0, on: false } : null;
   }, { passive: true });
   panel.addEventListener("touchmove", (e) => {
     if (!pull || e.touches.length !== 1) return;
-    const dy = e.touches[0].clientY - pull.y;
-    if (!pull.on && (dy < 6 || panel.scrollTop > 0)) {
-      if (dy < -4) pull = null; // a push up scrolls the content as usual
+    // A drawer goes back to its side; a sheet goes down.
+    const dx = e.touches[0].clientX - pull.x;
+    const dy = side ? dx : e.touches[0].clientY - pull.y;
+    const across = side ? Math.abs(e.touches[0].clientY - pull.y) : Math.abs(dx);
+    if (!pull.on && (dy < 6 || (!side && panel.scrollTop > 0) || (side && across > dy))) {
+      if (dy < -4 || (side && across > 10)) pull = null; // the other way scrolls the content as usual
       return;
     }
     pull.on = true;
     pull.dy = Math.max(0, dy);
     e.preventDefault();
     panel.style.transition = "none";
-    panel.style.transform = `translateY(${pull.dy}px)`;
-    scrim.style.setProperty("--pull", String(Math.min(1, pull.dy / Math.max(1, panel.offsetHeight))));
+    panel.style.transform = side ? `translateX(${pull.dy}px)` : `translateY(${pull.dy}px)`;
+    scrim.style.setProperty("--pull", String(Math.min(1, pull.dy / Math.max(1, side ? panel.offsetWidth : panel.offsetHeight))));
   }, { passive: false });
   const letGo = () => {
     if (!pull?.on) return void (pull = null);
     const speed = pull.dy / Math.max(1, performance.now() - pull.at);
-    const far = pull.dy > panel.offsetHeight * 0.28 || speed > 0.6;
+    const far = pull.dy > (side ? panel.offsetWidth : panel.offsetHeight) * 0.28 || speed > 0.6;
     pull = null;
     panel.style.transition = "";
     if (far) {
-      panel.style.transform = "translateY(105%)";
+      panel.style.transform = side ? "translateX(105%)" : "translateY(105%)";
       close();
     } else {
       panel.style.transform = "";
@@ -6807,6 +6969,323 @@ function toast(root, text, ms = 2600) {
 }
 
 return { h, icon, flashHint, iconButton, swallowPress, closeOnOutside, mount, inputRow, formBox, segmented, toggle, nextFrame, openSheet, openFloat, toast };
+})();
+__m["src/ui/house-arc-geometry.js"] = (() => {
+// The small planet that rises when a room is held, with my houses built on it (the owner, 21
+// November: "그 원형은 행성이야… 거기에 집이 지어진 거야", "큰 원의 3분의 1", "1번 집이 먼저 가운데에 있고
+// 점점 늘어날수록 오른쪽으로", "플러스 버튼은 맨 옆에 1번 방 옆에", "행성을 스크롤하면 그 원이 돌아가면서",
+// "5개 이상일 시 조금 더 작아져… 늘어남에 따라 약간 줄어듦", "큰 화면에서도 3분의 1 정도만"). Pure numbers,
+// no screen.
+//
+// Slots go round the rim one step apart: slot 0 is +, slot k is house k. The planet's turn is an
+// angle: at turn 0 house 1 stands at the top, + one step to its left, house 2 one step to its right.
+
+const SQRT89 = Math.sqrt(8 / 9);
+
+/** How big the houses stand: as they are up to four, a little smaller from five, again as they grow. */
+function houseScale(n) {
+  if (n < 5) return 1;
+  if (n < 12) return 0.8;
+  if (n < 20) return 0.72;
+  return 0.65;
+}
+
+/**
+ * w, hgt: the screen; n: how many houses; house, gap: a house's width and the room between two
+ * (px); low: room under a house's foot for its name. Returns { r, cap, cx, cy, scale, step, reach,
+ * min, max, start }: the circle (a third of it shows), how far apart the slots stand, the largest
+ * angle a house is seen at, and the turns that put + (min) or the last house (max) in the middle;
+ * start puts house 1 there (+ when there is no house).
+ */
+function planet(w, hgt, n, { house = 43, gap = 11, low = 42, margin = 8 } = {}) {
+  // A phone: the rim meets the bottom corners. A big screen: no taller than about a third of the
+  // screen, so the rooms stay in view and the planet is not stretched to the sides.
+  const r = Math.min(w / (2 * SQRT89), 0.36 * hgt * 1.5);
+  const cap = (2 * r) / 3;
+  const cx = w / 2;
+  const cy = hgt + r / 3;
+  const scale = houseScale(n);
+  const step = ((house + gap) * scale) / r;
+  const byBottom = Math.acos(Math.min(1, Math.max(-1, (cy - (hgt - low)) / r)));
+  // A house leans out with the ground under it: its far top corner must stay on the screen too.
+  const size = house * scale;
+  const reachOf = (a) => r * Math.sin(a) + size * Math.sin(a) + (size / 2) * Math.cos(a);
+  let lo = 0;
+  let hi = Math.PI / 2;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (reachOf(mid) <= w / 2 - margin) lo = mid;
+    else hi = mid;
+  }
+  const reach = Math.min(byBottom, lo, (75 * Math.PI) / 180);
+  const min = -step;
+  const max = Math.max(min, (n - 1) * step);
+  return { r, cap, cx, cy, scale, step, reach, min, max, start: n ? 0 : min };
+}
+
+/** Where slot `slot` stands on the rim at `turn` (0 = the top, positive to the right). */
+function slotAngle(g, slot, turn) {
+  return (slot - 1) * g.step - turn;
+}
+
+/** The turn that leaves a house (or +) in the middle, nearest to `turn`, never past either end. */
+function snapTurn(g, turn) {
+  const k = Math.round((turn - g.min) / g.step);
+  return Math.min(g.max, Math.max(g.min, g.min + k * g.step));
+}
+
+/** The point of the rim at `angle`. */
+function spotAt(g, angle) {
+  return { x: g.cx + g.r * Math.sin(angle), y: g.cy - g.r * Math.cos(angle) };
+}
+
+/** How many houses can be seen at once: the middle one and as many on each side as the rim holds. */
+function seen(g) {
+  return 1 + 2 * Math.floor(g.reach / g.step + 1e-9);
+}
+
+return { houseScale, planet, slotAngle, snapTurn, spotAt, seen };
+})();
+__m["src/ui/house-arc.js"] = (() => {
+// The houses a held room can go into, as a small planet rising from the bottom of the screen with my
+// houses built on it (the owner, 21 November: "그 원형은 행성이야… 거기에 집이 지어진 거야", "한 세계가
+// 나오듯 그 선들이 나오면서 원형이 나오는데… 큰 원의 3분의 1", "1번 집이 먼저 가운데… 오른쪽으로",
+// "플러스 버튼은 1번 방 옆에", "행성을 스크롤하면 그 원이 돌아가면서", "넣어짐 당하는 그 집이… 좀 커짐",
+// "힐링받게 간결하면서도 디테일에서 좋은 느낌"). Its rings draw themselves out from the top to both
+// sides, then the houses grow up out of the ground from the middle out. Drawn onto a house the room
+// goes in (held near either end, the planet turns to bring more houses); let go without moving, it
+// stays for a tap on a house, and a finger sliding along it turns it (outside, it closes).
+// Where things stand is ui/house-arc-geometry.js.
+
+const { h, icon, swallowPress } = __m["src/ui/dom.js"];
+const { planet, slotAngle, snapTurn, spotAt, seen } = __m["src/ui/house-arc-geometry.js"];
+
+const NS = "http://www.w3.org/2000/svg";
+const RISE = "cubic-bezier(0.22, 1.12, 0.36, 1)";
+
+/**
+ * houses: [{ id, name }], shapeOf(house) → its house element. Returns { el, choose(onPick), follow(x, y),
+ * onSpin, close() }: choose() keeps it open for a tap (onPick(id), id "new" for +); follow() is the held
+ * room's finger (near an end, the planet turns; onSpin() then runs so the house under it is read again);
+ * close() sinks it away.
+ */
+function openHouseArc({ houses, shapeOf }) {
+  const w = innerWidth;
+  const hgt = innerHeight;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const g = planet(w, hgt, houses.length, { house: 2.7 * rem, gap: 0.7 * rem, low: 2.6 * rem });
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let turn = g.start;
+  const el = (name, attrs) => {
+    const node = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    return node;
+  };
+  const svg = el("svg", { class: "arc-world", viewBox: `0 0 ${w} ${hgt}`, "aria-hidden": "true" });
+  const defs = el("defs", {});
+  const grad = el("radialGradient", { id: "arc-glow", cx: "50%", cy: "0%", r: "75%" });
+  grad.append(el("stop", { offset: "0%", class: "arc-glow-top" }), el("stop", { offset: "100%", class: "arc-glow-edge" }));
+  defs.append(grad);
+  svg.append(defs, el("circle", { class: "arc-face", cx: g.cx, cy: g.cy, r: g.r, fill: "url(#arc-glow)" }));
+  // The air around it: a soft light just outside the rim.
+  svg.append(el("circle", { class: "arc-air", cx: g.cx, cy: g.cy, r: g.r + 5 }));
+  // Its ground: a few small marks that turn with it, so a turn is seen even between houses.
+  const ground = el("g", { class: "arc-ground" });
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2 + (i % 3) * 0.07;
+    const rr = g.r * (0.9 - (i % 4) * 0.055);
+    ground.append(el("circle", { cx: g.cx + rr * Math.sin(a), cy: g.cy - rr * Math.cos(a), r: 1 + (i % 3) * 0.45 }));
+  }
+  svg.append(ground);
+  // The rings: each drawn from the top out to both sides at once, so they open like a fan.
+  const rings = [];
+  for (const [i, k] of [1, 0.86, 0.72].entries()) {
+    const rad = g.r * k;
+    const c = (g.cy - hgt) / rad;
+    if (c >= 1) continue;
+    const a = Math.acos(Math.max(-1, c));
+    for (const side of [1, -1]) {
+      const path = el("path", { class: "arc-ring" + (i === 0 ? " rim" : ""), d: `M ${g.cx} ${g.cy - rad} A ${rad} ${rad} 0 0 ${side > 0 ? 1 : 0} ${g.cx + side * rad * Math.sin(a)} ${hgt}`, pathLength: "1" });
+      svg.append(path);
+      rings.push({ path, i });
+    }
+  }
+  // Frosted glass under the rings (an SVG cannot blur what is behind it).
+  const glass = h("div", { class: "arc-glass", "aria-hidden": "true", style: { left: g.cx - g.r + "px", top: g.cy - g.r + "px", width: 2 * g.r + "px", height: 2 * g.r + "px" } });
+  const box = h("div", { class: "house-arc", id: "house-dock", role: "group", "aria-label": "넣을 집" }, glass, svg);
+  box.style.setProperty("--hw", 2.7 * rem + "px");
+  box.style.setProperty("--s", String(g.scale));
+  // Slot 0 is +, right beside house 1; slot k is house k.
+  const slots = [null, ...houses].map((house, slot) => {
+    const tile = h("button", { class: "dock-house" + (house ? "" : " dock-new"), type: "button", data: { house: house ? house.id : "new" },
+      "aria-label": house ? `'${house.name}'에 넣기` : "새 집을 지어 넣기" },
+    h("span", { class: "dock-body" }, house ? shapeOf(house) : h("span", { class: "house-shape house-plan" }, icon("plus"))),
+    h("span", { class: "dock-name", text: house ? house.name : "새 집" }));
+    box.append(tile);
+    return { tile, slot };
+  });
+  const more = slots.length > seen(g);
+  const hint = h("p", { class: "dock-hint arc-hint", text: houses.length ? (more ? "집 위에 놓으면 들어가요 · 끝으로 가면 행성이 돌아요" : "집 위에 놓으면 그 집에 들어가요") : "새 집 위에 놓으면 집을 지어 넣어요" });
+  box.append(hint);
+
+  /** Every house where the turn puts it, standing up from the ground; past the visible rim it fades. */
+  function place() {
+    for (const { tile, slot } of slots) {
+      const a = slotAngle(g, slot, turn);
+      const p = spotAt(g, a);
+      const fade = Math.max(0, Math.min(1, (g.reach + g.step * 0.45 - Math.abs(a)) / (g.step * 0.45)));
+      tile.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) rotate(${a.toFixed(4)}rad)`;
+      tile.style.opacity = fade.toFixed(3);
+      tile.classList.toggle("far", fade < 0.5);
+    }
+    ground.setAttribute("transform", `rotate(${((-turn * 180) / Math.PI).toFixed(3)} ${g.cx} ${g.cy})`);
+  }
+  place();
+  document.body.append(box);
+
+  if (!reduced && box.animate) {
+    for (const part of [glass, svg]) part.animate([{ transform: `translateY(${g.cap * 0.75}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 540, easing: RISE });
+    for (const { path, i } of rings) {
+      path.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 760, delay: 140 + i * 95, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "backwards" });
+    }
+    ground.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: 420, fill: "backwards" });
+    // Built up out of the ground, from the middle out, as if the world were laid out under them.
+    const order = slots.map((t, i) => [Math.abs(slotAngle(g, t.slot, turn)), i]).sort((a, b) => a[0] - b[0]);
+    order.forEach(([, i], n) => {
+      const { tile } = slots[i];
+      const delay = 250 + n * 55;
+      tile.querySelector(".dock-body").animate([{ transform: "scaleY(0.05)", opacity: 0 }, { transform: "scaleY(1.12)", opacity: 1, offset: 0.62 }, { transform: "scaleY(0.97)", offset: 0.84 }, { transform: "none", opacity: 1 }], { duration: 520, delay, easing: "cubic-bezier(0.3, 0.7, 0.3, 1)", fill: "backwards" });
+      tile.querySelector(".dock-name").animate([{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: delay + 200, fill: "backwards" });
+    });
+    hint.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 420, fill: "backwards" });
+  }
+
+  // ---- turning ------------------------------------------------------------------------------------
+  // A spring brings it to rest with a house in the middle (the wheel pickers' way: it coasts, then
+  // settles on the nearest).
+  let spin = 0;
+  let aim = turn;
+  let speed = 0;
+  let holdAt = null; // the held room's finger, when it is near an end
+  const api = { el: box, choose, follow, close, onSpin: null };
+  function frame(now, last) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    if (holdAt) {
+      // Near an end, the planet turns toward it: quicker the nearer the finger is.
+      turn = Math.max(g.min, Math.min(g.max, turn + holdAt.push * 1.4 * dt));
+      aim = snapTurn(g, turn);
+      speed = 0;
+    } else {
+      speed += (-240 * (turn - aim) - 26 * speed) * dt;
+      turn += speed * dt;
+      if (Math.abs(turn - aim) < 1e-4 && Math.abs(speed) < 1e-3) {
+        turn = aim;
+        speed = 0;
+      }
+    }
+    place();
+    api.onSpin?.();
+    spin = (holdAt || turn !== aim) && !closed ? requestAnimationFrame((t) => frame(t, now)) : 0;
+  }
+  function settle(to) {
+    aim = snapTurn(g, to);
+    if (reduced) {
+      turn = aim;
+      place();
+      return;
+    }
+    if (!spin) spin = requestAnimationFrame((t) => frame(t, t - 16));
+  }
+  /** The held room's finger: near either end of the planet, it turns (only while there is more to see). */
+  function follow(x, y) {
+    if (closed) return;
+    const band = y > hgt - g.cap - 3 * rem;
+    const half = g.r * Math.sin(g.reach);
+    const out = (x - g.cx) / Math.max(1, half);
+    const push = band && Math.abs(out) > 0.62 ? Math.sign(out) * Math.min(1, (Math.abs(out) - 0.62) / 0.3) : 0;
+    const can = push > 0 ? turn < g.max - 1e-6 : push < 0 ? turn > g.min + 1e-6 : false;
+    holdAt = can ? { push } : null;
+    if (holdAt && !spin && !reduced) spin = requestAnimationFrame((t) => frame(t, t - 16));
+    if (!holdAt) settle(turn);
+  }
+
+  let catcher = null;
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    cancelAnimationFrame(spin);
+    catcher?.remove();
+    if (reduced || !box.animate) return void box.remove();
+    box.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${Math.round(g.cap * 0.4)}px)` }], { duration: 220, easing: "ease-in", fill: "forwards" })
+      .finished.then(() => box.remove(), () => box.remove());
+  }
+  /** Stays for a tap: a house or + picks it, a slide along it turns it, anywhere else closes it. */
+  function choose(onPick) {
+    if (closed) return;
+    box.classList.add("choosing");
+    hint.textContent = more ? "넣을 집을 눌러요 · 옆으로 밀면 행성이 돌아요" : "넣을 집을 눌러요";
+    catcher = h("div", { class: "arc-catcher", "aria-hidden": "true" });
+    catcher.addEventListener("pointerdown", (e) => { swallowPress(e); close(); });
+    document.body.insertBefore(catcher, box);
+    let drag = null;
+    const down = (e) => {
+      if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      drag = { id: e.pointerId, x0: e.clientX, turn0: turn, moved: false, t: [[e.timeStamp, e.clientX]] };
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    };
+    const move = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x0;
+      if (!drag.moved && Math.abs(dx) < 7) return;
+      drag.moved = true;
+      // The finger carries the ground under it; past either end it gives a little and pulls back.
+      let to = drag.turn0 - dx / g.r;
+      if (to < g.min) to = g.min - (g.min - to) * 0.3;
+      if (to > g.max) to = g.max + (to - g.max) * 0.3;
+      turn = to;
+      aim = to;
+      cancelAnimationFrame(spin);
+      spin = 0;
+      place();
+      drag.t.push([e.timeStamp, e.clientX]);
+      if (drag.t.length > 6) drag.t.shift();
+    };
+    const up = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      if (!d.moved) return;
+      d.swallow = true;
+      // Let go moving, it coasts on a little and settles on the nearest house.
+      const [t0, x0] = d.t[0];
+      const [t1, x1] = d.t[d.t.length - 1];
+      const v = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0; // px per ms
+      settle(turn - (v * 260) / g.r);
+      const tile = e.target.closest?.(".dock-house");
+      if (tile) tile.dataset.slid = "1";
+    };
+    for (const part of [glass, ...slots.map((t) => t.tile)]) {
+      part.addEventListener("pointerdown", down);
+      part.addEventListener("pointermove", move);
+      part.addEventListener("pointerup", up);
+      part.addEventListener("pointercancel", up);
+    }
+    for (const { tile } of slots) {
+      tile.addEventListener("click", () => {
+        // A slide that began on a house turned the planet; it is not a pick.
+        if (tile.dataset.slid) return void delete tile.dataset.slid;
+        if (tile.classList.contains("far")) return;
+        const id = tile.dataset.house;
+        close();
+        onPick(id);
+      });
+    }
+  }
+  return api;
+}
+
+return { openHouseArc };
 })();
 __m["src/core/time.js"] = (() => {
 // Day sheets and time stamps, always in the room's time zone.
@@ -9830,40 +10309,63 @@ __m["src/ui/fingers.js"] = (() => {
  * Two or three fingers that land together and lift without moving: Procreate's taps (two =
  * 되돌리기, three = 다시하기), the way people who draw on a tablet already undo. A pinch moves, so
  * it is never one; fingers that land far apart in time are a hold and a tap, not one either.
+ * Held still a moment, two or three fingers go on undoing or redoing, quicker and quicker, until
+ * they lift (Procreate's hold); four fingers tapped together hide or show the tools (`four`).
  * Returns stop().
  */
-function watchFingerTaps(el, { two = null, three = null, slop = 14, within = 360, together = 160 } = {}) {
+function watchFingerTaps(el, { two = null, three = null, four = null, hold = 520, slop = 14, within = 360, together = 160 } = {}) {
   const down = new Map();
   let most = 0;
   let start = 0;
   let spoiled = false;
+  let timer = 0;
+  let held = false;
+  const quiet = () => { clearTimeout(timer); timer = 0; };
+  // Two or three still fingers: again and again while they stay.
+  const again = (n) => {
+    const fn = down.size === 2 ? two : down.size === 3 ? three : null;
+    if (spoiled || !fn || down.size !== most) return;
+    held = true;
+    fn();
+    timer = setTimeout(() => again(n + 1), Math.max(80, 280 - n * 30));
+  };
   const press = (e) => {
     if (e.pointerType !== "touch") return;
     if (!down.size) {
       start = e.timeStamp;
       most = 0;
       spoiled = false;
+      held = false;
     } else if (e.timeStamp - start > together) spoiled = true;
     down.set(e.pointerId, [e.clientX, e.clientY]);
     most = Math.max(most, down.size);
+    quiet();
+    if (!spoiled && (down.size === 2 || down.size === 3)) timer = setTimeout(() => again(0), hold);
   };
   const move = (e) => {
     const at = down.get(e.pointerId);
-    if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > slop) spoiled = true;
+    if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > slop) {
+      spoiled = true;
+      quiet();
+    }
   };
   const lift = (e) => {
     if (!el.isConnected) return stop();
     if (!down.has(e.pointerId)) return;
     if (e.type === "pointercancel") spoiled = true;
     down.delete(e.pointerId);
+    quiet();
     if (down.size) return;
-    if (!spoiled && e.timeStamp - start <= within) {
+    if (!spoiled && !held && e.timeStamp - start <= within) {
       if (most === 2) two?.();
       else if (most === 3) three?.();
+      else if (most === 4) four?.();
     }
     most = 0;
+    held = false;
   };
   function stop() {
+    quiet();
     el.removeEventListener("pointerdown", press, true);
     window.removeEventListener("pointermove", move, true);
     window.removeEventListener("pointerup", lift, true);
@@ -9874,6 +10376,16 @@ function watchFingerTaps(el, { two = null, three = null, slop = 14, within = 360
   window.addEventListener("pointerup", lift, true);
   window.addEventListener("pointercancel", lift, true);
   return stop;
+}
+
+/**
+ * Four fingers tapped together (Procreate's 전체 화면): the room's tools step out of the way and
+ * come back the same way. Only when asked, never on its own while drawing.
+ */
+function toggleBare(room, hint) {
+  if (!room) return;
+  const bare = room.classList.toggle("bare");
+  hint?.(bare ? "네 손가락으로 톡: 도구 다시 보기" : "도구 보기");
 }
 
 /** Watches the touch points that begin on el. Returns { pinching, stop }. */
@@ -9919,7 +10431,7 @@ function watchFingers(el, onPinch = () => {}) {
   };
 }
 
-return { watchFingerTaps, watchFingers };
+return { watchFingerTaps, toggleBare, watchFingers };
 })();
 __m["src/audio/piano.js"] = (() => {
 // The piano's sound, made by the app itself (no recorded samples).
@@ -10788,7 +11300,7 @@ __m["src/ui/motto.js"] = (() => {
 // its record. Said where something begins: an empty sheet, an invitation. (Not on home and not as
 // the app opens: the owner took those away on 16 November.)
 
-const MOTTO = "내 안에 작은 우주를 기록해 보자";
+const MOTTO = "작은 우주를 기록해 보자";
 
 return { MOTTO };
 })();
@@ -14589,11 +15101,15 @@ function waysIn({ app, roomId, root, name, prefix, mic, canRecord, onRecord }) {
     h("button", { type: "button", class: "btn rec-way", id: prefix + "record", disabled: !canRecord || !mic.ok, onclick: () => onRecord() }, h("span", { class: "dot-rec" }), "지금 이 앱에서 녹음"),
     !mic.ok && h("p", { class: "help warn", id: prefix + "mic-reason", text: micReason(mic.reason) }),
     mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root, prefix })),
-    // iPhone and iPad have no recorder to open from a page: they open the camera, and its sound is used.
-    h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, isApple() ? "카메라로 녹음하기 (소리만 써요)" : "폰 녹음 앱으로 녹음하기"),
-    h("p", { class: "help", text: isApple() ? "아이폰·아이패드는 녹음 앱 대신 카메라가 열려요. 찍은 영상의 소리만 가져와요." : "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
-    h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, "파일에서 가져오기"),
-    h("p", { class: "help", text: isApple() ? "음성 메모의 녹음은 공유 → '파일에 저장'한 뒤 여기서 고르세요. m4a·mp3·wav, 영상(소리만)도 돼요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
+    // A phone's own recorder app (the owner, 22 November: "녹음 앱을 들어가게 해야 돼… 핸드폰 녹음 앱도
+    // 저장되고 여기서도 나오고"): Android opens it from a page (삼성 녹음 and the like), the take stays there
+    // and comes straight here. iPhone and iPad cannot open 음성 메모 from a page (Apple keeps it shut) and
+    // offer the camera instead, which is not a recording ("동영상으로 찍어서 음원 추출… 그거 말고"): there
+    // a voice memo comes in as a file, and a take made here can be saved to the phone from 비서's 녹음.
+    !isApple() && h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, "폰 녹음 앱으로 녹음하기"),
+    !isApple() && h("p", { class: "help", text: "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음은 그 앱에도 남고, 마치면 바로 여기로 와요." }),
+    h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, isApple() ? "음성 메모·파일에서 가져오기" : "파일에서 가져오기"),
+    h("p", { class: "help", text: isApple() ? "음성 메모에서 녹음 → 공유 → '파일에 저장' 한 뒤 여기서 골라요. 아이폰·아이패드는 웹에서 녹음 앱을 바로 열 수 없어서 이렇게 가져와요. 여기서 녹음한 것은 비서의 녹음에서 '폰에 저장'으로 폰에도 남겨요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
     // Only what is there: a caller may append these as they are, and `false` would show as the word.
   ].filter(Boolean);
 }
@@ -16042,7 +16558,7 @@ __m["src/ui/ink.js"] = (() => {
 
 const { h, icon, iconButton, closeOnOutside, mount } = __m["src/ui/dom.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
-const { INK_COLORS, thinPoints, brushOf, widthOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } = __m["src/core/ink.js"];
+const { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } = __m["src/core/ink.js"];
 const { closeLoop, insideLoop: loopHas } = __m["src/core/board.js"];
 const { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } = __m["src/core/brush.js"];
 const { LIGHT_MS } = __m["src/ui/live-ink.js"];
@@ -16062,9 +16578,18 @@ const STEADY_NAMES = ["끔", "약", "중", "강"];
 /** How long a line is held still before it becomes a shape. */
 const SHAPE_HOLD_MS = 600;
 
-function inkColor(c) {
-  if (c === "black") return INK[currentTheme()];
+function inkColor(c, fixed = false) {
+  if (c === "black") return fixed ? INK.light : INK[currentTheme()];
   return COLORS[c] || c;
+}
+
+/**
+ * 그림 방 and 애니메이션 방 draw on a paper of their own colour, not the app's: their black is always
+ * the same black (the owner, 21 November: "밝기 모드를 다르게 해도 펜의 색깔 안 바뀌게"). A stroke drawn
+ * there keeps that very colour, so it stays so wherever it is taken.
+ */
+function fixedInk(c) {
+  return c === "black" ? INK.light : c;
 }
 
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -16189,9 +16714,11 @@ function fillOutline(g, poly) {
  * shaped: a shape made straight (followed exactly, no pressure).
  */
 /** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
-function paintStroke(g, pts, color, px, brush, shaped = false) {
+/** alpha: the stroke's own 불투명 (0.05 to 1), on top of what the brush itself lays down. */
+function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1) {
   if (!pts || pts.length < 3) return;
-  const look = brushLook(brush);
+  const base = brushLook(brush);
+  const look = alpha < 1 ? { ...base, alpha: base.alpha * alpha } : base;
   const size = (px || 4) * (100 / 16) * look.scale;
   const erase = brush === "erase";
   const ink = erase ? "#000" : inkColor(color);
@@ -16226,7 +16753,7 @@ function paintStroke(g, pts, color, px, brush, shaped = false) {
     fillOutline(g, poly);
     const seg = sketchLines(points, { reach: size * 9, seed: (pts[0] * 31 + pts[1]) | 0 });
     if (seg.length) {
-      g.globalAlpha = 0.22;
+      g.globalAlpha = 0.22 * alpha;
       g.strokeStyle = ink;
       g.lineWidth = Math.max(size * 0.25, 2);
       g.lineCap = "round";
@@ -16309,6 +16836,10 @@ function paintStroke(g, pts, color, px, brush, shaped = false) {
   g.restore();
 }
 
+// The glass that floats over a drawing in every room: bars, tools, the frames' strip.
+const XRAY_PARTS = ".bar, .toolbar, .board-top, .board-modes, .board-rail, .ink-tools, .anim-strip";
+const XRAY_NEAR = 56; // px: how near the pen comes before the glass opens around it
+
 class InkLayer {
   /**
    * host     the element to draw over (gets position: relative)
@@ -16345,7 +16876,8 @@ class InkLayer {
    * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
    * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null }) {
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null, fixedInk = false }) {
+    this.fixedInk = fixedInk; // 그림 방, 애니메이션 방: black stays black in 어둡게
     this.host = host;
     this.onLasso = onLasso;
     this.onLassoMove = onLassoMove;
@@ -16370,6 +16902,7 @@ class InkLayer {
     this.width = 2;
     this.size = null;
     this.brush = "pen";
+    this.opacity = 1; // 불투명, Procreate's second slider
     this.live = null;
     this.canvas = h("canvas", { class: "ink", "aria-hidden": "true" });
     host.append(this.canvas);
@@ -16399,12 +16932,13 @@ class InkLayer {
     this.canvas.dataset.tool = tool || "";
   }
 
-  /** size: a width of my own in px (그림 방's slider), null for the width's. */
-  setStyle({ color, width, brush, size }) {
+  /** size: a width of my own in px (그림 방's slider), null for the width's; opacity: 0.05 to 1. */
+  setStyle({ color, width, brush, size, opacity }) {
     if (color) this.color = color;
     if (width) this.width = width;
     if (brush) this.brush = brush;
     if (size !== undefined) this.size = size;
+    if (opacity !== undefined) this.opacity = Math.max(0.05, Math.min(1, Number(opacity) || 1));
   }
 
   // ---- 올가미 on drawings ------------------------------------------------------------------
@@ -16518,6 +17052,7 @@ class InkLayer {
       if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
+      this.xrayStart(e.clientX, e.clientY);
       if (this.tool === "lasso") {
         // 올가미: inside what it holds, the finger takes it anywhere; elsewhere a new loop is drawn.
         const [x, y] = this.point(e);
@@ -16563,7 +17098,7 @@ class InkLayer {
         }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
-          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}) });
+          this.share.begin("ink", { c: this.color, w: this.width, b: brush, ...(this.size ? { z: Math.round(this.size * 10) } : {}), ...(this.opacity < 1 ? { o: Math.round(this.opacity * 100) } : {}) });
           this.share.grow("ink", this.live.pts);
         }
         this.render();
@@ -16571,6 +17106,7 @@ class InkLayer {
     });
     c.addEventListener("pointermove", (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
+      this.xrayAt(e.clientX, e.clientY);
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
       if (live.moving) {
@@ -16616,6 +17152,7 @@ class InkLayer {
     });
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
+      this.xrayEnd();
       const live = this.live;
       if (live.moving) {
         this.live = null;
@@ -16668,8 +17205,9 @@ class InkLayer {
       let opId = null;
       // An eraser's stroke has no colour of its own; it keeps a neutral one.
       const size = this.size || undefined;
-      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true });
-      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush });
+      const opacity = this.opacity < 1 ? this.opacity : undefined;
+      if (shape) opId = this.onStroke({ pts: shape.pts, color: this.color, width: this.width, size, brush: live.brush, shape: true, opacity });
+      else if (live?.pts && live.pts.length >= 3) opId = this.onStroke({ pts: live.pts, color: live.brush === "erase" ? "black" : this.color, width: this.width, size, brush: live.brush, opacity });
       if (live?.pts && live.brush !== "erase") this.share?.end("ink", typeof opId === "string" ? opId : null);
       this.render();
     };
@@ -16740,7 +17278,7 @@ class InkLayer {
     const inv = kept.t.inverse();
     const pts = ringsToPoints(rings.filter((r) => r.length >= 3), ([x, y]) => { const p = inv.transformPoint({ x, y }); return [p.x, p.y]; });
     if (pts.length < 9) return;
-    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true });
+    this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined });
     this.render();
   }
 
@@ -16823,30 +17361,45 @@ class InkLayer {
     // moves); while a line is being drawn only that line is painted over it each frame.
     const shift = this.shift;
     const t = g.getTransform();
-    const key = [this.ink().version, w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
+    const ink = this.ink();
+    const version = ink.version;
+    const key = [w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
     // The picture belongs to one drawing (a layer can be pointed at another one: 애니메이션 방's frames).
-    if (!this.kept || this.kept.key !== key || this.kept.doc !== this.ink()) {
-      const pic = this.kept?.canvas || document.createElement("canvas");
-      pic.width = w;
-      pic.height = hgt;
-      const pg = pic.getContext("2d");
-      pg.setTransform(t);
-      for (const s of this.ink().strokes()) {
-        const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q);
+    const kept = this.kept;
+    if (!kept || kept.key !== key || kept.doc !== ink || kept.version !== version) {
+      const strokes = ink.strokes();
+      const last = strokes[strokes.length - 1];
+      // One line added on top of what the picture already holds (the line just drawn, or a friend's
+      // newest): only that line is painted onto it. Redrawing every line each time a line ended held
+      // up the next line's start on a full board (the owner: "한 선 한 선 그릴 때마다 끊겨").
+      if (kept && kept.key === key && kept.doc === ink && !shift && last && strokes.length === kept.count + 1 && (kept.count === 0 || strokes[strokes.length - 2]?.id === kept.lastId)) {
+        const pg = kept.canvas.getContext("2d");
+        pg.setTransform(t);
+        this.paint(pg, last.pts, last.c, widthOf(last), brushOf(last), !!last.q, opacityOf(last));
+        Object.assign(kept, { version, count: strokes.length, lastId: last.id });
+      } else {
+        const pic = kept?.canvas || document.createElement("canvas");
+        pic.width = w;
+        pic.height = hgt;
+        const pg = pic.getContext("2d");
+        pg.setTransform(t);
+        for (const s of strokes) {
+          const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
+          this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+        }
+        this.kept = { key, version, canvas: pic, doc: ink, t, count: strokes.length, lastId: last?.id ?? null };
       }
-      this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
     const live = this.live;
     // 문지르기 being drawn is the picture itself, smudged further as the finger goes on.
     const wet = live?.pts && live.brush === "smudge" && !live.shapeNow;
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px()) : this.kept.canvas, 0, 0);
+    g.drawImage(wet ? wetPicture(live, this.kept, this.color, this.px(), this.opacity) : this.kept.canvas, 0, 0);
     g.restore();
     // The line being drawn as it will be kept (the same points), or the shape it became.
-    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true);
-    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush);
+    if (live?.shapeNow) this.paint(g, live.shapeNow.pts, this.color, this.px(), live.brush, true, this.opacity);
+    else if (live?.pts && !wet) this.paint(g, thinPoints(live.pts), this.color, this.px(), live.brush, false, this.opacity);
     // 손떨림 보정 (중·강): the string from the hand to the brush, so the lag reads as a pull.
     if (live?.lazy && live.rope && !live.shape) this.paintRope(g, live);
     // 올가미: the loop being drawn, or the one that holds strokes (moving with them).
@@ -16855,7 +17408,7 @@ class InkLayer {
     // Friends' lines as they draw them, in their brushes; their pen with their colour and name.
     const tips = [];
     for (const line of this.share?.lines() || []) {
-      this.paint(g, line.pts, line.c, widthOf(line), line.b);
+      this.paint(g, line.pts, line.c, widthOf(line), line.b, false, opacityOf(line));
       if (line.live) tips.push(line);
     }
     // Pointer lights: friends' and mine; while one still glows, the next frame comes.
@@ -16964,6 +17517,46 @@ class InkLayer {
     g.restore();
   }
 
+  /**
+   * 엑스레이 (the owner, 22 November: "흐려지는 거는 하지 마… 그 선이 UI 때문에 가려졌으면 그 선 근처
+   * UI들을 조금 지워 줘… 게임에서 캐릭터가 나무에 가려지면 조금씩 보이는 것처럼"): nothing steps back
+   * while a line is drawn (making every bar fade at each pen-down stuttered the line's start); only the
+   * floating glass the pen comes near opens a soft round window around the pen, and closes behind it.
+   * Where the glass stands is read once as the pen goes down.
+   */
+  xrayStart(x, y) {
+    const room = this.host.closest(".room");
+    const parts = room ? [...room.querySelectorAll(XRAY_PARTS)] : [];
+    // The glass itself, not a box that only holds glass (one window, never two over each other).
+    this.xr = parts.filter((el) => !parts.some((o) => o !== el && el.contains(o)))
+      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false })).filter((p) => p.r.width > 0 && p.r.height > 0);
+    this.xrAt = null;
+    this.xrayAt(x, y);
+  }
+
+  xrayAt(x, y) {
+    if (!this.xr?.length) return;
+    if (this.xrAt && Math.abs(this.xrAt[0] - x) + Math.abs(this.xrAt[1] - y) < 2) return;
+    this.xrAt = [x, y];
+    for (const p of this.xr) {
+      const r = p.r;
+      const near = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom)) < XRAY_NEAR;
+      if (near) {
+        p.el.style.setProperty("--xr-x", Math.round(x - r.left) + "px");
+        p.el.style.setProperty("--xr-y", Math.round(y - r.top) + "px");
+      }
+      if (near !== p.on) {
+        p.on = near;
+        p.el.classList.toggle("xray", near);
+      }
+    }
+  }
+
+  xrayEnd() {
+    for (const p of this.xr || []) if (p.on) p.el.classList.remove("xray");
+    this.xr = null;
+  }
+
   /** One drawing per frame however many points came. */
   renderSoon() {
     if (this.frame) return;
@@ -16984,8 +17577,8 @@ class InkLayer {
     if (this.host.style.minHeight !== next) this.host.style.minHeight = next;
   }
 
-  paint(g, pts, color, px, brush, shaped = false) {
-    paintStroke(g, pts, color, px, brush, shaped);
+  paint(g, pts, color, px, brush, shaped = false, alpha = 1) {
+    paintStroke(g, pts, this.fixedInk ? fixedInk(color) : color, px, brush, shaped, alpha);
   }
 
   destroy() {
@@ -17064,18 +17657,21 @@ function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
 }
 
 /** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
-function wetPicture(live, kept, color, px) {
-  if (!live.wet || live.wet.key !== kept.key) {
+function wetPicture(live, kept, color, px, alpha = 1) {
+  // The picture changes without its key when a line is painted onto it (a friend's): its version tells.
+  const key = kept.key + "|" + kept.version;
+  if (!live.wet || live.wet.key !== key) {
     const c = live.wet?.canvas || document.createElement("canvas");
     c.width = kept.canvas.width;
     c.height = kept.canvas.height;
     const wg = c.getContext("2d");
     wg.drawImage(kept.canvas, 0, 0);
-    live.wet = { key: kept.key, canvas: c, done: 1 };
+    live.wet = { key, canvas: c, done: 1 };
   }
   const pts = thinPoints(live.pts);
   if (pts.length < 6) return live.wet.canvas;
-  const look = brushLook("smudge");
+  const base = brushLook("smudge");
+  const look = alpha < 1 ? { ...base, alpha: base.alpha * alpha } : base;
   const size = (px || 4) * (100 / 16) * look.scale;
   const points = strokePoints(pts, { streamline: look.streamline });
   // Only up to the line's last settled point: its very end still moves as the hand goes on.
@@ -17139,7 +17735,10 @@ function brushPreview(brush, color, width) {
  * lie in one row. pen: { tool, brush, color, width, size }; setTool(tool) applies a change;
  * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
-function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false }) {
+function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false }) {
+  // In 그림 방 and 애니메이션 방 black is shown as the black it draws (it never turns with 어둡게).
+  const shown = (c) => inkColor(c, fixed);
+  const drawn = (c) => (fixed ? fixedInk(c) : c);
   panel.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return void closeInkPop();
@@ -17155,7 +17754,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
   const brushNow = h("button", { class: "ink-tool ink-brush-now", id: "ink-brush-now", type: "button", "aria-label": `붓: ${brushName} (눌러서 붓 고르기)`,
     "aria-pressed": String(pen.tool === "pen"), "aria-expanded": String(inkPop?.kind === "brush"),
     onclick: () => (pen.tool !== "pen" ? setTool("pen") : togglePop("brush", brushNow)) },
-    brushPreview(pen.brush, pen.color, pen.width), h("span", { class: "ink-tool-name", text: brushName }));
+    brushPreview(pen.brush, drawn(pen.color), pen.width), h("span", { class: "ink-tool-name", text: brushName }));
   const eraserButton = iconButton("eraser", "eraser", "지우개 (다시 누르면 부분·획)", () => (erasing ? togglePop("erase", eraserButton) : setTool(eraserKind())));
   eraserButton.setAttribute("aria-pressed", String(erasing));
   const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
@@ -17164,7 +17763,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
   const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
   lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
   const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
-    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
+    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": shown(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
   const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
     ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
       onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
@@ -17189,7 +17788,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
       const look = brushLook(erasing ? "erase" : pen.brush);
       const d = Math.max(2, Math.min(220, (v * (100 / 16) * (look.scale || 1)) / (units?.() || 100 / 16)));
       peek.style.width = peek.style.height = d.toFixed(1) + "px";
-      peek.style.background = erasing ? "transparent" : inkColor(pen.color);
+      peek.style.background = erasing ? "transparent" : shown(pen.color);
       peek.classList.toggle("erase", erasing);
     };
     const set = (v) => {
@@ -17255,7 +17854,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
         h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
           ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
             onclick: () => { setSetting(store, "inkBrush", b); closeInkPop(); choose({ brush: b }); } },
-            brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name })))),
+            brushPreview(b, drawn(pen.color), pen.width), h("span", { class: "ink-brush-name", text: name })))),
         h("div", { class: "ink-pop-row" },
           h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
             onclick: () => { setSetting(store, "inkShapes", !shapes); pop.fill(); } }, "모양 잡기"),
@@ -17266,7 +17865,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
       mount(el,
         h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
           ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-            style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
+            style: { background: shown(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
           inkWell()),
         recent.length ? h("div", { class: "ink-colors recent", role: "group", "aria-label": "최근 색" },
           ...recent.map((c) => h("button", { class: "ink-color", type: "button", data: { recent: c }, "aria-label": "최근 색 " + c, "aria-pressed": String(pen.color === c),
@@ -17288,7 +17887,7 @@ function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = nul
         closeInkPop();
         openColorWheel({
           anchor,
-          color: own ? pen.color : inkColor(pen.color),
+          color: own ? pen.color : shown(pen.color),
           recent: getSettings(store).inkRecent || [],
           // While the finger moves only the pen and the colour dot change; the lift chooses it.
           onPick: (hex, done) => {
@@ -17393,7 +17992,7 @@ function closeInkPop() {
   for (const b of pop?.panel?.querySelectorAll("[aria-expanded]") || []) b.setAttribute("aria-expanded", "false");
 }
 
-return { BRUSH_NAMES, STEADY_NAMES, inkColor, pixelAt, paintStroke, InkLayer, drawInkTools, lassoActions, closeInkPop };
+return { BRUSH_NAMES, STEADY_NAMES, inkColor, fixedInk, pixelAt, paintStroke, InkLayer, drawInkTools, lassoActions, closeInkPop };
 })();
 __m["src/ui/text-room.js"] = (() => {
 // The shared sheets of a daily text room: one sheet per day, newest at the bottom.
@@ -17401,7 +18000,7 @@ __m["src/ui/text-room.js"] = (() => {
 const { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame, closeOnOutside } = __m["src/ui/dom.js"];
 const { shrinkPhoto } = __m["src/ui/photo.js"];
 const { watchPickers } = __m["src/ui/picker-watch.js"];
-const { watchFingers, watchFingerTaps } = __m["src/ui/fingers.js"];
+const { watchFingers, watchFingerTaps, toggleBare } = __m["src/ui/fingers.js"];
 const { onThemeChange } = __m["src/ui/theme.js"];
 const { SheetEditor } = __m["src/ui/editor.js"];
 const { UndoStack } = __m["src/core/undo.js"];
@@ -17558,6 +18157,7 @@ function mountTextRoom(body, app, session) {
   const stopTaps = watchFingerTaps(body, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(body.closest(".room"), flashHint),
   });
   // Two fingers also carry the page (the owner, 21 November: "그림 모드일 때 두 손으로 아래 넘기기도"):
   // moved together they scroll it, spread or pinched they zoom it, both at once as in Procreate.
@@ -19075,7 +19675,7 @@ function inside(pts, x, y) {
   return hit;
 }
 
-return { MIN_PPS, MAX_PPS, Timeline, timeText };
+return { MIN_PPS, MAX_PPS, wavePath, Timeline, timeText };
 })();
 __m["src/ui/note-editor.js"] = (() => {
 // 음 편집: one clip's notes as a piano roll.
@@ -21109,10 +21709,10 @@ __m["src/ui/board-room.js"] = (() => {
 // off, and it closes itself the shortest way when the end does not reach the start.
 
 const { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint, mount } = __m["src/ui/dom.js"];
-const { watchFingers, watchFingerTaps } = __m["src/ui/fingers.js"];
+const { watchFingers, watchFingerTaps, toggleBare } = __m["src/ui/fingers.js"];
 const { currentTheme, onThemeChange } = __m["src/ui/theme.js"];
 const { openNoteEditor } = __m["src/ui/note-editor.js"];
-const { timeText } = __m["src/ui/song-view.js"];
+const { timeText, wavePath } = __m["src/ui/song-view.js"];
 const { SPEEDS } = __m["src/ui/song-room.js"];
 const { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } = __m["src/ui/sound-in.js"];
 const { shrinkPhoto } = __m["src/ui/photo.js"];
@@ -21139,7 +21739,7 @@ const { reachableRooms, putCardsIntoSong } = __m["src/ui/room-actions.js"];
 const { bufferFromSamples, decodeAudioFile } = __m["src/audio/decode.js"];
 const { analyzeSamples } = __m["src/audio/analyze.js"];
 const { MicRecorder, micSupport, micProblem } = __m["src/audio/recorder.js"];
-const { toBase64 } = __m["src/audio/peaks.js"];
+const { toBase64, fromBase64 } = __m["src/audio/peaks.js"];
 const { newBlobId } = __m["src/sync/blobs.js"];
 const { RoomSession } = __m["src/sync/session.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
@@ -21400,10 +22000,8 @@ function mountBoardRoom(body, app, session, frame) {
     },
   });
   surface.prepend(boardInk.canvas);
-  // While the pen is on the board, the bars and tools step back (the owner chose "그릴 때 막대 옅어지기").
-  const inkingNow = (on) => body.closest(".room")?.classList.toggle("inking-now", on);
-  boardInk.canvas.addEventListener("pointerdown", () => { if (pen.tool) inkingNow(true); });
-  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) boardInk.canvas.addEventListener(type, () => inkingNow(false));
+  // Nothing steps back while the pen draws (the bars fading at each pen-down stuttered the line); the
+  // glass the pen comes near opens around it instead (엑스레이, ui/ink.js).
 
   /** 그리기 on or off (null). The pen belongs to 전체: turning it on there from any mode. */
   function setPen(tool) {
@@ -21524,7 +22122,7 @@ function mountBoardRoom(body, app, session, frame) {
         el.style.setProperty("--tc", item.tint != null ? memberColor(item.tint, currentTheme()) : inkColor(item.color || "black"));
         el.dataset.size = String(item.size || 2);
       }
-      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1) + "|" + (item.chords !== false);
+      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1) + "|" + (item.chords !== false) + "|" + (item.kind === "song" ? settings().songMode || "piano" : "");
       if (el.dataset.key !== key || el.shownData !== item.data) {
         el.dataset.key = key;
         el.shownData = item.data;
@@ -21597,8 +22195,30 @@ function mountBoardRoom(body, app, session, frame) {
         // Its own speed beside its length (the length as it sounds at that speed).
         (item.speed || 1) !== 1 && h("b", { class: "speed-badge", text: item.speed + "×" }),
         h("span", { class: "card-len", text: (d.dur / (item.speed || 1) / 1000).toFixed(1) + "초" })),
-      noteBars(d, "card-notes", item.chords !== false),
+      // 원본 shows the recording itself, 같이 the notes over it, 피아노 the notes (as in the song room;
+      // the owner, 22 November: "화이트보드에서는 원본 음을 볼 수가 없어").
+      ...(() => {
+        const mode = settings().songMode || "piano";
+        return [mode !== "piano" && waveOf(d, mode === "both"), mode !== "original" && noteBars(d, "card-notes", item.chords !== false)].filter(Boolean);
+      })(),
     ];
+  }
+
+  /** The recording's own shape (its peaks), drawn across the card. */
+  const peakBytes = new WeakMap();
+  function waveOf(d, under = false) {
+    if (!peakBytes.has(d)) peakBytes.set(d, fromBase64(d.peaks || ""));
+    const w = wavePath(peakBytes.get(d), 0, d.dur);
+    if (!w) return null;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "card-wave" + (under ? " under" : ""));
+    svg.setAttribute("viewBox", `0 -1 ${Math.max(1, w.n - 1)} 2`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", w.d);
+    svg.append(path);
+    return svg;
   }
 
   /** Note bars by pitch inside a box, as in the song room (also for 내 노래's previews). */
@@ -21791,7 +22411,7 @@ function mountBoardRoom(body, app, session, frame) {
       if (soloLasso === id) stopPlaying();
       apply(removeLassoOps(session.clock, board, id));
     } });
-    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 레퍼런스", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
+    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 맡기기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
     // 곡·글·그림·전체: what the loop's actions take.
     const kind = h("button", { type: "button", class: "lasso-kind", id: "lasso-kind-" + id, "aria-label": "올가미가 다룰 것 (곡, 글, 그림, 전체)", onclick: () => { if (!chipDragged) openKinds(id, chip); } });
     const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, kind, more, remove);
@@ -21881,7 +22501,7 @@ function mountBoardRoom(body, app, session, frame) {
         songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
         can && pasteable && one("lasso-paste", "붙여넣기", () => pasteIntoLoop(id)),
         one("lasso-copy", "복사", () => copyLasso(loopHolds(id))),
-        one("lasso-ref", "레퍼런스에 넣기", () => lassoToReference(loopHolds(id).cards)),
+        one("lasso-ref", "비서에게 맡기기", () => lassoToReference(loopHolds(id).cards)),
         can && one("lasso-delete", "지우기", () => deleteLasso(loopHolds(id))),
       ].filter(Boolean));
     };
@@ -22159,7 +22779,7 @@ function mountBoardRoom(body, app, session, frame) {
         n++;
       }
     }
-    toast(root, n ? `레퍼런스에 ${n}개를 넣었어요` : "레퍼런스에 넣을 글이나 노래 카드가 없어요", 3000);
+    toast(root, n ? `비서에게 ${n}개를 맡겼어요` : "비서에게 맡길 글이나 노래 카드가 없어요", 3000);
   }
 
   /** Takes every loop off (one undo step). */
@@ -22272,7 +22892,7 @@ function mountBoardRoom(body, app, session, frame) {
       menu.forItem = item.id;
       menu.view = "main";
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, item.chords !== false, menu.view].join("|");
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, item.chords !== false, menu.view, settings().songMode].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
@@ -22292,6 +22912,7 @@ function mountBoardRoom(body, app, session, frame) {
         h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
       menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
+        one("card-sound", { original: "원본", both: "같이" }[settings().songMode] || "피아노", () => toggleSoundMode()),
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
@@ -22439,6 +23060,7 @@ function mountBoardRoom(body, app, session, frame) {
   const stopTaps = watchFingerTaps(surface, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(surface.closest(".room"), flashHint),
   });
 
   function wireCard(el, id) {
@@ -24119,8 +24741,8 @@ __m["src/ui/timelapse.js"] = (() => {
 // jump along it, and 영상으로 저장 where the browser can record a canvas.
 
 const { h, toast } = __m["src/ui/dom.js"];
-const { paintStroke } = __m["src/ui/ink.js"];
-const { brushOf, widthOf } = __m["src/core/ink.js"];
+const { paintStroke, fixedInk } = __m["src/ui/ink.js"];
+const { brushOf, widthOf, opacityOf } = __m["src/core/ink.js"];
 const { replayPlan, strokePart } = __m["src/core/timelapse.js"];
 
 const SPEEDS = [1, 2, 4];
@@ -24129,7 +24751,7 @@ const SPEEDS = [1, 2, 4];
  * layers: [{ strokes, opacity, mode }] bottom first; pageW/pageH in stroke units; paper: its colour;
  * nameOf(member), colorOf(member); title for a saved video. Returns { close }.
  */
-function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, title = "그림" }) {
+function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, title = "그림", fixed = false }) {
   const plan = replayPlan(layers.map((l, i) => ({ layer: i, strokes: l.strokes })));
   const canvas = h("canvas", { class: "tl-canvas", id: "tl-canvas", "aria-label": "그린 과정" });
   const fill = h("span", { class: "tl-fill" });
@@ -24177,7 +24799,7 @@ function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, tit
   function paintOn(c, item, pts) {
     const lg = c.getContext("2d");
     lg.setTransform(k, 0, 0, k, 0, 0);
-    paintStroke(lg, pts, item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q);
+    paintStroke(lg, pts, fixed ? fixedInk(item.stroke.c) : item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q, opacityOf(item.stroke));
     lg.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -24462,12 +25084,12 @@ const { h, icon, iconButton, toast, closeOnOutside, flashHint } = __m["src/ui/do
 const { openTimelapse } = __m["src/ui/timelapse.js"];
 const { personColor } = __m["src/core/paint.js"];
 const { currentTheme } = __m["src/ui/theme.js"];
-const { watchFingerTaps } = __m["src/ui/fingers.js"];
+const { watchFingerTaps, toggleBare } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
-const { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } = __m["src/ui/ink.js"];
+const { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
 const { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } = __m["src/core/draw.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } = __m["src/core/ink.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, opacityOf, moveStrokesOps } = __m["src/core/ink.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -24512,6 +25134,7 @@ function mountDrawRoom(body, app, session, frame) {
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(stage.closest(".room"), flashHint),
   });
   // ---- layers on the page ---------------------------------------------------------------------
 
@@ -24527,6 +25150,7 @@ function mountDrawRoom(body, app, session, frame) {
     };
     let lasso = null;
     const ink = new InkLayer({
+      fixedInk: true,
       // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
       onLasso: (info) => lasso?.show(info),
       onLassoMove: (ids, dx, dy) => {
@@ -24545,9 +25169,9 @@ function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, size, brush, shape }) => {
+      onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
         if (readOnly()) return;
-        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
+        const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
@@ -24608,7 +25232,7 @@ function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -24650,7 +25274,7 @@ function mountDrawRoom(body, app, session, frame) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
     g.setTransform(c.width / PAGE_W, 0, 0, c.height / PAGE_H, 0, 0);
-    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
+    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
   }
 
   function drawPanel() {
@@ -24782,6 +25406,7 @@ function mountDrawRoom(body, app, session, frame) {
       nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
       colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
       title: session.room.meta("name") || "그림",
+      fixed: true,
     });
   }
 
@@ -24807,7 +25432,7 @@ function mountDrawRoom(body, app, session, frame) {
       one.height = hgt;
       const lg = one.getContext("2d");
       lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
+      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
       g.globalAlpha = layer.opacity;
       g.globalCompositeOperation = layer.mode;
       g.drawImage(one, 0, 0);
@@ -24878,13 +25503,13 @@ __m["src/ui/anim-room.js"] = (() => {
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
 const { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } = __m["src/ui/dom.js"];
-const { InkLayer, drawInkTools, paintStroke, lassoActions } = __m["src/ui/ink.js"];
+const { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
-const { watchFingerTaps } = __m["src/ui/fingers.js"];
+const { watchFingerTaps, toggleBare } = __m["src/ui/fingers.js"];
 const { pageStage } = __m["src/ui/page-stage.js"];
 const { PAGE_W, PAGE_H } = __m["src/ui/draw-room.js"];
 const { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } = __m["src/core/anim.js"];
-const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } = __m["src/core/ink.js"];
+const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } = __m["src/core/ink.js"];
 const { PAPERS } = __m["src/core/draw.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
@@ -24934,6 +25559,7 @@ function mountAnimRoom(body, app, session) {
     if (current) thumbSoon(current);
   };
   ink = new InkLayer({
+    fixedInk: true,
     host: inkHost,
     grow: false,
     onLasso: (info) => lasso?.show(info),
@@ -24950,10 +25576,10 @@ function mountAnimRoom(body, app, session) {
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
     onPick: (color) => { pen.color = color; setTool(pen.tool); },
-    onStroke: ({ pts, color, width, size, brush, shape }) => {
+    onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
       if (readOnly() || !current) return null;
       const name = curDoc();
-      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
+      const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
       session.commit(name, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: name })));
       thumbSoon(current);
@@ -25008,7 +25634,7 @@ function mountAnimRoom(body, app, session) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => ink.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -25055,7 +25681,7 @@ function mountAnimRoom(body, app, session) {
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, widthOf(s), brushOf(s), !!s.q);
+    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
   }
 
   const neighbours = () => {
@@ -25357,7 +25983,7 @@ function mountAnimRoom(body, app, session) {
     const atoms = made.atoms.map((atom) => ({ ...atom, doc: "anim" }));
     const name = frameDocOf(made.id);
     for (const s of from.strokes()) {
-      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
+      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: fixedInk(s.c), width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s), by: session.memberId });
       session.commit(name, one.ops);
       atoms.push(...one.atoms.map((atom) => ({ ...atom, doc: name })));
     }
@@ -25528,6 +26154,7 @@ function mountAnimRoom(body, app, session) {
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(stage.closest(".room"), flashHint),
   });
 
   // ---- start --------------------------------------------------------------------------------------
@@ -25760,7 +26387,7 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
   // words: notes), else where I was last.
   const here = insertSound && !insert ? "sounds" : insert && !insertSound ? "notes" : null;
   const first = tab || here || getSettings(app.store).refTab || "notes";
-  openFloat(app.root, { id: "reference", title: "레퍼런스", pos, dock }, (panel, close, onClose) => {
+  openFloat(app.root, { id: "reference", title: "비서", pos, dock }, (panel, close, onClose) => {
     const list = h("div", { class: "ref-list", id: "ref-list" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
@@ -25811,6 +26438,7 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
           h("button", { class: "chip play" + (audio?.id === s.id ? " on" : ""), type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
           insertSound && h("button", { class: "chip primary", type: "button", data: { putSound: s.id }, onclick: () => { stopHearing(); insertSound(s); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
           h("button", { class: "chip", type: "button", data: { sendSound: s.id }, text: "보내기", onclick: () => sendSound(s) }),
+          s.blob && h("button", { class: "chip", type: "button", data: { saveSound: s.id }, text: "폰에 저장", onpointerdown: () => fileOf(s), onclick: () => saveToPhone(s) }),
           h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }, "지우기"))))
         : [h("p", { class: "help ref-empty", text: "흥얼거림을 모아 두면, 노래 방이나 화이트보드에 바로 놓을 수 있어요." }),
           h("button", { class: "chip", type: "button", id: "ref-example", text: "예시 녹음 넣어 보기", onclick: () => addExample() })]));
@@ -25829,6 +26457,45 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
       } finally {
         busy = false;
       }
+    }
+
+    /**
+     * 폰에 저장 (the owner, 22 November: "녹음 앱으로 하면 핸드폰 녹음 앱도 저장되고 여기서도 나오고"): a take
+     * made here goes to the phone too, through the share sheet ('파일에 저장', or any app that takes
+     * a sound) or else as a download. Its file is read as the finger goes down, so the share sheet
+     * still opens from the tap itself (Safari asks for that).
+     */
+    const files = new Map();
+    function fileOf(s) {
+      if (!files.has(s.id)) {
+        files.set(s.id, app.blobs.get(s.blob).then((kept) => {
+          if (!kept?.data) return null;
+          const type = kept.type || "audio/wav";
+          const ext = /wav/.test(type) ? "wav" : /mp4|m4a|aac/.test(type) ? "m4a" : /mpeg|mp3/.test(type) ? "mp3" : /webm/.test(type) ? "webm" : /ogg/.test(type) ? "ogg" : "wav";
+          const name = String(s.name || "녹음").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+          return new File([kept.data], `${name}.${ext}`, { type });
+        }, () => null));
+      }
+      return files.get(s.id);
+    }
+    async function saveToPhone(s) {
+      const file = await fileOf(s);
+      if (!file) return void toast(app.root, "이 기기에 원본이 없어요", 2400);
+      try {
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: s.name || "녹음" });
+          return;
+        }
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+      }
+      const url = URL.createObjectURL(file);
+      const a = h("a", { href: url, download: file.name, style: { display: "none" } });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      toast(app.root, "폰에 저장했어요 (다운로드한 파일)", 2400);
     }
 
     /** 보내기: a kept recording into one of my song rooms (a clip after what it holds) or whiteboards (a card). */
@@ -26049,7 +26716,7 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
         return h("div", { class: "ref-item" },
           h("p", { text: f.text || `♪ ${f.sound.name} · ${timeText(f.sound.dur * 1000)}` }),
           act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "가져오기", onclick: act }),
-          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "레퍼런스 메모에 넣었어요"); } }));
+          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "비서 메모에 넣었어요"); } }));
       }) : [h("p", { class: "help", text: "가져올 것이 아직 없어요" })]));
     }
     onClose(() => {
@@ -27327,7 +27994,9 @@ const { showJoin } = __m["src/ui/join.js"];
 const { kindInfo, sideOf } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
 const { watchContrast } = __m["src/ui/contrast.js"];
-const { textPreview, songPreview, boardPreview } = __m["src/core/preview.js"];
+const { textPreview, songPreview, boardPreview, drawPreview } = __m["src/core/preview.js"];
+const { inkDocOf } = __m["src/core/draw.js"];
+const { frameDocOf } = __m["src/core/anim.js"];
 const { RoomSession } = __m["src/sync/session.js"];
 const { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } = __m["src/identity.js"];
 const { keepRoomWords } = __m["src/houses.js"];
@@ -27374,7 +28043,7 @@ function displaySettings(app, { withColors }) {
       h("div", { class: "tint-amount-row" }, slider, amountText, back)),
     h("div", { class: "row" }, h("span", { class: "label", text: "글자 크기" }),
       segmented(TEXT_SIZES.map(([v, name]) => [String(v), name, "text-" + String(v).replace(".", "-")]), String(settings.textScale || 1), (v) => change("textScale", Number(v)), "textSize")),
-    toggle("set-reference", "레퍼런스 기능 (나만 보는 메모)", settings.reference, (on) => change("reference", on)),
+    toggle("set-reference", "비서 (나만 보는 메모·녹음, 내 방들 잇기)", settings.reference, (on) => change("reference", on)),
     toggle("set-sounds", "효과음 (색이 섞일 때 띠리링)", settings.soundEffects !== false, (on) => change("soundEffects", on)),
     toggle("set-haptics", "진동 (들 때·놓을 때 짧게)", settings.haptics !== false, (on) => change("haptics", on)),
     withColors && toggle("set-colors", "사람마다 다른 색으로 보기", settings.colors, (on) => change("colors", on)),
@@ -27548,7 +28217,7 @@ function showRoom(app, roomId) {
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
-        getSettings(app.store).reference && iconButton("room-reference", "book", "레퍼런스 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, roomId })),
+        getSettings(app.store).reference && iconButton("room-reference", "book", "비서 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, roomId })),
         games.button,
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
@@ -27628,6 +28297,21 @@ function showRoom(app, roomId) {
       }
       if (kind === "creative-song") return session.isLoaded("song") ? songPreview(session.doc("song")) : undefined;
       if (kind === "creative-board") return session.isLoaded("board") ? boardPreview(session.doc("board")) : undefined;
+      // 그림 방: its layers as they show; 애니메이션 방: its first page over its background (the owner,
+      // 21 November: "그림 모드나 애니 모드도 미리보기도 나오게").
+      if (kind === "creative-draw") {
+        if (!session.isLoaded("draw")) return undefined;
+        const layers = session.doc("draw").layers();
+        if (layers.some((l) => !session.isLoaded(inkDocOf(l.id)))) return undefined;
+        return drawPreview(layers.map((l) => ({ visible: l.visible !== false, strokes: session.doc(inkDocOf(l.id)).strokes() })));
+      }
+      if (kind === "creative-anim") {
+        if (!session.isLoaded("anim")) return undefined;
+        const first = session.doc("anim").frames()[0];
+        const docs = [frameDocOf("bg"), first && frameDocOf(first.id)].filter(Boolean);
+        if (docs.some((d) => !session.isLoaded(d))) return undefined;
+        return drawPreview(docs.map((d) => ({ visible: true, strokes: session.doc(d).strokes() })));
+      }
     } catch (err) {
       console.warn(err);
     }
@@ -27839,7 +28523,9 @@ function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null }) {
   const W = innerWidth;
   const H = innerHeight;
   const L = vertical ? H : W;
-  const u0 = clamp(at, 0.06, 0.94) * L;
+  // Where the ball landed, however near a corner (the owner, 21 November: "끝쪽으로 쐈을 때… 내가 쏜 거
+  // 기준으로서 중앙에 애니가 발생되지 않아"): the flash, the sparks and the light all start there.
+  const u0 = clamp(at, 0, 1) * L;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const canvas = h("canvas", { class: "edge-glow", data: { edge }, "aria-hidden": "true" });
   canvas.width = Math.round((vertical ? STRIP : L) * dpr);
@@ -27870,7 +28556,11 @@ function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null }) {
   const fade = 760;
   const tau = 150 + 170 * s;
   const reach = (0.045 + 0.16 * s) * L;
+  // The light's ends fade into the glass, never into the corners; near a corner that fading keeps
+  // clear of the spot it landed on, so it lights up there as it does anywhere else.
   const end = 0.07 * L;
+  const endA = Math.max(1, Math.min(end, u0 * 0.6));
+  const endB = Math.max(1, Math.min(end, (L - u0) * 0.6));
   const alphas = new Float64Array(STEPS + 1);
 
   const along = (k, rgb) => {
@@ -27890,7 +28580,7 @@ function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null }) {
     const sigma = 8 + reach * (reduced ? 1 : 1 - Math.exp(-t / tau)) * (1 + 0.3 * fading);
     for (let i = 0; i <= STEPS; i++) {
       const u = (i / STEPS) * L;
-      alphas[i] = level * Math.exp(-((u - u0) ** 2) / (2 * sigma * sigma)) * smooth(u / end) * smooth((L - u) / end);
+      alphas[i] = level * Math.exp(-((u - u0) ** 2) / (2 * sigma * sigma)) * smooth(u / endA) * smooth((L - u) / endB);
     }
     // A soft light coming in from the edge: along × across.
     g.globalCompositeOperation = "source-over";
@@ -28153,10 +28843,19 @@ function throwOf({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, tap = 14 }) {
   const dy = y1 - y0;
   const d = Math.hypot(dx, dy);
   if (d < tap) return null;
-  const hit = edgeHit(x0, y0, dx, dy, w, h);
-  if (!hit) return null;
+  // The way it was thrown decides the edge (the owner, 21 November: "발사한 곳에는 우선적으로 그쪽으로"):
+  // its larger part, left or right, up or down. From a corner its line can meet another edge first
+  // (a throw to the left that rises a little, from the top right, met the top); where along the
+  // edge is where that line crosses the edge's own line, kept on the edge.
+  const edge = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? "left" : "right") : dy < 0 ? "top" : "bottom";
+  const sx = clamp(x0, 0, w);
+  const sy = clamp(y0, 0, h);
+  const t = edge === "left" ? -sx / dx : edge === "right" ? (w - sx) / dx : edge === "top" ? -sy / dy : (h - sy) / dy;
+  const x = edge === "left" ? 0 : edge === "right" ? w : clamp(sx + dx * t, 0, w);
+  const y = edge === "top" ? 0 : edge === "bottom" ? h : clamp(sy + dy * t, 0, h);
+  const at = edge === "left" || edge === "right" ? y / h : x / w;
   const speed = Math.hypot(vx, vy);
-  return { ...hit, speed, strength: strengthOf(speed, d) };
+  return { edge, at: clamp(at, 0, 1), x, y, dist: Math.hypot(x - sx, y - sy), speed, strength: strengthOf(speed, d) };
 }
 
 const OUTWARD = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
@@ -28282,7 +28981,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   const max = () => getSettings(store).recentSearchMax || 5;
   let mode = "name";
   let query = "";
-  const panel = h("aside", { class: "home-panel" + (floating ? " floating" : ""), id: "home-panel", data: { edge }, role: "dialog", "aria-label": "찾기와 집" });
+  const panel = h("aside", { class: "home-panel" + (floating ? " floating" : ""), id: "home-panel", data: { edge }, role: "dialog", "aria-label": "햇살 (방 찾기와 집)" });
   // While the panel is still coming out, a tap beside it does not put it away (it may be a tap on
   // the part of the panel that is not shown yet).
   let entering = false;
@@ -28291,9 +28990,11 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   // away (see onOutside).
   const scrim = h("div", { class: "home-panel-scrim", "aria-hidden": "true" });
   // The grip stays the same element while the views change under it (a finger on it keeps its hold).
-  const grip = h("div", { class: "panel-grip", id: "panel-grip", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  // It is the window's bar: its lock, its way between edge and window and its close live on it (the
+  // owner: "창 끝에 무슨 바 있는 거, 거기 줄에다가 잠금과 나가기와 다른 식으로 바꾸기").
+  const grip = h("div", { class: "panel-grip", id: "panel-grip" });
   // A side panel's inner edge (its 끝자락) takes the same throw.
-  const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  const end = h("div", { class: "panel-end", id: "panel-end" });
   const body = h("div", { class: "home-panel-body" });
   // At its top left a lock, at its top right the way between an edge and a window of its own (the
   // owner: "점3개… 거기 누르면 나오는 곳에서 위쪽 오른쪽에다가 그거 따로 독단적 창 나오게 하는 걸 버튼").
@@ -28315,34 +29016,61 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   // Its ┘ corner draws it bigger or smaller (the owner: "'ㄴ'을 반대로 한 거… 스와이프하면 그대로 크기가 그만큼
   // 작아지고"); small, only the houses stay, in a column when tall and a row when wide.
   const sizer = h("div", { class: "panel-sizer", id: "panel-sizer", role: "separator", "aria-label": "크기 바꾸기 (끌어서)" });
-  // Floating (like 레퍼런스, with the same head): its head moves it, where it is left it stays; its
-  // own button puts it away.
+  // Floating: its bar moves it and keeps its size; no name over it (the owner: "그 창 위에 이름을
+  // 넣지 마… 촌스러워"); its own button puts it away. Its two sides draw it wider or narrower.
   const head = floating && h("div", { class: "float-head", id: "float-head" },
     lockBtn,
-    h("h2", { class: "float-title", text: "찾기와 집" }),
-    floatBtn,
-    h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
-  if (floating) panel.append(head, body, sizer);
-  else panel.append(grip, h("div", { class: "panel-ctrl" }, lockBtn,
-    h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")))), body, end, sizer);
+    h("span", { class: "grip-bar", "aria-hidden": "true" }),
+    h("span", { class: "panel-ctrl-end" }, floatBtn,
+      h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close"))));
+  const sides = floating ? ["left", "right"].map((side) => h("div", { class: "panel-side " + side, id: "panel-side-" + side, role: "separator", "aria-label": (side === "left" ? "왼쪽" : "오른쪽") + " 가장자리를 끌어 너비 바꾸기" })) : [];
+  // Docked, its lock, its way to a window of its own and its close stand beside the bar it already
+  // has at its inner end (the owner, 21 November: "위쪽에 바를 새로 만들지 말고 이미 있는 그 창 바에다가
+  // 옆에"): across the end of a bottom or top window, along the inner edge of a side one.
+  const ctrlEnd = !floating && h("span", { class: "panel-ctrl-end" }, floatBtn,
+    h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
+  const gripBar = h("span", { class: "grip-bar", "aria-hidden": "true" });
+  const endBar = h("span", { class: "grip-bar", "aria-hidden": "true" });
+  function placeControls() {
+    if (floating) return;
+    const side = edge === "left" || edge === "right";
+    grip.replaceChildren(...(side ? [] : [lockBtn, gripBar, ctrlEnd]));
+    end.replaceChildren(...(side ? [lockBtn, endBar, ctrlEnd] : []));
+  }
+  if (floating) panel.append(head, body, ...sides, sizer);
+  else {
+    placeControls();
+    panel.append(grip, body, end, sizer);
+  }
   paintLock();
   root.append(scrim, panel);
-  // Home's round buttons step away while the panel is out, so there is nothing to keep clear of —
-  // unless ⋮ is kept for "다시 누르면 다른 쪽으로": then what the panel holds starts below them.
-  const topClear = () => {
-    const t = getSettings(store).panelCycle && document.querySelector(".home-top");
-    return t ? Math.ceil(t.getBoundingClientRect().bottom + 6) : 0;
-  };
-  panel.style.setProperty("--top-clear", topClear() + "px");
+  // 햇살 stays where it is while its window is out (the owner: "아이콘들 다 가리고서 거기 있던 그 아이콘만
+  // 보이게"); where the window comes under it (a small screen, a window at the top or the right),
+  // the rows under it make room: the bar's buttons and the search field shrink away from it.
+  function keepClearOfSun() {
+    const sun = document.getElementById("home-more")?.getBoundingClientRect();
+    for (const row of panel.querySelectorAll(".panel-grip, .float-head, .search-row")) {
+      row.style.removeProperty("--sun-r");
+      row.style.removeProperty("--sun-l");
+      if (!sun || !sun.width) continue;
+      const r = row.getBoundingClientRect();
+      if (!(sun.bottom > r.top && sun.top < r.bottom && sun.right > r.left && sun.left < r.right)) continue;
+      if (sun.left + sun.width / 2 >= r.left + r.width / 2) row.style.setProperty("--sun-r", Math.ceil(r.right - sun.left + 6) + "px");
+      else row.style.setProperty("--sun-l", Math.ceil(sun.right - r.left + 6) + "px");
+    }
+  }
+  addEventListener("resize", keepClearOfSun);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (floating) placeFloat(store.get(FLOAT_KEY, null));
   if (floating) popIn();
   else enter(at);
 
   function placeFloat(spot) {
-    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : 360));
+    // Moved by its bar it keeps the size it has (it went back to 360 wide: the owner, "크기가 원상 복구").
+    const now = panel.style.width ? panel.getBoundingClientRect().width : 360;
+    const w = Math.round(Math.min(innerWidth - 16, spot && Number.isFinite(spot.w) ? Math.max(MIN_SIDE, spot.w) : now));
     const x = spot && Number.isFinite(spot.x) ? spot.x : innerWidth - w - 12;
-    const y = spot && Number.isFinite(spot.y) ? spot.y : topClear() || 72;
+    const y = spot && Number.isFinite(spot.y) ? spot.y : 72;
     panel.style.width = w + "px";
     if (spot && Number.isFinite(spot.h)) {
       panel.style.height = Math.round(Math.min(innerHeight - 16, Math.max(MIN_SIDE, spot.h))) + "px";
@@ -28374,6 +29102,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     panel.classList.toggle("compact", compact);
     panel.classList.toggle("tall", compact && tall);
     panel.classList.toggle("wide", compact && !tall);
+    keepClearOfSun();
   };
   const shapeWatch = typeof ResizeObserver === "function" ? new ResizeObserver(() => shape()) : null;
   shapeWatch?.observe(panel);
@@ -28420,10 +29149,46 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     sizer.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
   }
 
+  for (const strip of sides) {
+    let s = null;
+    const left = strip.classList.contains("left");
+    strip.addEventListener("pointerdown", (e) => {
+      if (!open || s || locked || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = panel.getBoundingClientRect();
+      s = { id: e.pointerId, x0: e.clientX, left: r.left, right: r.right };
+      try { strip.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      panel.classList.add("sizing");
+    });
+    strip.addEventListener("pointermove", (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x0;
+      if (left) {
+        const x = Math.max(8, Math.min(s.right - MIN_SIDE, s.left + dx));
+        panel.style.left = Math.round(x) + "px";
+        panel.style.width = Math.round(s.right - x) + "px";
+      } else {
+        panel.style.width = Math.round(Math.max(MIN_SIDE, Math.min(innerWidth - 8 - s.left, s.right - s.left + dx))) + "px";
+      }
+      shape();
+    });
+    const done = (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      s = null;
+      panel.classList.remove("sizing");
+      const r = panel.getBoundingClientRect();
+      store.set(FLOAT_KEY, { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), ...(panel.style.height ? { h: Math.round(r.height) } : {}) });
+    };
+    strip.addEventListener("pointerup", done);
+    strip.addEventListener("pointercancel", done);
+    strip.addEventListener("touchmove", (e) => { if (s) e.preventDefault(); }, { passive: false });
+  }
+
   function popIn() {
     if (reduced || !panel.animate) return;
     entering = true;
-    const done = () => { entering = false; };
+    const done = () => { entering = false; keepClearOfSun(); };
     panel.animate([{ opacity: 0, transform: "translateY(-8px) scale(0.96)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }).finished.then(done, done);
   }
 
@@ -28448,7 +29213,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       panel.classList.remove("held");
       const r = panel.getBoundingClientRect();
       const was = store.get(FLOAT_KEY, null) || {};
-      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w, h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
+      store.set(FLOAT_KEY, { ...(Number.isFinite(was.w) ? { w: was.w } : {}), ...(Number.isFinite(was.h) ? { h: was.h } : {}), x: Math.round(r.left), y: Math.round(r.top) });
     };
     head.addEventListener("pointerup", drop);
     head.addEventListener("pointercancel", drop);
@@ -28478,7 +29243,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       { clipPath: open, offset: 0.55 },
       { clipPath: open, transform: "translate(0px, 0px) scale(1)", opacity: 1, offset: 1 },
     ], { duration: 480, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
-    const done = () => { entering = false; };
+    const done = () => { entering = false; keepClearOfSun(); };
     anim.finished.then(done, done);
   }
   let open = true;
@@ -28489,7 +29254,8 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
   for (const handle of [grip, end]) {
     let g = null;
     handle.addEventListener("pointerdown", (e) => {
-      if (!open || g || (e.pointerType === "mouse" && e.button !== 0)) return;
+      // Its buttons are pressed, not held as the bar.
+      if (!open || g || (e.pointerType === "mouse" && e.button !== 0) || e.target.closest?.("button")) return;
       e.preventDefault();
       g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, track: new VelocityTracker() };
       g.track.add(e.timeStamp, e.clientX, e.clientY);
@@ -28616,10 +29382,68 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     panel.style.transform = "";
     edge = to;
     panel.dataset.edge = to;
-    panel.style.setProperty("--top-clear", topClear() + "px");
+    placeControls();
     sizeAtEdge();
     shape();
     enter(spot);
+  }
+
+  /**
+   * Thrown at the edge it already stands on (the owner, 21 November: "그쪽으로 또 보낸다면… 보내지는
+   * 쪽으로 아주 약간 찌그러지고… 보낸 그 각도의 그 부분부터 약간 찌부되는데 그거랑 멀어질수록 찌부가
+   * 안 되도록… 공이 던져져 간다고 했을 때 먼저 닿는 면적부터… 갈수록 줄어드는… 빨리 복구… 애플같이 세련되게"):
+   * when the ball arrives, its inner end gives way where it was hit (deepest there, less further off),
+   * the dent widens as it eases and springs back, quick enough to be whole before the next throw.
+   */
+  let squashing = null;
+  function squash({ at = 0.5, strength = 0.4, delay = 0 } = {}) {
+    if (!open || floating || reduced || !panel.animate) return Promise.resolve();
+    squashing?.cancel();
+    const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const r = panel.getBoundingClientRect();
+    const side = edge === "left" || edge === "right";
+    const len = side ? r.height : r.width;
+    const depth = side ? r.width : r.height;
+    // Where it was hit along the inner end, in the panel's own length.
+    const u0 = Math.max(0, Math.min(len, (side ? at * innerHeight - r.top : at * innerWidth - r.left)));
+    const s = Math.max(0.15, Math.min(1, strength));
+    const deep = Math.min(depth * 0.18, (10 + 16 * s) * (remPx() / 16));
+    const width = (48 + 70 * s) * (remPx() / 16);
+    const out = 48; // past the panel, so its shadow stays wherever it is not dented
+    const N = 36;
+    // (u along the inner end, v into the panel from it) → the panel's own corner-based px.
+    const toXY = (u, v) => ({ bottom: [u, v], top: [u, r.height - v], left: [r.width - v, u], right: [v, u] }[edge]);
+    const shape = (k, spread) => {
+      const sig = width * spread;
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const u = -out + ((len + 2 * out) * i) / N;
+        const bell = Math.exp(-((u - u0) ** 2) / (2 * sig * sig));
+        // Far from the hit the line runs outside the panel (nothing is cut), near it inside (the dent).
+        const v = deep * k * bell - out * (1 - Math.min(1, bell * 2.2));
+        pts.push(toXY(u, v));
+      }
+      // Round the far side, wide of the panel, back to the start.
+      const far = depth + out;
+      pts.push(toXY(len + out, far), toXY(-out, far));
+      return `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(", ")})`;
+    };
+    // A ball's hit: in fast, out with one small give, settled (about a third of a second).
+    const keys = [[0, 0, 1], [0.16, 1, 1], [0.34, 0.55, 1.35], [0.52, 0.18, 1.7], [0.72, 0.05, 1.9], [1, 0, 2]];
+    // Each step eases on its own (an easing over the whole would keep the dent from ever going deep).
+    const frames = keys.map(([offset, k, spread], i) => ({ offset, clipPath: shape(k, spread), easing: i === 0 ? "cubic-bezier(0.2, 0.9, 0.4, 1)" : "cubic-bezier(0.35, 0, 0.3, 1)" }));
+    const into = { bottom: [0, 1], top: [0, -1], left: [-1, 0], right: [1, 0] }[edge];
+    const push = (1.5 + 2.5 * s) * (remPx() / 16);
+    const nudge = [{ translate: "0 0" }, { translate: `${into[0] * push}px ${into[1] * push}px`, offset: 0.18 }, { translate: "0 0" }];
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (!open) return resolve();
+        squashing = panel.animate(frames, { duration: 380 });
+        panel.animate(nudge, { duration: 300, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" });
+        buzz(app, 8);
+        squashing.finished.then(() => resolve(), () => resolve());
+      }, delay);
+    });
   }
 
   const onKey = (e) => { if (e.key === "Escape") close(); };
@@ -28664,6 +29488,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     document.removeEventListener("pointerup", onOutsideUp, true);
     document.removeEventListener("sheet-open", onSheet);
     removeEventListener("hashchange", onLeave);
+    removeEventListener("resize", keepClearOfSun);
     const gone = () => { panel.remove(); scrim.remove(); };
     if (now || reduced || !panel.animate) return gone();
     if (floating) {
@@ -28689,9 +29514,10 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
     // A house open in the panel takes a room held and dropped anywhere on it.
     if (view.name === "house") panel.dataset.dropHouse = view.id;
     else delete panel.dataset.dropHouse;
-    if (view.name === "house") return drawHouse();
-    if (view.name === "build") return drawBuild();
-    drawMain();
+    if (view.name === "house") drawHouse();
+    else if (view.name === "build") drawBuild();
+    else drawMain();
+    keepClearOfSun();
   }
 
   // ---- 찾기 + 집 ----------------------------------------------------------------------------
@@ -28858,6 +29684,7 @@ function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms, chang
       toast(root, "잠겨 있어요. 왼쪽 위 자물쇠로 풀어요", 1600);
       if (!reduced && panel.animate) panel.animate([{ translate: "0 0" }, { translate: "-5px 0" }, { translate: "5px 0" }, { translate: "0 0" }], { duration: 260 });
     },
+    squash: (hit) => squash(hit),
     // Somewhere else on the screen (the owner: "그걸 눌러서 다른 위치로 그게 옮겨가게").
     moveTo: (to, spot = 0.5, strength = 0.3) => { if (open && !floating && to !== edge) relocate({ edge: to, at: spot, strength }, [0, 0]); },
     refresh: () => draw(),
@@ -28870,13 +29697,14 @@ __m["src/ui/home.js"] = (() => {
 // Home: two halves side by side. 일상 on the left, 창작 on the right.
 
 const { h, icon, iconButton, mount, inputRow, openSheet, formBox, toast, toggle } = __m["src/ui/dom.js"];
+const { openHouseArc } = __m["src/ui/house-arc.js"];
 const { duplicateRoom, putIntoBoard, putRoomIntoSong, roomHistory } = __m["src/ui/room-actions.js"];
 const { displaySettings, diagnostics } = __m["src/ui/room-shell.js"];
 const { rememberRoom, forgetRoom } = __m["src/identity.js"];
 const { validPreview } = __m["src/core/preview.js"];
+const { inkColor } = __m["src/ui/ink.js"];
 const { RoomSession } = __m["src/sync/session.js"];
 const { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } = __m["src/core/room.js"];
-const { dayKey, dayLabel, hourLabel } = __m["src/core/time.js"];
 const { SIDES, kindsOf, sideOf, kindInfo } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
 const { refSounds } = __m["src/reference.js"];
@@ -28895,10 +29723,10 @@ const { currentTheme, myPeopleColor } = __m["src/ui/theme.js"];
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
+// The day and the time, whatever the screen (the owner, 21 November: "화면 큰 거에서는 날짜가 안 나오기도"):
+// "오늘 오전 10:02", "어제 …", "11월 20일 오후 3:02".
 function whenLabel(ms) {
-  const tz = localZone();
-  const day = dayKey(ms, tz);
-  return day === dayKey(Date.now(), tz) ? hourLabel(ms, tz) : dayLabel(day).split(" ").slice(0, 2).join(" ");
+  return Number.isFinite(ms) ? whenText(ms) : "";
 }
 
 /**
@@ -28973,6 +29801,28 @@ function previewOf(room) {
       p.notes.map(([x, w, y]) => h("span", { class: "pv-note", style: { left: pct(x), width: pct(w), top: 8 + y * 0.62 + "%" } })));
   }
   const NS = "http://www.w3.org/2000/svg";
+  if (p.t === "draw") {
+    // The drawing's own lines in their own colours (a black line kept as it was drawn).
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "room-preview room-preview-draw");
+    svg.setAttribute("viewBox", "0 0 100 60");
+    svg.setAttribute("aria-hidden", "true");
+    for (const [c, w, filled, ...pts] of p.lines) {
+      const line = document.createElementNS(NS, filled ? "polygon" : "polyline");
+      line.setAttribute("points", pts.join(" "));
+      const colour = inkColor(c, true);
+      line.setAttribute(filled ? "fill" : "stroke", colour);
+      if (filled) line.setAttribute("stroke", "none");
+      else {
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke-width", String(w));
+        line.setAttribute("stroke-linecap", "round");
+        line.setAttribute("stroke-linejoin", "round");
+      }
+      svg.append(line);
+    }
+    return svg;
+  }
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("class", "room-preview room-preview-board");
   svg.setAttribute("viewBox", "0 0 100 60");
@@ -28985,9 +29835,11 @@ function previewOf(room) {
   return svg;
 }
 
-// ⋮ counts as thrown only when it clearly is: this far, and quick (or twice as far).
-const THROW_PX = 40;
-const THROW_SPEED = 0.35; // px per ms
+// 햇살 counts as thrown when it clearly is: this far and quick, or far. A finger that slips in a
+// tap moves less than this; a swipe the owner means ("발사한 곳으로 우선") is quicker and longer.
+const THROW_PX = 28;
+const THROW_SPEED = 0.3; // px per ms
+const THROW_FAR = 72;
 
 function showHome(app) {
   const root = app.root;
@@ -29035,52 +29887,31 @@ function showHome(app) {
         draw();
         toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600);
       } }, icon("star"));
-    // Held, the room lifts: let go where it is, its actions open (as before); drawn onto a house in
-    // the dock below, it goes into that house (the owner: "꾹 눌러서 폴더에 넣으면 그 안에 포함").
+    // Held, the room lifts and the houses come up as a small world from below (ui/house-arc.js);
+    // drawn onto a house it goes in, let go where it was the world stays for a tap on a house (the
+    // owner, 21 November: "꾹 누르면 어디 집에 넣을지"). Its details and actions are two fingers' tap
+    // (or 마우스 왼쪽·오른쪽 together, or the right button): roomMenu.
     let lift = null;
     const hold = () => {
+      if (fingers.size > 1) return;
       held = true;
       clearTimeout(timer);
-      // With 찾기와 집 out, its own houses take the room; otherwise a row of houses rises from below.
-      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseDock() };
+      // With 햇살 out, its own houses take the room; otherwise the world of houses rises from below.
+      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseArc() };
+      if (lift.dock) lift.dock.onSpin = () => { if (lift?.moved && lift.at) overAt(...lift.at); };
       row.classList.add("lifted");
       try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
       buzz(app, 10);
     };
-    const endLift = () => {
+    const endLift = ({ keep = false } = {}) => {
       row.classList.remove("lifted");
       lift?.ghost?.remove();
       lift?.over?.classList.remove("over");
       const dock = lift?.dock;
       lift = null;
-      if (dock) {
-        if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(110%)", opacity: 0 }], { duration: 220, easing: "ease-in", fill: "forwards" }).finished.then(() => dock.remove(), () => dock.remove());
-        else dock.remove();
-      }
+      if (dock && !keep) dock.close();
     };
-    const dragTo = (x, y) => {
-      if (!lift.moved && Math.hypot(x - lift.x, y - lift.y) < 8) return;
-      if (!lift.moved) {
-        lift.moved = true;
-        lift.ghost = h("div", { class: "room-ghost", "aria-hidden": "true" }, icon(kind?.icon || "lines"), room.name);
-        document.body.append(lift.ghost);
-      }
-      lift.ghost.style.translate = `${x}px ${y}px`;
-      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house, .home-panel .house-tile, .home-panel[data-drop-house]") || null;
-      if (target !== lift.over) {
-        lift.over?.classList.remove("over");
-        target?.classList.add("over");
-        if (target) buzz(app, 6);
-        lift.over = target;
-      }
-    };
-    const drop = () => {
-      const target = lift.over;
-      const moved = lift.moved;
-      endLift();
-      if (!moved) return void roomMenu(room);
-      if (!target) return;
-      const id = target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null);
+    const putRoom = (id) => {
       if (!id) return;
       if (id === "new") {
         if (panelCtl?.isOpen()) return void panelCtl.show({ name: "build", room: room.id });
@@ -29092,41 +29923,102 @@ function showHome(app) {
       panelCtl?.isOpen() && panelCtl.refresh();
       toast(root, `'${houses(app.store).find((x) => x.id === id)?.name || "집"}'에 넣었어요`);
     };
+    const dragTo = (x, y) => {
+      if (!lift.moved && Math.hypot(x - lift.x, y - lift.y) < 8) return;
+      if (!lift.moved) {
+        lift.moved = true;
+        lift.ghost = h("div", { class: "room-ghost", "aria-hidden": "true" }, icon(kind?.icon || "lines"), room.name);
+        document.body.append(lift.ghost);
+      }
+      lift.ghost.style.translate = `${x}px ${y}px`;
+      lift.at = [x, y];
+      overAt(x, y);
+      // Near either end of the planet, it turns to bring the houses further along.
+      lift.dock?.follow(x, y);
+    };
+    /** The house under the finger lights up (read again as the planet turns under a still finger). */
+    const overAt = (x, y) => {
+      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house:not(.far), .home-panel .house-tile, .home-panel[data-drop-house]") || null;
+      if (target !== lift.over) {
+        lift.over?.classList.remove("over");
+        target?.classList.add("over");
+        if (target) buzz(app, 6);
+        lift.over = target;
+      }
+    };
+    const drop = () => {
+      const target = lift.over;
+      const moved = lift.moved;
+      const dock = lift.dock;
+      if (!moved) {
+        // Let go where it was held: the world stays for a tap on a house (or + for a new one).
+        endLift({ keep: true });
+        if (dock) dock.choose(putRoom);
+        else toast(root, "집 위로 끌어다 놓아요 · 방의 자세한 것은 두 손가락으로 톡", 2600);
+        return;
+      }
+      endLift();
+      if (!target) return;
+      putRoom(target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null));
+    };
+    // Two fingers on the room at once, a quick tap: its details and what can be done with it (the
+    // owner, 21 November: "두 손가락으로 동시에 그 방을 누르면 그 방의 세부 정보나 상호작용").
+    const fingers = new Map();
+    let two = null;
+    let lastKind = "mouse";
     row.addEventListener("pointerdown", (e) => {
+      lastKind = e.pointerType || "mouse";
+      if (e.pointerType === "touch") {
+        fingers.set(e.pointerId, [e.clientX, e.clientY]);
+        if (fingers.size === 2 && !lift) {
+          clearTimeout(timer);
+          held = true; // no tap-to-open from these fingers
+          two = { at: e.timeStamp, spoiled: e.timeStamp - (two?.first ?? e.timeStamp) > 220 };
+        } else if (fingers.size === 1) two = { first: e.timeStamp };
+        else if (fingers.size > 2 && two) two.spoiled = true;
+        if (fingers.size > 1) return;
+      }
       held = false;
       start = { x: e.clientX, y: e.clientY, id: e.pointerId };
       clearTimeout(timer);
       if (e.button === 0) timer = setTimeout(hold, 500);
     });
     row.addEventListener("pointermove", (e) => {
+      const at = fingers.get(e.pointerId);
+      if (at && two?.at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > 16) two.spoiled = true;
       if (lift) return void dragTo(e.clientX, e.clientY);
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer);
     });
-    row.addEventListener("pointerup", () => { clearTimeout(timer); if (lift) drop(); });
-    row.addEventListener("pointercancel", () => { clearTimeout(timer); if (lift) endLift(); });
+    const lifted = (e) => {
+      if (!fingers.delete(e.pointerId) || fingers.size) return false;
+      const t = two;
+      two = null;
+      if (!t?.at || t.spoiled || e.type === "pointercancel" || e.timeStamp - t.at > 450) return t?.at != null;
+      roomMenu(room);
+      return true;
+    };
+    row.addEventListener("pointerup", (e) => { clearTimeout(timer); if (lifted(e)) return; if (lift) drop(); });
+    row.addEventListener("pointercancel", (e) => { clearTimeout(timer); fingers.delete(e.pointerId); if (!fingers.size) two = null; if (lift) endLift(); });
     row.addEventListener("pointerleave", () => { if (!lift) clearTimeout(timer); });
     // Lifted, the finger moves the room, not the list.
-    row.addEventListener("touchmove", (e) => { if (lift) e.preventDefault(); }, { passive: false });
+    row.addEventListener("touchmove", (e) => { if (lift || fingers.size > 1) e.preventDefault(); }, { passive: false });
+    // The mouse's right button (alone, or with the left held) is two fingers' tap; a finger's long
+    // press may also send this (an iPad does): it is the long press, already in hand, so nothing more.
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (lift || held) return;
+      // Chrome says what sent it; Safari does not, so the last press's kind stands in.
+      if ((e.pointerType || lastKind) !== "mouse") return;
+      clearTimeout(timer);
+      if (lift) endLift();
       held = true;
       roomMenu(room);
     });
     return h("div", { class: "room-cell" }, row, star);
   }
 
-  /** The houses at the bottom while a room is held, to drop it into (and a new one). */
-  function houseDock() {
-    const list = houses(app.store);
-    const dock = h("div", { class: "house-dock", id: "house-dock", "aria-hidden": "true" },
-      h("p", { class: "dock-hint", text: list.length ? "집 위에 놓으면 그 집에 들어가요" : "새 집 위에 놓으면 집을 지어 넣어요" }),
-      h("div", { class: "dock-row" },
-        ...list.map((house) => h("div", { class: "dock-house", data: { house: house.id } }, houseShape(house), h("span", { class: "dock-name", text: house.name }))),
-        h("div", { class: "dock-house dock-new", data: { house: "new" } }, h("span", { class: "house-shape house-plan" }, icon("plus")), h("span", { class: "dock-name", text: "새 집" }))));
-    document.body.append(dock);
-    if (dock.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) dock.animate([{ transform: "translateY(110%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
-    return dock;
+  /** The world of houses that rises while a room is held (ui/house-arc.js). */
+  function houseArc() {
+    return openHouseArc({ houses: houses(app.store), shapeOf: houseShape });
   }
 
   // ---- ⋮: 찾기와 집 ---------------------------------------------------------------------------
@@ -29159,7 +30051,12 @@ function showHome(app) {
         if (edge !== panelCtl.edge()) {
           rememberPanelEdge(app.store, { edge, at: at ?? 0.5 });
           panelCtl.moveTo(edge, at ?? 0.5, strength);
+          return;
         }
+        // Thrown at the edge it is already on: the ball hits it there, then the light comes as ever.
+        const ctl = panelCtl;
+        await ctl.squash({ at: at ?? 0.5, strength, delay });
+        if (alive && ctl.isOpen()) glowEdge({ edge, at: at ?? 0.5, strength, delay: 0 });
         return;
       }
       // Floating and thrown: it comes down to that edge.
@@ -29196,8 +30093,8 @@ function showHome(app) {
   function kebab() {
     // Its look is the window's (the owner: "점3개 세로 아이콘 그걸 너가 새로 만든 그거 아이콘 디자인으로…
     // 기능은 점 3개 세로인 걸로").
-    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "찾기와 집 (누르면 지난번 그 자리에서, 꾹 눌러 끌면 화면 끝으로 던져요)",
-      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("float"));
+    const btn = h("button", { class: "icon-btn home-kebab", id: "home-more", type: "button", "aria-label": "햇살: 방 찾기와 집 (누르면 지난번 그 자리에서, 끌어서 던지면 그쪽에서)",
+      onclick: (e) => { if (e.detail === 0) openPanel(); } }, icon("sunshine"));
     let g = null;
     const aim = aimMarker();
     const reset = () => {
@@ -29233,7 +30130,7 @@ function showHome(app) {
       g.track.add(e.timeStamp, e.clientX, e.clientY);
       const v = g.track.velocity(e.timeStamp);
       const moved = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
-      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= 2.2 * THROW_PX) ? throwNow(e.clientX, e.clientY, v) : null;
+      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= THROW_FAR) ? throwNow(e.clientX, e.clientY, v) : null;
       g = null;
       reset();
       if (!hit) return void openPanel();
@@ -29334,7 +30231,7 @@ function showHome(app) {
               h("button", { class: "btn", type: "button", id: "room-new-house", text: "새 집 짓기", onclick: () => { close(); openPanel({ edge: "bottom", strength: 0.3, view: { name: "build", room: room.id } }); } }));
           } }),
         h("button", { class: "btn quiet", type: "button", id: "room-forget", text: "목록에서 빼기", onclick: () => { forgetRoom(app.store, room.id); close(); draw(); toast(root, "목록에서 뺐어요. 방은 그대로 있어요"); } })));
-    });
+    }, { side: true });
   }
 
   function half(side, title, note, emptyText) {
@@ -29358,7 +30255,7 @@ function showHome(app) {
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
-          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r))),
+          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
         ]),
       h("button", { class: "add", id: "add-" + side, type: "button", "aria-label": title + " 방 만들기", onclick: () => chooseKind(side) }, icon("plus")));
   }
@@ -29378,13 +30275,13 @@ function showHome(app) {
         h("div", { class: "home", id: "home" },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
-        // 설정 and 레퍼런스 side by side at the top right, ⋮ under 레퍼런스 (the owner, 20 November: "점 3개
-        // 세로와 레퍼런스의 위치 바꾸고"), so nothing lies over 창작's title.
+        // 설정 and 햇살 side by side at the top right, 비서 under 햇살 (the owner, 21 November: "찾기와 집
+        // 그거 기능을 레퍼런스 아이콘 위로"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
           iconButton("home-settings", "more", "설정", openSettings),
-          getSettings(app.store).reference && iconButton("home-reference", "book", "레퍼런스 (나만 보기)", () => openRef()),
-          // ⋮: 찾기와 집 (its own top-right button turns it into a window of its own and back).
-          kebab()),
+          // 햇살: 방 찾기와 집 (its bar's own button turns it into a window of its own and back).
+          kebab(),
+          getSettings(app.store).reference && iconButton("home-reference", "book", "비서 (나만 보기)", () => openRef())),
         h("div", { class: "home-foot" },
           slow && h("span", { class: "hint", id: "connecting", text: "아직 연결 중" }),
           // 녹음 right from home: the takes are kept (모아 두기) in 레퍼런스's 녹음, to send to a room when wanted.
@@ -29395,10 +30292,10 @@ function showHome(app) {
     if (panelCtl?.isOpen()) root.append(...panelCtl.nodes);
   }
 
-  function sheet(title, build) {
+  function sheet(title, build, opts) {
     closeSheet?.();
     closeWindows("sheet");
-    closeSheet = openSheet(root, title, build);
+    closeSheet = openSheet(root, title, build, opts);
   }
 
   /**
@@ -29542,9 +30439,9 @@ function showHome(app) {
           segmented([["5", "5개", "recent-5"], ["10", "10개", "recent-10"], ["20", "20개", "recent-20"]], recent, (v) => setSetting(app.store, "recentSearchMax", Number(v)), "recentMax"))),
       // ⋮ pressed again with 찾기와 집 out (the owner, 21 November: "설정에서… 키냐 안 키냐… 처음에는 이게 안
       // 켜진 상태로"): off, it is put away; on, it goes round to the next edge.
-      h("div", { class: "section" }, h("p", { class: "section-title", text: "찾기와 집" }),
-        toggle("panel-cycle", "열린 채 ⋮을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
-        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 ⋮이나 위쪽 바를 그쪽으로 던져요." })),
+      h("div", { class: "section" }, h("p", { class: "section-title", text: "햇살 (방 찾기와 집)" }),
+        toggle("panel-cycle", "열린 채 햇살을 다시 누르면 다른 쪽으로", getSettings(app.store).panelCycle === true, (on) => setSetting(app.store, "panelCycle", on)),
+        h("p", { class: "help small", text: "끄면 다시 눌렀을 때 닫혀요. 다른 쪽으로 옮기려면 햇살이나 창의 바를 그쪽으로 던져요." })),
       // 미니게임 (the owner: "그거 끄는, 없애는 기능도 홈 화면에서"): off, no game button in rooms and no invitations.
       h("div", { class: "section" }, h("p", { class: "section-title", text: "미니게임" }),
         toggle("games-on", "방에서 친구와 미니게임", getSettings(app.store).games !== false, (on) => setSetting(app.store, "games", on)),
@@ -29575,14 +30472,18 @@ function showHome(app) {
       if (!closeSheet || !root.querySelector(".scrim:not(.closing)")) draw();
     });
 
-  // While a window is out (a sheet, 레퍼런스, 찾기와 집), home's three round buttons step away: they never
-  // lie over it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The
-  // window closes by its own button or a press outside it; 설정's spot pressed again is outside it.
-  // With 설정's "열린 채 ⋮을 다시 누르면 다른 쪽으로" on, ⋮ is wanted while 찾기와 집 is out: the
-  // buttons stay for it (and the panel keeps clear of them), as before.
-  const windowOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference") ||
-    (document.getElementById("home-panel") && !getSettings(app.store).panelCycle));
-  const watchWindows = new MutationObserver(() => root.classList.toggle("home-window", alive && windowOut()));
+  // While a window is out (a sheet, 비서), home's three round buttons step away: they never lie over
+  // it (the owner, 21 November: "뭐 나오면은 그 홈 화면에 있는 아이콘 3개 그건 안 뜨게"). The window
+  // closes by its own button or a press outside it; 설정's spot pressed again is outside it. While
+  // 햇살's own window is out, only 햇살 stays where it was and still answers (the owner: "걍 아이콘들 다
+  // 가리고서 거기에 있던 그 아이콘만 보이게"), whatever 설정 says: that setting is only what its tap does.
+  const sheetOut = () => !!(document.querySelector(".scrim:not(.closing)") || document.getElementById("reference"));
+  const sunOut = () => !!document.getElementById("home-panel");
+  const watchWindows = new MutationObserver(() => {
+    const sheet = alive && sheetOut();
+    root.classList.toggle("home-window", sheet);
+    root.classList.toggle("home-sun-out", alive && !sheet && sunOut());
+  });
   watchWindows.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 
   return () => {
@@ -29590,7 +30491,7 @@ function showHome(app) {
     clearTimeout(slowTimer);
     closeSheet?.();
     watchWindows.disconnect();
-    root.classList.remove("home-window");
+    root.classList.remove("home-window", "home-sun-out");
   };
 }
 
