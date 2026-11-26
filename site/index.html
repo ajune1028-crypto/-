@@ -1620,9 +1620,47 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .rooms.cards .room-thumb .room-preview { inset: 2.2rem 0.55rem 0.55rem 0.55rem; }
 .rooms.cards .room-thumb .room-preview-text { -webkit-line-clamp: 5; }
 .rooms.cards .room-name { font-size: 0.88rem; }
+/* Motion on what exists (ui/motion.js): a chosen mode's name settles out of a brief scramble drawn
+   over it (the words themselves never change), a count rolls in, a check draws itself, a star pops. */
+.decoding { position: relative; color: transparent !important; }
+.decoding::after { content: attr(data-scramble); position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: var(--scramble-color); white-space: nowrap; pointer-events: none; }
+.rolling { display: inline-block; animation: roll-in 0.32s var(--ease); }
+@keyframes roll-in { from { opacity: 0; transform: translateY(0.55em); } }
+.drawn-check { flex: none; width: 1em; height: 1em; margin-right: 0.3em; vertical-align: -0.12em; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.drawn-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw-check 0.36s var(--ease) 0.05s forwards; }
+@keyframes draw-check { to { stroke-dashoffset: 0; } }
+.room-star.bursting { animation: star-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.room-star.bursting::after { content: ""; position: absolute; inset: 0.2rem; border-radius: 50%; pointer-events: none; animation: star-ring 0.6s ease-out forwards; }
+@keyframes star-pop { 40% { transform: scale(1.32); } }
+@keyframes star-ring { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tint) 70%, transparent); } to { box-shadow: 0 0 0 0.9rem transparent; } }
+@media (prefers-reduced-motion: reduce) { .rolling, .drawn-check path, .room-star.bursting, .room-star.bursting::after { animation: none; } }
+/* 벤토 (the song room's clip tiles): the side panel's grid packs with no holes and a wide tile takes two
+   columns; held, the tiles shake as a phone's home screen does, each with a '−', and below them the
+   ones put away come back with '+' and 완료 ends it. The floating menu keeps the same tiles in a row. */
+.song-side .clip-menu.side:not(.tints) { grid-auto-flow: row dense; }
+.song-side .clip-menu.side:not(.tints) > .side-btn.wide { grid-column: span 2; }
+.clip-menu.editing > [data-tile] { position: relative; animation: tile-wiggle 0.26s ease-in-out infinite alternate; touch-action: none; }
+.clip-menu.editing > [data-tile]:nth-of-type(even) { animation-delay: -0.13s; }
+@keyframes tile-wiggle { from { rotate: -1.4deg; } to { rotate: 1.4deg; } }
+.clip-menu .dragging { z-index: 4; opacity: 0.9; animation: none !important; box-shadow: 0 10px 24px color-mix(in srgb, var(--tint) 30%, transparent); }
+.tile-minus { position: absolute; top: -0.4rem; left: -0.4rem; z-index: 2; display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; font-size: 0.95rem; font-weight: 900; line-height: 1; color: #fff; background: color-mix(in srgb, var(--ink) 72%, transparent); box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); }
+.tile-edit-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.35rem; }
+.tile-edit-foot .tile-help { flex: 1 1 100%; margin: 0.1rem 0; }
+.tile-edit-foot #tile-done { margin-left: auto; }
+@media (prefers-reduced-motion: reduce) { .clip-menu.editing > [data-tile] { animation: none; } }
+/* How ● records (here, the phone's recorder app, a voice memo): a small glass menu above it. */
+.record-way { position: absolute; z-index: 30; display: flex; flex-direction: column; gap: 0.45rem; width: min(18rem, calc(100% - 1rem)); padding: 0.8rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: color-mix(in srgb, var(--paper) 90%, var(--tint) 10%); box-shadow: var(--glass-shine), 0 12px 30px color-mix(in srgb, var(--tint) 22%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); animation: page-in 0.24s var(--ease); }
+.record-way-title { margin: 0 0 0.15rem; font-size: 0.9rem; font-weight: 800; }
+.record-way .btn { width: 100%; justify-content: center; }
+.record-way .help { margin: 0; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
+/* Wider: what shows through a glass (my colour's drawing near the pen, the inside of a closed line) is
+   a small picture of its own (ink.js xrayMap); with the pen's window, both at once. */
+.xray-map { -webkit-mask-image: var(--xr-map); mask-image: var(--xr-map); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.xray.xray-map { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map);
+  -webkit-mask-size: auto, 100% 100%; mask-size: auto, 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }
@@ -2247,6 +2285,16 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .day-menu .chip svg { width: 0.95rem; height: 0.95rem; }
 .day-menu-help, .day-menu-who { margin: 0; font-size: 0.78rem; color: var(--muted); }
 .day-menu-who { color: var(--ink); font-weight: 700; }
+/* 비서 노트: one sheet of my own, written straight on. Its own class: never .input, never .typing. */
+.note-sheet { display: block; box-sizing: border-box; width: 100%; min-height: 8.5rem; max-height: 40vh; padding: 0.85rem 0.95rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: var(--paper); color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.65; resize: vertical; outline: none; box-shadow: var(--glass-shine); }
+.note-sheet:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge)); }
+.note-actions { margin-top: 0.5rem; }
+/* 비서 바구니: what I copied anywhere, newest first. */
+.ref-basket-item { padding: 0.6rem 0.75rem 0.55rem; border: 1px solid var(--glass-edge); border-radius: 1.05rem; background: var(--card-bg); box-shadow: var(--glass-shine), 0 4px 14px color-mix(in srgb, var(--tint) 12%, transparent); }
+.ref-basket-item .pick-head { justify-content: flex-start; align-items: center; gap: 0.45rem; }
+.ref-basket-item .pick-name { overflow-wrap: anywhere; }
+.basket-icon { display: inline-flex; flex: none; width: 1.55rem; height: 1.55rem; align-items: center; justify-content: center; border-radius: 0.55rem; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.basket-icon svg { width: 0.95rem; height: 0.95rem; }
 </style>
 </head>
 <body>
@@ -3674,7 +3722,37 @@ function invertInkOps(ink, clock, atoms, dir) {
   return ops;
 }
 
-return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, THIN_UNITS, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, opacityOf, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps };
+/**
+ * A line that came back on itself: the points it closes round, or null (ends meeting, or crossing itself).
+ * `since`: how many of its points (4 px apart) were looked at before, so a line being drawn is only
+ * looked at where it grew.
+ */
+function closedLoop(path, rem = 16, since = 0) {
+  const pts = [];
+  for (const p of path) {
+    const q = pts[pts.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 4) pts.push(p);
+  }
+  if (pts.length < 8) return null;
+  const length = (list) => list.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - list[i - 1][0], p[1] - list[i - 1][1]) : 0), 0);
+  const last = pts[pts.length - 1];
+  if (length(pts) > 10 * rem && Math.hypot(last[0] - pts[0][0], last[1] - pts[0][1]) < 2.5 * rem) return pts;
+  const cross = (a, b, c, d) => {
+    const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  };
+  for (let j = Math.max(1, since); j < pts.length; j++) {
+    for (let i = 0; i < j - 2; i++) {
+      if (cross(pts[i], pts[i + 1], pts[j - 1], pts[j])) {
+        const loop = pts.slice(i + 1, j);
+        return length(loop) > 6 * rem ? loop : null;
+      }
+    }
+  }
+  return null;
+}
+
+return { INK_COLORS, INK_WIDTHS, WIDTH_PX, SIZE_MIN, SIZE_MAX, BRUSHES, STYLES, InkDoc, THIN_UNITS, thinPoints, brushOf, widthOf, nearestWidth, strokeOps, opacityOf, eraseOps, moveStrokesOps, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, invertInkOps, closedLoop };
 })();
 __m["src/core/board.js"] = (() => {
 // The whiteboard: cards on a big surface, and 잇기 lines that say in which
@@ -6744,8 +6822,86 @@ function myPeopleColor(settings, room = null) {
 
 return { applyTheme, currentTheme, onThemeChange, fitScale, reducedMotion, ACCENTS, TEXT_SIZES, applyAccent, tintAmount, applyTintAmount, applyTextScale, glassHex, myPeopleColor };
 })();
+__m["src/ui/motion.js"] = (() => {
+// Small motions on what already exists (the owner, 22 November: "애니메이션… 절대로 뭐 바꾸지 말고 시스템을…
+// 그냥 뭔가 좋을 것 같은 '애니메이션'", and with the references sent: "모드 바꿀 때 사람 말이 아닌 것 같은
+// 느낌을 아주 조금"). Nothing here changes what a control says or does: the words stay the words (a
+// scramble is drawn over them, never written into them), a number is set at once and only rolls in.
+// Ideas from the references the owner sent (Kokonut UI, MIT: dynamic text, ai-text-loading; NumberFlow,
+// MIT: rolling numbers), written anew for this app.
+
+const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Shapes that read as no one's letters (the owner: "사람 말이 아닌 것 같은 느낌").
+const GLYPHS = "░▒▓▖▗▘▙▚▛▜▝▞▟◐◑◒◓◆◇";
+
+/**
+ * A chosen mode's name settles out of a brief scramble, left to right (about a quarter second). The
+ * label itself never changes: the scramble lies over it and goes.
+ */
+function decodeLabel(el, ms = 240) {
+  if (!el || still()) return;
+  const text = el.textContent;
+  if (!text || el.children.length) return; // icons only, or a label with parts: leave it be
+  cancelAnimationFrame(el._decode || 0);
+  el.style.setProperty("--scramble-color", getComputedStyle(el).color);
+  el.classList.add("decoding");
+  const chars = [...text];
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / ms);
+    const solid = Math.floor(t * (chars.length + 1));
+    el.dataset.scramble = chars.map((c, i) => (i < solid || c === " " ? c : GLYPHS[(Math.random() * GLYPHS.length) | 0])).join("");
+    if (t < 1 && el.isConnected) el._decode = requestAnimationFrame(step);
+    else {
+      el.classList.remove("decoding");
+      delete el.dataset.scramble;
+      el._decode = 0;
+    }
+  };
+  el._decode = requestAnimationFrame(step);
+}
+
+/** A number or a short count changes and rolls in from below (the text is right at once). */
+function rollTo(el, text) {
+  if (!el || el.textContent === text) return;
+  el.textContent = text;
+  if (still()) return;
+  el.classList.remove("rolling");
+  void el.offsetWidth;
+  el.classList.add("rolling");
+}
+
+/** Done (copied): a check draws itself at the start of the button, then goes. */
+function drawCheck(button, ms = 1400) {
+  if (!button || still()) return;
+  button.querySelector(":scope > .drawn-check")?.remove();
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "drawn-check");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M4.5 12.5l4.6 4.6L19.5 6.8");
+  svg.append(path);
+  button.prepend(svg);
+  setTimeout(() => svg.remove(), ms);
+}
+
+/** A star turned on: it springs and a ring of small lights goes out from it. */
+function burst(el) {
+  if (!el || still()) return;
+  el.classList.remove("bursting");
+  void el.offsetWidth;
+  el.classList.add("bursting");
+  setTimeout(() => el.classList.remove("bursting"), 700);
+}
+
+return { decodeLabel, rollTo, drawCheck, burst };
+})();
 __m["src/ui/dom.js"] = (() => {
 // Small helpers for building the screens. Text always goes in as text, never as markup.
+
+const { decodeLabel } = __m["src/ui/motion.js"];
 
 const ICONS = {
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -6980,7 +7136,12 @@ function segmented(options, current, onPick, attr) {
   for (const [value, label, id] of options) {
     const data = { value };
     if (attr) data[attr] = value;
-    el.append(h("button", { type: "button", id, data, text: label, onclick: () => { paint(value); onPick(value); } }));
+    el.append(h("button", { type: "button", id, data, text: label, onclick: (e) => {
+      const changed = e.currentTarget.getAttribute("aria-pressed") !== "true";
+      paint(value);
+      onPick(value);
+      if (changed) decodeLabel(e.currentTarget);
+    } }));
   }
   paint(current);
   flowingPill(el);
@@ -7941,7 +8102,9 @@ __m["src/core/files.js"] = (() => {
 const { validId, cmpId } = __m["src/core/crdt.js"];
 
 const FILE_PART_CHARS = 40000;
-const MAX_FILE_PARTS = 64; // 2.5 million characters, about 1.9 MB
+// 9.6 million characters, about 7.2 MB: a take of fifteen minutes at 16 kHz, thirty at 8 kHz (a whole song
+// put into a song room used to be over the old 64 parts, about four minutes, and never reached anyone).
+const MAX_FILE_PARTS = 240;
 const FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "audio/adpcm"];
 const MAX_UNKNOWN = 100;
 const BASE64 = /^[A-Za-z0-9+/=]*$/;
@@ -10028,13 +10191,19 @@ const { decodeWav } = __m["src/audio/wav.js"];
 const { toMono, resample } = __m["src/audio/dsp.js"];
 
 const SHARE_RATE = 16000;
+const LONG_RATE = 8000; // a very long take (over fifteen minutes) travels at half the rate
 const PART_PAUSE_MS = 120; // between parts: the room's store takes them one by one
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const queues = new WeakMap(); // session → { busy, waiting: [key], sent: Set, done: Promise }
 
-/** The longest take that fits the room's files, in seconds. */
-const MAX_SHARED_SECONDS = Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 - 16) / (SHARE_RATE / 2));
+const fits = (rate) => Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 - 16) / (rate / 2));
+/** The longest take that fits the room's files, in seconds (at the lower rate). */
+const MAX_SHARED_SECONDS = fits(LONG_RATE);
+/** The rate a take this long travels at: 16 kHz while it fits, 8 kHz for a very long one; 0 when even that is too long. */
+function shareRateFor(seconds) {
+  return seconds <= fits(SHARE_RATE) ? SHARE_RATE : seconds <= fits(LONG_RATE) ? LONG_RATE : 0;
+}
 
 /**
  * Makes sure the room has this take's sound: sends it (in the background) when this device has
@@ -10073,9 +10242,10 @@ async function run(app, session, q) {
       if (!wav) continue; // not here (yet): asked again later
       q.sent.add(key);
       const mono = toMono(wav.channels);
-      if (mono.length / wav.rate > MAX_SHARED_SECONDS) continue;
-      const low = wav.rate === SHARE_RATE ? mono : resample(mono, wav.rate, SHARE_RATE);
-      const data = toBase64(encodeAdpcm(low, SHARE_RATE));
+      const rate = shareRateFor(mono.length / wav.rate);
+      if (!rate) continue;
+      const low = wav.rate === rate ? mono : resample(mono, wav.rate, rate);
+      const data = toBase64(encodeAdpcm(low, rate));
       // Begun before (this device left the room halfway): the parts still missing, under the same file.
       // Otherwise (looked again just before sending, so two of my devices open at once send it once) whole.
       const begun = missingParts(files, key);
@@ -10086,7 +10256,7 @@ async function run(app, session, q) {
       for (const op of ops) {
         if (!session.docs) return;
         session.commit("files", [op]);
-        await pause(PART_PAUSE_MS);
+        await pause(session.partPauseMs ?? PART_PAUSE_MS);
       }
     }
   } catch (err) {
@@ -10111,7 +10281,7 @@ async function takeSound(app, files, key) {
   return sound ? { samples: sound.samples, rate: sound.rate, own: false } : null;
 }
 
-return { SHARE_RATE, MAX_SHARED_SECONDS, shareTake, shareDone, takeSound };
+return { SHARE_RATE, MAX_SHARED_SECONDS, shareRateFor, shareTake, shareDone, takeSound };
 })();
 __m["src/ui/room-actions.js"] = (() => {
 // What a room on home can do from a long press: be copied whole into a new room
@@ -12879,7 +13049,72 @@ function removeRefSound(store, id) {
   store.set(SOUNDS, refSounds(store).filter((s) => s.id !== id));
 }
 
-return { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound };
+// 노트 (검토 9절, the day's plan 6): one sheet instead of the message-like memos, written straight on.
+// A line that begins with □ is a to-do, ☑ one done. Kept on this device like the rest of 비서.
+const NOTE = "reference-note";
+const NOTE_MOVED = "reference-note-moved";
+const NOTE_MAX = 20000;
+const TODO = "□ ";
+const DONE = "☑ ";
+
+function refNote(store) {
+  const text = store.get(NOTE, "");
+  return typeof text === "string" ? text : "";
+}
+
+function setRefNote(store, text) {
+  store.set(NOTE, String(text ?? "").slice(0, NOTE_MAX));
+}
+
+/** Words put into the note from elsewhere (a room's line): a line of their own at its end. */
+function addToNote(store, text) {
+  const now = refNote(store);
+  const add = String(text ?? "").trim();
+  if (!add) return;
+  setRefNote(store, now ? now.replace(/\n*$/, "") + "\n" + add : add);
+}
+
+/** Once: the old memos become the note's first lines, oldest first (the memos themselves stay). */
+function noteFromMemos(store) {
+  if (store.get(NOTE_MOVED, false)) return;
+  const memos = refNotes(store).slice().reverse().map((n) => n.text).filter((t) => t && t.trim());
+  if (memos.length) {
+    const now = refNote(store);
+    setRefNote(store, [memos.join("\n"), now].filter(Boolean).join("\n"));
+  }
+  store.set(NOTE_MOVED, true);
+}
+
+function lineAround(text, at) {
+  const start = at > 0 ? text.lastIndexOf("\n", at - 1) + 1 : 0;
+  const nl = text.indexOf("\n", start);
+  return { start, end: nl < 0 ? text.length : nl };
+}
+
+/** □ 할 일: the caret's line becomes a to-do, or (a to-do or a done one) a plain line again. */
+function toggleTodo(text, caret) {
+  const { start } = lineAround(text, caret);
+  const head = text.slice(start, start + 2);
+  if (head === TODO || head === DONE) return { text: text.slice(0, start) + text.slice(start + 2), caret: Math.max(start, caret - 2) };
+  return { text: text.slice(0, start) + TODO + text.slice(start), caret: caret + 2 };
+}
+
+/** A tap on a line's □ ticks it (☑), on ☑ unticks it; anywhere else it is only a tap (null). */
+function flipTodoAt(text, at) {
+  const { start } = lineAround(text, at);
+  if (at - start > 1) return null;
+  const mark = text[start];
+  if (text[start + 1] !== " " || (mark !== "□" && mark !== "☑")) return null;
+  return text.slice(0, start) + (mark === "□" ? "☑" : "□") + text.slice(start + 1);
+}
+
+/** The words of the caret's line without its to-do mark (what 여기에 놓기 puts down). */
+function lineAt(text, at) {
+  const { start, end } = lineAround(text, at);
+  return text.slice(start, end).replace(/^[□☑] /, "").trim();
+}
+
+return { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound, refNote, setRefNote, addToNote, noteFromMemos, toggleTodo, flipTodoAt, lineAt };
 })();
 __m["src/audio/peaks.js"] = (() => {
 // A small summary of a recording's loudness over time, enough to draw its
@@ -15596,6 +15831,143 @@ function pickerHelp({ app, roomId, root, mic }) {
 
 return { AUDIO_TYPES, isApple, KEEP_RATE, micReason, soundPickers, PUBLIC_APP, elsewhere, waysIn, micSteps, micRefused, pickerHelp };
 })();
+__m["src/clipboard.js"] = (() => {
+// What this device copied, kept across rooms: copy a clip in one song room and paste it into another.
+// Every copy also piles up in 비서's 바구니 (the day's plan 6, after Excalidraw's library and the
+// clipboard history of Samsung's keyboard and Windows): newest first, the same thing once, so any of
+// them can be put into another room later (여기에 놓기). A room's 붙여넣기 takes the newest thing of
+// the kinds it can take.
+//
+// Item kinds:
+//   "song-clip"   { room, src (id in that room), source: { duration, notes (seconds), peaks, blob,
+//                 name }, offset, length (ms), speed, tint }
+//   "song-clips"  { room, clips: [{ dx, dy, offset, length, speed, tint, muted, src, source }] }
+//   "board-items" { items: [{ kind, dx, dy, data, … }], strokes: [{ pts, c, w, … }] }
+//   "text"        { text }
+
+const BASKET = "basket";
+const LEGACY = "clipboard";
+const BASKET_MAX = 40;
+// What the basket may hold on this device, all told (characters of JSON): a lasso of drawings can be
+// large, and the device's storage is small.
+const BASKET_CHARS = 600_000;
+
+function same(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** The basket, newest first: [{ id, at, item, from: { room, name, kind } | null }]. */
+function basketItems(store) {
+  let list = store.get(BASKET, null);
+  if (!Array.isArray(list)) {
+    // Before the basket: the one copied thing becomes its first entry.
+    const old = store.get(LEGACY, null);
+    list = old && typeof old.kind === "string" ? [{ id: "c" + (old.at || 0).toString(36), at: old.at || 0, item: strip(old), from: null }] : [];
+  }
+  return list.filter((e) => e && e.item && typeof e.item.kind === "string");
+}
+
+function strip(item) {
+  const { at, ...rest } = item || {};
+  return rest;
+}
+
+// Who wants to know when the basket changed (비서's 바구니 while it is open).
+const watchers = new Set();
+function onBasketChange(fn) {
+  watchers.add(fn);
+  return () => watchers.delete(fn);
+}
+
+function save(store, list) {
+  // Within its size: the oldest go first (the newest always stays).
+  let kept = list.slice(0, BASKET_MAX);
+  let size = kept.reduce((n, e) => n + JSON.stringify(e).length, 0);
+  while (kept.length > 1 && size > BASKET_CHARS) size -= JSON.stringify(kept.pop()).length;
+  for (;;) {
+    try {
+      store.set(BASKET, kept);
+      for (const fn of watchers) fn();
+      return;
+    } catch {
+      // The device's storage is full: keep less, at least the newest.
+      if (kept.length <= 1) return;
+      kept = kept.slice(0, Math.max(1, Math.floor(kept.length / 2)));
+    }
+  }
+}
+
+/**
+ * A copy: the thing 붙여넣기 puts down next, and the newest in the basket. `from` says where it came
+ * from ({ room, name, kind }).
+ */
+function copyItem(store, item, from = null, now = Date.now()) {
+  const plain = strip(item);
+  const list = basketItems(store);
+  const had = list.find((e) => same(e.item, plain));
+  const entry = {
+    id: had?.id || "c" + now.toString(36) + Math.random().toString(36).slice(2, 6),
+    at: now,
+    item: plain,
+    from: from && typeof from.room === "string" ? { room: from.room.slice(0, 40), name: String(from.name || "").slice(0, 30), kind: String(from.kind || "").slice(0, 30) } : had?.from || null,
+  };
+  save(store, [entry, ...list.filter((e) => e !== had)]);
+  return entry;
+}
+
+/** The newest copied thing of this kind (what a room's 붙여넣기 puts down), or null. */
+function clipboardItem(store, kind) {
+  const entry = basketItems(store).find((e) => e.item.kind === kind);
+  return entry ? { ...entry.item, at: entry.at } : null;
+}
+
+/** The newest of these kinds, or null: { kind, item }. */
+function newestOf(store, kinds) {
+  const entry = basketItems(store).find((e) => kinds.includes(e.item.kind));
+  return entry ? { ...entry.item, at: entry.at } : null;
+}
+
+/** 여기에 놓기 of a basket entry: it becomes the newest again (what 붙여넣기 puts down). */
+function takeFromBasket(store, id, now = Date.now()) {
+  const list = basketItems(store);
+  const entry = list.find((e) => e.id === id);
+  if (!entry) return null;
+  save(store, [{ ...entry, at: now }, ...list.filter((e) => e !== entry)]);
+  return entry.item;
+}
+
+function removeFromBasket(store, id) {
+  save(store, basketItems(store).filter((e) => e.id !== id));
+}
+
+const seconds = (ms) => (ms / 1000).toFixed(1) + "초";
+
+/** What a basket thing is, in a few words, with an icon's name. */
+function describeItem(item) {
+  switch (item?.kind) {
+    case "song-clip":
+      return { icon: "note", text: `${item.source?.name || "녹음"} · ${seconds(item.length || 0)}` };
+    case "song-clips": {
+      const n = item.clips?.length || 0;
+      const total = (item.clips || []).reduce((s, c) => s + (c.length || 0) / (c.speed || 1), 0);
+      return { icon: "note", text: `노래 클립 ${n}개 · ${seconds(total)}` };
+    }
+    case "board-items": {
+      const cards = item.items?.length || 0;
+      const strokes = item.strokes?.length || 0;
+      return { icon: "board", text: [cards && `카드 ${cards}개`, strokes && `그림 ${strokes}획`].filter(Boolean).join(" · ") || "빈 묶음" };
+    }
+    case "text": {
+      const flat = String(item.text || "").replace(/\s+/g, " ").trim();
+      return { icon: "pen", text: flat.length > 40 ? flat.slice(0, 40) + "…" : flat };
+    }
+    default:
+      return { icon: "copy", text: "복사한 것" };
+  }
+}
+
+return { BASKET_MAX, basketItems, onBasketChange, copyItem, clipboardItem, newestOf, takeFromBasket, removeFromBasket, describeItem };
+})();
 __m["src/core/noise.js"] = (() => {
 // 2D simplex noise, for brush tips that look drawn rather than stamped (Klecks' chalk).
 //
@@ -16976,7 +17348,7 @@ __m["src/ui/ink.js"] = (() => {
 
 const { h, icon, iconButton, closeOnOutside, mount } = __m["src/ui/dom.js"];
 const { getSettings, setSetting } = __m["src/identity.js"];
-const { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps } = __m["src/core/ink.js"];
+const { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, closedLoop } = __m["src/core/ink.js"];
 const { closeLoop, insideLoop: loopHas } = __m["src/core/board.js"];
 const { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } = __m["src/core/brush.js"];
 const { LIGHT_MS } = __m["src/ui/live-ink.js"];
@@ -17257,6 +17629,23 @@ function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1) {
 // The glass that floats over a drawing in every room: bars, tools, the frames' strip.
 const XRAY_PARTS = ".bar, .toolbar, .board-top, .board-modes, .board-rail, .ink-tools, .anim-strip";
 const XRAY_NEAR = 56; // px: how near the pen comes before the glass opens around it
+const XRAY_WIDE = 144; // px: how far round the pen my colour's drawing opens the glass too
+const XRAY_CELL = 12; // px: one spot of that drawing
+const XRAY_LOOK = 90; // ms between two looks at what lies round the pen (the pen's own window follows every move)
+const XRAY_PAINT = 40; // ms between two paintings of what shows through while it comes and goes
+const XRAY_IN = 220; // ms for a part to come in
+const XRAY_OUT = 340; // ms for it to go again
+
+let rgbProbe = null;
+/** A colour as the page draws it, [r, g, b]. */
+function rgbOf(css) {
+  rgbProbe ||= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  rgbProbe.clearRect(0, 0, 1, 1);
+  rgbProbe.fillStyle = css;
+  rgbProbe.fillRect(0, 0, 1, 1);
+  const d = rgbProbe.getImageData(0, 0, 1, 1).data;
+  return [d[0], d[1], d[2]];
+}
 
 class InkLayer {
   /**
@@ -17941,14 +18330,34 @@ class InkLayer {
    * while a line is drawn (making every bar fade at each pen-down stuttered the line's start); only the
    * floating glass the pen comes near opens a soft round window around the pen, and closes behind it.
    * Where the glass stands is read once as the pen goes down.
+   *
+   * Wider (the owner, 26 November: "주변에 같은 색이 있다면 일정 부분이 거기도 약간 투명하게… 어딜 감싸고
+   * 있다고 인식되면 그 안 전체까지… 자연스러운 애니메이션으로… 목적이 잘 보이라고… 지금 너무 가까이만"):
+   * my colour's drawing round the pen shows through the glass over it a little, and once the line closes
+   * round something, all of its inside does. Each of those comes in and goes out on its own, softly.
    */
   xrayStart(x, y) {
     const room = this.host.closest(".room");
     const parts = room ? [...room.querySelectorAll(XRAY_PARTS)] : [];
+    // What still shows from the line before (a quick next line) goes out from where it is, not at once.
+    const before = new Map((this.xr || []).map((p) => [p.el, p]));
     // The glass itself, not a box that only holds glass (one window, never two over each other).
     this.xr = parts.filter((el) => !parts.some((o) => o !== el && el.contains(o)))
-      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false })).filter((p) => p.r.width > 0 && p.r.height > 0);
+      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false, mapped: !!before.get(el)?.mapped })).filter((p) => p.r.width > 0 && p.r.height > 0);
+    for (const [el, p] of before) {
+      if (p.mapped && !this.xr.some((q) => q.el === el)) { el.classList.remove("xray-map"); el.style.removeProperty("--xr-map"); }
+    }
     this.xrAt = null;
+    // The pen's own window always; my colour round it with a brush; a closed line with a brush or the 올가미.
+    this.xrWide = this.tool === "pen" && this.brush !== "fill" ? "pen" : this.tool === "lasso" ? "loop" : null;
+    this.xrPts = [[x, y]];
+    this.xrChecked = 0;
+    this.xrFound = null;
+    this.xrLookAt = 0;
+    this.xrUp = false;
+    this.xrSpots ||= new Map();
+    this.xrLoops = (this.xrLoops || []).filter((l) => l.k > 0);
+    for (const l of this.xrLoops) l.on = false;
     this.xrayAt(x, y);
   }
 
@@ -17968,11 +18377,193 @@ class InkLayer {
         p.el.classList.toggle("xray", near);
       }
     }
+    if (!this.xrWide || this.live?.moving) return;
+    const last = this.xrPts[this.xrPts.length - 1];
+    if (Math.hypot(x - last[0], y - last[1]) > 4) this.xrPts.push([x, y]);
+    // A look a few times a second, and one more just after the pen stops (a line closed and held still).
+    clearTimeout(this.xrLookTimer);
+    const wait = XRAY_LOOK - (performance.now() - this.xrLookAt);
+    if (wait <= 0) this.xrayLook(x, y);
+    else this.xrLookTimer = setTimeout(() => this.xr && !this.xrUp && this.xrayLook(x, y), wait);
   }
 
+  /** What lies round the pen now: my colour's drawing as spots, and the line's inside once it closes. */
+  xrayLook(x, y) {
+    this.xrLookAt = performance.now();
+    if (!this.xrFound) {
+      this.xrFound = closedLoop(this.xrPts, remPx(), this.xrChecked);
+      this.xrChecked = this.xrPts.length;
+      if (this.xrFound) {
+        const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+        for (const [px, py] of this.xrFound) { box.left = Math.min(box.left, px); box.top = Math.min(box.top, py); box.right = Math.max(box.right, px); box.bottom = Math.max(box.bottom, py); }
+        this.xrLoops.push({ pts: this.xrFound, box, k: 0, on: true });
+      }
+    }
+    const seen = new Set();
+    if (this.xrWide === "pen") {
+      for (const s of this.sameInkNear(x, y)) {
+        seen.add(s.key);
+        const was = this.xrSpots.get(s.key);
+        if (was) was.on = true;
+        else this.xrSpots.set(s.key, { ...s, k: 0, on: true });
+      }
+    }
+    for (const [key, s] of this.xrSpots) if (!seen.has(key)) s.on = false;
+    this.xrayRun();
+  }
+
+  /** Brings what shows through in and out, painting it a few times a second until it settles. */
+  xrayRun() {
+    if (this.xrFrame) return;
+    let last = performance.now();
+    let painted = 0;
+    const ease = (thing, dt) => {
+      const to = thing.on && !this.xrUp ? 1 : 0;
+      if (thing.k === to) return false;
+      thing.k = to > thing.k ? Math.min(1, thing.k + dt / XRAY_IN) : Math.max(0, thing.k - dt / XRAY_OUT);
+      return true;
+    };
+    const step = (now) => {
+      this.xrFrame = 0;
+      if (!this.xr) return;
+      const dt = Math.min(64, now - last);
+      last = now;
+      let moving = false;
+      for (const [key, s] of this.xrSpots) {
+        if (ease(s, dt)) moving = true;
+        if (s.k <= 0 && !s.on) this.xrSpots.delete(key);
+      }
+      for (const l of this.xrLoops) if (ease(l, dt)) moving = true;
+      this.xrLoops = this.xrLoops.filter((l) => l.k > 0 || (l.on && !this.xrUp));
+      if (!moving || now - painted >= XRAY_PAINT) {
+        painted = now;
+        this.xrayPaint();
+      }
+      if (moving) this.xrFrame = requestAnimationFrame(step);
+      else if (this.xrUp) this.xrayClear();
+    };
+    this.xrFrame = requestAnimationFrame(step);
+  }
+
+  /** Each glass with something under it gets a small mask of its own (a picture); the others none. */
+  xrayPaint() {
+    const spots = [...this.xrSpots.values()].filter((s) => s.k > 0.01);
+    const loops = this.xrLoops.filter((l) => l.k > 0.01);
+    for (const p of this.xr || []) {
+      const r = p.r;
+      const mine = spots.filter((s) => s.x + s.r > r.left && s.x - s.r < r.right && s.y + s.r > r.top && s.y - s.r < r.bottom);
+      const round = loops.filter(({ box: b }) => b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom);
+      if (!mine.length && !round.length) {
+        if (p.mapped) { p.mapped = false; p.el.classList.remove("xray-map"); p.el.style.removeProperty("--xr-map"); }
+        continue;
+      }
+      const s = 0.25;
+      const cw = Math.max(4, Math.ceil(r.width * s));
+      const ch = Math.max(4, Math.ceil(r.height * s));
+      const cv = (this.xrCanvas ||= document.createElement("canvas"));
+      cv.width = cw;
+      cv.height = ch;
+      const g = cv.getContext("2d");
+      g.fillStyle = "#000";
+      g.fillRect(0, 0, cw, ch);
+      g.globalCompositeOperation = "destination-out";
+      for (const sp of mine) {
+        const gx = (sp.x - r.left) * s;
+        const gy = (sp.y - r.top) * s;
+        const rr = sp.r * s;
+        const grad = g.createRadialGradient(gx, gy, 0, gx, gy, rr);
+        grad.addColorStop(0, `rgba(0,0,0,${0.5 * sp.k})`);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = grad;
+        g.fillRect(gx - rr, gy - rr, rr * 2, rr * 2);
+      }
+      for (const l of round) {
+        g.fillStyle = `rgba(0,0,0,${0.82 * l.k})`;
+        g.beginPath();
+        l.pts.forEach(([lx, ly], i) => (i ? g.lineTo((lx - r.left) * s, (ly - r.top) * s) : g.moveTo((lx - r.left) * s, (ly - r.top) * s)));
+        g.closePath();
+        g.fill();
+      }
+      g.globalCompositeOperation = "source-over";
+      p.el.style.setProperty("--xr-map", `url(${cv.toDataURL()})`);
+      if (!p.mapped) { p.mapped = true; p.el.classList.add("xray-map"); }
+    }
+  }
+
+  /**
+   * My colour's drawing within reach of the pen, as soft spots on a fixed grid (client coordinates), so
+   * a spot keeps its name from one look to the next and can come in and go out by itself. The same
+   * colour, or one only a little different (the owner: "비슷한 류의 아주 조금 차이 나는 거").
+   */
+  sameInkNear(x, y) {
+    const c = this.canvas;
+    const rect = c.getBoundingClientRect();
+    if (!rect.width || !rect.height || !c.width) return [];
+    const R = XRAY_WIDE;
+    const cell = XRAY_CELL;
+    const fine = 4; // looks per cell side: a thin line is never missed between them
+    const i0 = Math.floor((x - R) / cell);
+    const j0 = Math.floor((y - R) / cell);
+    const n = Math.ceil((2 * R) / cell) + 1;
+    const N = n * fine;
+    const probe = (this.xrProbe ||= document.createElement("canvas"));
+    if (probe.width !== N) { probe.width = N; probe.height = N; }
+    const g = probe.getContext("2d", { willReadFrequently: true });
+    g.clearRect(0, 0, N, N);
+    g.imageSmoothingEnabled = false;
+    const sx = c.width / rect.width;
+    const sy = c.height / rect.height;
+    let data;
+    try {
+      g.drawImage(c, (i0 * cell - rect.left) * sx, (j0 * cell - rect.top) * sy, n * cell * sx, n * cell * sy, 0, 0, N, N);
+      data = g.getImageData(0, 0, N, N).data;
+    } catch {
+      return [];
+    }
+    const css = inkColor(this.color, this.fixedInk);
+    const want = (this.xrRgb ||= {})[css] ||= rgbOf(css);
+    const out = [];
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const cx = (i0 + i + 0.5) * cell;
+        const cy = (j0 + j + 0.5) * cell;
+        if (Math.hypot(cx - x, cy - y) > R) continue;
+        let hit = false;
+        for (let v = 0; v < fine && !hit; v++) {
+          for (let u = 0; u < fine && !hit; u++) {
+            const at = ((j * fine + v) * N + i * fine + u) * 4;
+            hit = data[at + 3] >= 60 && Math.hypot(data[at] - want[0], data[at + 1] - want[1], data[at + 2] - want[2]) <= 72;
+          }
+        }
+        if (hit) out.push({ key: i0 + i + "," + (j0 + j), x: cx, y: cy, r: cell * 1.5 });
+      }
+    }
+    return out;
+  }
+
+  /** Pen up: the pen's own window closes at once (as before); what showed through goes out gently. */
   xrayEnd() {
-    for (const p of this.xr || []) if (p.on) p.el.classList.remove("xray");
+    clearTimeout(this.xrLookTimer);
+    if (!this.xr) return;
+    for (const p of this.xr) if (p.on) { p.on = false; p.el.classList.remove("xray"); }
+    this.xrUp = true;
+    if (this.xrSpots?.size || this.xrLoops?.length) this.xrayRun();
+    else this.xrayClear();
+  }
+
+  xrayClear() {
+    clearTimeout(this.xrLookTimer);
+    cancelAnimationFrame(this.xrFrame || 0);
+    this.xrFrame = 0;
+    for (const p of this.xr || []) {
+      if (p.on) p.el.classList.remove("xray");
+      if (p.mapped) { p.el.classList.remove("xray-map"); p.el.style.removeProperty("--xr-map"); }
+    }
     this.xr = null;
+    this.xrPts = null;
+    this.xrFound = null;
+    this.xrSpots = null;
+    this.xrLoops = null;
   }
 
   /** One drawing per frame however many points came. */
@@ -18434,7 +19025,8 @@ const { keepRawTake, takeWhere } = __m["src/ui/keep-take.js"];
 const { MicRecorder, micSupport, micProblem } = __m["src/audio/recorder.js"];
 const { soundPickers, waysIn, pickerHelp, micRefused } = __m["src/ui/sound-in.js"];
 const { dayKey } = __m["src/core/time.js"];
-const { getSettings, setSetting } = __m["src/identity.js"];
+const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
+const { copyItem } = __m["src/clipboard.js"];
 const { buzz } = __m["src/ui/chime.js"];
 const { InkLayer, inkColor, drawInkTools: drawInkToolsInto, lassoActions } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
@@ -18599,6 +19191,17 @@ function mountTextRoom(body, app, session) {
     e.preventDefault();
     setPageZoom(pageZoom * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
   };
+  // Words copied here (the phone's own 복사, or a keyboard's) also go into 비서's 바구니, to be put into
+  // any room later.
+  const onCopy = (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLTextAreaElement) || !box.classList.contains("typing")) return;
+    const text = box.value.slice(box.selectionStart, box.selectionEnd);
+    if (!text.trim()) return;
+    copyItem(app.store, { kind: "text", text: text.slice(0, 4000) }, { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "daily-text" });
+  };
+  body.addEventListener("copy", onCopy);
+  body.addEventListener("cut", onCopy);
   body.addEventListener("touchstart", onTouchStart, { passive: true });
   body.addEventListener("touchmove", onTouchMove, { passive: false });
   body.addEventListener("touchend", onTouchEnd);
@@ -19278,6 +19881,8 @@ function mountTextRoom(body, app, session) {
     stopPhotoWatch();
     photoInput.remove();
     body.removeEventListener("touchstart", onTouchStart);
+    body.removeEventListener("copy", onCopy);
+    body.removeEventListener("cut", onCopy);
     body.removeEventListener("touchmove", onTouchMove);
     body.removeEventListener("touchend", onTouchEnd);
     body.removeEventListener("wheel", onWheel);
@@ -19296,7 +19901,18 @@ function mountTextRoom(body, app, session) {
     inkTools.remove();
     list.remove();
   };
-  return { close, insertText };
+  return {
+    close,
+    insertText,
+    /** 비서's 바구니: words, and a whiteboard's text cards as lines. */
+    takes(item) {
+      return item.kind === "text" || (item.kind === "board-items" && (item.items || []).some((i) => i.kind === "note" && (i.data?.text || "").trim()));
+    },
+    put(item) {
+      const text = item.kind === "text" ? item.text : item.items.filter((i) => i.kind === "note" && (i.data?.text || "").trim()).sort((a, b) => a.dy - b.dy || a.dx - b.dx).map((i) => i.data.text).join("\n");
+      if (text) insertText(text);
+    },
+  };
 }
 
 
@@ -19621,7 +20237,7 @@ class Timeline {
     el.setAttribute("aria-label", clipLabel(clip, notes));
     const hasAudio = model.hasAudio(clip.src);
     const named = model.name ? model.name(clip) : null;
-    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, !hasAudio && !!model.arriving?.(clip.src), clip.muted, clip.locked, clip.chords !== false, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p + (n.h ? "h" : "")).join(",")].join("|");
+    const key = [clip.offset, clip.length, model.mode, model.showWave, this.pps, this.rowScale, hasAudio, !hasAudio && Math.round((model.arriving?.(clip.src) || 0) * 20), clip.muted, clip.locked, clip.chords !== false, model.color(clip), named?.title, named?.kind, notes.length, notes.map((n) => n.t + ":" + n.d + ":" + n.p + (n.h ? "h" : "")).join(",")].join("|");
     if (entry.key === key) return;
     entry.key = key;
     el.replaceChildren(...this.clipInside(clip, source, model, hasAudio, notes));
@@ -19673,7 +20289,10 @@ class Timeline {
       if (!any) parts.push(h("span", { class: "clip-note", text: "음을 찾지 못했어요" }));
     } else if (!hasAudio) {
       // The take's own sound is on the device that made it; it comes here through the room.
-      parts.push(h("span", { class: "clip-note", text: model.arriving?.(clip.src) ? "원본을 받는 중이에요…" : "원본이 아직 오지 않았어요" }));
+      // How much of the voice has come (the owner, 26 November: "원본이 아직 오지 않았어요 이딴 말"): it
+      // comes from the device that recorded it; until then the notes play as piano.
+      const came = model.arriving?.(clip.src) || 0;
+      parts.push(h("span", { class: "clip-note", text: came > 0 ? `원본 받는 중 ${Math.round(came * 100)}%` : "원본은 올린 사람의 기기에서 와요 · 지금은 피아노로" }));
     }
     const flags = h("span", { class: "flags" });
     if (clip.muted) flags.append(iconSvg("muted"));
@@ -20478,28 +21097,6 @@ function range2(hi, lo) {
 
 return { openNoteEditor };
 })();
-__m["src/clipboard.js"] = (() => {
-// What this device copied, kept across rooms: copy a clip in one song room and
-// paste it into another. This is the first piece of moving work between
-// rooms (일상 ↔ 창작 ↔ 레퍼런스, song → whiteboard); new kinds of items are
-// new `kind` values here.
-//
-// Item kinds:
-//   "song-clip"  { room, src (id in that room), source: { duration, notes
-//                (seconds), peaks, blob, name }, offset, length } (ms)
-
-function copyItem(store, item) {
-  store.set("clipboard", { ...item, at: Date.now() });
-}
-
-/** The copied item if it is of this kind, else null. */
-function clipboardItem(store, kind) {
-  const item = store.get("clipboard", null);
-  return item && item.kind === kind ? item : null;
-}
-
-return { copyItem, clipboardItem };
-})();
 __m["src/ui/names.js"] = (() => {
 // What a recording is, in a person's words: its name and what it came from
 // (the owner: "mp3 가지고 왔으면 그것의 이름과 어떤 mp3인지 알려주고").
@@ -20524,6 +21121,108 @@ function soundTitle(name, fallback = "녹음") {
 
 return { soundTitle };
 })();
+__m["src/ui/share-in.js"] = (() => {
+// 공유로 받기 (the owner, 26 November: "다른 진짜 녹음 어플로 들어가서 녹음, 거기도 저장되고 여기로 또
+// 옮겨지고"): on the public address the app can be put on the home screen (Chrome on Android); then
+// the phone's recorder app's '공유' lists it, and a sound sent that way comes into 비서's 녹음 (sw.js
+// keeps it, this file takes it). Inside Claude's trial page, or on a computer's local copy, nothing
+// here does anything.
+
+const SHARED = "hamkke-share";
+
+function params() {
+  try {
+    return new URLSearchParams(location.search);
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+/** Whether this page can be put on the home screen with a share sheet entry (a public https address, not framed). */
+function canShareIn() {
+  try {
+    if (!("serviceWorker" in navigator) || !window.isSecureContext || window.top !== window) return false;
+    return location.protocol === "https:" || params().has("sw");
+  } catch {
+    return false;
+  }
+}
+
+/** Already on the home screen (opened from its icon). */
+function onHomeScreen() {
+  try {
+    return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The manifest and the service worker, where they can work. Never throws; nothing waits on it. */
+function offerShareIn() {
+  if (!canShareIn()) return;
+  try {
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = "manifest.webmanifest";
+      document.head.append(link);
+    }
+    navigator.serviceWorker.register("sw.js").catch((err) => console.warn(err));
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+/**
+ * What the share sheet brought (?shared=<id>): the files, taken out of the cache and the address.
+ * Resolves with [] when nothing came.
+ */
+async function takeShared() {
+  const id = params().get("shared");
+  if (!id || !/^[a-z0-9]+$/.test(id)) return [];
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete("shared");
+    url.searchParams.delete("n");
+    history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+  } catch {
+    // the address stays as it is
+  }
+  try {
+    const cache = await caches.open(SHARED);
+    const keys = (await cache.keys()).filter((req) => new URL(req.url).pathname.includes(`/shared/${id}/`));
+    keys.sort((a, b) => Number(a.url.split("/").pop()) - Number(b.url.split("/").pop()));
+    const files = [];
+    for (const req of keys) {
+      const res = await cache.match(req);
+      if (res) {
+        const blob = await res.blob();
+        let name = "녹음";
+        try {
+          name = decodeURIComponent(res.headers.get("x-name") || "") || name;
+        } catch {
+          // a name it could not read
+        }
+        files.push(new File([blob], name, { type: res.headers.get("content-type") || blob.type || "" }));
+      }
+      await cache.delete(req);
+    }
+    return files;
+  } catch (err) {
+    console.warn(err);
+    return [];
+  }
+}
+
+/** The one line that tells how a recording already in the recorder app comes here, or null where it cannot. */
+function shareInHint() {
+  if (onHomeScreen()) return "녹음 앱에 이미 있는 녹음은 그 앱의 '공유'에서 이 앱을 골라 보내요.";
+  if (!canShareIn()) return null;
+  return "녹음 앱에 이미 있는 녹음은 그 앱의 '공유'로 보내요. 크롬 메뉴 ⋮ → '홈 화면에 추가'를 한 번 하면 공유 목록에 이 앱이 나와요.";
+}
+
+return { canShareIn, onHomeScreen, offerShareIn, takeShared, shareInHint };
+})();
 __m["src/ui/song-room.js"] = (() => {
 // The song room: sing or hum, and it becomes piano notes with the timing you
 // sang. Takes become clips on rows; rows play together; clips can be copied,
@@ -20546,7 +21245,7 @@ const { memberColor, personColor, INK, PALETTE } = __m["src/core/paint.js"];
 const { MAX_ROWS, MAX_TAKE_MS, SongDoc, sourceOp, addClipOps, setClipOps, removeClipOps, splitClipOps, invertSongOps, tempoOps, CLIP_SPEEDS, clipSpan, joinClipOps, joinWithSourceOps, combinedSource, packMs, noteInSeconds } = __m["src/core/song.js"];
 const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
 const { stepMs, beatMs, barMs, barBeat, snapMs, estimateTempo, tapTempo, countIn, METERS, GRIDS, MIN_BPM, MAX_BPM } = __m["src/core/beat.js"];
-const { copyItem, clipboardItem } = __m["src/clipboard.js"];
+const { copyItem, clipboardItem, newestOf } = __m["src/clipboard.js"];
 const { audioContext, SongPlayer } = __m["src/audio/engine.js"];
 const { Analyzer, analyzeSamples } = __m["src/audio/analyze.js"];
 const { MicRecorder, micSupport, micProblem } = __m["src/audio/recorder.js"];
@@ -20560,9 +21259,10 @@ const { soundTitle } = __m["src/ui/names.js"];
 const { buzz } = __m["src/ui/chime.js"];
 const { shareTake, takeSound } = __m["src/ui/share-take.js"];
 const { reachableRooms, meIn } = __m["src/ui/room-actions.js"];
-const { KEEP_RATE, soundPickers, waysIn: soundWays, pickerHelp: noChooserHelp, micRefused } = __m["src/ui/sound-in.js"];
+const { KEEP_RATE, soundPickers, waysIn: soundWays, pickerHelp: noChooserHelp, micRefused, isApple } = __m["src/ui/sound-in.js"];
+const { shareInHint } = __m["src/ui/share-in.js"];
 const { RoomSession } = __m["src/sync/session.js"];
-const { addItemOps, cardFromClip, keptFields, setItemOps } = __m["src/core/board.js"];
+const { addItemOps, cardFromClip, keptFields, setItemOps, cardNotes, cardScale } = __m["src/core/board.js"];
 
 const MIN_TAKE_MS = 250;
 const PRESENCE_EVERY_MS = 120;
@@ -20642,11 +21342,17 @@ function mountSongRoom(body, app, session, frame) {
     lassoButton.setAttribute("aria-pressed", String(!!on));
     if (on) toast(root, "클립들을 손가락으로 둘러 그리세요", 1800);
   }
-  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "같이", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
+  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "둘 다", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
   // They lie straight on the room's background: they read it (white, black or a deeper black).
   for (const el of [zoomOut, zoomIn, lassoButton, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
   modeSwitch.setAttribute("aria-label", "듣는 방식");
+  // What each one is, held or pointed at (the owner, 26 November: "같이는 또 뭐야"): '둘 다' is the
+  // recording and the piano over it at once.
+  for (const [id, words] of [["mode-original", "원본: 내 녹음 그대로"], ["mode-piano", "피아노: 찾은 음을 피아노로"], ["mode-both", "둘 다: 원본과 피아노를 겹쳐서"]]) {
+    const b = modeSwitch.querySelector("#" + id);
+    if (b) b.title = words;
+  }
   frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn, lassoButton), modeSwitch));
 
   const startButton = iconButton("to-start", "start", "처음으로", () => seek(0), "처음");
@@ -20658,6 +21364,15 @@ function mountSongRoom(body, app, session, frame) {
   const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"), "다시하기");
   const speedButton = h("button", { class: "icon-btn speed-btn", id: "speed", type: "button", "aria-label": "재생 빠르기", data: { cap: "빠르기" }, onclick: () => nextSpeed() });
   const toneButton = iconButton("tone", "sun", "피아노 음색", () => setTone(settings().pianoTone === "dark" ? "bright" : "dark"), "음색");
+  // ● with the phone's recorder app (the owner, 26 November: "녹음이 왜 거기서밖에 안 되지? 다른 진짜 녹음
+  // 어플로 들어가서 녹음, 거기도 저장되고 여기로 또 옮겨지고"). The same button as a <label> for the capture
+  // picker, so the tap itself opens the recorder (a picker opened from script is refused on some phones);
+  // the take stays in the recorder app and comes back here as a clip where the playhead is. On an
+  // iPhone or iPad, whose recorder a page may not open, it picks from Files (음성 메모 → 공유 → 파일에 저장).
+  const recordPhone = h("label", { class: "icon-btn rec-btn", id: "record-phone", for: "song-capture", "aria-label": "녹음 (폰 녹음 앱으로)", data: { cap: "녹음" } }, icon("record"));
+  const recordMemo = h("label", { class: "icon-btn rec-btn", id: "record-memo", for: "song-file", "aria-label": "녹음 (음성 메모에서 가져오기)", data: { cap: "녹음" } }, icon("record"));
+  const recordWay = () => getSettings(app.store).recordWith || null; // "app" | "phone" | "memo"
+  const onPhone = () => matchMedia("(pointer: coarse)").matches && (isApple() || /Android/i.test(navigator.userAgent || ""));
   const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, addButton, undoButton, redoButton, speedButton, toneButton);
   body.after(toolbar);
 
@@ -20683,6 +21398,17 @@ function mountSongRoom(body, app, session, frame) {
   const SIDE_MIN = 11;
   const SIDE_MAX = 26;
   const sideLook = () => ({ w: 15, locked: false, hidden: false, ...(getSettings(app.store).songSide || {}) });
+  // 벤토 (the owner, 21 November: "벤토 그리드… 기능 숨기기·다시 넣기, 꾹 누르면 편집, 크기"): one list of a
+  // clip's tiles - their order, the ones put away, the wide ones - for both the side panel's grid and
+  // the phone's floating menu (the same tiles at every size; the grid packs with no holes, as
+  // gridstack's compact does, by the grid's own dense flow).
+  const tileLook = () => {
+    const t = getSettings(app.store).songTiles || {};
+    const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+    return { order: list(t.order), hidden: list(t.hidden), wide: list(t.wide) };
+  };
+  const saveTiles = (patch) => setSetting(app.store, "songTiles", { ...tileLook(), ...patch });
+  let tileEdit = false;
   const saveSide = (patch) => setSetting(app.store, "songSide", { ...sideLook(), ...patch });
   const sideLock = h("button", { class: "side-lock", id: "side-lock", type: "button", onclick: (e) => { e.stopPropagation(); saveSide({ locked: !sideLook().locked }); paintSide(); buzz(app, 8); } }, icon("lock"));
   const sideHide = h("button", { class: "side-hide", id: "side-hide", type: "button", "aria-label": "옆 패널 숨기기", title: "옆 패널 숨기기", onclick: (e) => { e.stopPropagation(); saveSide({ hidden: true }); paintSide(); } }, icon("hideRight"));
@@ -20812,7 +21538,7 @@ function mountSongRoom(body, app, session, frame) {
       clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, group, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
-      arriving: (id) => { const blob = song.source(id)?.blob; return !!blob && (roomFiles?.namedProgress(blob) || 0) > 0; },
+      arriving: (id) => { const blob = song.source(id)?.blob; return blob ? roomFiles?.namedProgress(blob) || 0 : 0; },
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
       others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
       playhead, empty, tempo: song.tempo(), heads: rowHeads(),
@@ -20901,6 +21627,9 @@ function mountSongRoom(body, app, session, frame) {
     recordButton.classList.toggle("on", !!rec || counting);
     recordButton.classList.toggle("no-mic", !mic.ok);
     recordButton.disabled = readOnly() || (!!busy && !rec && !counting);
+    const way = recordWay();
+    const showing = rec || counting || readOnly() || !way || way === "app" ? recordButton : way === "memo" ? recordMemo : recordPhone;
+    for (const b of [recordButton, recordPhone, recordMemo]) if (b !== showing && b.isConnected) b.replaceWith(showing);
     addButton.disabled = readOnly() || !!busy || !!rec;
     undoButton.disabled = !undo.canUndo || !!rec;
     redoButton.disabled = !undo.canRedo || !!rec;
@@ -21144,8 +21873,60 @@ function mountSongRoom(body, app, session, frame) {
 
   // ---- recording ----------------------------------------------------------------
 
+  /** How to record: here at once, the phone's recorder app, or (iPhone, iPad) a voice memo from Files. Remembered. */
+  function chooseRecordWay() {
+    document.getElementById("record-way")?.remove();
+    // One menu at a time: a chosen clip's menu goes first (else a tap on this one would only close that).
+    if (selected) select(null);
+    const anchor = toolbar.querySelector(".rec-btn");
+    const r = anchor?.getBoundingClientRect();
+    // The menu goes on the next turn: a <label> taken out of the page during its own tap would open nothing.
+    const pick = (way) => { setSetting(app.store, "recordWith", way); drawButtons(); setTimeout(() => { menu.remove(); stopOutside?.(); }, 0); };
+    const apple = isApple();
+    const menu = h("div", { class: "record-way", id: "record-way", role: "menu", "aria-label": "녹음하는 방법" },
+      h("p", { class: "record-way-title", text: "어떻게 녹음할까요?" }),
+      h("button", { type: "button", class: "btn quiet", id: "record-way-app", text: "여기서 바로 녹음", onclick: () => { pick("app"); toggleRecord(); } }),
+      apple
+        ? h("label", { class: "btn quiet", id: "record-way-memo", for: "song-file", onclick: () => pick("memo") }, "음성 메모에서 가져오기")
+        : h("label", { class: "btn quiet", id: "record-way-phone", for: "song-capture", onclick: () => pick("phone") }, "폰 녹음 앱으로"),
+      h("p", { class: "help small", text: apple
+        ? "아이폰·아이패드는 웹에서 음성 메모 앱을 바로 열 수 없어요(애플이 막아 둠). 음성 메모에서 녹음 → 공유 → '파일에 저장' 한 뒤 여기서 골라요."
+        : "녹음 앱으로 녹음하면 녹음은 그 앱에도 남고, 마치면 지금 자리에 들어와요." }),
+      ...(apple || !shareInHint() ? [] : [h("p", { class: "help small", id: "record-way-share", text: shareInHint() })]),
+      h("p", { class: "help small", text: "고른 대로 기억해요. ● 를 꾹 누르면 다시 골라요." }));
+    body.append(menu);
+    if (r) {
+      const area = body.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(area.width - menu.offsetWidth - 8, r.left - area.left + r.width / 2 - menu.offsetWidth / 2)) + "px";
+      menu.style.bottom = Math.max(8, area.bottom - r.top + 8) + "px";
+    }
+    const stopOutside = closeOnOutside((t) => menu.contains(t), () => { menu.remove(); stopOutside?.(); }, menu);
+  }
+  // 꾹 (half a second) on ●: choose again. The tap that follows is not a recording.
+  let recHold = null;
+  for (const b of [recordButton, recordPhone, recordMemo]) {
+    b.addEventListener("pointerdown", (e) => {
+      if (rec || busy || readOnly()) return;
+      clearTimeout(recHold?.timer);
+      recHold = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => { recHold.fired = true; buzz(app, 10); chooseRecordWay(); }, 500) };
+    });
+    b.addEventListener("pointermove", (e) => {
+      if (recHold && e.pointerId === recHold.id && Math.hypot(e.clientX - recHold.x, e.clientY - recHold.y) > 10) clearTimeout(recHold.timer);
+    });
+    b.addEventListener("pointerup", () => clearTimeout(recHold?.timer));
+    b.addEventListener("pointercancel", () => clearTimeout(recHold?.timer));
+    b.addEventListener("click", (e) => {
+      if (!recHold?.fired) return;
+      recHold = null;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }
+
   async function toggleRecord() {
     if (rec) return stopRecording();
+    // On a phone, the first ● asks how (here, or the phone's recorder app); after that it goes straight.
+    if (!recordWay() && onPhone() && !busy) return chooseRecordWay();
     // Pressed again while counting in: no take after all.
     if (busy === "count") return void cancelCount?.();
     if (readOnly() || busy) return;
@@ -21539,7 +22320,7 @@ function mountSongRoom(body, app, session, frame) {
         return { dx: c.start - from, dy: c.lane - top, offset: c.offset, length: c.length, speed: c.speed || 1, tint: c.tint ?? null, muted: !!c.muted, src: c.src,
           source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) } };
       }),
-    });
+    }, fromHere());
     toast(root, `클립 ${clips.length}개를 복사했어요. 클립을 눌러 '붙여넣기'로 넣어요`, 2600);
   }
 
@@ -21573,9 +22354,46 @@ function mountSongRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: src.id, offset: clip.offset, length: clip.length, speed: clip.speed || 1, tint: clip.tint ?? null,
       source: { duration: src.dur / 1000, notes: song.notesOf(src.id).map(noteInSeconds), peaks: src.peaks, blob: src.blob, name: src.name, scale: song.scaleOf(src.id) },
-    });
+    }, fromHere());
     toast(root, "복사했어요. 다른 노래 방에도 붙여넣을 수 있어요", 2400);
     draw();
+  }
+
+  /** Where a copy came from, for 비서's 바구니. */
+  function fromHere() {
+    return { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-song" };
+  }
+
+  /**
+   * 여기에 놓기 of a whiteboard's song cards (비서's 바구니): clips one after another on one row from the
+   * playhead, each with its own speed, colour and mute; one undo takes them all away.
+   */
+  function pasteCards(cards) {
+    if (readOnly() || !cards.length) return;
+    const total = cards.reduce((n, c) => n + Math.round(c.data.dur / (c.speed || 1)), 0);
+    const row = song.freeRow(playhead, Math.max(1, total), selectedRow);
+    if (row === null) return void toast(root, "이 자리에는 줄이 더 없어요");
+    let at = playhead;
+    const atoms = [];
+    let last = null;
+    for (const card of cards) {
+      if (!song.canAddClip()) break;
+      const d = card.data;
+      const src = sourceOp(session.clock, song, { duration: d.dur / 1000, notes: cardNotes(d), scale: cardScale(d) || undefined, peaks: d.peaks || "", by: session.memberId, at: Date.now(), blob: d.blob || undefined, name: d.name || undefined });
+      const clip = addClipOps(session.clock, song, { src: src.id, row, start: at, length: d.dur, by: session.memberId, at: Date.now() });
+      session.commit("song", [src, ...clip.ops]);
+      atoms.push(...clip.atoms);
+      const looks = { ...((card.speed || 1) !== 1 && CLIP_SPEEDS.includes(card.speed) ? { speed: card.speed } : {}), ...(Number.isInteger(card.tint) && card.tint >= 0 && card.tint <= 7 ? { tint: card.tint } : {}), ...(card.muted ? { muted: true } : {}) };
+      if (Object.keys(looks).length) session.commit("song", setClipOps(session.clock, song, clip.id, looks).ops);
+      at += Math.round(d.dur / (card.speed || 1));
+      last = clip.id;
+    }
+    record(atoms);
+    selectedRow = row;
+    if (last) {
+      select(last);
+      timeline.revealClip(last);
+    }
   }
 
   function pasteClip() {
@@ -21734,6 +22552,7 @@ function mountSongRoom(body, app, session, frame) {
   // The small menu by a chosen clip.
   function placeMenu() {
     if (!selected || rec) {
+      tileEdit = false;
       menu?.stopGuard?.();
       menu?.remove();
       menu = null;
@@ -21750,6 +22569,7 @@ function mountSongRoom(body, app, session, frame) {
     if (!menu) {
       menu = h("div", { class: "clip-menu" + (docked ? " side" : ""), id: "clip-menu", role: "toolbar", "aria-label": "클립 메뉴" });
       (docked ? side : body).append(menu);
+      watchTiles(menu);
       // A tap anywhere else only puts the menu away; the chosen clip, the time bar (to place
       // the playhead for 분할) and the tool bars still work. At the side it covers nothing, so a
       // tap elsewhere does what it does (another clip is chosen at once).
@@ -21786,7 +22606,7 @@ function mountSongRoom(body, app, session, frame) {
       item("clip-play", soloClip === clip.id ? "■ 멈춤" : "▶ 듣기", () => playClipAlone(clip.id), !rec, soloClip === clip.id ? "stop" : "play"),
       item("clip-split", "분할", () => splitClip(clip.id), !locked && insideClip(clip.id), "scissors"),
       item("clip-copy", "복사", () => copyClip(clip.id), true, "copy"),
-      item("clip-paste", "붙여넣기", () => (clipboardItem(app.store, "song-clips") ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
+      item("clip-paste", "붙여넣기", () => (newestOf(app.store, ["song-clip", "song-clips"])?.kind === "song-clips" ? pasteGroup() : pasteClip()), !!(clipboardItem(app.store, "song-clip") || clipboardItem(app.store, "song-clips")) && !readOnly(), "paste"),
       item("clip-mute", clip.muted ? "소리 켜기" : "음소거", () => toggleMute(clip.id), !readOnly(), "muted"),
       // 화음: the harmony found under the tune, left out or brought back (only when there is some).
       item("clip-chords", clip.chords === false ? "화음 켜기" : "화음 끄기", () => { apply(setClipOps(session.clock, song, clip.id, { chords: clip.chords === false })); draw(); }, !readOnly() && song.hasHarmony(clip.src), "chords"),
@@ -21800,6 +22620,7 @@ function mountSongRoom(body, app, session, frame) {
       item("clip-lock", clip.locked ? "잠금 풀기" : "잠금", () => toggleLock(clip.id), !readOnly(), "lock"),
       item("clip-delete", "삭제", () => deleteClip(clip.id), !locked, "trash"),
     ].filter(Boolean));
+    arrangeTiles(docked);
     if (docked) return;
     const w = menu.offsetWidth;
     const hgt = menu.offsetHeight;
@@ -21809,6 +22630,123 @@ function mountSongRoom(body, app, session, frame) {
     if (top < 4) top = box.bottom - area.top + 6;
     menu.style.left = left + "px";
     menu.style.top = Math.max(4, Math.min(top, area.height - hgt - 4)) + "px";
+  }
+
+  /** The clip's tiles in the order kept, without the ones put away; while editing, what can be changed. */
+  function arrangeTiles(docked) {
+    if (!menu) return;
+    const look = tileLook();
+    const tiles = [...menu.children].filter((el) => el.tagName === "BUTTON" && /^clip-/.test(el.id) && !/^clip-tint-/.test(el.id));
+    const rank = new Map(tiles.map((el, i) => [el.id, look.order.includes(el.id) ? look.order.indexOf(el.id) : 1000 + i]));
+    const off = [];
+    for (const el of tiles.sort((a, b) => rank.get(a.id) - rank.get(b.id))) {
+      if (look.hidden.includes(el.id)) {
+        off.push(el);
+        el.remove();
+        continue;
+      }
+      el.classList.toggle("wide", docked && look.wide.includes(el.id));
+      el.dataset.tile = el.id;
+      menu.append(el);
+      if (tileEdit) el.append(h("span", { class: "tile-minus", data: { tileOff: el.id }, "aria-label": "빼기", text: "−" }));
+    }
+    menu.classList.toggle("editing", tileEdit);
+    if (!tileEdit) return;
+    const word = (el) => el.getAttribute("aria-label") || el.textContent.replace(/^[▶■] /, "");
+    menu.append(h("div", { class: "tile-edit-foot", id: "tile-edit-foot" },
+      ...off.map((el) => h("button", { type: "button", class: "chip tile-back", data: { tileBack: el.id }, text: "+ " + word(el),
+        onclick: (e) => { e.stopPropagation(); saveTiles({ hidden: tileLook().hidden.filter((id) => id !== el.id) }); placeMenu(); } })),
+      h("p", { class: "help small tile-help", text: docked ? "끌어서 순서, 톡 누르면 크게·작게" : "끌어서 순서" }),
+      h("button", { type: "button", class: "btn small", id: "tile-done", text: "완료", onclick: (e) => { e.stopPropagation(); tileEdit = false; placeMenu(); } })));
+  }
+
+  /**
+   * 꾹 on a tile (half a second) is editing, as a phone's home screen: tiles shake; '−' puts one away;
+   * dragged onto another it goes before it; tapped in the grid it turns wide or narrow. While editing
+   * a tile's own action does not happen.
+   */
+  function watchTiles(el) {
+    let hold = null;
+    let drag = null;
+    const tileAt = (x, y) => document.elementFromPoint(x, y)?.closest?.("#clip-menu [data-tile]") || null;
+    el.addEventListener("click", (e) => {
+      if (!tileEdit && !hold?.fired) return;
+      if (e.target.closest?.("#tile-edit-foot")) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (hold?.fired) hold = null;
+    }, true);
+    el.addEventListener("pointerdown", (e) => {
+      const tile = e.target.closest?.("[data-tile]");
+      if (!tile || (e.pointerType === "mouse" && e.button !== 0)) return;
+      if (tileEdit) {
+        // Whether it began on the tile's '−' (once the tile holds the pointer, every event is the tile's).
+        drag = { id: e.pointerId, tile, x: e.clientX, y: e.clientY, moved: false, off: !!e.target.closest?.("[data-tile-off]") };
+        try { tile.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        return;
+      }
+      clearTimeout(hold?.timer);
+      hold = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => {
+        if (!hold || readOnly()) return;
+        hold.fired = true;
+        tileEdit = true;
+        buzz(app, 12);
+        placeMenu();
+      }, 500) };
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (hold && e.pointerId === hold.id && !hold.fired && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 8) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      drag.moved = true;
+      drag.tile.classList.add("dragging");
+      drag.tile.style.translate = `${dx}px ${dy}px`;
+    });
+    const up = (e) => {
+      if (hold && e.pointerId === hold.id && !hold.fired) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+      if (!drag || e.pointerId !== drag.id) return;
+      const { tile, moved, off } = drag;
+      drag = null;
+      tile.classList.remove("dragging");
+      tile.style.translate = "";
+      const ids = [...menu.querySelectorAll("[data-tile]")].map((t) => t.dataset.tile);
+      if (moved) {
+        tile.style.visibility = "hidden";
+        const onto = tileAt(e.clientX, e.clientY);
+        tile.style.visibility = "";
+        if (onto && onto !== tile) {
+          const rest = ids.filter((id) => id !== tile.dataset.tile);
+          rest.splice(rest.indexOf(onto.dataset.tile), 0, tile.dataset.tile);
+          saveTiles({ order: [...rest, ...tileLook().hidden.filter((id) => !rest.includes(id))] });
+        }
+      } else if (off) {
+        saveTiles({ hidden: [...new Set([...tileLook().hidden, tile.dataset.tile])], order: [...ids, ...tileLook().hidden.filter((id) => !ids.includes(id))] });
+      } else if (wideSide.matches) {
+        const wide = tileLook().wide;
+        saveTiles({ wide: wide.includes(tile.dataset.tile) ? wide.filter((id) => id !== tile.dataset.tile) : [...wide, tile.dataset.tile] });
+      }
+      placeMenu();
+    };
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", (e) => {
+      if (drag && e.pointerId === drag.id) {
+        drag.tile.classList.remove("dragging");
+        drag.tile.style.translate = "";
+        drag = null;
+      }
+      if (hold && e.pointerId === hold.id) {
+        clearTimeout(hold.timer);
+        hold = null;
+      }
+    });
   }
 
   /** The side panel with nothing chosen: what the song is, and how to see a clip here. */
@@ -22065,6 +23003,17 @@ function mountSongRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 비서's 바구니: what this room takes (clips, and a whiteboard's song cards as clips). */
+    takes(item) {
+      if (readOnly()) return false;
+      return item.kind === "song-clip" || item.kind === "song-clips" || (item.kind === "board-items" && (item.items || []).some((i) => i.kind === "song"));
+    },
+    /** …and puts down here (it is already the newest of its kind, so 붙여넣기 takes it). */
+    put(item) {
+      if (item.kind === "song-clip") pasteClip();
+      else if (item.kind === "song-clips") pasteGroup();
+      else if (item.kind === "board-items") pasteCards(item.items.filter((i) => i.kind === "song").sort((a, b) => a.dx - b.dx || a.dy - b.dy));
+    },
     /** 레퍼런스 → 이 방에 붙이기: a recording becomes a clip at the playhead (its sound is already on this device). */
     insertSound(memo) {
       if (readOnly() || !song.canAddClip()) return void toast(root, "여기에는 붙일 수 없어요");
@@ -22144,7 +23093,7 @@ const { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorSt
 const { InkLayer, inkColor, drawInkTools } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
 const { addRefNote, addRefSound } = __m["src/reference.js"];
-const { clipboardItem, copyItem } = __m["src/clipboard.js"];
+const { clipboardItem, copyItem, newestOf } = __m["src/clipboard.js"];
 const { solfege } = __m["src/audio/notes.js"];
 const { audioContext, SongPlayer } = __m["src/audio/engine.js"];
 const { decodeWav, encodeWav } = __m["src/audio/wav.js"];
@@ -22160,7 +23109,7 @@ const { MicRecorder, micSupport, micProblem } = __m["src/audio/recorder.js"];
 const { toBase64, fromBase64 } = __m["src/audio/peaks.js"];
 const { newBlobId } = __m["src/sync/blobs.js"];
 const { RoomSession } = __m["src/sync/session.js"];
-const { getSettings, setSetting } = __m["src/identity.js"];
+const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
 
 const SVG = "http://www.w3.org/2000/svg";
 // Far out to see a big board whole, near in to draw small (the owner: "축소를 완전 많이").
@@ -22829,7 +23778,7 @@ function mountBoardRoom(body, app, session, frame) {
       if (soloLasso === id) stopPlaying();
       apply(removeLassoOps(session.clock, board, id));
     } });
-    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 맡기기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
+    const more = h("button", { type: "button", class: "lasso-more", id: "lasso-more-" + id, "aria-label": "올가미 안의 카드들", title: "복사, 지우기, 비서에게 넣기", text: "⋯", onclick: () => { if (!chipDragged) openLassoMenu(id, chip); } });
     // 곡·글·그림·전체: what the loop's actions take.
     const kind = h("button", { type: "button", class: "lasso-kind", id: "lasso-kind-" + id, "aria-label": "올가미가 다룰 것 (곡, 글, 그림, 전체)", onclick: () => { if (!chipDragged) openKinds(id, chip); } });
     const chip = h("div", { class: "lasso-chip", data: { lasso: id }, role: "group", "aria-label": "올가미" }, play, kind, more, remove);
@@ -22919,7 +23868,7 @@ function mountBoardRoom(body, app, session, frame) {
         songs.length > 0 && one("lasso-repeat", repeating.has(id) ? "반복 끄기" : "반복", () => toggleRepeat(id)),
         can && pasteable && one("lasso-paste", "붙여넣기", () => pasteIntoLoop(id)),
         one("lasso-copy", "복사", () => copyLasso(loopHolds(id))),
-        one("lasso-ref", "비서에게 맡기기", () => lassoToReference(loopHolds(id).cards)),
+        one("lasso-ref", "비서에게 넣기", () => lassoToReference(loopHolds(id))),
         can && one("lasso-delete", "지우기", () => deleteLasso(loopHolds(id))),
       ].filter(Boolean));
     };
@@ -23094,11 +24043,19 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   /** The cards as they stand relative to each other, ready to be put down elsewhere. */
+  /** Where a copy came from, for 비서's 바구니. */
+  function fromHere() {
+    return { room: session.roomId, name: roomEntry(app.store, session.roomId)?.name || "", kind: "creative-board" };
+  }
+
   /** The cards (and drawings) as they stand to each other, ready to be put down elsewhere. */
-  function copyLasso({ cards: items, strokes = [] }) {
+  function copyLasso({ cards: items, strokes = [] }, { quiet = false } = {}) {
     const ink = session.doc(INK_DOC);
     const lines = strokes.map((sid) => ink.get(sid)).filter(Boolean);
-    if (!items.length && !lines.length) return void toast(root, "올가미 안에 고른 것이 없어요");
+    if (!items.length && !lines.length) {
+      toast(root, "올가미 안에 고른 것이 없어요");
+      return false;
+    }
     // The group's corner, in board pixels (drawings count in INK_UNITs).
     const xs = [...items.map((i) => i.x), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 0).map((v) => v / INK_UNIT))];
     const ys = [...items.map((i) => i.y), ...lines.flatMap((l) => l.pts.filter((_, k) => k % 3 === 1).map((v) => v / INK_UNIT))];
@@ -23108,8 +24065,9 @@ function mountBoardRoom(body, app, session, frame) {
       kind: "board-items",
       items: items.map((i) => ({ kind: i.kind, dx: i.x - x0, dy: i.y - y0, data: i.kind === "note" ? { text: i.text || "" } : i.data, ...keepOf(i) })),
       strokes: lines.map((l) => ({ pts: l.pts.map((v, k) => (k % 3 === 0 ? Math.round(v - x0 * INK_UNIT) : k % 3 === 1 ? Math.round(v - y0 * INK_UNIT) : v)), c: l.c, w: l.w, ...(l.z ? { z: l.z } : {}), b: l.b || "pen", ...(l.s ? { s: l.s } : {}), ...(l.q ? { q: 1 } : {}) })),
-    });
-    toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
+    }, fromHere());
+    if (!quiet) toast(root, `${items.length + lines.length}개를 복사했어요. 화이트보드의 '붙이기'나 올가미의 '붙여넣기'로 넣을 수 있어요`, 3200);
+    return true;
   }
 
   function deleteLasso({ cards: items, strokes = [] }) {
@@ -23135,8 +24093,9 @@ function mountBoardRoom(body, app, session, frame) {
   function pasteIntoLoop(id) {
     const loop = board.lassos().find((l) => l.id === id);
     if (!loop || readOnly()) return;
-    const group = clipboardItem(app.store, "board-items");
-    const clip = !group && clipboardItem(app.store, "song-clip");
+    const newest = newestOf(app.store, ["board-items", "song-clip"]);
+    const group = newest?.kind === "board-items" ? newest : null;
+    const clip = newest?.kind === "song-clip" ? newest : null;
     if (!group && !clip) return void toast(root, "복사한 것이 없어요");
     const list = group ? group.items : [{ kind: "song", dx: 0, dy: 0, data: cardFromClip(clip), speed: clip.speed, tint: clip.tint }];
     const inside = itemsInLoop(board, id);
@@ -23184,20 +24143,18 @@ function mountBoardRoom(body, app, session, frame) {
     toast(root, `올가미에 ${made.items.length + made.strokes}개를 붙였어요`);
   }
 
-  /** Song cards go to 레퍼런스 as recordings, text as notes (on this device only, as all of 레퍼런스). */
-  function lassoToReference(items) {
-    let n = 0;
-    for (const i of items) {
-      if (i.kind === "note" && (i.text || "").trim()) {
-        addRefNote(app.store, i.text);
-        n++;
-      } else if (i.kind === "song") {
-        const d = i.data;
-        addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob });
-        n++;
-      }
+  /**
+   * 비서에게 넣기: what the loop holds goes into 비서's 바구니 as one thing (as a copy does), to be put
+   * into any room later; its song cards are among 비서's recordings too (every recording in one place).
+   */
+  function lassoToReference(held) {
+    if (!copyLasso(held, { quiet: true })) return;
+    for (const i of held.cards) {
+      if (i.kind !== "song") continue;
+      const d = i.data;
+      addRefSound(app.store, { name: d.name, dur: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob });
     }
-    toast(root, n ? `비서에게 ${n}개를 맡겼어요` : "비서에게 맡길 글이나 노래 카드가 없어요", 3000);
+    toast(root, "비서의 바구니에 넣었어요. 다른 방에서 '여기에 놓기'로 꺼내요", 3200);
   }
 
   /** Takes every loop off (one undo step). */
@@ -23268,7 +24225,7 @@ function mountBoardRoom(body, app, session, frame) {
         railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "둘 다" }[s.songMode] || "피아노", () => toggleSoundMode()),
         // With a loop in hand: only its part (pressed), or the whole board.
         !!focusLoop && railButton("song-focus", "fit", "올가미만", () => { focusOff = !focusOff; draw(); }, { pressed: !focusOff }),
       ],
@@ -23276,7 +24233,7 @@ function mountBoardRoom(body, app, session, frame) {
       lasso: [
         railButton("board-fit", "fit", "모두 보기", () => fitAll()),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "둘 다" }[s.songMode] || "피아노", () => toggleSoundMode()),
         can && railButton("lasso-clear", "eraser", "모두 풀기", () => removeAllLassos()),
       ],
     }[mode];
@@ -23330,7 +24287,7 @@ function mountBoardRoom(body, app, session, frame) {
         h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
       menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
-        one("card-sound", { original: "원본", both: "같이" }[settings().songMode] || "피아노", () => toggleSoundMode()),
+        one("card-sound", { original: "원본", both: "둘 다" }[settings().songMode] || "피아노", () => toggleSoundMode()),
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),
@@ -24148,9 +25105,10 @@ function mountBoardRoom(body, app, session, frame) {
   }
 
   function addSong() {
-    const group = clipboardItem(app.store, "board-items");
-    if (group) return void pasteGroup(group.items, { strokes: group.strokes || [] });
-    const item = clipboardItem(app.store, "song-clip");
+    // The newer of a copied group and a copied clip.
+    const newest = newestOf(app.store, ["board-items", "song-clip"]);
+    if (newest?.kind === "board-items") return void pasteGroup(newest.items, { strokes: newest.strokes || [] });
+    const item = newest?.kind === "song-clip" ? newest : null;
     if (!item) return void toast(root, "노래 방에서 클립을 '복사'하면 여기에 붙일 수 있어요. '내 노래'에서 골라도 돼요.", 4200);
     const data = cardFromClip(item);
     placeCard(data, keptFields("song", item, data));
@@ -24221,7 +25179,7 @@ function mountBoardRoom(body, app, session, frame) {
     copyItem(app.store, {
       kind: "song-clip", room: session.roomId, src: id, offset: 0, length: d.dur, speed: board.item(id).speed || 1, tint: board.item(id).tint ?? null,
       source: { duration: d.dur / 1000, notes: d.notes.map(unpackNote), peaks: d.peaks, blob: d.blob, name: d.name },
-    });
+    }, fromHere());
     toast(root, "복사했어요. 노래 방이나 다른 화이트보드에 붙일 수 있어요", 2600);
   }
 
@@ -25051,6 +26009,27 @@ function mountBoardRoom(body, app, session, frame) {
   draw();
 
   return {
+    /** 비서's 바구니: a whiteboard takes everything there is (cards, clips as song cards, words as a text card). */
+    takes(item) {
+      return !readOnly() && ["board-items", "song-clip", "song-clips", "text"].includes(item.kind);
+    },
+    put(item) {
+      if (item.kind === "board-items") pasteGroup(item.items || [], { strokes: item.strokes || [] });
+      else if (item.kind === "song-clip") {
+        const data = cardFromClip(item);
+        placeCard(data, keptFields("song", item, data));
+      } else if (item.kind === "song-clips") {
+        // One under another, in the order they stood (a loop's 순서 정리 lays them in a row).
+        const clips = (item.clips || []).slice().sort((a, b) => a.dx - b.dx || a.dy - b.dy);
+        pasteGroup(clips.map((c, i) => {
+          const data = cardFromClip(c);
+          return { kind: "song", dx: 0, dy: i * 110, data, ...keptFields("song", c, data) };
+        }));
+      } else if (item.kind === "text") {
+        const at = spotFor("note");
+        apply(addItemOps(session.clock, board, { kind: "note", x: at.x, y: at.y, data: { text: item.text }, by: session.memberId }));
+      }
+    },
     /** 레퍼런스 → 이 방에 붙이기, a recording: a song card (its sound is already on this device). */
     insertSound(memo) {
       placeCard(songCardData({ duration: memo.dur, notes: memo.notes, peaks: memo.peaks, name: memo.name, blob: memo.blob, scale: memo.scale }));
@@ -25920,6 +26899,7 @@ __m["src/ui/anim-room.js"] = (() => {
 // shows where each of them is, and their lines appear live on the frame they share. Each frame is its
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
+const { rollTo } = __m["src/ui/motion.js"];
 const { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } = __m["src/ui/dom.js"];
 const { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
@@ -26037,7 +27017,7 @@ function mountAnimRoom(body, app, session) {
 
   function drawTools() {
     const { fps, loop } = doc.settings();
-    speedChip.textContent = `${fps}장/초`;
+    rollTo(speedChip, `${fps}장/초`);
     speedChip.setAttribute("aria-label", `재생: 1초에 ${fps}장, 끝나면 ${LOOP_NAMES[loop]}`);
     onionButton.setAttribute("aria-pressed", String(onionOn()));
     playButton.replaceChildren(icon(playing ? "pause" : "play"));
@@ -26258,7 +27238,7 @@ function mountAnimRoom(body, app, session) {
     for (const [id, { cell }] of cells) if (!keep.has(id)) { cell.remove(); cells.delete(id); }
     strip.append(nav, bgCell);
     const at = list.findIndex((f) => f.id === current);
-    where.textContent = current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`;
+    rollTo(where, current === BG ? `배경 · ${list.length}장` : `${at + 1}/${list.length}`);
     prevButton.disabled = current === BG || at <= 0;
     nextButton.disabled = current !== BG && at >= list.length - 1;
     bgCell.classList.toggle("on", current === BG);
@@ -26774,8 +27754,8 @@ const { kindInfo } = __m["src/ui/kinds.js"];
 const { RoomSession } = __m["src/sync/session.js"];
 const { timeText } = __m["src/ui/song-view.js"];
 const { KEEP_RATE, soundPickers, pickerHelp, micRefused, micReason, elsewhere, isApple } = __m["src/ui/sound-in.js"];
-const { refNotes, addRefNote, removeRefNote, refSounds, addRefSound, removeRefSound } = __m["src/reference.js"];
-const { clipboardItem } = __m["src/clipboard.js"];
+const { refSounds, addRefSound, removeRefSound, refNote, setRefNote, noteFromMemos, addToNote, toggleTodo, flipTodoAt, lineAt } = __m["src/reference.js"];
+const { basketItems, takeFromBasket, removeFromBasket, describeItem, onBasketChange } = __m["src/clipboard.js"];
 const { MAX_TAKE_MS, unpackNote } = __m["src/core/song.js"];
 const { audioContext } = __m["src/audio/engine.js"];
 const { analyzeSamples } = __m["src/audio/analyze.js"];
@@ -26789,9 +27769,10 @@ const { solfege } = __m["src/audio/notes.js"];
 
 /**
  * insert(text): the room takes a note; insertSound(sound): the room takes a recording
- * (a song room as a clip, a whiteboard as a card). Either may be missing.
+ * (a song room as a clip, a whiteboard as a card). Either may be missing. takes(item) / put(item):
+ * whether the room takes a thing from the 바구니, and puts it down in its own form.
  */
-function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null } = {}) {
+function openReference(app, { insert = null, insertSound = null, roomId = null, tab = null, incoming = null, takes = null, put = null } = {}) {
   // Its button opens it and, pressed again, closes it. Asked for a tab (home's 녹음), it opens there.
   const open = document.getElementById("reference");
   if (open && !tab) return void open.close?.();
@@ -26804,12 +27785,16 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
   // What it opens on: asked for, else what this room takes (a song room: recordings; a page of
   // words: notes), else where I was last.
   const here = insertSound && !insert ? "sounds" : insert && !insertSound ? "notes" : null;
-  const first = tab || here || getSettings(app.store).refTab || "notes";
+  const was = getSettings(app.store).refTab;
+  const first = tab || here || (["notes", "basket", "sounds", "rooms"].includes(was) ? was : "notes");
   openFloat(app.root, { id: "reference", title: "비서", pos, dock }, (panel, close, onClose) => {
-    const list = h("div", { class: "ref-list", id: "ref-list" });
+    const basket = h("div", { class: "ref-list ref-basket", id: "ref-basket" });
     const sounds = h("div", { class: "ref-sounds", id: "ref-sounds" });
     const status = h("p", { class: "help", id: "ref-status", role: "status", hidden: true });
-    const area = h("textarea", { class: "input note-area", id: "ref-text", rows: 2, placeholder: "가사, 코드, 떠오른 말…" });
+    // 노트: one sheet of my own, written straight on (the old memos move into it once).
+    noteFromMemos(app.store);
+    const sheet = h("textarea", { class: "note-sheet", id: "ref-note", rows: 6, spellcheck: false, "aria-label": "노트", placeholder: "떠오른 것, 가사, 할 일… 그냥 이어 써요." });
+    sheet.value = refNote(app.store);
     let busy = false;
     let audio = null; // the recording being heard: { id, el, url }
 
@@ -26818,19 +27803,57 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
       status.hidden = !text;
     };
 
+    let saving = 0;
+    const saveNote = () => {
+      clearTimeout(saving);
+      saving = setTimeout(() => setRefNote(app.store, sheet.value), 250);
+    };
+    sheet.addEventListener("input", saveNote);
+    sheet.addEventListener("blur", () => setRefNote(app.store, sheet.value));
+    // A tap on a line's □ ticks it, on ☑ unticks it (as in Apple's and Samsung's notes).
+    sheet.addEventListener("click", () => {
+      const at = sheet.selectionStart;
+      if (at !== sheet.selectionEnd) return;
+      const flipped = flipTodoAt(sheet.value, at);
+      if (flipped === null) return;
+      sheet.value = flipped;
+      sheet.setSelectionRange(at, at);
+      setRefNote(app.store, flipped);
+    });
+    const stay = (e) => e.preventDefault(); // the buttons leave the keyboard and the caret where they are
     function drawNotes() {
-      const notes = refNotes(app.store);
-      const clip = clipboardItem(app.store, "song-clip");
-      mount(list,
-        clip && h("p", { class: "help ref-clip", id: "ref-clip", text: `복사해 둔 노래 클립: ${clip.source?.name || "녹음"} · ${(clip.length / 1000).toFixed(1)}초 (노래 방이나 화이트보드에 붙일 수 있어요)` }),
-        ...(notes.length ? notes.map((n) => h("div", { class: "ref-note", data: { id: n.id } },
-          h("p", { class: "ref-body", text: n.text }),
-          h("div", { class: "ref-actions" },
-            insert && h("button", { class: "chip primary", type: "button", data: { put: n.id }, onclick: () => { insert(n.text); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
-            h("button", { class: "chip", type: "button", onclick: () => Promise.resolve().then(() => navigator.clipboard.writeText(n.text)).then(() => toast(app.root, "복사했어요"), () => toast(app.root, "길게 눌러 복사해 주세요")) }, icon("copy"), "복사"),
-            h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { removeRefNote(app.store, n.id); drawNotes(); } }, "지우기"))))
-          : [h("p", { class: "help ref-empty", text: "떠오른 것을 적어 두면, 같이 하는 중에 꺼내 쓸 수 있어요." })]));
+      sheet.value = refNote(app.store);
     }
+
+    /** 바구니: what I copied anywhere, newest first; 여기에 놓기 where this room takes it. */
+    function drawBasket() {
+      const all = basketItems(app.store);
+      mount(basket, ...(all.length ? all.map((e) => {
+        const what = describeItem(e.item);
+        const can = !!(takes && put && takes(e.item));
+        return h("div", { class: "ref-basket-item", data: { id: e.id } },
+          h("div", { class: "pick-head" }, h("span", { class: "basket-icon", "aria-hidden": "true" }, icon(what.icon)), h("span", { class: "pick-name", text: what.text })),
+          h("p", { class: "ref-from", text: [e.from?.name && `'${e.from.name}'에서`, new Date(e.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })].filter(Boolean).join(" · ") }),
+          h("div", { class: "ref-actions" },
+            can && h("button", { class: "chip primary", type: "button", data: { putBasket: e.id }, onclick: () => {
+              const item = takeFromBasket(app.store, e.id);
+              if (!item) return;
+              try {
+                put(item);
+                toast(app.root, "여기에 놓았어요");
+              } catch (err) {
+                console.warn(err);
+                toast(app.root, "놓지 못했어요", 3000);
+              }
+              drawBasket();
+            } }, icon("plus"), "여기에 놓기"),
+            h("button", { class: "chip danger", type: "button", data: { dropBasket: e.id }, "aria-label": "바구니에서 빼기", onclick: () => { removeFromBasket(app.store, e.id); drawBasket(); } }, "빼기")));
+      }) : [h("p", { class: "help ref-empty", id: "ref-basket-empty", text: "방에서 '복사'한 것이 여기 모여요. 다른 방에서 '여기에 놓기'로 꺼내요." })]));
+    }
+    // A copy made while it is open shows at once.
+    const offBasket = onBasketChange(() => {
+      if (!basketPart.hidden) drawBasket();
+    });
 
     /** A recording's notes as small bars by pitch, named when there is room. */
     function bars(s) {
@@ -27045,34 +28068,58 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
     const waysWhy = !mic.ok && h("div", { class: "ref-why" },
       h("p", { class: "help warn", id: "ref-mic-reason", text: micReason(mic.reason) }),
       mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root: app.root, prefix: "ref-" })));
-    // A note goes in like a message: write, then the round button beside it.
+    // 노트: the sheet, □ 할 일 for the caret's line, and 여기에 놓기 (the chosen words, or the caret's line).
     const notesPart = h("div", { class: "ref-part", id: "ref-notes" },
-      h("div", { class: "ref-compose" }, area,
-        h("button", { class: "ref-send", id: "ref-add", type: "button", "aria-label": "메모 남기기", onclick: () => {
-          if (!area.value.trim()) return;
-          addRefNote(app.store, area.value.trim());
-          area.value = "";
-          drawNotes();
-        } }, "남기기")),
-      list);
+      sheet,
+      h("div", { class: "ref-actions note-actions" },
+        h("button", { class: "chip", type: "button", id: "ref-todo", onpointerdown: stay, onclick: () => {
+          const r = toggleTodo(sheet.value, sheet.selectionStart);
+          sheet.value = r.text;
+          sheet.setSelectionRange(r.caret, r.caret);
+          setRefNote(app.store, r.text);
+        } }, "□ 할 일"),
+        insert && h("button", { class: "chip primary", type: "button", id: "ref-note-put", onpointerdown: stay, onclick: () => {
+          const chosen = sheet.value.slice(sheet.selectionStart, sheet.selectionEnd).trim();
+          const words = chosen ? chosen.replace(/^[□☑] /gm, "") : lineAt(sheet.value, sheet.selectionStart);
+          if (!words) return void toast(app.root, "놓을 줄에 커서를 두거나 글을 골라 주세요", 2600);
+          insert(words);
+          toast(app.root, "여기에 놓았어요");
+        } }, icon("plus"), "여기에 놓기")));
     const soundsPart = h("div", { class: "ref-part", id: "ref-sounds-part" }, ...inputs, ways, waysWhy, status, sounds);
     const roomsPart = h("div", { class: "ref-part", id: "ref-rooms" });
-    const parts = { notes: notesPart, sounds: soundsPart, rooms: roomsPart };
+    const basketPart = h("div", { class: "ref-part", id: "ref-basket-part" }, basket);
+    const parts = { notes: notesPart, basket: basketPart, sounds: soundsPart, rooms: roomsPart };
     const show = (which) => {
       for (const [k, el] of Object.entries(parts)) el.hidden = k !== which;
       setSetting(app.store, "refTab", which);
       if (which === "rooms" && !roomsPart.childElementCount) drawRooms();
+      if (which === "basket") drawBasket();
       // The first time the recordings are looked at and there are none, the example goes in.
       if (which === "sounds" && !refSounds(app.store).length && !app.store.get("exampleTake", false)) addExample();
     };
-    const tabs = segmented([["notes", "메모", "ref-tab-notes"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], first, (v) => show(v), "refTab");
+    const tabs = segmented([["notes", "노트", "ref-tab-notes"], ["basket", "바구니", "ref-tab-basket"], ["sounds", "녹음", "ref-tab-sounds"], ["rooms", "내 방", "ref-tab-rooms"]], first, (v) => show(v), "refTab");
     tabs.classList.add("ref-tabs");
     // What it is, in a line: mine alone, at hand while together (the owner: "나 혼자만 볼 수 있는 거…
     // 같이 하면서도 도움되게… 비서 느낌").
-    panel.append(h("p", { class: "ref-sub", text: roomId ? "나만 보는 주머니 · 꺼내서 이 방에 놓아요" : "나만 보는 주머니 · 모아 두고 방으로 보내요" }), tabs, notesPart, soundsPart, roomsPart);
+    panel.append(h("p", { class: "ref-sub", text: roomId ? "나만 보는 주머니 · 꺼내서 이 방에 놓아요" : "나만 보는 주머니 · 모아 두고 방으로 보내요" }), tabs, notesPart, basketPart, soundsPart, roomsPart);
     show(first);
     drawNotes();
     drawSounds();
+
+    // 공유로 받기: sounds sent here from the phone's recorder app ('공유' → this app) go in one after
+    // another, as a picked file does (ui/share-in.js); then '보내기' takes them into a room.
+    if (incoming?.length) {
+      (async () => {
+        let came = 0;
+        for (const file of incoming) {
+          while (busy) await new Promise((r) => setTimeout(r, 120));
+          const before = refSounds(app.store).length;
+          await importFile(file);
+          if (refSounds(app.store).length > before) came++;
+        }
+        if (came) toast(app.root, came > 1 ? `녹음 앱에서 ${came}개를 받았어요. '보내기'로 방에 넣어요` : "녹음 앱에서 받았어요. '보내기'로 방에 넣어요", 3600);
+      })();
+    }
 
     // 내 방: my other rooms, to look into and bring things from into this room.
     function drawRooms() {
@@ -27087,7 +28134,7 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
       }) : [h("p", { class: "help", text: "다른 방이 아직 없어요." })]));
     }
 
-    /** A room's words, clips and cards, each with 가져오기 where this room can take it. */
+    /** A room's words, clips and cards, each with 여기에 놓기 where this room can take it. */
     async function lookInto(room, box) {
       box.replaceChildren(h("p", { class: "help", text: "불러오는 중…" }));
       let other = null;
@@ -27128,16 +28175,19 @@ function openReference(app, { insert = null, insertSound = null, roomId = null, 
       } finally {
         other?.close();
       }
-      const take = (f) => (f.text ? insert && (() => { insert(f.text); toast(app.root, "가져왔어요"); }) : insertSound && (() => { insertSound(f.sound); toast(app.root, "가져왔어요"); }));
+      const take = (f) => (f.text ? insert && (() => { insert(f.text); toast(app.root, "여기에 놓았어요"); }) : insertSound && (() => { insertSound(f.sound); toast(app.root, "여기에 놓았어요"); }));
       box.replaceChildren(...(found.length ? found.slice(0, 40).map((f, i) => {
         const act = take(f);
         return h("div", { class: "ref-item" },
           h("p", { text: f.text || `♪ ${f.sound.name} · ${timeText(f.sound.dur * 1000)}` }),
-          act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "가져오기", onclick: act }),
-          f.text && h("button", { class: "chip", type: "button", text: "메모로", onclick: () => { addRefNote(app.store, f.text); drawNotes(); toast(app.root, "비서 메모에 넣었어요"); } }));
+          act && h("button", { class: "chip", type: "button", data: { take: String(i) }, text: "여기에 놓기", onclick: act }),
+          f.text && h("button", { class: "chip", type: "button", text: "노트에", onclick: () => { addToNote(app.store, f.text); drawNotes(); toast(app.root, "노트에 적었어요"); } }));
       }) : [h("p", { class: "help", text: "가져올 것이 아직 없어요" })]));
     }
     onClose(() => {
+      offBasket();
+      clearTimeout(saving);
+      setRefNote(app.store, sheet.value);
       stopPickers();
       stopHearing();
       if (recording) {
@@ -28409,6 +29459,8 @@ const { fromBase64 } = __m["src/core/b64.js"];
 const { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toast, formBox } = __m["src/ui/dom.js"];
 const { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } = __m["src/ui/theme.js"];
 const { showJoin } = __m["src/ui/join.js"];
+const { drawCheck } = __m["src/ui/motion.js"];
+const { shareDone } = __m["src/ui/share-take.js"];
 const { roomKeyFrom, keyText, validRoomPassword } = __m["src/core/lock.js"];
 const { sealedTransport, isLockedRoom, keyOpens } = __m["src/sync/sealed.js"];
 const { kindInfo, sideOf } = __m["src/ui/kinds.js"];
@@ -28682,7 +29734,7 @@ function showRoom(app, roomId) {
       h("header", { class: "bar" },
         iconButton("back", "back", "홈으로", () => app.go("")),
         title, status, people,
-        getSettings(app.store).reference && iconButton("room-reference", "book", "비서 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, roomId })),
+        getSettings(app.store).reference && iconButton("room-reference", "book", "비서 (나만 보기)", () => openReference(app, { insert: screen.insertText || null, insertSound: screen.insertSound || null, takes: screen.takes || null, put: screen.put || null, roomId })),
         games.button,
         iconButton("invite", "invite", "친구 초대", openInvite),
         iconButton("room-settings", "more", "방 설정", openSettings)),
@@ -28790,9 +29842,9 @@ function showRoom(app, roomId) {
     return () => {};
   }
 
-  function copy(text, done, failed) {
+  function copy(text, done, failed, button = null) {
     // The clipboard may refuse (it does in some frames); the text stays on screen to long-press.
-    Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => toast(root, done), () => toast(root, failed));
+    Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => { drawCheck(button); toast(root, done); }, () => toast(root, failed));
   }
 
   function openInvite() {
@@ -28814,12 +29866,12 @@ function showRoom(app, roomId) {
         h("div", { class: "btn-row" },
           canSend && h("button", { class: "btn", id: "send-link", type: "button", text: "보내기", onclick: send }),
           h("button", { class: canSend ? "btn quiet" : "btn", id: "copy-link", type: "button", text: "링크 복사",
-            onclick: () => copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요") })),
+            onclick: (e) => copy(link, "링크를 복사했어요", "링크를 길게 눌러 복사해 주세요", e.currentTarget) })),
         h("div", { class: "row" }, h("span", { class: "label", text: "링크 대신 홈의 '코드로 들어가기'에 넣는 방 코드" }),
           h("div", { class: "with-btn", style: { alignItems: "center" } },
             h("span", { class: "code", id: "invite-code", style: { flex: "1" }, text: roomId }),
             h("button", { class: "btn small quiet", id: "copy-invite-code", type: "button", text: "코드 복사",
-              onclick: () => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요") }))),
+              onclick: (e) => copy(roomId, "코드를 복사했어요", "코드를 길게 눌러 복사해 주세요", e.currentTarget) }))),
         roomEntry(app.store, roomId)?.key && h("p", { class: "help", id: "invite-password", text: "비밀번호가 있는 방이에요. 친구에게 주소와 함께 비밀번호도 알려 주세요." }),
         app.shareBase() && h("p", { class: "help", id: "invite-note", text: "시험판이라 Claude에서 이 페이지를 공유받은 사람만 들어올 수 있어요." }),
         h("button", { class: "btn quiet", id: "invite-done", type: "button", text: "닫기", onclick: close })));
@@ -28920,7 +29972,11 @@ function showRoom(app, roomId) {
     alive = false;
     clearTimeout(slowTimer);
     for (const off of offs) off?.();
-    session?.close();
+    // A take still on its way to the room goes on to the end even when the room is left (the owner,
+    // 26 November: "원본이 아직 오지 않았어요… 같이 하는 게 제일 중요한 건데"): the room's connection stays
+    // until it has gone (ten minutes at most), then closes.
+    const leaving = session;
+    if (leaving) Promise.race([shareDone(leaving), new Promise((r) => setTimeout(r, 10 * 60 * 1000))]).finally(() => leaving.close());
     if (app.session === session) app.session = null;
   };
 }
@@ -28935,6 +29991,7 @@ __m["src/ui/my-code.js"] = (() => {
 // another device. After that it lives at the top of 설정, hidden until asked for.
 
 const { h, toast, formBox } = __m["src/ui/dom.js"];
+const { drawCheck } = __m["src/ui/motion.js"];
 const { normalizeCode, validCode, formatCode, CODE_LENGTH } = __m["src/core/me.js"];
 const { myCodeOf, markMyCodeShown, adoptMyCode } = __m["src/identity.js"];
 
@@ -28949,10 +30006,10 @@ function codeLetters(code, { masked = false } = {}) {
     ...groups.map((g, i) => h("span", { class: "my-code-group", style: { "--i": i } }, masked ? "••••" : g)));
 }
 
-function copyCode(root, code) {
+function copyCode(root, code, button = null) {
   Promise.resolve()
     .then(() => navigator.clipboard.writeText(formatCode(code)))
-    .then(() => toast(root, "코드를 복사했어요. 나만 아는 곳에 두세요"), () => toast(root, "복사가 막혀 있어요. 코드를 길게 눌러 복사해 주세요"));
+    .then(() => { drawCheck(button); toast(root, "코드를 복사했어요. 나만 아는 곳에 두세요"); }, () => toast(root, "복사가 막혀 있어요. 코드를 길게 눌러 복사해 주세요"));
 }
 
 /**
@@ -28970,7 +30027,7 @@ function openMyCodeIntro(app, root, sheet, { onChange } = {}) {
       h("p", { class: "my-code-words", text: "이건 당신만의 코드예요. 이 코드를 알면 어디서든 당신의 방과 집, 모든 것을 그대로 열 수 있어요." }),
       h("p", { class: "help", text: "다른 사람에게는 보여 주지 마세요. 설정 맨 위에서 언제든 다시 볼 수 있어요." }),
       h("div", { class: "my-code-actions" },
-        h("button", { class: "btn quiet", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+        h("button", { class: "btn quiet", id: "my-code-copy", type: "button", text: "복사", onclick: (e) => copyCode(root, me.code, e.currentTarget) }),
         h("button", { class: "btn", id: "my-code-ok", type: "button", text: "알겠어요", onclick: () => close() })),
       h("button", {
         class: "link-btn my-code-have", id: "my-code-have", type: "button", text: "다른 기기에서 쓰던 코드가 있어요",
@@ -29031,7 +30088,7 @@ function myCodeSection(app, root, sheet, { onChange } = {}) {
     slot,
     h("p", { class: "help small", text: "이 코드를 알면 어디서든 당신의 모든 것을 열 수 있어요. 다른 사람에게는 보여 주지 마세요." }),
     h("div", { class: "my-code-chips" }, see,
-      h("button", { class: "chip", id: "my-code-copy", type: "button", text: "복사", onclick: () => copyCode(root, me.code) }),
+      h("button", { class: "chip", id: "my-code-copy", type: "button", text: "복사", onclick: (e) => copyCode(root, me.code, e.currentTarget) }),
       h("button", { class: "chip", id: "my-code-other", type: "button", text: "다른 코드 넣기", onclick: () => openEnterCode(app, root, sheet, { onChange }) })));
 }
 
@@ -30284,6 +31341,7 @@ const { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } = __m["s
 const { SIDES, kindsOf, sideOf, kindInfo } = __m["src/ui/kinds.js"];
 const { openReference } = __m["src/ui/reference.js"];
 const { myCode, myCodeSection, openMyCodeIntro } = __m["src/ui/my-code.js"];
+const { burst } = __m["src/ui/motion.js"];
 const { roomKeyFrom, keyText, validRoomPassword } = __m["src/core/lock.js"];
 const { sealedTransport } = __m["src/sync/sealed.js"];
 const { refSounds } = __m["src/reference.js"];
@@ -30467,6 +31525,7 @@ function showHome(app) {
         const on = toggleStar(app.store, room.id);
         buzz(app);
         draw();
+        if (on) burst(root.querySelector(`.room-star[data-star="${room.id}"]`));
         toast(root, on ? "별표: 맨 위에 둘게요" : "별표를 뺐어요", 1600);
       } }, icon("star"));
     // Held, the room lifts and the houses come up as a small world from below (ui/house-arc.js);
@@ -31175,7 +32234,7 @@ const DOC = "bundles";
 /** Settings that are mine wherever I am. Where a bar or panel stands, and a device's own delay fix, stay on the device. */
 const SHARED_SETTINGS = ["theme", "accent", "textScale", "tintAmount", "colors", "mixing", "songMode", "pianoTone", "showWave", "songSpeed",
   "metronome", "snap", "grid", "countIn", "inkBrush", "inkEraser", "inkSteady", "inkShapes", "reference", "panelCycle", "games", "recentSearchMax",
-  "soundEffects", "haptics", "lineColors", "animOnion", "boardText", "roomView"];
+  "soundEffects", "haptics", "lineColors", "animOnion", "boardText", "roomView", "songTiles"];
 
 function deviceOf(store) {
   let id = store.get("meDevice", null);
@@ -31385,6 +32444,8 @@ const { BlobStore } = __m["src/sync/blobs.js"];
 const { startMyPlace } = __m["src/sync/me-place.js"];
 const { sealedTransport } = __m["src/sync/sealed.js"];
 const { keyFromText } = __m["src/core/lock.js"];
+const { offerShareIn, takeShared } = __m["src/ui/share-in.js"];
+const { openReference } = __m["src/ui/reference.js"];
 
 const APP_VERSION = "0.1.0";
 const ROOM_ROUTE = /^r-([a-z2-7]{12})$/;
@@ -31536,6 +32597,12 @@ function boot(root) {
   });
   render();
   app.booted = true;
+  // On a public address: the home screen and the share sheet. A sound sent from the phone's recorder
+  // app ('공유' → this app) comes into 비서's 녹음, over whatever is open.
+  offerShareIn();
+  takeShared().then((files) => {
+    if (files.length) openReference(app, { tab: "sounds", incoming: files });
+  });
 }
 
 boot(document.getElementById("app"));

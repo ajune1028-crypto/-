@@ -1,0 +1,56 @@
+{
+  "name": "hamkke · 작은 우주를 기록해 보자",
+  "short_name": "hamkke",
+  "description": "친구와 링크로 같이 쓰는 방. 작은 우주를 기록해 보자.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16161b",
+  "theme_color": "#16161b",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "sound",
+          "accept": [
+            "audio/*",
+            ".m4a",
+            ".mp3",
+            ".wav",
+            ".aac",
+            ".ogg",
+            ".opus",
+            ".amr",
+            ".3gp",
+            ".webm",
+            ".flac"
+          ]
+        }
+      ]
+    }
+  }
+}
