@@ -9,7 +9,6 @@ import { validPreview } from "../core/preview.js";
 import { inkColor } from "./ink.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
-import { dayKey, dayLabel, hourLabel } from "../core/time.js";
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { refSounds } from "../reference.js";
@@ -28,10 +27,10 @@ import { currentTheme, myPeopleColor } from "./theme.js";
 
 const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
+// The day and the time, whatever the screen (the owner, 21 November: "화면 큰 거에서는 날짜가 안 나오기도"):
+// "오늘 오전 10:02", "어제 …", "11월 20일 오후 3:02".
 function whenLabel(ms) {
-  const tz = localZone();
-  const day = dayKey(ms, tz);
-  return day === dayKey(Date.now(), tz) ? hourLabel(ms, tz) : dayLabel(day).split(" ").slice(0, 2).join(" ");
+  return Number.isFinite(ms) ? whenText(ms) : "";
 }
 
 /**
@@ -560,7 +559,7 @@ export function showHome(app) {
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
-          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r))),
+          h("div", { class: "rooms", id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
         ]),
       h("button", { class: "add", id: "add-" + side, type: "button", "aria-label": title + " 방 만들기", onclick: () => chooseKind(side) }, icon("plus")));
   }
