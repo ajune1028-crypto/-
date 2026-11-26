@@ -241,8 +241,9 @@ scenario("home windows: the titles stay while the rooms scroll and fade under a 
   await page.release(more[0] - 18, more[1] + 10);
   await page.waitFor(q("#home-panel"), 3000);
   assert.equal(await page.eval(`JSON.stringify(window.__app.store.get("homePanelEdge", null))`), edgeBefore, "the edge it comes from did not change");
-  // 햇살's own window: the other round buttons go, 햇살 stays where it was (the owner, 21 November).
-  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "hidden" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
+  // 햇살's own window covers what it covers; nothing is hidden (the owner, 21 November: "사라지고 숨기는
+  // 게 아니라… 그 햇살만 안 가려지게").
+  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "visible" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
   // The 녹음 button (레퍼런스's recordings) with 찾기와 집 out: 찾기와 집 goes, 레퍼런스 comes.
   await click(page, "#home-record");
   await page.waitFor(`${q("#reference")} && !${q("#home-panel")}`, 3000);
@@ -5354,8 +5355,11 @@ scenario("home top: 설정 and 햇살 side by side; under them 비서 alone at t
     })()`);
     assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, width + ": no second icon");
     assert.ok(Math.abs(at.set.t - at.more.t) < 1 && at.set.r <= at.more.l + 0.5, width + ": 설정 then 햇살 in a row: " + JSON.stringify(at));
-    assert.ok(at.ref.t >= at.more.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1 && Math.abs(at.ref.r - at.more.r) < 1, width + ": 비서 under 햇살, at the right end: " + JSON.stringify(at));
-    assert.ok(await page.eval(`!!document.querySelector("#home-more .sun-core")`), width + ": 햇살 is a sun");
+    assert.ok(at.ref.t >= at.more.b - 0.5 && Math.abs(at.ref.cx - at.more.cx) < 1, width + ": 비서 under 햇살, at the right end: " + JSON.stringify(at));
+    // A sun drawn in lines like the others (no yellow core), a little bigger than its neighbours.
+    const sun = await page.eval(`(() => { const c = document.querySelector("#home-more svg circle"); return c ? { r: Number(c.getAttribute("r")), fill: getComputedStyle(c).fill } : null; })()`);
+    assert.ok(sun && sun.r >= 5 && /none|rgba\(0, 0, 0, 0\)/.test(sun.fill), width + ": 햇살 is a sun in lines: " + JSON.stringify(sun));
+    assert.ok(at.more.r - at.more.l > at.set.r - at.set.l + 2, width + ": 햇살 is bigger than 설정: " + JSON.stringify(at));
     assert.ok(at.set.ok && at.more.ok && at.ref.ok, width + ": each can be pressed: " + JSON.stringify(at));
     await page.shot(out(`home-top-${width}.png`));
   }
@@ -6133,13 +6137,13 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.touch("start", [empty]);
   await page.touch("end");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
-  // While it is out, the other round buttons step away and 햇살 stays and answers (the owner, 21
-  // November: "아이콘들 다 가리고서 거기에 있던 그 아이콘만 보이게"); a tap on it puts it away.
+  // While it is out it covers what lies under it and nothing else goes away; only 햇살 stays above it
+  // and answers (the owner: "창 나온 거는 원래 다 가려지는데, 그 햇살만 안 가려지게"); a tap on it puts it away.
   await click(page, "#home-more");
   await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 2000);
   await pause(600);
   assert.ok(await pressable("#home-more"), "햇살 stays while its window is out");
-  assert.ok(!(await pressable("#home-settings")), "설정 stepped away");
+  assert.ok(await pressable("#home-settings"), "설정 is not hidden: a window at the bottom does not lie over it");
   await click(page, "#home-more");
   await page.waitFor(`!document.getElementById("home-panel")`, 2000);
   // Its lock, its float button and its ✕ are on its bar.
@@ -6159,6 +6163,16 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
     await click(page, "#home-more");
     await page.waitFor(`${q("#home-panel")}?.dataset.edge === ${JSON.stringify(next)} && document.querySelectorAll("#home-panel").length === 1`, 2500);
     await pause(650);
+    // 햇살 is above it on every edge; 설정 is under it only where it lies over 설정.
+    const sunAbove = await page.eval(`(() => { const r = document.getElementById("home-more").getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest("#home-more") !== null; })()`);
+    assert.ok(sunAbove, next + ": 햇살 is above the window");
+    const over = await page.eval(`(() => { const s = document.getElementById("home-settings").getBoundingClientRect(), p = document.getElementById("home-panel").getBoundingClientRect(); const x = s.left + s.width / 2, y = s.top + s.height / 2; return x > p.left && x < p.right && y > p.top && y < p.bottom; })()`);
+    assert.equal(await pressable("#home-settings"), !over, next + ": 설정 is covered exactly where the window lies over it");
+    assert.equal(await page.eval(`getComputedStyle(document.getElementById("home-settings")).visibility`), "visible", "never hidden");
+    // Its buttons stand beside the bar it has at its inner end: along the edge of a side window, across the end of a top one.
+    const onBar = await page.eval(`["panel-lock", "panel-float", "panel-close"].every((id) => document.getElementById(id)?.closest(${JSON.stringify(next === "top" ? ".panel-grip" : ".panel-end")}))`);
+    assert.ok(onBar, next + ": the buttons are beside its bar");
+    if (next !== "top") assert.equal(await page.eval(`getComputedStyle(document.getElementById("panel-grip")).display`), "none", next + ": no bar across the top of a side window");
     // What the panel holds is not under 햇살: the search field and the bar's buttons make room.
     const clear = await page.eval(`(() => { const t = document.getElementById("home-more").getBoundingClientRect(); const ok = (el) => { const f = el.getBoundingClientRect(); return f.top >= t.bottom || f.right <= t.left || f.left >= t.right || f.bottom <= t.top; }; return ok(document.getElementById("home-search")) && ["panel-lock", "panel-float", "panel-close"].every((id) => ok(document.getElementById(id))); })()`);
     assert.ok(clear, next + ": the search field and the bar's buttons are clear of 햇살");
@@ -6167,14 +6181,14 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   assert.ok(await pressable("#home-more"), "⋮ can still be pressed");
   await page.eval(`window.__app.store.set("settings", { ...window.__app.store.get("settings", {}), panelCycle: false })`);
   assert.equal(await page.eval(`!!document.getElementById("home-float")`), false, "no second icon on home");
-  // Its own button on the bar: the same panel floating on its own (the other buttons step away, 햇살 stays).
+  // Its own button on the bar: the same panel floating on its own (it covers what it lies over, 햇살 stays above).
   await click(page, "#panel-float");
   await page.waitFor(`${q("#home-panel.floating")} && ${q("#float-head")}`, 2000);
   await pause(350);
   assert.equal(await page.eval(`document.querySelectorAll("#home-panel").length`), 1, "one panel at a time");
   const placed = await page.eval(`(() => { const r = document.getElementById("home-panel").getBoundingClientRect(); const t = document.querySelector(".home-top").getBoundingClientRect(); return { top: r.top, below: t.bottom, left: r.left, right: r.right }; })()`);
   assert.ok(placed.top >= 0 && placed.left >= 0 && placed.right <= 390, "on the screen: " + JSON.stringify(placed));
-  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "hidden" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
+  await page.waitFor(`getComputedStyle(document.getElementById("home-settings")).visibility === "visible" && getComputedStyle(document.getElementById("home-more")).visibility === "visible"`, 2000);
   assert.ok(!(await page.eval(`!!document.querySelector("#home-panel .float-title")`)), "no name over the floating window");
   // Its right side draws it narrower; moved by its bar, it keeps that width (it went back to 360).
   const wide = await page.eval(`document.getElementById("home-panel").getBoundingClientRect().width`);

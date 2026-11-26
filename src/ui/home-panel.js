@@ -91,7 +91,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
   // owner: "창 끝에 무슨 바 있는 거, 거기 줄에다가 잠금과 나가기와 다른 식으로 바꾸기").
   const grip = h("div", { class: "panel-grip", id: "panel-grip" });
   // A side panel's inner edge (its 끝자락) takes the same throw.
-  const end = h("div", { class: "panel-end", id: "panel-end", "aria-hidden": "true" }, h("span", { class: "grip-bar" }));
+  const end = h("div", { class: "panel-end", id: "panel-end" });
   const body = h("div", { class: "home-panel-body" });
   // At its top left a lock, at its top right the way between an edge and a window of its own (the
   // owner: "점3개… 거기 누르면 나오는 곳에서 위쪽 오른쪽에다가 그거 따로 독단적 창 나오게 하는 걸 버튼").
@@ -121,10 +121,22 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     h("span", { class: "panel-ctrl-end" }, floatBtn,
       h("button", { class: "icon-btn float-close", id: "float-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close"))));
   const sides = floating ? ["left", "right"].map((side) => h("div", { class: "panel-side " + side, id: "panel-side-" + side, role: "separator", "aria-label": (side === "left" ? "왼쪽" : "오른쪽") + " 가장자리를 끌어 너비 바꾸기" })) : [];
+  // Docked, its lock, its way to a window of its own and its close stand beside the bar it already
+  // has at its inner end (the owner, 21 November: "위쪽에 바를 새로 만들지 말고 이미 있는 그 창 바에다가
+  // 옆에"): across the end of a bottom or top window, along the inner edge of a side one.
+  const ctrlEnd = !floating && h("span", { class: "panel-ctrl-end" }, floatBtn,
+    h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close")));
+  const gripBar = h("span", { class: "grip-bar", "aria-hidden": "true" });
+  const endBar = h("span", { class: "grip-bar", "aria-hidden": "true" });
+  function placeControls() {
+    if (floating) return;
+    const side = edge === "left" || edge === "right";
+    grip.replaceChildren(...(side ? [] : [lockBtn, gripBar, ctrlEnd]));
+    end.replaceChildren(...(side ? [lockBtn, endBar, ctrlEnd] : []));
+  }
   if (floating) panel.append(head, body, ...sides, sizer);
   else {
-    grip.append(lockBtn, h("span", { class: "grip-bar", "aria-hidden": "true" }),
-      h("span", { class: "panel-ctrl-end" }, floatBtn, h("button", { class: "icon-btn panel-close", id: "panel-close", type: "button", "aria-label": "닫기", onclick: () => close() }, icon("close"))));
+    placeControls();
     panel.append(grip, body, end, sizer);
   }
   paintLock();
@@ -467,6 +479,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     panel.style.transform = "";
     edge = to;
     panel.dataset.edge = to;
+    placeControls();
     sizeAtEdge();
     shape();
     enter(spot);

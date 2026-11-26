@@ -1615,10 +1615,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .in-houses svg { width: 1rem; height: 1rem; }
 .home-kebab { touch-action: none; transition: scale 0.15s var(--ease), background 0.2s var(--ease); }
 .home-kebab.charging { scale: 1.14; background: color-mix(in srgb, var(--tint) 24%, transparent); }
-/* 햇살 (the owner's branding: 일상, 친근): its core stays warm whatever colour the rays read from behind them. */
-:root { --sun-core: #ffbd3a; }
-:root[data-theme="dark"] { --sun-core: #ffc95e; }
-.sun-core { fill: var(--sun-core); stroke: currentColor; }
+/* 햇살: drawn in lines like every other icon (the owner: "안을 노란색으로 하지 말고 원래대로"), a little
+   bigger than the round buttons beside it, its sun round and full (the owner: "햇살 아이콘도 태양의 원형
+   크기도 좀 키워"). */
+.home-top .icon-btn.home-kebab { width: 2.65rem; height: 2.65rem; }
+.home-top .icon-btn.home-kebab svg { width: 1.45rem; height: 1.45rem; }
 
 /* A house: one deep colour of glass, a ㅅ roof, a small chimney, a white icon inside. */
 .house-shape { position: relative; display: block; width: 100%; aspect-ratio: 1; filter: drop-shadow(0 7px 10px color-mix(in srgb, var(--house, #888) 36%, transparent)); }
@@ -1720,7 +1721,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .search-icon svg { width: 1.1rem; height: 1.1rem; }
 .search-row .search-input { flex: 1; min-width: 0; height: 2.7rem; padding-left: 2.4rem; border-radius: 999px; }
 .search-row .search-modes { flex: none; width: auto; }
-.search-modes button { padding: 0 0.75rem; }
+.search-modes button { padding: 0 0.75rem; white-space: nowrap; }
 .search-results { display: flex; flex-direction: column; gap: 0.35rem; }
 .search-results:empty { display: none; }
 .search-hit { display: grid; gap: 0.12rem; width: 100%; padding: 0.6rem 0.8rem; text-align: left; border-radius: 0.95rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
@@ -1784,8 +1785,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
    with 레퍼런스 off it stands beside 설정. */
 /* 설정 · 햇살 on the top row, 비서 under 햇살 (the owner, 21 November: "찾기와 집을 레퍼런스 아이콘 위로"). */
 .home-top #home-reference { grid-column: 2; }
-/* 햇살's window is out: the other round buttons go, 햇살 stays where it is and still answers. */
-.home-sun-out .home-top > :not(.home-kebab) { opacity: 0; visibility: hidden; pointer-events: none; }
+/* 햇살's window is out: it covers what it covers, as a window does, and the round buttons it lies over
+   are under it; only 햇살 stays above it and answers (the owner, 21 November: "사라지고 숨기는 게 아니라
+   창 나온 거는 원래 다 가려지는데, 그 햇살 창만 안 가려지게"). */
+.home-sun-out .home-top { z-index: auto; }
+.home-sun-out .home-top > * { position: relative; z-index: 60; }
+.home-sun-out .home-top > .home-kebab { z-index: 64; }
 @media (max-width: 340px) { .half-title { font-size: 1.55rem; } }
 .house-actions .chip { height: 2.1rem; }
 .house-actions .help { width: 100%; }
@@ -1913,12 +1918,18 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .cw-swatch { width: 1.05rem; height: 1.05rem; padding: 0; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
 
 /* A side panel's inner edge (끝자락): a strip that takes the same throw as the grip, its small bar a hint. */
-.panel-end { display: none; position: absolute; top: 0; bottom: 0; width: 1.15rem; touch-action: none; cursor: grab; place-items: center; }
-.home-panel[data-edge="right"] .panel-end { display: grid; left: 0; }
-.home-panel[data-edge="left"] .panel-end { display: grid; right: 0; }
-.panel-end .grip-bar { width: 0.3rem; height: 2.6rem; }
-.home-panel[data-edge="right"] .home-panel-body { padding-left: 1.3rem; }
-.home-panel[data-edge="left"] .home-panel-body { padding-right: 1.3rem; }
+.panel-end { display: none; position: absolute; top: 0; bottom: 0; width: 2.5rem; touch-action: none; cursor: grab; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem; }
+.home-panel[data-edge="right"] .panel-end { display: flex; left: 0; }
+.home-panel[data-edge="left"] .panel-end { display: flex; right: 0; }
+.panel-end .grip-bar { width: 0.3rem; height: 2.6rem; margin: 0.25rem 0; }
+.panel-end .panel-ctrl-end { flex-direction: column; gap: 0.2rem; }
+.panel-end .icon-btn { width: 1.9rem; height: 1.9rem; cursor: pointer; }
+.panel-end .icon-btn svg { width: 1.05rem; height: 1.05rem; }
+.home-panel[data-edge="right"] .home-panel-body { padding-left: 2.6rem; }
+.home-panel[data-edge="left"] .home-panel-body { padding-right: 2.6rem; }
+/* A side window has no bar across its top (its bar is its inner edge): what it holds starts at the top. */
+.home-panel[data-edge="left"] .panel-grip, .home-panel[data-edge="right"] .panel-grip { display: none; }
+.home-panel[data-edge="right"] .home-panel-body, .home-panel[data-edge="left"] .home-panel-body { padding-top: calc(0.9rem + env(safe-area-inset-top)); }
 .home-panel.held { transition: none; }
 /* 투명 종이: the checkerboard every drawing app shows for nothing behind (ArtCraft's paint page too). */
 .draw-page[data-paper="clear"], .paper-swatch.clear, .paper-pick.clear { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 22px 22px; }
@@ -2022,8 +2033,9 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* A narrow panel (half a phone): the search field gets its own line, 이름·내용 under it, smaller houses. */
 .home-panel-body { container-type: inline-size; }
 @container (max-width: 17rem) {
-  .search-row { flex-wrap: wrap; }
-  .search-row .search-input { flex-basis: 100%; }
+  /* Only the field's own line makes room for 햇살; 이름·내용 under it keep the whole width. */
+  .search-row { flex-wrap: wrap; padding-right: 0; padding-left: 0; }
+  .search-row .search-input { flex: 1 1 100%; max-width: calc(100% - var(--sun-r, 0px) - var(--sun-l, 0px)); margin-left: var(--sun-l, 0px); }
   .search-row .search-icon { top: 1.35rem; }
   .search-row .search-modes { flex: 1; }
   .house-grid { grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); gap: 0.8rem 0.45rem; }
