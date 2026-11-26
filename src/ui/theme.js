@@ -55,9 +55,9 @@ export function fitScale() {
     const hgt = window.innerHeight;
     const landscape = w > hgt * 1.05;
     root.dataset.orient = landscape ? "landscape" : "portrait";
-    // A phone grows with its width; a tablet or a computer keeps a comfortable size and uses
-    // its extra room for more of the board, the timeline and the page (the app fills the screen).
-    const k = landscape ? Math.min(1.2, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.25, Math.max(1.05, w / 640));
+    // A phone grows with its width; a tablet or a computer is the phone made bigger (the owner, 21
+    // November: "폰에서 화면만 키운 느낌으로"): the same screens, their type and buttons larger.
+    const k = landscape ? Math.min(1.35, Math.max(0.85, hgt / 560)) : w <= 520 ? Math.min(1.2, Math.max(0.8, w / 360)) : Math.min(1.4, Math.max(1.05, w / 600));
     root.style.setProperty("--k", String(k));
   };
   set();

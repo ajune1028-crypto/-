@@ -33,9 +33,18 @@ export const STEADY_NAMES = ["끔", "약", "중", "강"];
 /** How long a line is held still before it becomes a shape. */
 const SHAPE_HOLD_MS = 600;
 
-export function inkColor(c) {
-  if (c === "black") return INK[currentTheme()];
+export function inkColor(c, fixed = false) {
+  if (c === "black") return fixed ? INK.light : INK[currentTheme()];
   return COLORS[c] || c;
+}
+
+/**
+ * 그림 방 and 애니메이션 방 draw on a paper of their own colour, not the app's: their black is always
+ * the same black (the owner, 21 November: "밝기 모드를 다르게 해도 펜의 색깔 안 바뀌게"). A stroke drawn
+ * there keeps that very colour, so it stays so wherever it is taken.
+ */
+export function fixedInk(c) {
+  return c === "black" ? INK.light : c;
 }
 
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -318,7 +327,8 @@ export class InkLayer {
    * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
    * or nothing; onLassoMove(ids, dx, dy) → the moved strokes' new ids (the room keeps the move).
    */
-  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null }) {
+  constructor({ host, ink, onStroke, onErase, blocked = () => false, room = () => 0, view = null, shapes = () => true, onShape = () => {}, grow = true, maxPixels = Infinity, share = null, steady = () => 0, onPick = null, pick = null, onLasso = null, onLassoMove = null, fixedInk = false }) {
+    this.fixedInk = fixedInk; // 그림 방, 애니메이션 방: black stays black in 어둡게
     this.host = host;
     this.onLasso = onLasso;
     this.onLassoMove = onLassoMove;
@@ -961,7 +971,7 @@ export class InkLayer {
   }
 
   paint(g, pts, color, px, brush, shaped = false, alpha = 1) {
-    paintStroke(g, pts, color, px, brush, shaped, alpha);
+    paintStroke(g, pts, this.fixedInk ? fixedInk(color) : color, px, brush, shaped, alpha);
   }
 
   destroy() {
@@ -1116,7 +1126,10 @@ function brushPreview(brush, color, width) {
  * lie in one row. pen: { tool, brush, color, width, size }; setTool(tool) applies a change;
  * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
-export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false }) {
+export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false }) {
+  // In 그림 방 and 애니메이션 방 black is shown as the black it draws (it never turns with 어둡게).
+  const shown = (c) => inkColor(c, fixed);
+  const drawn = (c) => (fixed ? fixedInk(c) : c);
   panel.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return void closeInkPop();
@@ -1132,7 +1145,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   const brushNow = h("button", { class: "ink-tool ink-brush-now", id: "ink-brush-now", type: "button", "aria-label": `붓: ${brushName} (눌러서 붓 고르기)`,
     "aria-pressed": String(pen.tool === "pen"), "aria-expanded": String(inkPop?.kind === "brush"),
     onclick: () => (pen.tool !== "pen" ? setTool("pen") : togglePop("brush", brushNow)) },
-    brushPreview(pen.brush, pen.color, pen.width), h("span", { class: "ink-tool-name", text: brushName }));
+    brushPreview(pen.brush, drawn(pen.color), pen.width), h("span", { class: "ink-tool-name", text: brushName }));
   const eraserButton = iconButton("eraser", "eraser", "지우개 (다시 누르면 부분·획)", () => (erasing ? togglePop("erase", eraserButton) : setTool(eraserKind())));
   eraserButton.setAttribute("aria-pressed", String(erasing));
   const laserButton = iconButton("ink-laser", "laser", "가리키기 (친구 화면에 빛으로, 남지 않아요)", () => setTool(pointing ? "pen" : "laser"));
@@ -1141,7 +1154,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
   lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
   const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
-    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": inkColor(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
+    "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": shown(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
   const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
     ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
       onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
@@ -1166,7 +1179,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       const look = brushLook(erasing ? "erase" : pen.brush);
       const d = Math.max(2, Math.min(220, (v * (100 / 16) * (look.scale || 1)) / (units?.() || 100 / 16)));
       peek.style.width = peek.style.height = d.toFixed(1) + "px";
-      peek.style.background = erasing ? "transparent" : inkColor(pen.color);
+      peek.style.background = erasing ? "transparent" : shown(pen.color);
       peek.classList.toggle("erase", erasing);
     };
     const set = (v) => {
@@ -1232,7 +1245,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
         h("div", { class: "ink-brushes", role: "group", "aria-label": "붓" },
           ...BRUSH_NAMES.map(([b, name]) => h("button", { class: "ink-brush", type: "button", data: { brush: b }, "aria-pressed": String(pen.tool === "pen" && pen.brush === b), "aria-label": name,
             onclick: () => { setSetting(store, "inkBrush", b); closeInkPop(); choose({ brush: b }); } },
-            brushPreview(b, pen.color, pen.width), h("span", { class: "ink-brush-name", text: name })))),
+            brushPreview(b, drawn(pen.color), pen.width), h("span", { class: "ink-brush-name", text: name })))),
         h("div", { class: "ink-pop-row" },
           h("button", { class: "ink-shapes chip", id: "ink-shapes", type: "button", "aria-pressed": String(shapes), title: "그리고 잠깐 멈추면 반듯한 선·동그라미·네모로",
             onclick: () => { setSetting(store, "inkShapes", !shapes); pop.fill(); } }, "모양 잡기"),
@@ -1243,7 +1256,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       mount(el,
         h("div", { class: "ink-colors", role: "group", "aria-label": "색" },
           ...INK_COLORS.map((c) => h("button", { class: "ink-color", type: "button", data: { ink: c }, "aria-label": c, "aria-pressed": String(!erasing && pen.color === c),
-            style: { background: inkColor(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
+            style: { background: shown(c) }, onclick: () => { closeInkPop(); choose({ color: c }); } })),
           inkWell()),
         recent.length ? h("div", { class: "ink-colors recent", role: "group", "aria-label": "최근 색" },
           ...recent.map((c) => h("button", { class: "ink-color", type: "button", data: { recent: c }, "aria-label": "최근 색 " + c, "aria-pressed": String(pen.color === c),
@@ -1265,7 +1278,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
         closeInkPop();
         openColorWheel({
           anchor,
-          color: own ? pen.color : inkColor(pen.color),
+          color: own ? pen.color : shown(pen.color),
           recent: getSettings(store).inkRecent || [],
           // While the finger moves only the pen and the colour dot change; the lift chooses it.
           onPick: (hex, done) => {

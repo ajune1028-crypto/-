@@ -10,10 +10,10 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, opacityOf, moveStrokesOps } from "../core/ink.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -73,6 +73,7 @@ export function mountDrawRoom(body, app, session, frame) {
     };
     let lasso = null;
     const ink = new InkLayer({
+      fixedInk: true,
       // 올가미 on this layer: lines drawn round are held, taken anywhere, recoloured, copied or rubbed out.
       onLasso: (info) => lasso?.show(info),
       onLassoMove: (ids, dx, dy) => {
@@ -91,9 +92,9 @@ export function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, size, brush, shape }) => {
+      onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
         if (readOnly()) return;
-        const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
+        const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
         session.commit(name, made.ops);
         record(made.atoms.map((atom) => ({ ...atom, doc: name })));
         thumbSoon(layer.id);
@@ -154,7 +155,7 @@ export function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -196,7 +197,7 @@ export function mountDrawRoom(body, app, session, frame) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, c.width, c.height);
     g.setTransform(c.width / PAGE_W, 0, 0, c.height / PAGE_H, 0, 0);
-    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
+    for (const s of session.doc(inkDocOf(id)).strokes()) paintStroke(g, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
   }
 
   function drawPanel() {
@@ -328,6 +329,7 @@ export function mountDrawRoom(body, app, session, frame) {
       nameOf: (m) => (m === session.memberId ? "나" : session.room.member(m)?.name || "친구"),
       colorOf: (m) => { const member = session.room.member(m); return member ? personColor(member, currentTheme()) : "#8c919c"; },
       title: session.room.meta("name") || "그림",
+      fixed: true,
     });
   }
 
@@ -353,7 +355,7 @@ export function mountDrawRoom(body, app, session, frame) {
       one.height = hgt;
       const lg = one.getContext("2d");
       lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, s.c, widthOf(s), brushOf(s), !!s.q);
+      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
       g.globalAlpha = layer.opacity;
       g.globalCompositeOperation = layer.mode;
       g.drawImage(one, 0, 0);

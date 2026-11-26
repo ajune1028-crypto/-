@@ -8,13 +8,13 @@
 // own drawing, with the same brushes, gestures and live lines as 그림 방.
 
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke, lassoActions } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { PAGE_W, PAGE_H } from "./draw-room.js";
 import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
-import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps } from "../core/ink.js";
+import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } from "../core/ink.js";
 import { PAPERS } from "../core/draw.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting } from "../identity.js";
@@ -64,6 +64,7 @@ export function mountAnimRoom(body, app, session) {
     if (current) thumbSoon(current);
   };
   ink = new InkLayer({
+    fixedInk: true,
     host: inkHost,
     grow: false,
     onLasso: (info) => lasso?.show(info),
@@ -80,10 +81,10 @@ export function mountAnimRoom(body, app, session) {
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
     onPick: (color) => { pen.color = color; setTool(pen.tool); },
-    onStroke: ({ pts, color, width, size, brush, shape }) => {
+    onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
       if (readOnly() || !current) return null;
       const name = curDoc();
-      const made = strokeOps(session.clock, session.doc(name), { pts, color, width, size, brush, shape, by: session.memberId });
+      const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
       session.commit(name, made.ops);
       record(made.atoms.map((atom) => ({ ...atom, doc: name })));
       thumbSoon(current);
@@ -138,7 +139,7 @@ export function mountAnimRoom(body, app, session) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => ink.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx() });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -185,7 +186,7 @@ export function mountAnimRoom(body, app, session) {
   /** One frame's strokes onto a context sized w × hgt; tint: every stroke in that one colour. */
   function paintFrame(g, id, w, hgt, tint = null) {
     g.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || s.c, widthOf(s), brushOf(s), !!s.q);
+    for (const s of session.doc(frameDocOf(id)).strokes()) paintStroke(g, s.pts, tint || fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s));
   }
 
   const neighbours = () => {
@@ -487,7 +488,7 @@ export function mountAnimRoom(body, app, session) {
     const atoms = made.atoms.map((atom) => ({ ...atom, doc: "anim" }));
     const name = frameDocOf(made.id);
     for (const s of from.strokes()) {
-      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: s.c, width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, by: session.memberId });
+      const one = strokeOps(session.clock, session.doc(name), { pts: s.pts, color: fixedInk(s.c), width: s.w, size: s.z ? s.z / 10 : undefined, brush: s.b || "pen", style: s.s, shape: !!s.q, opacity: opacityOf(s), by: session.memberId });
       session.commit(name, one.ops);
       atoms.push(...one.atoms.map((atom) => ({ ...atom, doc: name })));
     }

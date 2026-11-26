@@ -4,7 +4,7 @@
 // jump along it, and 영상으로 저장 where the browser can record a canvas.
 
 import { h, toast } from "./dom.js";
-import { paintStroke } from "./ink.js";
+import { paintStroke, fixedInk } from "./ink.js";
 import { brushOf, widthOf, opacityOf } from "../core/ink.js";
 import { replayPlan, strokePart } from "../core/timelapse.js";
 
@@ -14,7 +14,7 @@ const SPEEDS = [1, 2, 4];
  * layers: [{ strokes, opacity, mode }] bottom first; pageW/pageH in stroke units; paper: its colour;
  * nameOf(member), colorOf(member); title for a saved video. Returns { close }.
  */
-export function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, title = "그림" }) {
+export function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, colorOf, title = "그림", fixed = false }) {
   const plan = replayPlan(layers.map((l, i) => ({ layer: i, strokes: l.strokes })));
   const canvas = h("canvas", { class: "tl-canvas", id: "tl-canvas", "aria-label": "그린 과정" });
   const fill = h("span", { class: "tl-fill" });
@@ -62,7 +62,7 @@ export function openTimelapse({ root, layers, pageW, pageH, paper, nameOf, color
   function paintOn(c, item, pts) {
     const lg = c.getContext("2d");
     lg.setTransform(k, 0, 0, k, 0, 0);
-    paintStroke(lg, pts, item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q, opacityOf(item.stroke));
+    paintStroke(lg, pts, fixed ? fixedInk(item.stroke.c) : item.stroke.c, widthOf(item.stroke), brushOf(item.stroke), !!item.stroke.q, opacityOf(item.stroke));
     lg.setTransform(1, 0, 0, 1, 0, 0);
   }
 

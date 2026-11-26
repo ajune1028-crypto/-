@@ -1110,7 +1110,8 @@ scenario("wide screen: lying down or on a computer the app and the writing take 
   const r = await page.eval(`(() => { const b = document.querySelector("#app").getBoundingClientRect(); const s = document.querySelector(".sheets").getBoundingClientRect(); return { orient: document.documentElement.dataset.orient, width: b.width, height: b.height, sheetLeft: s.left, sheetWidth: s.width, scroll: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(${TODAY}.querySelector(".draw")).fontSize), rem: parseFloat(getComputedStyle(document.documentElement).fontSize) }; })()`);
   assert.equal(r.orient, "landscape");
   assert.ok(r.width === 1280 && r.height === 800 && r.scroll <= 1280, JSON.stringify(r));
-  assert.ok(Math.abs(r.rem - 19.2) < 0.01 && Math.abs(r.font - 19.2) < 0.1, "scaled by the height: " + JSON.stringify(r));
+  // A big screen is the phone made bigger (the owner, 21 November): 800 high gives 16 × 1.35.
+  assert.ok(Math.abs(r.rem - 21.6) < 0.01 && Math.abs(r.font - 21.6) < 0.1, "scaled by the height: " + JSON.stringify(r));
   assert.ok(r.sheetWidth >= 1280 - 4 * r.rem, "the writing takes the width: " + JSON.stringify(r));
   await page.shot(out("room-wide.png"));
 });
@@ -5515,6 +5516,47 @@ scenario("whiteboard bar and tools stay where they are let go: the bar low on th
 
 // The owner: "그림 방도 만들고… 실시간으로 같이 그림 그리는 거", "레이어". One page drawn on together: what
 // one draws, the friend sees; layers are added, chosen, hidden, made see-through and blended, for both.
+// The owner (21 November): "밝은 모드에서 검정 펜으로 그렸던 게 어두운 모드에서는 다른 색깔로 보여… 그림 모드,
+// 애니메이션 모드에서 밝기 모드를 다르게 해도 펜의 색깔 안 바뀌게… 다른 곳에 옮겨도 안 변하게".
+scenario("그림 방 ink keeps its colour in 밝게 and 어둡게: a black line drawn in the dark is dark on the white paper, kept as that very colour (so it stays so wherever it goes), and the same after the theme turns", async ({ open }) => {
+  const a = await open({ dark: true, width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "어둠 속 그림");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1 && matchMedia("(prefers-color-scheme: dark)").matches`);
+  const p = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const y = p.y + p.h * 0.4;
+  await a.press(p.x + p.w * 0.2, y);
+  for (let i = 1; i <= 10; i++) await a.moveTo(p.x + p.w * (0.2 + 0.05 * i), y);
+  await a.release(p.x + p.w * 0.7, y);
+  const layerDoc = `window.__app.session.doc("k:L" + window.__app.session.doc("draw").layers()[0].id)`;
+  await a.waitFor(`${layerDoc}.strokes().length === 1`);
+  assert.equal(await a.eval(`${layerDoc}.strokes()[0].c`), "#1b2030", "kept as the black it was drawn in");
+  // On the screen: dark where the line is, in 어둡게 and again in 밝게.
+  const inkAt = () => a.eval(`(() => {
+    const c = document.querySelector(".draw-layer canvas"); const r = c.getBoundingClientRect();
+    const g = c.getContext("2d"); const x = Math.round((${p.x + p.w * 0.45} - r.left) * c.width / r.width), yy = Math.round((${y} - r.top) * c.height / r.height);
+    const d = g.getImageData(x - 2, yy - 2, 5, 5).data; let best = 765;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) best = Math.min(best, d[i] + d[i + 1] + d[i + 2]);
+    return best;
+  })()`);
+  await a.front();
+  await pause(150);
+  const dark = await inkAt();
+  assert.ok(dark < 200, "a dark line in 어둡게: " + dark);
+  await click(a, "#room-settings");
+  await click(a, '[data-theme-choice="light"]');
+  await a.waitFor(`document.documentElement.dataset.theme === "light"`);
+  await a.key("Escape");
+  await pause(300);
+  const light = await inkAt();
+  assert.ok(light < 200 && Math.abs(light - dark) < 30, "the same in 밝게: " + [dark, light]);
+});
+
 scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden and made see-through shows the same for both; undo takes a layer away", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 420, height: 860 });
   await click(a, "#add-creative");
