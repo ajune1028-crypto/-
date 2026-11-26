@@ -180,6 +180,7 @@ export function showHome(app) {
       clearTimeout(timer);
       // With 햇살 out, its own houses take the room; otherwise the world of houses rises from below.
       lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseArc() };
+      if (lift.dock) lift.dock.onSpin = () => { if (lift?.moved && lift.at) overAt(...lift.at); };
       row.classList.add("lifted");
       try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
       buzz(app, 10);
@@ -212,7 +213,14 @@ export function showHome(app) {
         document.body.append(lift.ghost);
       }
       lift.ghost.style.translate = `${x}px ${y}px`;
-      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house, .home-panel .house-tile, .home-panel[data-drop-house]") || null;
+      lift.at = [x, y];
+      overAt(x, y);
+      // Near either end of the planet, it turns to bring the houses further along.
+      lift.dock?.follow(x, y);
+    };
+    /** The house under the finger lights up (read again as the planet turns under a still finger). */
+    const overAt = (x, y) => {
+      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house:not(.far), .home-panel .house-tile, .home-panel[data-drop-house]") || null;
       if (target !== lift.over) {
         lift.over?.classList.remove("over");
         target?.classList.add("over");

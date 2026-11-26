@@ -291,6 +291,10 @@ export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1)
   g.restore();
 }
 
+// The glass that floats over a drawing in every room: bars, tools, the frames' strip.
+const XRAY_PARTS = ".bar, .toolbar, .board-top, .board-modes, .board-rail, .ink-tools, .anim-strip";
+const XRAY_NEAR = 56; // px: how near the pen comes before the glass opens around it
+
 export class InkLayer {
   /**
    * host     the element to draw over (gets position: relative)
@@ -503,6 +507,7 @@ export class InkLayer {
       if (!this.tool || this.live || this.blocked()) return;
       e.preventDefault();
       c.setPointerCapture?.(e.pointerId);
+      this.xrayStart(e.clientX, e.clientY);
       if (this.tool === "lasso") {
         // 올가미: inside what it holds, the finger takes it anywhere; elsewhere a new loop is drawn.
         const [x, y] = this.point(e);
@@ -556,6 +561,7 @@ export class InkLayer {
     });
     c.addEventListener("pointermove", (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
+      this.xrayAt(e.clientX, e.clientY);
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
       if (live.moving) {
@@ -601,6 +607,7 @@ export class InkLayer {
     });
     const end = (e) => {
       if (!this.live || e.pointerId !== this.live.pointer) return;
+      this.xrayEnd();
       const live = this.live;
       if (live.moving) {
         this.live = null;
@@ -809,19 +816,34 @@ export class InkLayer {
     // moves); while a line is being drawn only that line is painted over it each frame.
     const shift = this.shift;
     const t = g.getTransform();
-    const key = [this.ink().version, w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
+    const ink = this.ink();
+    const version = ink.version;
+    const key = [w, hgt, t.a, t.b, t.c, t.d, t.e, t.f, shift ? `${shift.dx},${shift.dy},${shift.ids.size}` : "", currentTheme()].join("|");
     // The picture belongs to one drawing (a layer can be pointed at another one: 애니메이션 방's frames).
-    if (!this.kept || this.kept.key !== key || this.kept.doc !== this.ink()) {
-      const pic = this.kept?.canvas || document.createElement("canvas");
-      pic.width = w;
-      pic.height = hgt;
-      const pg = pic.getContext("2d");
-      pg.setTransform(t);
-      for (const s of this.ink().strokes()) {
-        const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
-        this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+    const kept = this.kept;
+    if (!kept || kept.key !== key || kept.doc !== ink || kept.version !== version) {
+      const strokes = ink.strokes();
+      const last = strokes[strokes.length - 1];
+      // One line added on top of what the picture already holds (the line just drawn, or a friend's
+      // newest): only that line is painted onto it. Redrawing every line each time a line ended held
+      // up the next line's start on a full board (the owner: "한 선 한 선 그릴 때마다 끊겨").
+      if (kept && kept.key === key && kept.doc === ink && !shift && last && strokes.length === kept.count + 1 && (kept.count === 0 || strokes[strokes.length - 2]?.id === kept.lastId)) {
+        const pg = kept.canvas.getContext("2d");
+        pg.setTransform(t);
+        this.paint(pg, last.pts, last.c, widthOf(last), brushOf(last), !!last.q, opacityOf(last));
+        Object.assign(kept, { version, count: strokes.length, lastId: last.id });
+      } else {
+        const pic = kept?.canvas || document.createElement("canvas");
+        pic.width = w;
+        pic.height = hgt;
+        const pg = pic.getContext("2d");
+        pg.setTransform(t);
+        for (const s of strokes) {
+          const pts = shift && shift.ids.has(s.id) ? s.pts.map((v, i) => (i % 3 === 0 ? v + shift.dx : i % 3 === 1 ? v + shift.dy : v)) : s.pts;
+          this.paint(pg, pts, s.c, widthOf(s), brushOf(s), !!s.q, opacityOf(s));
+        }
+        this.kept = { key, version, canvas: pic, doc: ink, t, count: strokes.length, lastId: last?.id ?? null };
       }
-      this.kept = { key, canvas: pic, doc: this.ink(), t };
     }
     const live = this.live;
     // 문지르기 being drawn is the picture itself, smudged further as the finger goes on.
@@ -950,6 +972,46 @@ export class InkLayer {
     g.restore();
   }
 
+  /**
+   * 엑스레이 (the owner, 22 November: "흐려지는 거는 하지 마… 그 선이 UI 때문에 가려졌으면 그 선 근처
+   * UI들을 조금 지워 줘… 게임에서 캐릭터가 나무에 가려지면 조금씩 보이는 것처럼"): nothing steps back
+   * while a line is drawn (making every bar fade at each pen-down stuttered the line's start); only the
+   * floating glass the pen comes near opens a soft round window around the pen, and closes behind it.
+   * Where the glass stands is read once as the pen goes down.
+   */
+  xrayStart(x, y) {
+    const room = this.host.closest(".room");
+    const parts = room ? [...room.querySelectorAll(XRAY_PARTS)] : [];
+    // The glass itself, not a box that only holds glass (one window, never two over each other).
+    this.xr = parts.filter((el) => !parts.some((o) => o !== el && el.contains(o)))
+      .map((el) => ({ el, r: el.getBoundingClientRect(), on: false })).filter((p) => p.r.width > 0 && p.r.height > 0);
+    this.xrAt = null;
+    this.xrayAt(x, y);
+  }
+
+  xrayAt(x, y) {
+    if (!this.xr?.length) return;
+    if (this.xrAt && Math.abs(this.xrAt[0] - x) + Math.abs(this.xrAt[1] - y) < 2) return;
+    this.xrAt = [x, y];
+    for (const p of this.xr) {
+      const r = p.r;
+      const near = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom)) < XRAY_NEAR;
+      if (near) {
+        p.el.style.setProperty("--xr-x", Math.round(x - r.left) + "px");
+        p.el.style.setProperty("--xr-y", Math.round(y - r.top) + "px");
+      }
+      if (near !== p.on) {
+        p.on = near;
+        p.el.classList.toggle("xray", near);
+      }
+    }
+  }
+
+  xrayEnd() {
+    for (const p of this.xr || []) if (p.on) p.el.classList.remove("xray");
+    this.xr = null;
+  }
+
   /** One drawing per frame however many points came. */
   renderSoon() {
     if (this.frame) return;
@@ -1051,13 +1113,15 @@ function smudgeAlong(g, points, size, look, real, from = 1, upto = Infinity) {
 
 /** 문지르기 while it is being drawn: the picture smudged so far, kept, smudged further each frame. */
 function wetPicture(live, kept, color, px, alpha = 1) {
-  if (!live.wet || live.wet.key !== kept.key) {
+  // The picture changes without its key when a line is painted onto it (a friend's): its version tells.
+  const key = kept.key + "|" + kept.version;
+  if (!live.wet || live.wet.key !== key) {
     const c = live.wet?.canvas || document.createElement("canvas");
     c.width = kept.canvas.width;
     c.height = kept.canvas.height;
     const wg = c.getContext("2d");
     wg.drawImage(kept.canvas, 0, 0);
-    live.wet = { key: kept.key, canvas: c, done: 1 };
+    live.wet = { key, canvas: c, done: 1 };
   }
   const pts = thinPoints(live.pts);
   if (pts.length < 6) return live.wet.canvas;

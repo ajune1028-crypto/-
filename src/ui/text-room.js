@@ -3,7 +3,7 @@
 import { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame, closeOnOutside } from "./dom.js";
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
-import { watchFingers, watchFingerTaps } from "./fingers.js";
+import { watchFingers, watchFingerTaps, toggleBare } from "./fingers.js";
 import { onThemeChange } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
@@ -160,6 +160,7 @@ export function mountTextRoom(body, app, session) {
   const stopTaps = watchFingerTaps(body, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(body.closest(".room"), flashHint),
   });
   // Two fingers also carry the page (the owner, 21 November: "그림 모드일 때 두 손으로 아래 넘기기도"):
   // moved together they scroll it, spread or pinched they zoom it, both at once as in Procreate.

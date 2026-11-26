@@ -985,7 +985,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools .icon-btn svg { width: 1.1rem; height: 1.1rem; }
 .ink-tools .icon-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
 /* The tools' rail (ArtCraft's paint page side toolbar; Procreate's and ibisPaint's size bar): slim glass
-   at the left edge, the middle of the screen, icons only; it fades while a line is drawn. */
+   at the left edge, the middle of the screen, icons only; where the pen comes near it, it opens around the pen. */
 .ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
 .ink-tools.rail::-webkit-scrollbar { display: none; }
 .room[data-kind] > .ink-tools.rail { position: fixed; }
@@ -1547,9 +1547,12 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .room[data-bar-size="3"] .board-modes button { min-height: 3.2rem; font-size: 1.05rem; }
 .room[data-modes-icons="true"] .board-modes button svg { width: 1.2rem; height: 1.2rem; }
 .room[data-modes-icons="true"] .board-modes { width: auto; }
-/* While the pen is on the board, everything over it steps back. */
-.room.inking-now > .bar, .room.inking-now .board-top, .room.inking-now .board-rail, .room.inking-now > .toolbar, .room.inking-now .ink-tools { opacity: 0.12; transition: opacity 0.2s var(--ease); }
-.room > .bar, .board-top, .board-rail, .room > .toolbar, .ink-tools { transition: opacity 0.35s var(--ease); }
+/* Four fingers tapped (Procreate's 전체 화면): the tools step out of the way until four fingers again. */
+.room > .bar, .room .toolbar, .room .board-top, .room .board-rail, .room .ink-tools, .room .anim-strip { transition: opacity 0.25s var(--ease); }
+.room.bare > .bar, .room.bare .toolbar, .room.bare .board-top, .room.bare .board-rail, .room.bare .ink-tools, .room.bare .anim-strip { opacity: 0; pointer-events: none; }
+/* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
+   character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
+.xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }
@@ -1641,14 +1644,27 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .arc-glow-edge { stop-color: color-mix(in srgb, var(--paper) 66%, var(--tint)); stop-opacity: 0.92; }
 .arc-ring { fill: none; stroke: color-mix(in srgb, var(--tint) 70%, var(--ink)); stroke-width: 1.1; stroke-dasharray: 1; stroke-linecap: round; opacity: 0.45; }
 .arc-ring.rim { stroke-width: 2; opacity: 0.85; }
-.house-arc .dock-house { position: absolute; width: 4.4rem; padding: 0; border: 0; background: none; color: var(--ink); transform: translate(-50%, -100%) scale(var(--s, 1)); transform-origin: 50% 100%; }
-.house-arc .dock-house.over { transform: translate(-50%, -100%) translateY(-8px) scale(calc(var(--s, 1) * 1.18)); }
+/* A house on the planet: its foot on the ground, standing out from the middle like a house on a small
+   world; its name on the ground under it. Held over, it grows and lights up to take the room in. */
+.house-arc .dock-house { position: absolute; left: 0; top: 0; display: block; width: 0; height: 0; padding: 0; border: 0; background: none; color: var(--ink); pointer-events: auto; transform-origin: 0 0; }
+.house-arc .dock-house.far { pointer-events: none; }
+.house-arc .dock-body { position: absolute; left: 0; bottom: -0.15rem; display: block; width: var(--hw); translate: -50% 0; scale: var(--s); transform-origin: 50% 100%; transition: scale 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), translate 0.24s var(--ease), filter 0.24s var(--ease); }
+.house-arc .dock-body .house-shape { filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--house, #888) 30%, transparent)); }
+.house-arc .dock-body .house-plan { aspect-ratio: 1; border-radius: 0.9rem 0.9rem 0.35rem 0.35rem; background: color-mix(in srgb, var(--paper) 40%, transparent); }
+.house-arc .dock-name { position: absolute; left: 0; top: 0.3rem; max-width: none; width: calc(var(--hw) * var(--s) + 0.8rem); translate: -50% 0; text-align: center; font-size: 0.64rem; font-weight: 750; color: var(--ink); opacity: 0.78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity 0.2s var(--ease); }
+.house-arc .dock-house.over .dock-body { scale: calc(var(--s) * 1.32); translate: -50% -0.35rem; filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--tint) 65%, transparent)); }
+.house-arc .dock-house.over .dock-name { opacity: 1; }
+.arc-air { fill: none; stroke: color-mix(in srgb, var(--tint) 50%, transparent); stroke-width: 10; opacity: 0.32; filter: blur(6px); }
+.arc-ground circle { fill: color-mix(in srgb, var(--tint) 50%, var(--ink)); opacity: 0.16; }
 .dock-hint { font-size: 0.72rem; font-weight: 700; color: var(--soft); text-align: center; }
 .arc-hint { position: absolute; left: 0; right: 0; bottom: calc(0.9rem + env(safe-area-inset-bottom)); margin: 0; font-size: 0.78rem; color: var(--ink); opacity: 0.72; }
 /* The world itself is frosted glass in my colour: home's buttons below it do not show through. */
 .arc-glass { position: absolute; border-radius: 50%; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 78%, var(--tint) 10%); box-shadow: var(--glass-shine), 0 -14px 36px color-mix(in srgb, var(--tint) 24%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
 .arc-face { opacity: 0.55; }
 .arc-catcher { position: fixed; inset: 0; z-index: 79; }
+/* Waiting for a tap, the planet itself can be slid to turn it (its round glass takes the finger). */
+.house-arc.choosing .arc-glass { pointer-events: auto; touch-action: none; cursor: grab; }
+.house-arc.choosing .dock-house { touch-action: none; }
 .dock-house { flex: none; display: grid; justify-items: center; gap: 0.15rem; width: 4rem; pointer-events: auto; transition: transform 0.2s var(--ease); }
 .dock-house.over { transform: translateY(-6px) scale(1.16); }
 .dock-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; font-weight: 700; }

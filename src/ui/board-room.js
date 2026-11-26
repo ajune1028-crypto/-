@@ -15,7 +15,7 @@
 // off, and it closes itself the shortest way when the end does not reach the start.
 
 import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swallowPress, flashHint, mount } from "./dom.js";
-import { watchFingers, watchFingerTaps } from "./fingers.js";
+import { watchFingers, watchFingerTaps, toggleBare } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
 import { timeText } from "./song-view.js";
@@ -311,10 +311,8 @@ export function mountBoardRoom(body, app, session, frame) {
     },
   });
   surface.prepend(boardInk.canvas);
-  // While the pen is on the board, the bars and tools step back (the owner chose "그릴 때 막대 옅어지기").
-  const inkingNow = (on) => body.closest(".room")?.classList.toggle("inking-now", on);
-  boardInk.canvas.addEventListener("pointerdown", () => { if (pen.tool) inkingNow(true); });
-  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) boardInk.canvas.addEventListener(type, () => inkingNow(false));
+  // Nothing steps back while the pen draws (the bars fading at each pen-down stuttered the line); the
+  // glass the pen comes near opens around it instead (엑스레이, ui/ink.js).
 
   /** 그리기 on or off (null). The pen belongs to 전체: turning it on there from any mode. */
   function setPen(tool) {
@@ -1350,6 +1348,7 @@ export function mountBoardRoom(body, app, session, frame) {
   const stopTaps = watchFingerTaps(surface, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(surface.closest(".room"), flashHint),
   });
 
   function wireCard(el, id) {

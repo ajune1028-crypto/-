@@ -4875,7 +4875,7 @@ scenario("motion: the chosen mark runs like a drop of water from one mode to the
   assert.ok(Math.abs(pill.x - orig.x) < 1 && Math.abs(pill.w - orig.w) < 1, "on 원본 now: " + JSON.stringify([pill, orig]));
 });
 
-scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing the bars step back; 처음대로", async ({ open, out }) => {
+scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mode hidden, 노래 first, large); held and dragged to the left edge it stands there upright, the tools on the right; the tools held and let go on the left half stand on the left and the hint says so; while drawing nothing fades, only the bar the pen comes near opens around it; 처음대로", async ({ open, out }) => {
   const page = await open({ width: 700, height: 900 });
   await createBoard(page);
   const room = `document.querySelector(".room")`;
@@ -4926,14 +4926,27 @@ scenario("whiteboard bar: a long press opens 막대 꾸미기 (icons only, a mod
   assert.match(await page.eval(`document.querySelector(".board-hint")?.textContent || ""`), /왼쪽 아이콘으로/, "the hint names the side");
   await page.front();
   await page.shot(out("board-bar-left.png"));
-  // Drawing: the bars step back while the pen is down.
+  // Drawing: nothing steps back (the bars fading at each pen-down stuttered the line: the owner, 22
+  // November); only the glass the pen comes near opens around it (엑스레이), and closes behind it.
   await click(page, "#board-pen");
   const p = await page.eval(`(() => { const b = document.getElementById("room-body").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  const modes = await page.eval(`(() => { const b = document.querySelector(".board-modes").getBoundingClientRect(); return { right: b.right, top: b.top, bottom: b.bottom }; })()`);
   await page.stylus("down", p[0], p[1]);
   await page.stylus("move", p[0] + 30, p[1] + 10);
-  assert.ok(await page.eval(`${room}.classList.contains("inking-now")`), "stepped back while drawing");
-  await page.stylus("up", p[0] + 60, p[1] + 20);
-  await page.waitFor(`!${room}.classList.contains("inking-now")`);
+  assert.equal(await page.eval(`document.querySelectorAll(".xray").length`), 0, "far from every bar: nothing changes");
+  assert.equal(await page.eval(`getComputedStyle(document.querySelector(".board-modes")).opacity`), "1", "no bar fades");
+  // Toward the upright bar on the left: it opens around the pen; the others stay as they are.
+  for (let i = 1; i <= 8; i++) await page.stylus("move", p[0] + 30 - ((p[0] + 30 - (modes.right + 20)) * i) / 8, p[1] + 10);
+  await page.waitFor(`document.querySelector(".board-modes").classList.contains("xray")`, 2000);
+  // Only glass by the pen opens (here the bar and the tools beside it), never a box that holds glass.
+  const tip = [modes.right + 20, p[1] + 10];
+  const opened = await page.eval(`[...document.querySelectorAll(".xray")].map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, d: Math.hypot(Math.max(r.left - ${tip[0]}, 0, ${tip[0]} - r.right), Math.max(r.top - ${tip[1]}, 0, ${tip[1]} - r.bottom)) }; })`);
+  assert.ok(opened.every((o) => o.d < 60 && !/board-top/.test(o.cls)), "only the glass by the pen: " + JSON.stringify(opened));
+  assert.ok(!(await page.eval(`document.querySelector(".room > .bar")?.classList.contains("xray")`)), "the top bar, far away, stays as it is");
+  const hole = await page.eval(`(() => { const el = document.querySelector(".board-modes"); return [el.style.getPropertyValue("--xr-x"), getComputedStyle(el).maskImage || getComputedStyle(el).webkitMaskImage]; })()`);
+  assert.ok(/px$/.test(hole[0]) && /radial-gradient/.test(hole[1]), "a round window where the pen is: " + JSON.stringify(hole));
+  await page.stylus("up", modes.right + 20, p[1] + 10);
+  await page.waitFor(`document.querySelectorAll(".xray").length === 0`, 2000);
   // 처음대로.
   await click(page, "#board-pen");
   await hold(".board-modes button");
@@ -5178,20 +5191,21 @@ scenario("brushes fit: on a 360-wide phone the tools' rail (brush, eraser, 가�
 // The owner (21 November): "방 꾹 누르면 어디 집에 넣을지 뜨는데 아이패드는 안 떠" / "큰 원의 3분의 1… 윗부분이
 // 우선 나오는데 거기에 내가 생성한 집이… 가운데에 플러스… 촤라라락 펼쳐지듯이" / "두 손가락으로 동시에 누르면
 // 세부 정보… 마우스는 왼쪽 오른쪽 같이". The world of houses, and the room's details by two fingers or the mouse.
-scenario("home 집 고르기: held, a room raises a world of houses from the bottom (+ at its top, the houses evenly to both sides, all on the screen); let go without moving it stays for a tap on a house; a tap outside closes it; a finger's contextmenu (as an iPad sends while held) changes nothing; the mouse's right button gives the room's details", async ({ open, out }) => {
+scenario("home 집 고르기: held, a room raises a small planet with my houses built on it (house 1 in the middle, the next ones to its right, + right beside house 1, all on the screen); drawn over a house it grows; let go without moving it stays for a tap; a slide turns the planet; held near its end the planet turns; a tap outside closes it; a finger's contextmenu changes nothing; the mouse's right button gives the room's details", async ({ open, out }) => {
   const page = await open({ width: 390, height: 844 });
   for (const room of ["첫 방", "둘째 방"]) {
     await createRoom(page, { room });
     await click(page, "#back");
     await page.waitFor(q("#home"));
   }
-  await page.eval(`(() => { const st = window.__app.store; st.set("houses", ["가족", "친구", "일", "취미"].map((name, i) => ({ id: "h" + i, name, color: ["coral", "blue", "green", "violet"][i], icon: "home", rooms: [], at: i }))); return true; })()`);
-  await page.eval(`(() => { location.reload(); return true; })()`);
+  const names = ["가족", "친구", "일", "취미", "여행", "운동", "공부", "요리", "음악"];
+  const seed = (n) => page.eval(`(() => { const st = window.__app.store; st.set("houses", ${JSON.stringify(names)}.slice(0, ${n}).map((name, i) => ({ id: "h" + i, name, color: ["coral", "blue", "green", "violet"][i % 4], icon: "home", rooms: [], at: i }))); location.reload(); return true; })()`);
+  await seed(4);
   await pause(300);
   await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 2`);
   const rowOf = (name) => `[...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === ${JSON.stringify(name)})`;
   const at = await page.eval(`(() => { const b = ${rowOf("첫 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
-  // Held: the world comes up; a finger's contextmenu in the middle of it (an iPad sends one) is nothing more.
+  // Held: the planet comes up; a finger's contextmenu in the middle of it (an iPad sends one) is nothing more.
   await page.front();
   await page.touch("start", [at]);
   await pause(250);
@@ -5199,39 +5213,85 @@ scenario("home 집 고르기: held, a room raises a world of houses from the bot
   await pause(450);
   await page.waitFor(q("#house-dock .dock-new"));
   assert.ok(!(await page.eval(q("#room-actions"))), "no details from a finger's long press");
-  await pause(900);
-  const spots = await page.eval(`[...document.querySelectorAll("#house-dock .dock-house")].map((t) => { const r = t.getBoundingClientRect(); return { id: t.dataset.house, x: r.left + r.width / 2, l: r.left, r: r.right, b: r.bottom }; })`);
+  await pause(1100);
+  const spots = await page.eval(`[...document.querySelectorAll("#house-dock .dock-house")].map((t) => { const r = t.querySelector(".dock-body").getBoundingClientRect(); return { id: t.dataset.house, x: r.left + r.width / 2, w: r.width, l: r.left, r: r.right, b: r.bottom, seen: Number(getComputedStyle(t).opacity) > 0.5 }; })`);
   assert.equal(spots.length, 5, "+ and the four houses");
-  const plus = spots.find((t) => t.id === "new");
-  assert.ok(Math.abs(plus.x - 195) < 2, "+ in the middle: " + plus.x);
-  const rest = spots.filter((t) => t.id !== "new");
-  assert.equal(rest.filter((t) => t.x > 195).length, 2, "two to the right");
-  assert.equal(rest.filter((t) => t.x < 195).length, 2, "two to the left");
-  for (const t of spots) assert.ok(t.l >= -1 && t.r <= 391 && t.b <= 844, "on the screen: " + JSON.stringify(t));
+  const by = (id) => spots.find((t) => t.id === id);
+  assert.ok(Math.abs(by("h0").x - 195) < 2, "house 1 in the middle: " + by("h0").x);
+  assert.ok(by("new").x < by("h0").x, "+ right beside house 1, on its left");
+  assert.ok(by("h0").x < by("h1").x && by("h1").x < by("h2").x && by("h2").x < by("h3").x, "the next ones to its right, in order");
+  // What is seen stands whole on the screen; house 4 may still be round the planet's side.
+  for (const t of spots.filter((t) => t.seen)) assert.ok(t.l >= -1 && t.r <= 391 && t.b <= 844, "whole on the screen: " + JSON.stringify(t));
+  assert.ok(["new", "h0", "h1", "h2"].every((id) => by(id).seen), "+, house 1 and the two after it are seen");
+  assert.ok(by("h0").w < 60, "houses of a modest size, built on the planet: " + by("h0").w);
   await page.shot(out("house-arc.png"));
-  // Let go where it was held: the world stays for a tap.
+  // Drawn over house 2, it grows to take the room.
+  const h2 = by("h1");
+  await page.touch("move", [[at[0], at[1] - 40]]);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((h2.x - at[0]) * i) / 10, at[1] - 40 + ((h2.b - 20 - at[1] + 40) * i) / 10]]);
+  await page.waitFor(`document.querySelector('#house-dock [data-house="h1"]').classList.contains("over")`, 2000);
+  await pause(300);
+  const grown = await page.eval(`document.querySelector('#house-dock [data-house="h1"] .dock-body').getBoundingClientRect().width`);
+  assert.ok(grown > h2.w * 1.2, "it grows under the room: " + [h2.w, grown]);
+  await page.shot(out("house-arc-over.png"));
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === "h1").rooms.length === 1`, 3000);
+  // Let go where it was held: it stays for a tap.
+  await page.touch("start", [at]);
+  await pause(700);
   await page.touch("end");
   await pause(300);
   assert.ok(await page.eval(`!!document.querySelector("#house-dock.choosing")`), "it stays to be chosen from");
-  await click(page, '#house-dock [data-house="h1"]');
-  await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === "h1").rooms.length === 1`, 3000);
-  // Held again and let go: a tap outside closes it and touches nothing there.
-  const at2 = await page.eval(`(() => { const b = ${rowOf("둘째 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
-  await page.touch("start", [at2]);
+  await click(page, '#house-dock [data-house="h0"] .dock-body');
+  await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === "h0").rooms.length === 1`, 3000);
+  // Nine houses: smaller, and the planet turns. A slide to the left brings later houses to the middle.
+  await seed(9);
+  await pause(300);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 2`);
+  const at3 = await page.eval(`(() => { const b = ${rowOf("둘째 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await page.front();
+  await page.touch("start", [at3]);
   await pause(700);
   await page.touch("end");
   await page.waitFor(q("#house-dock.choosing"));
-  await page.touch("start", [[at2[0], 30]]);
+  await pause(1100);
+  const middle = () => page.eval(`(() => { let best = null, d = 1e9; for (const t of document.querySelectorAll("#house-dock .dock-house")) { const r = t.querySelector(".dock-body").getBoundingClientRect(); const x = Math.abs(r.left + r.width / 2 - innerWidth / 2); if (x < d) { d = x; best = t.dataset.house; } } return best; })()`);
+  assert.equal(await middle(), "h0", "house 1 in the middle first");
+  const small = await page.eval(`document.querySelector('#house-dock [data-house="h0"] .dock-body').getBoundingClientRect().width`);
+  assert.ok(small < by("h0").w - 4, "five and more stand a little smaller: " + [by("h0").w, small]);
+  assert.equal(await page.eval(`Number(getComputedStyle(document.querySelector('#house-dock [data-house="h8"]')).opacity) < 0.5`), true, "the last house is round the planet, not seen yet");
+  const y = 844 - 60;
+  await page.touch("start", [[300, y]]);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[300 - i * 20, y]]);
+  await page.touch("end");
+  await pause(900);
+  const now = await middle();
+  assert.ok(Number(now.slice(1)) >= 3, "a slide turned the planet, a later house is in the middle: " + now);
+  await page.shot(out("house-arc-turned.png"));
+  // A tap outside closes it and touches nothing there.
+  await page.touch("start", [[at3[0], 30]]);
   await page.touch("end");
   await page.waitFor(`!document.getElementById("house-dock")`, 2000);
   assert.ok(await page.eval(`location.hash === "" || location.hash === "#"`), "nothing under the tap opened");
+  // Held and carried to the right end of the planet: it turns there on its own, the house under the finger changes.
+  await page.touch("start", [at3]);
+  await pause(700);
+  await page.waitFor(q("#house-dock"));
+  await pause(900);
+  const right = [372, 844 - 70];
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[at3[0] + ((right[0] - at3[0]) * i) / 10, at3[1] + ((right[1] - at3[1]) * i) / 10]]);
+  await pause(1500);
+  const turned = await middle();
+  assert.ok(Number(turned.slice(1)) >= 2, "held near the end, the planet turned: " + turned);
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("house-dock")`, 3000);
   // The mouse: the left held and the right pressed with it gives the room's details and actions.
   const m = await page.eval(`(() => { const b = ${rowOf("둘째 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
   await page.press(m[0], m[1]);
   await page.rightWhileLeft(m[0], m[1]);
   await page.release(m[0], m[1]);
   await page.waitFor(q("#room-actions #room-open"), 3000);
-  assert.ok(!(await page.eval(q("#house-dock"))), "no world of houses from it");
+  assert.ok(!(await page.eval(q("#house-dock"))), "no planet from it");
 });
 
 scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that edge, lit); 초성 search ranks and hides; 내용 search; recent searches; a house built; a room dropped into it and taken out; leaving the app puts it away", async ({ open, out }) => {
@@ -5295,9 +5355,9 @@ scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that
   await page.touch("start", [at]);
   await pause(700);
   await page.waitFor(q("#house-dock .dock-house:not(.dock-new)"));
-  // The world settles (its houses pop up one after another) before the finger aims at one.
-  await pause(800);
-  const target = await page.eval(`(() => { const b = document.querySelector("#house-dock .dock-house:not(.dock-new)").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  // The planet settles (its houses grow up one after another) before the finger aims at one.
+  await pause(1100);
+  const target = await page.eval(`(() => { const b = document.querySelector("#house-dock .dock-house:not(.dock-new) .dock-body").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
   for (let i = 1; i <= 12; i++) await page.touch("move", [[at[0] + ((target[0] - at[0]) * i) / 12, at[1] + ((target[1] - at[1]) * i) / 12]]);
   await page.waitFor(q("#house-dock .dock-house.over"));
   await page.touch("end");
@@ -5685,6 +5745,55 @@ scenario("같이 그리기: a friend's line shows while it is drawn, with their 
   }
   await click(a, "#ink-brush-now");
   assert.equal(await a.eval(`window.__app.store.get("settings", {}).inkSteady`), 0, "back round to 끔, remembered");
+});
+
+// The owner (22 November): "프로크리에이터의 손 동작… 두 손가락으로 동시에 터치하면 뒤로 가기, 세 손가락으로
+// 한 번에 터치하면 앞으로 가기, 그런 거와 비슷하게 많이". On the whiteboard with the pen on: the taps, held
+// fingers going on undoing (Procreate's hold), four fingers hiding and showing the tools.
+scenario("whiteboard gestures with the pen on: two fingers tapped undo, three redo; two fingers held keep undoing; four fingers hide the tools and bring them back", async ({ open }) => {
+  const page = await open({ width: 420, height: 860 });
+  await createBoard(page);
+  await click(page, "#board-pen");
+  const count = () => page.eval(`window.__app.session.doc("k:board").strokes().length`);
+  const box = await page.eval(`(() => { const r = document.getElementById("room-body").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const at = (fx, fy) => [box.x + box.w * fx, box.y + box.h * fy];
+  for (const fy of [0.3, 0.4, 0.5, 0.6]) {
+    await page.front();
+    await page.touch("start", [at(0.25, fy)]);
+    for (let i = 1; i <= 8; i++) await page.touch("move", [at(0.25 + 0.05 * i, fy)]);
+    await page.touch("end");
+  }
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 4`);
+  await page.front();
+  await page.touch("start", [at(0.4, 0.75), at(0.6, 0.76)]);
+  await pause(60);
+  await page.touch("end");
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 3`);
+  await pause(400);
+  await page.touch("start", [at(0.3, 0.75), at(0.5, 0.76), at(0.7, 0.75)]);
+  await pause(60);
+  await page.touch("end");
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 4`);
+  // Held still: one undo after another until they lift.
+  await pause(400);
+  await page.touch("start", [at(0.4, 0.75), at(0.6, 0.76)]);
+  await pause(1500);
+  await page.touch("end");
+  const left = await count();
+  assert.ok(left <= 1, "held, it went on undoing: " + left);
+  // Four fingers: the tools step aside; four again, they are back.
+  await pause(400);
+  const four = [at(0.2, 0.7), at(0.4, 0.72), at(0.6, 0.7), at(0.8, 0.72)];
+  await page.touch("start", four);
+  await pause(60);
+  await page.touch("end");
+  await page.waitFor(`document.querySelector(".room").classList.contains("bare")`, 2000);
+  await page.waitFor(`getComputedStyle(document.querySelector(".board-top")).opacity === "0" && getComputedStyle(document.querySelector(".board-rail")).opacity === "0"`, 2000);
+  await pause(400);
+  await page.touch("start", four);
+  await pause(60);
+  await page.touch("end");
+  await page.waitFor(`!document.querySelector(".room").classList.contains("bare")`, 2000);
 });
 
 // From the reference study (Procreate's gestures, 하던 대로): two fingers tapped together 되돌리기,

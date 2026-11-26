@@ -89,6 +89,58 @@ export function boardPreview(board) {
   return { t: "board", cards };
 }
 
+const MAX_LINES = 40;
+const MAX_POINTS = 15;
+const DRAW_SCALE = 0.2; // a small doodle is drawn larger, never more than this
+const round1 = (v) => Math.round(v * 10) / 10;
+
+/**
+ * A drawing (그림 방's layers, or 애니메이션 방's first page over its background) as a few of its
+ * lines within 100 × 60, as the board's map: `layers` from the bottom up, each { strokes, visible }.
+ * Each line is [colour, width, filled (1) or not (0), x, y, x, y, …]. Rubbing out is left out; with
+ * many lines, the newest. The colour is kept as it was drawn (home reads it as the room does).
+ */
+export function drawPreview(layers) {
+  const lines = [];
+  for (const layer of layers || []) {
+    if (!layer || layer.visible === false) continue;
+    for (const s of layer.strokes || []) {
+      if (!s || s.b === "erase" || !Array.isArray(s.pts) || s.pts.length < 3 || typeof s.c !== "string") continue;
+      lines.push(s);
+    }
+  }
+  if (!lines.length) return null;
+  const kept = lines.slice(-MAX_LINES);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const s of kept) {
+    for (let i = 0; i + 1 < s.pts.length; i += 3) {
+      x0 = Math.min(x0, s.pts[i]);
+      x1 = Math.max(x1, s.pts[i]);
+      y0 = Math.min(y0, s.pts[i + 1]);
+      y1 = Math.max(y1, s.pts[i + 1]);
+    }
+  }
+  const scale = Math.min(MAP_W / Math.max(1, x1 - x0), MAP_H / Math.max(1, y1 - y0), DRAW_SCALE);
+  const ox = (MAP_W - (x1 - x0) * scale) / 2;
+  const oy = (MAP_H - (y1 - y0) * scale) / 2;
+  const at = (x, y) => [round1(Math.max(0, Math.min(MAP_W, ox + (x - x0) * scale))), round1(Math.max(0, Math.min(MAP_H, oy + (y - y0) * scale)))];
+  return {
+    t: "draw",
+    lines: kept.map((s) => {
+      const n = Math.floor(s.pts.length / 3);
+      const step = Math.max(1, Math.ceil((n - 1) / (MAX_POINTS - 1)));
+      const thick = s.z ? s.z / 10 : [4, 8, 16][s.w] ?? 8;
+      const out = [s.c.slice(0, 24), round1(Math.max(0.5, Math.min(4, thick * scale))), s.s === "fill" ? 1 : 0];
+      for (let i = 0; i < n - 1; i += step) out.push(...at(s.pts[i * 3], s.pts[i * 3 + 1]));
+      out.push(...at(s.pts[(n - 1) * 3], s.pts[(n - 1) * 3 + 1]));
+      return out;
+    }),
+  };
+}
+
 const nums = (a, n) => Array.isArray(a) && a.length === n && a.every((v) => Number.isFinite(v));
 
 /** True for a preview home may draw (what is kept on the device is read back with care). */
@@ -98,6 +150,10 @@ export function validPreview(p) {
   if (p.t === "song") {
     return Array.isArray(p.notes) && p.notes.length <= 64 && p.notes.every((n) => nums(n, 3)) &&
       (p.clips === undefined || (Array.isArray(p.clips) && p.clips.length <= 32 && p.clips.every((c) => nums(c, 3))));
+  }
+  if (p.t === "draw") {
+    return Array.isArray(p.lines) && p.lines.length <= 48 && p.lines.every((l) => Array.isArray(l) && l.length >= 5 && l.length <= 3 + 2 * 16 &&
+      typeof l[0] === "string" && l[0].length <= 24 && l.slice(1).every((v) => Number.isFinite(v)));
   }
   if (p.t === "board") {
     return Array.isArray(p.cards) && p.cards.length <= 32 &&

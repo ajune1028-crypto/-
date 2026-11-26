@@ -10,7 +10,7 @@
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
 import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
-import { watchFingerTaps } from "./fingers.js";
+import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { PAGE_W, PAGE_H } from "./draw-room.js";
 import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
@@ -659,6 +659,7 @@ export function mountAnimRoom(body, app, session) {
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(stage.closest(".room"), flashHint),
   });
 
   // ---- start --------------------------------------------------------------------------------------

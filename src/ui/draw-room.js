@@ -8,7 +8,7 @@ import { h, icon, iconButton, toast, closeOnOutside, flashHint } from "./dom.js"
 import { openTimelapse } from "./timelapse.js";
 import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
-import { watchFingerTaps } from "./fingers.js";
+import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
@@ -58,6 +58,7 @@ export function mountDrawRoom(body, app, session, frame) {
   const stopTaps = watchFingerTaps(stage, {
     two: () => { if (undo.canUndo) { step("undo"); flashHint("되돌리기"); } },
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
+    four: () => toggleBare(stage.closest(".room"), flashHint),
   });
   // ---- layers on the page ---------------------------------------------------------------------
 
