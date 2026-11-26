@@ -1638,6 +1638,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .tile-edit-foot .tile-help { flex: 1 1 100%; margin: 0.1rem 0; }
 .tile-edit-foot #tile-done { margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { .clip-menu.editing > [data-tile] { animation: none; } }
+/* How ● records (here, the phone's recorder app, a voice memo): a small glass menu above it. */
+.record-way { position: absolute; z-index: 30; display: flex; flex-direction: column; gap: 0.45rem; width: min(18rem, calc(100% - 1rem)); padding: 0.8rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: color-mix(in srgb, var(--paper) 90%, var(--tint) 10%); box-shadow: var(--glass-shine), 0 12px 30px color-mix(in srgb, var(--tint) 22%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); animation: page-in 0.24s var(--ease); }
+.record-way-title { margin: 0 0 0.15rem; font-size: 0.9rem; font-weight: 800; }
+.record-way .btn { width: 100%; justify-content: center; }
+.record-way .help { margin: 0; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }

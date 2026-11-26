@@ -37,7 +37,7 @@ import { soundTitle } from "./names.js";
 import { buzz } from "./chime.js";
 import { shareTake, takeSound } from "./share-take.js";
 import { reachableRooms, meIn } from "./room-actions.js";
-import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused } from "./sound-in.js";
+import { KEEP_RATE, soundPickers, waysIn as soundWays, pickerHelp as noChooserHelp, micRefused, isApple } from "./sound-in.js";
 import { RoomSession } from "../sync/session.js";
 import { addItemOps, cardFromClip, keptFields, setItemOps } from "../core/board.js";
 
@@ -141,6 +141,15 @@ export function mountSongRoom(body, app, session, frame) {
   const redoButton = iconButton("redo", "redo", "다시실행", () => step("redo"), "다시하기");
   const speedButton = h("button", { class: "icon-btn speed-btn", id: "speed", type: "button", "aria-label": "재생 빠르기", data: { cap: "빠르기" }, onclick: () => nextSpeed() });
   const toneButton = iconButton("tone", "sun", "피아노 음색", () => setTone(settings().pianoTone === "dark" ? "bright" : "dark"), "음색");
+  // ● with the phone's recorder app (the owner, 26 November: "녹음이 왜 거기서밖에 안 되지? 다른 진짜 녹음
+  // 어플로 들어가서 녹음, 거기도 저장되고 여기로 또 옮겨지고"). The same button as a <label> for the capture
+  // picker, so the tap itself opens the recorder (a picker opened from script is refused on some phones);
+  // the take stays in the recorder app and comes back here as a clip where the playhead is. On an
+  // iPhone or iPad, whose recorder a page may not open, it picks from Files (음성 메모 → 공유 → 파일에 저장).
+  const recordPhone = h("label", { class: "icon-btn rec-btn", id: "record-phone", for: "song-capture", "aria-label": "녹음 (폰 녹음 앱으로)", data: { cap: "녹음" } }, icon("record"));
+  const recordMemo = h("label", { class: "icon-btn rec-btn", id: "record-memo", for: "song-file", "aria-label": "녹음 (음성 메모에서 가져오기)", data: { cap: "녹음" } }, icon("record"));
+  const recordWay = () => getSettings(app.store).recordWith || null; // "app" | "phone" | "memo"
+  const onPhone = () => matchMedia("(pointer: coarse)").matches && (isApple() || /Android/i.test(navigator.userAgent || ""));
   const toolbar = h("div", { class: "toolbar song-tools", id: "song-tools" }, startButton, playButton, recordButton, addButton, undoButton, redoButton, speedButton, toneButton);
   body.after(toolbar);
 
@@ -395,6 +404,9 @@ export function mountSongRoom(body, app, session, frame) {
     recordButton.classList.toggle("on", !!rec || counting);
     recordButton.classList.toggle("no-mic", !mic.ok);
     recordButton.disabled = readOnly() || (!!busy && !rec && !counting);
+    const way = recordWay();
+    const showing = rec || counting || readOnly() || !way || way === "app" ? recordButton : way === "memo" ? recordMemo : recordPhone;
+    for (const b of [recordButton, recordPhone, recordMemo]) if (b !== showing && b.isConnected) b.replaceWith(showing);
     addButton.disabled = readOnly() || !!busy || !!rec;
     undoButton.disabled = !undo.canUndo || !!rec;
     redoButton.disabled = !undo.canRedo || !!rec;
@@ -638,8 +650,59 @@ export function mountSongRoom(body, app, session, frame) {
 
   // ---- recording ----------------------------------------------------------------
 
+  /** How to record: here at once, the phone's recorder app, or (iPhone, iPad) a voice memo from Files. Remembered. */
+  function chooseRecordWay() {
+    document.getElementById("record-way")?.remove();
+    // One menu at a time: a chosen clip's menu goes first (else a tap on this one would only close that).
+    if (selected) select(null);
+    const anchor = toolbar.querySelector(".rec-btn");
+    const r = anchor?.getBoundingClientRect();
+    // The menu goes on the next turn: a <label> taken out of the page during its own tap would open nothing.
+    const pick = (way) => { setSetting(app.store, "recordWith", way); drawButtons(); setTimeout(() => { menu.remove(); stopOutside?.(); }, 0); };
+    const apple = isApple();
+    const menu = h("div", { class: "record-way", id: "record-way", role: "menu", "aria-label": "녹음하는 방법" },
+      h("p", { class: "record-way-title", text: "어떻게 녹음할까요?" }),
+      h("button", { type: "button", class: "btn quiet", id: "record-way-app", text: "여기서 바로 녹음", onclick: () => { pick("app"); toggleRecord(); } }),
+      apple
+        ? h("label", { class: "btn quiet", id: "record-way-memo", for: "song-file", onclick: () => pick("memo") }, "음성 메모에서 가져오기")
+        : h("label", { class: "btn quiet", id: "record-way-phone", for: "song-capture", onclick: () => pick("phone") }, "폰 녹음 앱으로"),
+      h("p", { class: "help small", text: apple
+        ? "아이폰·아이패드는 웹에서 음성 메모 앱을 바로 열 수 없어요(애플이 막아 둠). 음성 메모에서 녹음 → 공유 → '파일에 저장' 한 뒤 여기서 골라요."
+        : "녹음 앱으로 녹음하면 녹음은 그 앱에도 남고, 마치면 지금 자리에 들어와요." }),
+      h("p", { class: "help small", text: "고른 대로 기억해요. ● 를 꾹 누르면 다시 골라요." }));
+    body.append(menu);
+    if (r) {
+      const area = body.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(area.width - menu.offsetWidth - 8, r.left - area.left + r.width / 2 - menu.offsetWidth / 2)) + "px";
+      menu.style.bottom = Math.max(8, area.bottom - r.top + 8) + "px";
+    }
+    const stopOutside = closeOnOutside((t) => menu.contains(t), () => { menu.remove(); stopOutside?.(); }, menu);
+  }
+  // 꾹 (half a second) on ●: choose again. The tap that follows is not a recording.
+  let recHold = null;
+  for (const b of [recordButton, recordPhone, recordMemo]) {
+    b.addEventListener("pointerdown", (e) => {
+      if (rec || busy || readOnly()) return;
+      clearTimeout(recHold?.timer);
+      recHold = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => { recHold.fired = true; buzz(app, 10); chooseRecordWay(); }, 500) };
+    });
+    b.addEventListener("pointermove", (e) => {
+      if (recHold && e.pointerId === recHold.id && Math.hypot(e.clientX - recHold.x, e.clientY - recHold.y) > 10) clearTimeout(recHold.timer);
+    });
+    b.addEventListener("pointerup", () => clearTimeout(recHold?.timer));
+    b.addEventListener("pointercancel", () => clearTimeout(recHold?.timer));
+    b.addEventListener("click", (e) => {
+      if (!recHold?.fired) return;
+      recHold = null;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }
+
   async function toggleRecord() {
     if (rec) return stopRecording();
+    // On a phone, the first ● asks how (here, or the phone's recorder app); after that it goes straight.
+    if (!recordWay() && onPhone() && !busy) return chooseRecordWay();
     // Pressed again while counting in: no take after all.
     if (busy === "count") return void cancelCount?.();
     if (readOnly() || busy) return;

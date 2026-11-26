@@ -7498,3 +7498,38 @@ scenario("song 원본 to a friend: the maker leaves the room right after putting
   const parts = await b.eval(`(() => { const f = window.__app.session.doc("files"); const id = f.names.get(${JSON.stringify(blob)}); return f.files.get(id).n; })()`);
   assert.ok(parts >= 2, "it travelled in several parts: " + parts);
 });
+
+// The owner (26 November): "녹음이 왜 거기서밖에 안 되지? 다른 진짜 녹음 어플로 들어가서 녹음, 거기도 저장되고
+// 여기로 또 옮겨지고". ● held chooses how to record; chosen '폰 녹음 앱으로', ● itself opens the phone's recorder
+// (the capture picker) and the take comes back as a clip; '여기서 바로 녹음' records here again.
+scenario("song ● with the phone's recorder app: held, ● asks how to record; '폰 녹음 앱으로' makes ● open the recorder (the capture picker) and the take comes in as a clip; '여기서 바로' records here again", async ({ open, fixtures, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await createSongRoom(page);
+  const centre = (sel) => page.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  // Held: how to record.
+  let at = await centre("#record");
+  await page.press(at[0], at[1]);
+  await pause(650);
+  await page.release(at[0], at[1]);
+  await page.waitFor(q("#record-way"), 2000);
+  assert.equal(await page.eval(`!!window.__app.player?.recording`), false, "held, ● did not start a take");
+  assert.ok(await page.eval(`!!document.getElementById("record-way-phone") || !!document.getElementById("record-way-memo")`));
+  await page.shot(out("song-record-way.png"));
+  // 폰 녹음 앱으로: the recorder opens (Chrome holds the picker open for the test) and the take comes in.
+  await page.interceptChooser(true);
+  await click(page, "#record-way-phone");
+  await page.waitFor(`!document.getElementById("record-way") && !!document.getElementById("record-phone")`, 2000);
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).recordWith`), "phone");
+  await page.setFiles("#song-capture", [fixtures.doremi]);
+  await page.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`, 20000);
+  // From now on ● itself is the recorder app's door.
+  assert.equal(await page.eval(`document.getElementById("record-phone").htmlFor`), "song-capture");
+  // Held again: back to recording here.
+  at = await centre("#record-phone");
+  await page.press(at[0], at[1]);
+  await pause(650);
+  await page.release(at[0], at[1]);
+  await page.waitFor(q("#record-way-app"), 2000);
+  await click(page, "#record-way-app");
+  await page.waitFor(`window.__app.store.get("settings", {}).recordWith === "app" && !!document.getElementById("record")`, 3000);
+});
