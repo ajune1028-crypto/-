@@ -18,7 +18,7 @@ import { h, icon, iconButton, segmented, openSheet, toast, closeOnOutside, swall
 import { watchFingers, watchFingerTaps, toggleBare } from "./fingers.js";
 import { currentTheme, onThemeChange } from "./theme.js";
 import { openNoteEditor } from "./note-editor.js";
-import { timeText } from "./song-view.js";
+import { timeText, wavePath } from "./song-view.js";
 import { SPEEDS } from "./song-room.js";
 import { KEEP_RATE, soundPickers, waysIn, pickerHelp, micRefused } from "./sound-in.js";
 import { shrinkPhoto } from "./photo.js";
@@ -50,7 +50,7 @@ import { reachableRooms, putCardsIntoSong } from "./room-actions.js";
 import { bufferFromSamples, decodeAudioFile } from "../audio/decode.js";
 import { analyzeSamples } from "../audio/analyze.js";
 import { MicRecorder, micSupport, micProblem } from "../audio/recorder.js";
-import { toBase64 } from "../audio/peaks.js";
+import { toBase64, fromBase64 } from "../audio/peaks.js";
 import { newBlobId } from "../sync/blobs.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting } from "../identity.js";
@@ -433,7 +433,7 @@ export function mountBoardRoom(body, app, session, frame) {
         el.style.setProperty("--tc", item.tint != null ? memberColor(item.tint, currentTheme()) : inkColor(item.color || "black"));
         el.dataset.size = String(item.size || 2);
       }
-      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1) + "|" + (item.chords !== false);
+      const key = item.kind + "|" + (item.text ?? "") + "|" + order.indexOf(item.id) + "|" + !!item.muted + "|" + (item.speed || 1) + "|" + (item.chords !== false) + "|" + (item.kind === "song" ? settings().songMode || "piano" : "");
       if (el.dataset.key !== key || el.shownData !== item.data) {
         el.dataset.key = key;
         el.shownData = item.data;
@@ -506,8 +506,30 @@ export function mountBoardRoom(body, app, session, frame) {
         // Its own speed beside its length (the length as it sounds at that speed).
         (item.speed || 1) !== 1 && h("b", { class: "speed-badge", text: item.speed + "×" }),
         h("span", { class: "card-len", text: (d.dur / (item.speed || 1) / 1000).toFixed(1) + "초" })),
-      noteBars(d, "card-notes", item.chords !== false),
+      // 원본 shows the recording itself, 같이 the notes over it, 피아노 the notes (as in the song room;
+      // the owner, 22 November: "화이트보드에서는 원본 음을 볼 수가 없어").
+      ...(() => {
+        const mode = settings().songMode || "piano";
+        return [mode !== "piano" && waveOf(d, mode === "both"), mode !== "original" && noteBars(d, "card-notes", item.chords !== false)].filter(Boolean);
+      })(),
     ];
+  }
+
+  /** The recording's own shape (its peaks), drawn across the card. */
+  const peakBytes = new WeakMap();
+  function waveOf(d, under = false) {
+    if (!peakBytes.has(d)) peakBytes.set(d, fromBase64(d.peaks || ""));
+    const w = wavePath(peakBytes.get(d), 0, d.dur);
+    if (!w) return null;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "card-wave" + (under ? " under" : ""));
+    svg.setAttribute("viewBox", `0 -1 ${Math.max(1, w.n - 1)} 2`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", w.d);
+    svg.append(path);
+    return svg;
   }
 
   /** Note bars by pitch inside a box, as in the song room (also for 내 노래's previews). */
@@ -1181,7 +1203,7 @@ export function mountBoardRoom(body, app, session, frame) {
       menu.forItem = item.id;
       menu.view = "main";
     }
-    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, item.chords !== false, menu.view].join("|");
+    const key = [item.id, item.kind, !!item.muted, solo === item.id && !!player?.playing, readOnly(), item.color, item.size, item.tint, item.speed, item.chords !== false, menu.view, settings().songMode].join("|");
     if (build && menu.dataset.key !== key) {
       menu.dataset.key = key;
       const can = !readOnly();
@@ -1201,6 +1223,7 @@ export function mountBoardRoom(body, app, session, frame) {
         h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
       menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
+        one("card-sound", { original: "원본", both: "같이" }[settings().songMode] || "피아노", () => toggleSoundMode()),
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),

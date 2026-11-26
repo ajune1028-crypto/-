@@ -35,7 +35,7 @@ function peaksOf(source) {
   return source.peakBytes;
 }
 
-function wavePath(bytes, fromMs, toMs) {
+export function wavePath(bytes, fromMs, toMs) {
   const per = 1000 / PEAKS_PER_SECOND;
   const i0 = Math.floor(fromMs / per);
   const i1 = Math.min(bytes.length, Math.ceil(toMs / per));

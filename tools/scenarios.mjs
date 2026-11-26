@@ -3619,6 +3619,52 @@ async function songThenBoard(page, fixtures) {
 }
 const cardBox = (page, n = 0) => page.eval(`(() => { const c = [...document.querySelectorAll(".card.song")].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[${n}]; const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.left, y: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; })()`);
 
+// The owner (22 November): "화이트보드에서는 원본 음을 볼 수가 없어. 피아노 음으로 변절된 거밖에".
+scenario("whiteboard 원본: a song card's menu says how it sounds and turns it to 원본 (the card shows the recording itself), 같이 (the notes over it), 피아노 (the notes)", async ({ open, out, fixtures }) => {
+  const page = await open();
+  const boardId = await createBoard(page, { room: "원본 보드" });
+  await click(page, "#back");
+  await createSongRoom(page, { room: "흥얼 방" });
+  await importSound(page, fixtures.doremi);
+  await choose(page, ".clip[data-id]");
+  await click(page, "#clip-send");
+  await page.waitFor(q(`#send-boards [data-room="${boardId}"]`));
+  await click(page, `#send-boards [data-room="${boardId}"]`);
+  await page.waitFor(`document.querySelector(".toast")?.textContent.includes("화이트보드로 보냈어요")`, 6000);
+  await click(page, "#back");
+  await page.waitFor(q("#home"));
+  await page.eval(`(() => { location.hash = "#r-${boardId}"; return true; })()`);
+  await page.waitFor(q(".card.song"), 8000);
+  await pause(400);
+  const card = await page.eval(`(() => { const r = document.querySelector(".card.song").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  assert.ok(!(await page.eval(`!!document.querySelector(".card.song .card-wave")`)), "피아노 first: the notes");
+  await page.tap(card[0], card[1]);
+  await page.waitFor(q("#card-sound"));
+  assert.equal(await text(page, "#card-sound"), "피아노");
+  await click(page, "#card-sound");
+  await page.waitFor(`${q("#card-sound")}?.textContent === "같이" && !!document.querySelector(".card.song .card-wave.under") && !!document.querySelector(".card.song .card-notes")`);
+  await click(page, "#card-sound");
+  await page.waitFor(`${q("#card-sound")}?.textContent === "원본" && !!document.querySelector(".card.song .card-wave:not(.under)") && !document.querySelector(".card.song .card-notes")`);
+  const wave = await page.eval(`(() => { const w = document.querySelector(".card.song .card-wave"); const r = w.getBoundingClientRect(); return { w: r.width, h: r.height, d: w.querySelector("path").getAttribute("d").length }; })()`);
+  assert.ok(wave.w > 40 && wave.h > 10 && wave.d > 40, "the recording's own shape across the card: " + JSON.stringify(wave));
+  assert.equal(await page.eval(`window.__app.store.get("settings", {}).songMode`), "original", "and it sounds as recorded");
+  await page.shot(out("board-original.png"));
+});
+
+// The owner (22 November): "녹음 앱으로 하면… 핸드폰 녹음 앱도 저장되고 또 여기서도 나오고": a take made here
+// goes to the phone too, from 비서's 녹음.
+scenario("비서 녹음: a take is saved to the phone (the share sheet where there is one, else a download with its own name)", async ({ open, fixtures }) => {
+  const page = await open();
+  await page.eval(`(() => { window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; return true; })()`);
+  await click(page, "#home-record");
+  await page.waitFor(q("#reference"));
+  await page.waitFor(`document.querySelectorAll(".ref-sound").length >= 1`, 20000);
+  await page.waitFor(q(".ref-sound [data-save-sound]"));
+  await click(page, ".ref-sound [data-save-sound]");
+  await page.waitFor(`window.__downloads.length === 1`, 5000);
+  assert.match(await page.eval(`window.__downloads[0]`), /\.(wav|m4a|mp3|webm|ogg)$/, "a file with its own name");
+});
+
 scenario("whiteboard 노래 모드: modes on top, each mode's tools on the right; 내 노래 slides in from the right; song cards are as long as their songs and stretch sideways", async ({ open, out, fixtures }) => {
   const page = await open();
   await songThenBoard(page, fixtures);

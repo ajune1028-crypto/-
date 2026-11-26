@@ -86,11 +86,15 @@ export function waysIn({ app, roomId, root, name, prefix, mic, canRecord, onReco
     h("button", { type: "button", class: "btn rec-way", id: prefix + "record", disabled: !canRecord || !mic.ok, onclick: () => onRecord() }, h("span", { class: "dot-rec" }), "지금 이 앱에서 녹음"),
     !mic.ok && h("p", { class: "help warn", id: prefix + "mic-reason", text: micReason(mic.reason) }),
     mic.reason === "blocked" && h("div", { class: "elsewhere" }, ...elsewhere({ app, roomId, root, prefix })),
-    // iPhone and iPad have no recorder to open from a page: they open the camera, and its sound is used.
-    h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, isApple() ? "카메라로 녹음하기 (소리만 써요)" : "폰 녹음 앱으로 녹음하기"),
-    h("p", { class: "help", text: isApple() ? "아이폰·아이패드는 녹음 앱 대신 카메라가 열려요. 찍은 영상의 소리만 가져와요." : "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음을 마치면 바로 이 방으로 와요." }),
-    h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, "파일에서 가져오기"),
-    h("p", { class: "help", text: isApple() ? "음성 메모의 녹음은 공유 → '파일에 저장'한 뒤 여기서 고르세요. m4a·mp3·wav, 영상(소리만)도 돼요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
+    // A phone's own recorder app (the owner, 22 November: "녹음 앱을 들어가게 해야 돼… 핸드폰 녹음 앱도
+    // 저장되고 여기서도 나오고"): Android opens it from a page (삼성 녹음 and the like), the take stays there
+    // and comes straight here. iPhone and iPad cannot open 음성 메모 from a page (Apple keeps it shut) and
+    // offer the camera instead, which is not a recording ("동영상으로 찍어서 음원 추출… 그거 말고"): there
+    // a voice memo comes in as a file, and a take made here can be saved to the phone from 비서's 녹음.
+    !isApple() && h("label", { class: "btn quiet way", id: prefix + "capture", for: name + "-capture" }, "폰 녹음 앱으로 녹음하기"),
+    !isApple() && h("p", { class: "help", text: "삼성 녹음 같은 폰의 녹음 앱이 열려요. 녹음은 그 앱에도 남고, 마치면 바로 여기로 와요." }),
+    h("label", { class: "btn quiet way", id: prefix + "file", for: name + "-file" }, isApple() ? "음성 메모·파일에서 가져오기" : "파일에서 가져오기"),
+    h("p", { class: "help", text: isApple() ? "음성 메모에서 녹음 → 공유 → '파일에 저장' 한 뒤 여기서 골라요. 아이폰·아이패드는 웹에서 녹음 앱을 바로 열 수 없어서 이렇게 가져와요. 여기서 녹음한 것은 비서의 녹음에서 '폰에 저장'으로 폰에도 남겨요." : "녹음 앱에 저장된 파일(m4a), mp3, wav, 영상(소리만) 모두 돼요." }),
     // Only what is there: a caller may append these as they are, and `false` would show as the word.
   ].filter(Boolean);
 }

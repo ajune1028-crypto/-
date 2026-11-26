@@ -1550,6 +1550,10 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 /* Four fingers tapped (Procreate's 전체 화면): the tools step out of the way until four fingers again. */
 .room > .bar, .room .toolbar, .room .board-top, .room .board-rail, .room .ink-tools, .room .anim-strip { transition: opacity 0.25s var(--ease); }
 .room.bare > .bar, .room.bare .toolbar, .room.bare .board-top, .room.bare .board-rail, .room.bare .ink-tools, .room.bare .anim-strip { opacity: 0; pointer-events: none; }
+/* A song card's own recording (원본), the notes over it in 같이: as the song room shows it. */
+.card-wave { display: block; width: 100%; height: 2.2rem; margin-top: 0.25rem; overflow: visible; }
+.card-wave path { fill: color-mix(in srgb, var(--c, var(--accent)) 55%, var(--ink)); opacity: 0.75; }
+.card-wave.under { position: absolute; left: 0.55rem; right: 0.55rem; bottom: 0.45rem; width: auto; margin: 0; opacity: 0.45; pointer-events: none; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
    character walks behind (the owner, 22 November); everything else stays as it is while drawing. */
 .xray { -webkit-mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 4.4rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }

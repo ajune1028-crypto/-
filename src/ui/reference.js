@@ -96,6 +96,7 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
           h("button", { class: "chip play" + (audio?.id === s.id ? " on" : ""), type: "button", id: "ref-play-" + s.id, text: audio?.id === s.id ? "■ 멈춤" : "▶ 듣기", onclick: () => hear(s) }),
           insertSound && h("button", { class: "chip primary", type: "button", data: { putSound: s.id }, onclick: () => { stopHearing(); insertSound(s); toast(app.root, "여기에 놓았어요"); } }, icon("plus"), "여기에 놓기"),
           h("button", { class: "chip", type: "button", data: { sendSound: s.id }, text: "보내기", onclick: () => sendSound(s) }),
+          s.blob && h("button", { class: "chip", type: "button", data: { saveSound: s.id }, text: "폰에 저장", onpointerdown: () => fileOf(s), onclick: () => saveToPhone(s) }),
           h("button", { class: "chip danger", type: "button", "aria-label": "지우기", onclick: () => { if (audio?.id === s.id) stopHearing(); removeRefSound(app.store, s.id); drawSounds(); } }, "지우기"))))
         : [h("p", { class: "help ref-empty", text: "흥얼거림을 모아 두면, 노래 방이나 화이트보드에 바로 놓을 수 있어요." }),
           h("button", { class: "chip", type: "button", id: "ref-example", text: "예시 녹음 넣어 보기", onclick: () => addExample() })]));
@@ -114,6 +115,45 @@ export function openReference(app, { insert = null, insertSound = null, roomId =
       } finally {
         busy = false;
       }
+    }
+
+    /**
+     * 폰에 저장 (the owner, 22 November: "녹음 앱으로 하면 핸드폰 녹음 앱도 저장되고 여기서도 나오고"): a take
+     * made here goes to the phone too, through the share sheet ('파일에 저장', or any app that takes
+     * a sound) or else as a download. Its file is read as the finger goes down, so the share sheet
+     * still opens from the tap itself (Safari asks for that).
+     */
+    const files = new Map();
+    function fileOf(s) {
+      if (!files.has(s.id)) {
+        files.set(s.id, app.blobs.get(s.blob).then((kept) => {
+          if (!kept?.data) return null;
+          const type = kept.type || "audio/wav";
+          const ext = /wav/.test(type) ? "wav" : /mp4|m4a|aac/.test(type) ? "m4a" : /mpeg|mp3/.test(type) ? "mp3" : /webm/.test(type) ? "webm" : /ogg/.test(type) ? "ogg" : "wav";
+          const name = String(s.name || "녹음").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+          return new File([kept.data], `${name}.${ext}`, { type });
+        }, () => null));
+      }
+      return files.get(s.id);
+    }
+    async function saveToPhone(s) {
+      const file = await fileOf(s);
+      if (!file) return void toast(app.root, "이 기기에 원본이 없어요", 2400);
+      try {
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: s.name || "녹음" });
+          return;
+        }
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+      }
+      const url = URL.createObjectURL(file);
+      const a = h("a", { href: url, download: file.name, style: { display: "none" } });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      toast(app.root, "폰에 저장했어요 (다운로드한 파일)", 2400);
     }
 
     /** 보내기: a kept recording into one of my song rooms (a clip after what it holds) or whiteboards (a card). */
