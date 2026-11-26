@@ -333,7 +333,12 @@ export function showHome(app) {
         if (edge !== panelCtl.edge()) {
           rememberPanelEdge(app.store, { edge, at: at ?? 0.5 });
           panelCtl.moveTo(edge, at ?? 0.5, strength);
+          return;
         }
+        // Thrown at the edge it is already on: the ball hits it there, then the light comes as ever.
+        const ctl = panelCtl;
+        await ctl.squash({ at: at ?? 0.5, strength, delay });
+        if (alive && ctl.isOpen()) glowEdge({ edge, at: at ?? 0.5, strength, delay: 0 });
         return;
       }
       // Floating and thrown: it comes down to that edge.

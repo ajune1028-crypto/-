@@ -485,6 +485,64 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
     enter(spot);
   }
 
+  /**
+   * Thrown at the edge it already stands on (the owner, 21 November: "그쪽으로 또 보낸다면… 보내지는
+   * 쪽으로 아주 약간 찌그러지고… 보낸 그 각도의 그 부분부터 약간 찌부되는데 그거랑 멀어질수록 찌부가
+   * 안 되도록… 공이 던져져 간다고 했을 때 먼저 닿는 면적부터… 갈수록 줄어드는… 빨리 복구… 애플같이 세련되게"):
+   * when the ball arrives, its inner end gives way where it was hit (deepest there, less further off),
+   * the dent widens as it eases and springs back, quick enough to be whole before the next throw.
+   */
+  let squashing = null;
+  function squash({ at = 0.5, strength = 0.4, delay = 0 } = {}) {
+    if (!open || floating || reduced || !panel.animate) return Promise.resolve();
+    squashing?.cancel();
+    const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const r = panel.getBoundingClientRect();
+    const side = edge === "left" || edge === "right";
+    const len = side ? r.height : r.width;
+    const depth = side ? r.width : r.height;
+    // Where it was hit along the inner end, in the panel's own length.
+    const u0 = Math.max(0, Math.min(len, (side ? at * innerHeight - r.top : at * innerWidth - r.left)));
+    const s = Math.max(0.15, Math.min(1, strength));
+    const deep = Math.min(depth * 0.18, (10 + 16 * s) * (remPx() / 16));
+    const width = (48 + 70 * s) * (remPx() / 16);
+    const out = 48; // past the panel, so its shadow stays wherever it is not dented
+    const N = 36;
+    // (u along the inner end, v into the panel from it) → the panel's own corner-based px.
+    const toXY = (u, v) => ({ bottom: [u, v], top: [u, r.height - v], left: [r.width - v, u], right: [v, u] }[edge]);
+    const shape = (k, spread) => {
+      const sig = width * spread;
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const u = -out + ((len + 2 * out) * i) / N;
+        const bell = Math.exp(-((u - u0) ** 2) / (2 * sig * sig));
+        // Far from the hit the line runs outside the panel (nothing is cut), near it inside (the dent).
+        const v = deep * k * bell - out * (1 - Math.min(1, bell * 2.2));
+        pts.push(toXY(u, v));
+      }
+      // Round the far side, wide of the panel, back to the start.
+      const far = depth + out;
+      pts.push(toXY(len + out, far), toXY(-out, far));
+      return `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(", ")})`;
+    };
+    // A ball's hit: in fast, out with one small give, settled (about a third of a second).
+    const keys = [[0, 0, 1], [0.16, 1, 1], [0.34, 0.55, 1.35], [0.52, 0.18, 1.7], [0.72, 0.05, 1.9], [1, 0, 2]];
+    // Each step eases on its own (an easing over the whole would keep the dent from ever going deep).
+    const frames = keys.map(([offset, k, spread], i) => ({ offset, clipPath: shape(k, spread), easing: i === 0 ? "cubic-bezier(0.2, 0.9, 0.4, 1)" : "cubic-bezier(0.35, 0, 0.3, 1)" }));
+    const into = { bottom: [0, 1], top: [0, -1], left: [-1, 0], right: [1, 0] }[edge];
+    const push = (1.5 + 2.5 * s) * (remPx() / 16);
+    const nudge = [{ translate: "0 0" }, { translate: `${into[0] * push}px ${into[1] * push}px`, offset: 0.18 }, { translate: "0 0" }];
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (!open) return resolve();
+        squashing = panel.animate(frames, { duration: 380 });
+        panel.animate(nudge, { duration: 300, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" });
+        buzz(app, 8);
+        squashing.finished.then(() => resolve(), () => resolve());
+      }, delay);
+    });
+  }
+
   const onKey = (e) => { if (e.key === "Escape") close(); };
   // Leaving the app and coming back finds home as it was: no search, no panel.
   const onHide = () => { if (document.visibilityState === "hidden") close({ now: true, forget: true }); };
@@ -723,6 +781,7 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       toast(root, "잠겨 있어요. 왼쪽 위 자물쇠로 풀어요", 1600);
       if (!reduced && panel.animate) panel.animate([{ translate: "0 0" }, { translate: "-5px 0" }, { translate: "5px 0" }, { translate: "0 0" }], { duration: 260 });
     },
+    squash: (hit) => squash(hit),
     // Somewhere else on the screen (the owner: "그걸 눌러서 다른 위치로 그게 옮겨가게").
     moveTo: (to, spot = 0.5, strength = 0.3) => { if (open && !floating && to !== edge) relocate({ edge: to, at: spot, strength }, [0, 0]); },
     refresh: () => draw(),

@@ -5294,6 +5294,51 @@ scenario("home 집 고르기: held, a room raises a small planet with my houses 
   assert.ok(!(await page.eval(q("#house-dock"))), "no planet from it");
 });
 
+// The owner (21 November): thrown to the very end of an edge the light did not start where it was
+// thrown ("끝쪽으로 쐈을 때… 내가 쏜 거 기준으로서 중앙에 애니가 발생되지 않아… 애니메이션은 절대 바꾸지 마");
+// thrown again at the edge the window is on, nothing happened ("찌그러졌다가… 빨리 복구").
+scenario("햇살 thrown near a corner lights up exactly where it lands; thrown again at the same edge, the window takes the ball (a dent where it hits, back at once) and then the light comes as ever", async ({ open }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.waitFor(q("#home-more"));
+  const sun = await page.eval(`(() => { const r = document.getElementById("home-more").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  // Steeply down and a little right: it lands on the bottom edge, at its right end.
+  const throwDown = async () => {
+    await page.front();
+    await page.touch("start", [sun]);
+    for (let i = 1; i <= 6; i++) await page.touch("move", [[sun[0] + i * 3.5, sun[1] + i * 22]]);
+    const aim = await page.eval(`(() => { const a = document.querySelector(".edge-aim"); return a ? { edge: a.dataset.edge, x: parseFloat(a.style.left) } : null; })()`);
+    await page.touch("end");
+    return aim;
+  };
+  const aim = await throwDown();
+  assert.ok(aim && aim.edge === "bottom" && aim.x > 366, "aimed at the bottom edge's right end: " + JSON.stringify(aim));
+  await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='bottom']")`, 1500);
+  // Read once the ball has landed (it flies a moment first).
+  const litNow = `(() => {
+    const c = document.querySelector(".edge-glow[data-edge='bottom']"); if (!c) return 0; const g = c.getContext("2d");
+    const k = c.width / c.getBoundingClientRect().width; const row = g.getImageData(0, c.height - Math.round(10 * k), c.width, 1).data;
+    let best = 0; for (let i = 0; i < c.width; i++) best = Math.max(best, row[i * 4 + 3]); return best;
+  })()`;
+  await page.waitFor(`${litNow} > 60`, 1500);
+  await pause(60);
+  const lit = await page.eval(`(() => {
+    const c = document.querySelector(".edge-glow[data-edge='bottom']"); const g = c.getContext("2d");
+    const k = c.width / c.getBoundingClientRect().width; const row = g.getImageData(0, c.height - Math.round(10 * k), c.width, 1).data;
+    let best = 0, at = -1; for (let i = 0; i < c.width; i++) { const a = row[i * 4 + 3]; if (a > best) { best = a; at = i; } }
+    return { x: at / k, a: best };
+  })()`);
+  assert.ok(lit.a > 40 && Math.abs(lit.x - aim.x) < 14, "it lights up where it landed: " + JSON.stringify({ aim, lit }));
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 3000);
+  await pause(1300);
+  // Again at the bottom: the window takes the ball (its inner end dented where it hit), then the light.
+  await throwDown();
+  await page.waitFor(`[...document.getElementById("home-panel").getAnimations()].some((a) => (a.effect?.getKeyframes?.() || []).some((f) => /polygon/.test(f.clipPath || "")))`, 1500);
+  await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='bottom']")`, 2000);
+  await pause(700);
+  assert.equal(await page.eval(`[...document.getElementById("home-panel").getAnimations()].filter((a) => a.playState === "running" && (a.effect?.getKeyframes?.() || []).some((f) => f.clipPath)).length`), 0, "back to its shape at once");
+  assert.equal(await page.eval(`document.querySelectorAll("#home-panel").length`), 1, "still the one window, where it was");
+});
+
 scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that edge, lit); 초성 search ranks and hides; 내용 search; recent searches; a house built; a room dropped into it and taken out; leaving the app puts it away", async ({ open, out }) => {
   const page = await open({ width: 390, height: 800 });
   const roomNames = ["쇼타로 일기", "산책 노트", "우리 쇼핑"];

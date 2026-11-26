@@ -59,7 +59,9 @@ export function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null 
   const W = innerWidth;
   const H = innerHeight;
   const L = vertical ? H : W;
-  const u0 = clamp(at, 0.06, 0.94) * L;
+  // Where the ball landed, however near a corner (the owner, 21 November: "끝쪽으로 쐈을 때… 내가 쏜 거
+  // 기준으로서 중앙에 애니가 발생되지 않아"): the flash, the sparks and the light all start there.
+  const u0 = clamp(at, 0, 1) * L;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const canvas = h("canvas", { class: "edge-glow", data: { edge }, "aria-hidden": "true" });
   canvas.width = Math.round((vertical ? STRIP : L) * dpr);
@@ -90,7 +92,11 @@ export function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null 
   const fade = 760;
   const tau = 150 + 170 * s;
   const reach = (0.045 + 0.16 * s) * L;
+  // The light's ends fade into the glass, never into the corners; near a corner that fading keeps
+  // clear of the spot it landed on, so it lights up there as it does anywhere else.
   const end = 0.07 * L;
+  const endA = Math.max(1, Math.min(end, u0 * 0.6));
+  const endB = Math.max(1, Math.min(end, (L - u0) * 0.6));
   const alphas = new Float64Array(STEPS + 1);
 
   const along = (k, rgb) => {
@@ -110,7 +116,7 @@ export function glowEdge({ edge, at, strength = 0.5, delay = 0, onImpact = null 
     const sigma = 8 + reach * (reduced ? 1 : 1 - Math.exp(-t / tau)) * (1 + 0.3 * fading);
     for (let i = 0; i <= STEPS; i++) {
       const u = (i / STEPS) * L;
-      alphas[i] = level * Math.exp(-((u - u0) ** 2) / (2 * sigma * sigma)) * smooth(u / end) * smooth((L - u) / end);
+      alphas[i] = level * Math.exp(-((u - u0) ** 2) / (2 * sigma * sigma)) * smooth(u / endA) * smooth((L - u) / endB);
     }
     // A soft light coming in from the edge: along × across.
     g.globalCompositeOperation = "source-over";
