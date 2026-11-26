@@ -119,11 +119,17 @@ export function mountSongRoom(body, app, session, frame) {
     lassoButton.setAttribute("aria-pressed", String(!!on));
     if (on) toast(root, "클립들을 손가락으로 둘러 그리세요", 1800);
   }
-  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "같이", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
+  const modeSwitch = segmented([["original", "원본", "mode-original"], ["piano", "피아노", "mode-piano"], ["both", "둘 다", "mode-both"]], settings().songMode, (mode) => setMode(mode), "mode");
   // They lie straight on the room's background: they read it (white, black or a deeper black).
   for (const el of [zoomOut, zoomIn, lassoButton, modeSwitch]) el.dataset.contrast = "";
   modeSwitch.classList.add("mode-switch");
   modeSwitch.setAttribute("aria-label", "듣는 방식");
+  // What each one is, held or pointed at (the owner, 26 November: "같이는 또 뭐야"): '둘 다' is the
+  // recording and the piano over it at once.
+  for (const [id, words] of [["mode-original", "원본: 내 녹음 그대로"], ["mode-piano", "피아노: 찾은 음을 피아노로"], ["mode-both", "둘 다: 원본과 피아노를 겹쳐서"]]) {
+    const b = modeSwitch.querySelector("#" + id);
+    if (b) b.title = words;
+  }
   frame.top.append(h("div", { class: "song-top" }, h("div", { class: "song-top-left" }, clock, zoomOut, zoomIn, lassoButton), modeSwitch));
 
   const startButton = iconButton("to-start", "start", "처음으로", () => seek(0), "처음");
@@ -300,7 +306,7 @@ export function mountSongRoom(body, app, session, frame) {
       clips, source: (id) => song.source(id), notesOf: (id) => song.notesOf(id), color: clipColor, name: clipName, group, mode: settings().songMode, showWave: settings().showWave,
       selected, selectedRow, peers: peerSelections(), rows: Math.max(song.rowCount(), rec ? rec.row + 1 : 1, ...[...peerRecs.values()].map((r) => r.row + 1)),
       end: Math.max(song.end(), rec ? rec.start + rec.ms : 0), hasAudio: (id) => !!audio.get(id) || hasLocalBlob(id),
-      arriving: (id) => { const blob = song.source(id)?.blob; return !!blob && (roomFiles?.namedProgress(blob) || 0) > 0; },
+      arriving: (id) => { const blob = song.source(id)?.blob; return blob ? roomFiles?.namedProgress(blob) || 0 : 0; },
       recording: rec && { row: rec.row, start: rec.start, ms: rec.ms, notes: rec.notes },
       others: [...peerRecs.values()].map((r) => ({ row: r.row, start: r.at, ms: performance.now() - r.since, name: r.name, color: r.color })),
       playhead, empty, tempo: song.tempo(), heads: rowHeads(),

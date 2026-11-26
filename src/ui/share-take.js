@@ -11,13 +11,19 @@ import { decodeWav } from "../audio/wav.js";
 import { toMono, resample } from "../audio/dsp.js";
 
 export const SHARE_RATE = 16000;
+const LONG_RATE = 8000; // a very long take (over fifteen minutes) travels at half the rate
 const PART_PAUSE_MS = 120; // between parts: the room's store takes them one by one
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const queues = new WeakMap(); // session → { busy, waiting: [key], sent: Set, done: Promise }
 
-/** The longest take that fits the room's files, in seconds. */
-export const MAX_SHARED_SECONDS = Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 - 16) / (SHARE_RATE / 2));
+const fits = (rate) => Math.floor((MAX_FILE_PARTS * FILE_PART_CHARS * 0.75 - 16) / (rate / 2));
+/** The longest take that fits the room's files, in seconds (at the lower rate). */
+export const MAX_SHARED_SECONDS = fits(LONG_RATE);
+/** The rate a take this long travels at: 16 kHz while it fits, 8 kHz for a very long one; 0 when even that is too long. */
+export function shareRateFor(seconds) {
+  return seconds <= fits(SHARE_RATE) ? SHARE_RATE : seconds <= fits(LONG_RATE) ? LONG_RATE : 0;
+}
 
 /**
  * Makes sure the room has this take's sound: sends it (in the background) when this device has
@@ -56,9 +62,10 @@ async function run(app, session, q) {
       if (!wav) continue; // not here (yet): asked again later
       q.sent.add(key);
       const mono = toMono(wav.channels);
-      if (mono.length / wav.rate > MAX_SHARED_SECONDS) continue;
-      const low = wav.rate === SHARE_RATE ? mono : resample(mono, wav.rate, SHARE_RATE);
-      const data = toBase64(encodeAdpcm(low, SHARE_RATE));
+      const rate = shareRateFor(mono.length / wav.rate);
+      if (!rate) continue;
+      const low = wav.rate === rate ? mono : resample(mono, wav.rate, rate);
+      const data = toBase64(encodeAdpcm(low, rate));
       // Begun before (this device left the room halfway): the parts still missing, under the same file.
       // Otherwise (looked again just before sending, so two of my devices open at once send it once) whole.
       const begun = missingParts(files, key);
@@ -69,7 +76,7 @@ async function run(app, session, q) {
       for (const op of ops) {
         if (!session.docs) return;
         session.commit("files", [op]);
-        await pause(PART_PAUSE_MS);
+        await pause(session.partPauseMs ?? PART_PAUSE_MS);
       }
     }
   } catch (err) {

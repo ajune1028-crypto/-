@@ -8,6 +8,7 @@ import { h, icon, iconButton, mount, inputRow, segmented, toggle, openSheet, toa
 import { applyTheme, applyAccent, applyTextScale, applyTintAmount, tintAmount, currentTheme, myPeopleColor, ACCENTS, TEXT_SIZES } from "./theme.js";
 import { showJoin } from "./join.js";
 import { drawCheck } from "./motion.js";
+import { shareDone } from "./share-take.js";
 import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
 import { sealedTransport, isLockedRoom, keyOpens } from "../sync/sealed.js";
 import { kindInfo, sideOf } from "./kinds.js";
@@ -519,7 +520,11 @@ export function showRoom(app, roomId) {
     alive = false;
     clearTimeout(slowTimer);
     for (const off of offs) off?.();
-    session?.close();
+    // A take still on its way to the room goes on to the end even when the room is left (the owner,
+    // 26 November: "원본이 아직 오지 않았어요… 같이 하는 게 제일 중요한 건데"): the room's connection stays
+    // until it has gone (ten minutes at most), then closes.
+    const leaving = session;
+    if (leaving) Promise.race([shareDone(leaving), new Promise((r) => setTimeout(r, 10 * 60 * 1000))]).finally(() => leaving.close());
     if (app.session === session) app.session = null;
   };
 }

@@ -12,7 +12,9 @@
 import { validId, cmpId } from "./crdt.js";
 
 export const FILE_PART_CHARS = 40000;
-export const MAX_FILE_PARTS = 64; // 2.5 million characters, about 1.9 MB
+// 9.6 million characters, about 7.2 MB: a take of fifteen minutes at 16 kHz, thirty at 8 kHz (a whole song
+// put into a song room used to be over the old 64 parts, about four minutes, and never reached anyone).
+export const MAX_FILE_PARTS = 240;
 export const FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "audio/adpcm"];
 const MAX_UNKNOWN = 100;
 const BASE64 = /^[A-Za-z0-9+/=]*$/;

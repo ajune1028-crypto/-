@@ -1161,7 +1161,7 @@ export function mountBoardRoom(body, app, session, frame) {
         railButton("stretch-in", "stretch", "늘이기", () => stretchChosen(1.4)),
         railButton("stretch-out", "squeeze", "줄이기", () => stretchChosen(1 / 1.4)),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "둘 다" }[s.songMode] || "피아노", () => toggleSoundMode()),
         // With a loop in hand: only its part (pressed), or the whole board.
         !!focusLoop && railButton("song-focus", "fit", "올가미만", () => { focusOff = !focusOff; draw(); }, { pressed: !focusOff }),
       ],
@@ -1169,7 +1169,7 @@ export function mountBoardRoom(body, app, session, frame) {
       lasso: [
         railButton("board-fit", "fit", "모두 보기", () => fitAll()),
         railButton("board-speed", null, "빠르기", () => nextSpeed(), { text: (s.songSpeed || 1) + "×" }),
-        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "같이" }[s.songMode] || "피아노", () => toggleSoundMode()),
+        railButton("board-sound-mode", { original: "wave", both: "mixed" }[s.songMode] || "note", { original: "원본", both: "둘 다" }[s.songMode] || "피아노", () => toggleSoundMode()),
         can && railButton("lasso-clear", "eraser", "모두 풀기", () => removeAllLassos()),
       ],
     }[mode];
@@ -1223,7 +1223,7 @@ export function mountBoardRoom(body, app, session, frame) {
         h("span", { class: "menu-swatch", style: { background: item.tint != null ? memberColor(item.tint, currentTheme()) : colorOf(item.by) } }), "색");
       menu.replaceChildren(...(item.kind !== "note" && menu.view === "tints" ? tints() : item.kind === "song" ? [
         one("card-play", solo === item.id && player?.playing ? "■ 멈춤" : "▶ 듣기", () => playCard(item.id)),
-        one("card-sound", { original: "원본", both: "같이" }[settings().songMode] || "피아노", () => toggleSoundMode()),
+        one("card-sound", { original: "원본", both: "둘 다" }[settings().songMode] || "피아노", () => toggleSoundMode()),
         can && one("card-cut", "분할", () => { if (cursor?.id === item.id) cutAtMs(item.id, cursor.ms); else { cutting = true; draw(); } }),
         one("card-notes", "음 편집", () => editCardNotes(item.id)),
         can && one("card-mute", item.muted ? "소리 켜기" : "음소거", () => apply(setItemOps(session.clock, board, item.id, { muted: !item.muted }))),

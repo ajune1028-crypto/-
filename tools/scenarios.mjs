@@ -3670,7 +3670,7 @@ scenario("whiteboard 원본: a song card's menu says how it sounds and turns it 
   await page.waitFor(q("#card-sound"));
   assert.equal(await text(page, "#card-sound"), "피아노");
   await click(page, "#card-sound");
-  await page.waitFor(`${q("#card-sound")}?.textContent === "같이" && !!document.querySelector(".card.song .card-wave.under") && !!document.querySelector(".card.song .card-notes")`);
+  await page.waitFor(`${q("#card-sound")}?.textContent === "둘 다" && !!document.querySelector(".card.song .card-wave.under") && !!document.querySelector(".card.song .card-notes")`);
   await click(page, "#card-sound");
   await page.waitFor(`${q("#card-sound")}?.textContent === "원본" && !!document.querySelector(".card.song .card-wave:not(.under)") && !document.querySelector(".card.song .card-notes")`);
   const wave = await page.eval(`(() => { const w = document.querySelector(".card.song .card-wave"); const r = w.getBoundingClientRect(); return { w: r.width, h: r.height, d: w.querySelector("path").getAttribute("d").length }; })()`);
@@ -7463,4 +7463,38 @@ scenario("song 벤토: held, the side panel's tiles shake to be arranged - '−'
   await page.waitFor(`!!document.getElementById("clip-menu") && !document.getElementById("clip-menu").classList.contains("side")`, 3000);
   const phone = await page.eval(`[...document.querySelectorAll("#clip-menu [data-tile]")].map((t) => t.id)`);
   assert.ok(!phone.includes("clip-copy") && phone.indexOf("clip-send") >= 0 && phone.indexOf("clip-send") < phone.indexOf("clip-play"), "the phone's menu keeps the same tiles: " + phone);
+});
+
+// The owner (26 November): "원본이 아직 오지 않았어요… 같이 하는 게 제일 중요한 건데 다른 사람이 올린 것도
+// 못 봐". A take on its way to the room went no further once its maker left the room; now the room's
+// connection stays until it has all gone, and the friend's clip says how much has come, kindly.
+import { decodeWav as decodeWavFile, encodeWav as encodeWavFile } from "../src/audio/wav.js";
+import { writeFileSync } from "node:fs";
+scenario("song 원본 to a friend: the maker leaves the room right after putting a long take in, and the friend still gets all of the voice; while it comes the clip says how much, never '아직 오지 않았어요'", async ({ open, fixtures }) => {
+  // A take of about half a minute: several parts, so leaving at once would have cut it.
+  const short = decodeWavFile(new Uint8Array(readFileSync(fixtures.doremi)));
+  const times = Math.max(2, Math.ceil(32 / (short.channels[0].length / short.rate)));
+  const long = new Float32Array(short.channels[0].length * times);
+  for (let i = 0; i < times; i++) long.set(short.channels[0], i * short.channels[0].length);
+  const longPath = fixtures.doremi.replace(/doremi\.wav$/, "doremi-long.wav");
+  writeFileSync(longPath, encodeWavFile(long, short.rate));
+  const a = await open({ dev: "a" });
+  const id = await createSongRoom(a, { room: "같이 부르는 방" });
+  await importSound(a, longPath);
+  const blob = await a.eval(`[...window.__app.session.doc("song").sources.values()][0].blob`);
+  // Straight back home, before the voice has gone.
+  await click(a, "#back");
+  await a.waitFor(q("#home-settings"));
+  const b = await open({ dev: "b" });
+  await b.goto(await localLink(a, "b", id));
+  await b.waitFor("window.__app && window.__app.booted");
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`document.querySelectorAll(".clip[data-id]").length === 1`);
+  await click(b, "#mode-original");
+  const words = await b.eval(`document.querySelector(".clip[data-id] .clip-note")?.textContent || ""`);
+  assert.ok(!/아직 오지 않았어요/.test(words), "never the cold words: " + words);
+  await b.waitFor(`!!window.__app.session.doc("files").named(${JSON.stringify(blob)})`, 20000);
+  await b.waitFor(`!document.querySelector(".clip[data-id] .clip-note")`, 5000);
+  const parts = await b.eval(`(() => { const f = window.__app.session.doc("files"); const id = f.names.get(${JSON.stringify(blob)}); return f.files.get(id).n; })()`);
+  assert.ok(parts >= 2, "it travelled in several parts: " + parts);
 });

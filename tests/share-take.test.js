@@ -10,7 +10,7 @@ function device(files, blobs = new Map()) {
   const clock = new Clock("d" + Math.random().toString(36).slice(2, 6));
   const sent = [];
   const session = {
-    clock, memberId: "m1", docs: {}, transport: {},
+    clock, memberId: "m1", docs: {}, transport: {}, partPauseMs: 0,
     load: async (doc) => (doc === "files" ? files : null),
     commit: (doc, ops) => { if (doc === "files") { for (const op of ops) files.apply(op); sent.push(...ops); } },
   };
@@ -87,4 +87,26 @@ test("a room on this device only sends no copy of the take", async () => {
   shareTake(shared.app, shared.session, "take-3");
   await shareDone(shared.session);
   assert.equal(files.namedProgress("take-3"), 1);
+});
+
+// The owner (26 November): "원본이 아직 오지 않았어요… 다른 사람이 올린 것도 못 봐". A whole song put in (five
+// minutes) was never sent at all: the room's files took about four minutes at most and the rest was
+// skipped without a word. Now long takes go too (fifteen minutes at 16 kHz, then 8 kHz up to thirty).
+test("a five-minute take goes to the room too (it used to be skipped without a word); a twenty-minute one goes at a lower rate", async () => {
+  const files = new FileDoc();
+  const blobs = new Map([["long-take", { data: encodeWav(tone(300, 16000), 16000) }], ["very-long", { data: encodeWav(tone(1200, 8000), 8000) }]]);
+  const d = device(files, blobs);
+  shareTake(d.app, d.session, "long-take");
+  shareTake(d.app, d.session, "very-long");
+  await shareDone(d.session);
+  assert.equal(files.namedProgress("long-take"), 1, "five minutes: whole in the room");
+  assert.equal(files.namedProgress("very-long"), 1, "twenty minutes: whole in the room");
+  const { decodeAdpcm } = await import("../src/audio/adpcm.js");
+  const { fromBase64 } = await import("../src/core/b64.js");
+  const five = decodeAdpcm(fromBase64(files.named("long-take").data));
+  assert.equal(five.rate, 16000);
+  assert.ok(Math.abs(five.samples.length / five.rate - 300) < 1, "all five minutes: " + five.samples.length / five.rate);
+  const twenty = decodeAdpcm(fromBase64(files.named("very-long").data));
+  assert.equal(twenty.rate, 8000, "a very long one at 8 kHz");
+  assert.ok(Math.abs(twenty.samples.length / twenty.rate - 1200) < 1);
 });
