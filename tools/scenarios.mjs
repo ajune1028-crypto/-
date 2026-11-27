@@ -5310,14 +5310,14 @@ scenario("home 집 고르기: held, a room raises a small planet with my houses 
   assert.ok(["new", "h0", "h1", "h2"].every((id) => by(id).seen), "+, house 1 and the two after it are seen");
   assert.ok(by("h0").w < 60, "houses of a modest size, built on the planet: " + by("h0").w);
   await page.shot(out("house-arc.png"));
-  // Drawn over house 2, it grows to take the room.
+  // Drawn over house 2, it grows a little to take the room (a touch, never huge: the owner, 27 November).
   const h2 = by("h1");
   await page.touch("move", [[at[0], at[1] - 40]]);
   for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((h2.x - at[0]) * i) / 10, at[1] - 40 + ((h2.b - 20 - at[1] + 40) * i) / 10]]);
   await page.waitFor(`document.querySelector('#house-dock [data-house="h1"]').classList.contains("over")`, 2000);
   await pause(300);
   const grown = await page.eval(`document.querySelector('#house-dock [data-house="h1"] .dock-body').getBoundingClientRect().width`);
-  assert.ok(grown > h2.w * 1.2, "it grows under the room: " + [h2.w, grown]);
+  assert.ok(grown > h2.w * 1.08 && grown < h2.w * 1.2, "it grows under the room, a little: " + [h2.w, grown]);
   await page.shot(out("house-arc-over.png"));
   await page.touch("end");
   await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === "h1").rooms.length === 1`, 3000);
@@ -5454,17 +5454,25 @@ scenario("행성 while a room is held: another finger slides the planet round; a
   const now = await middle();
   assert.ok(Number(now.slice(1)) >= 3, "another finger turned the planet while the room was held: " + now);
   assert.ok(await page.eval(`!!document.querySelector(".room-row.lifted")`), "the room is still held");
-  // Toward the house in the middle: still well short of it, it has already grown a little.
+  // Toward the house in the middle (the owner, 27 November: "너무 안 가까이 갔는데 집이 막 엄청 커지거나
+  // 그러지 말고"): well off, nothing swells; near, the nearest grows a touch; close by (yet not over the
+  // house itself), it lights up as the one that takes the room, a little bigger, never huge.
   const base = await body(now);
-  const far = [base.x + 12, base.top - 62];
-  for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((far[0] - at[0]) * i) / 10, at[1] + ((far[1] - at[1]) * i) / 10]]);
+  const off = [base.x + 12, base.top - 150];
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((off[0] - at[0]) * i) / 10, at[1] + ((off[1] - at[1]) * i) / 10]]);
+  await pause(350);
+  assert.ok((await body(now)).w < base.w * 1.01, "well off, no house swells");
+  const far = [base.x + 12, base.top - 36];
+  for (let i = 1; i <= 6; i++) await page.touch("move", [[off[0] + ((far[0] - off[0]) * i) / 6, off[1] + ((far[1] - off[1]) * i) / 6]]);
   await pause(350);
   const near = await body(now);
-  assert.ok(near.w > base.w * 1.03, "a house grows as the room comes near it: " + [base.w, near.w]);
-  // Closer (yet not over the house itself): it lights up as the one that takes the room.
-  const close = [base.x + 18, base.top - 26];
+  assert.ok(near.w > base.w * 1.015 && near.w < base.w * 1.07, "near, the house grows a touch: " + [base.w, near.w]);
+  const close = [base.x + 18, base.top - 22];
   for (let i = 1; i <= 4; i++) await page.touch("move", [[far[0] + ((close[0] - far[0]) * i) / 4, far[1] + ((close[1] - far[1]) * i) / 4]]);
   await page.waitFor(`document.querySelector('#house-dock [data-house="${now}"]').classList.contains("over")`, 2000);
+  await pause(350);
+  const over = await body(now);
+  assert.ok(over.w > base.w * 1.08 && over.w < base.w * 1.2, "the taker is a little bigger, not huge: " + [base.w, over.w]);
   await page.shot(out("house-arc-near.png"));
   await page.touch("end");
   await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === ${JSON.stringify(now)}).rooms.length === 1`, 3000);

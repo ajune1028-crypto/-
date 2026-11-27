@@ -178,9 +178,10 @@ export function openHouseArc({ houses, shapeOf }) {
   }
   /**
    * The house (or +) the held room is brought to at (x, y): the nearest one seen, within about a house
-   * and a third of the middle of it (at least 48 px), takes it. On the way, the ones near grow a little,
-   * more the nearer the room comes (as a dock's icons swell under a finger), so where it will go is
-   * seen before it is let go.
+   * and a third of the middle of it (at least 48 px), takes it. Only when the room is already near (less
+   * than twice that), the nearest grows a touch on the way, so where it will go is seen before it is let
+   * go; further off nothing swells (the owner, 27 November: "너무 안 가까이 갔는데 집이 막 엄청 커지거나
+   * 그러지 말고").
    */
   function pick(x, y) {
     if (closed) return null;
@@ -189,24 +190,25 @@ export function openHouseArc({ houses, shapeOf }) {
       return null;
     }
     const size = houseW * g.scale;
+    const take = Math.max(48, size * 1.3);
     let best = null;
     let far = Infinity;
     for (const { tile, slot } of slots) {
-      if (tile.classList.contains("far")) {
-        tile.style.removeProperty("--near");
-        continue;
-      }
+      if (tile.classList.contains("far")) continue;
       const a = slotAngle(g, slot, turn);
       const p = spotAt(g, a);
       // The middle of the house standing up out of the ground there.
       const d = Math.hypot(x - (p.x + Math.sin(a) * size * 0.5), y - (p.y - Math.cos(a) * size * 0.5));
-      tile.style.setProperty("--near", Math.max(0, 1 - d / (size * 2.8)).toFixed(3));
       if (d < far) {
         far = d;
         best = tile;
       }
     }
-    return far <= Math.max(48, size * 1.3) ? best : null;
+    for (const { tile } of slots) {
+      if (tile !== best) tile.style.removeProperty("--near");
+    }
+    if (best) best.style.setProperty("--near", Math.max(0, Math.min(1, 2 - far / take)).toFixed(3));
+    return far <= take ? best : null;
   }
   /** Whether (x, y) is over the planet or among its houses: a room brought there is for the planet. */
   function near(x, y) {

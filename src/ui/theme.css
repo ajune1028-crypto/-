@@ -1746,11 +1746,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
    world; its name on the ground under it. Held over, it grows and lights up to take the room in. */
 .house-arc .dock-house { position: absolute; left: 0; top: 0; display: block; width: 0; height: 0; padding: 0; border: 0; background: none; color: var(--ink); pointer-events: auto; transform-origin: 0 0; }
 .house-arc .dock-house.far { pointer-events: none; }
-.house-arc .dock-body { position: absolute; left: 0; bottom: -0.15rem; display: block; width: var(--hw); translate: -50% 0; scale: calc(var(--s) * (1 + 0.16 * var(--near, 0))); transform-origin: 50% 100%; transition: scale 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), translate 0.24s var(--ease), filter 0.24s var(--ease); }
+.house-arc .dock-body { position: absolute; left: 0; bottom: -0.15rem; display: block; width: var(--hw); translate: -50% 0; scale: calc(var(--s) * (1 + 0.06 * var(--near, 0))); transform-origin: 50% 100%; transition: scale 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), translate 0.24s var(--ease), filter 0.24s var(--ease); }
 .house-arc .dock-body .house-shape { filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--house, #888) 30%, transparent)); }
 .house-arc .dock-body .house-plan { aspect-ratio: 1; border-radius: 0.9rem 0.9rem 0.35rem 0.35rem; background: color-mix(in srgb, var(--paper) 40%, transparent); }
 .house-arc .dock-name { position: absolute; left: 0; top: 0.3rem; max-width: none; width: calc(var(--hw) * var(--s) + 0.8rem); translate: -50% 0; text-align: center; font-size: 0.64rem; font-weight: 750; color: var(--ink); opacity: 0.78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity 0.2s var(--ease); }
-.house-arc .dock-house.over .dock-body { scale: calc(var(--s) * 1.32); translate: -50% -0.35rem; filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--tint) 65%, transparent)); }
+.house-arc .dock-house.over .dock-body { scale: calc(var(--s) * 1.14); translate: -50% -0.2rem; filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--tint) 60%, transparent)); }
 .house-arc .dock-house.over .dock-name { opacity: 1; }
 .arc-air { fill: none; stroke: color-mix(in srgb, var(--tint) 50%, transparent); stroke-width: 10; opacity: 0.32; filter: blur(6px); }
 .arc-ground circle { fill: color-mix(in srgb, var(--tint) 50%, var(--ink)); opacity: 0.16; }
@@ -1775,11 +1775,11 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .home-panel { position: fixed; z-index: 61; display: flex; flex-direction: column; border: 1px solid var(--glass-edge); background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); overflow: hidden; }
 /* Half the screen, so the rooms beside it can be held and drawn into its houses ("반만 가려져서"). */
 .home-panel[data-edge="right"], .home-panel[data-edge="left"] { top: 0; bottom: 0; width: max(50vw, 12.5rem); max-width: 30rem; }
-.home-panel[data-edge="right"] { right: 0; border-radius: 1.6rem 0 0 1.6rem; }
-.home-panel[data-edge="left"] { left: 0; border-radius: 0 1.6rem 1.6rem 0; }
+.home-panel[data-edge="right"] { right: 0; border-radius: var(--panel-r) 0 0 var(--panel-r); }
+.home-panel[data-edge="left"] { left: 0; border-radius: 0 var(--panel-r) var(--panel-r) 0; }
 .home-panel[data-edge="bottom"], .home-panel[data-edge="top"] { left: 0; right: 0; margin-inline: auto; max-width: 42rem; height: min(50vh, 30rem); }
-.home-panel[data-edge="bottom"] { bottom: 0; border-radius: 1.6rem 1.6rem 0 0; }
-.home-panel[data-edge="top"] { top: 0; border-radius: 0 0 1.6rem 1.6rem; }
+.home-panel[data-edge="bottom"] { bottom: 0; border-radius: var(--panel-r) var(--panel-r) 0 0; }
+.home-panel[data-edge="top"] { top: 0; border-radius: 0 0 var(--panel-r) var(--panel-r); }
 /* The grip: a bar across the panel's inner end (on a side panel, across its top). */
 .panel-grip { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 1.7rem; padding: 0 max(0.35rem, var(--sun-r, 0px)) 0 max(0.35rem, var(--sun-l, 0px)); touch-action: none; cursor: grab; }
 /* The window's bar holds its lock (left), the bar itself (middle) and its other two buttons (right). */
@@ -1795,20 +1795,32 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .panel-ctrl-end { display: flex; gap: 0.15rem; }
 .panel-grip .icon-btn svg, .float-head .icon-btn svg { width: 1.05rem; height: 1.05rem; }
 /* A bottom window's ┐ is at the bar's right end: the buttons stop short of it. */
-.home-panel[data-edge="bottom"] .panel-grip { padding-right: max(2rem, var(--sun-r, 0px)); }
+.home-panel[data-edge="bottom"] .panel-grip { padding-right: max(2.7rem, var(--sun-r, 0px)); }
 .home-panel.locked .panel-lock { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
 .home-panel.locked { box-shadow: var(--glass-shine), 0 0 0 1.5px color-mix(in srgb, var(--tint) 42%, transparent), var(--glass-shadow); }
 /* The ┘ corner (its free corner: ┐ on a bottom panel, └ on a right one). */
-.panel-sizer { position: absolute; z-index: 4; width: 1.75rem; height: 1.75rem; touch-action: none; }
-.panel-sizer::before { content: ""; position: absolute; inset: 0.45rem; border: 0 solid color-mix(in srgb, var(--ink) 38%, transparent); border-right-width: 3px; border-bottom-width: 3px; border-bottom-right-radius: 0.4rem; }
-.home-panel.floating .panel-sizer, .home-panel[data-edge="left"] .panel-sizer, .home-panel[data-edge="top"] .panel-sizer { right: 0.05rem; bottom: 0.05rem; cursor: nwse-resize; }
-.home-panel[data-edge="left"] .panel-sizer { bottom: calc(0.05rem + env(safe-area-inset-bottom)); }
-.home-panel[data-edge="right"] .panel-sizer { left: 0.05rem; bottom: calc(0.05rem + env(safe-area-inset-bottom)); cursor: nesw-resize; }
-.home-panel[data-edge="right"] .panel-sizer::before { border-right-width: 0; border-left-width: 3px; border-bottom-right-radius: 0; border-bottom-left-radius: 0.4rem; }
-.home-panel[data-edge="bottom"] .panel-sizer { right: 0.05rem; top: 0.05rem; cursor: nesw-resize; }
-.home-panel[data-edge="bottom"] .panel-sizer::before { border-bottom-width: 0; border-top-width: 3px; border-bottom-right-radius: 0; border-top-right-radius: 0.4rem; }
+/* The grip that sizes it (the owner, 27 November: "쪼끔 더 넓혀 주고 디자인을 더 좋게… 창의 둥글기에 맞춰"): a
+   band hugging the window's own rounded corner, as an iPad's windows have, the same curve a little
+   inside it, running a short way along both sides and fading at its ends; a wider place to take hold
+   of; in my colour while it is held. --panel-r is the window's corner. */
+.home-panel { --panel-r: 1.6rem; }
+.home-panel.floating { --panel-r: 1.4rem; }
+.panel-sizer { --gap: 0.3rem; --arm: 0.75rem; --reach: calc(var(--panel-r) - var(--gap) + var(--arm)); position: absolute; z-index: 4; width: 2.6rem; height: 2.6rem; touch-action: none; }
+.panel-sizer::before { content: ""; position: absolute; width: var(--reach); height: var(--reach); border: 0 solid color-mix(in srgb, var(--ink) 40%, transparent); transition: border-color 0.2s var(--ease); }
+.home-panel.floating .panel-sizer, .home-panel[data-edge="left"] .panel-sizer, .home-panel[data-edge="top"] .panel-sizer { right: 0; bottom: 0; cursor: nwse-resize; }
+.home-panel.floating .panel-sizer::before, .home-panel[data-edge="left"] .panel-sizer::before, .home-panel[data-edge="top"] .panel-sizer::before {
+  right: var(--gap); bottom: var(--gap); border-right-width: 0.22rem; border-bottom-width: 0.22rem; border-bottom-right-radius: calc(var(--panel-r) - var(--gap));
+  -webkit-mask-image: radial-gradient(circle var(--reach) at 100% 100%, #000 50%, transparent 100%); mask-image: radial-gradient(circle var(--reach) at 100% 100%, #000 50%, transparent 100%); }
+.home-panel[data-edge="left"] .panel-sizer { bottom: env(safe-area-inset-bottom); }
+.home-panel[data-edge="right"] .panel-sizer { left: 0; bottom: env(safe-area-inset-bottom); cursor: nesw-resize; }
+.home-panel[data-edge="right"] .panel-sizer::before { left: var(--gap); bottom: var(--gap); border-left-width: 0.22rem; border-bottom-width: 0.22rem; border-bottom-left-radius: calc(var(--panel-r) - var(--gap));
+  -webkit-mask-image: radial-gradient(circle var(--reach) at 0 100%, #000 50%, transparent 100%); mask-image: radial-gradient(circle var(--reach) at 0 100%, #000 50%, transparent 100%); }
+.home-panel[data-edge="bottom"] .panel-sizer { right: 0; top: 0; cursor: nesw-resize; }
+.home-panel[data-edge="bottom"] .panel-sizer::before { right: var(--gap); top: var(--gap); border-right-width: 0.22rem; border-top-width: 0.22rem; border-top-right-radius: calc(var(--panel-r) - var(--gap));
+  -webkit-mask-image: radial-gradient(circle var(--reach) at 100% 0, #000 50%, transparent 100%); mask-image: radial-gradient(circle var(--reach) at 100% 0, #000 50%, transparent 100%); }
+.panel-sizer:hover::before { border-color: color-mix(in srgb, var(--ink) 58%, transparent); }
 .home-panel.sizing { transition: none; }
-.home-panel.sizing .panel-sizer::before { border-color: var(--tint); }
+.home-panel.sizing .panel-sizer::before { border-color: var(--accent-ink); }
 /* Small: only the houses, in a column when tall, in a row when wide; rooms still go in. */
 .home-panel.compact .search-row, .home-panel.compact .search-results, .home-panel.compact .houses-title, .home-panel.compact .houses > .help, .home-panel.compact .house-new { display: none; }
 .home-panel.compact .home-panel-body { gap: 0.4rem; padding: max(0.35rem, var(--sun-t, 0px)) max(0.5rem, var(--sun-r, 0px)) 0.6rem max(0.5rem, var(--sun-l, 0px)); }
@@ -2152,7 +2164,7 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .count-in-note { font-size: 0.85rem; font-weight: 700; padding: 0.2rem 0.7rem; border-radius: 999px; background: color-mix(in srgb, var(--paper) 80%, transparent); }
 
 /* 찾기와 집 floating on its own, like 레퍼런스 (its head is 레퍼런스's): moved by it, kept where it is left. */
-.home-panel.floating { max-height: min(62vh, 34rem); border-radius: 1.4rem; }
+.home-panel.floating { max-height: min(62vh, 34rem); border-radius: var(--panel-r); }
 .home-panel.floating .home-panel-body { padding-top: 0.3rem; }
 .home-panel.floating.held { box-shadow: var(--glass-shine), 0 18px 40px color-mix(in srgb, var(--tint) 30%, transparent); }
 /* A narrow panel (half a phone): the search field gets its own line, 이름·내용 under it, smaller houses. */
