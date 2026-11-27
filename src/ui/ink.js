@@ -328,7 +328,9 @@ export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1,
 }
 
 // The glass that floats over a drawing in every room: bars, tools, the frames' strip.
-const XRAY_PARTS = ".bar, .toolbar, .board-top, .board-modes, .board-rail, .ink-tools, .anim-strip";
+// 애니메이션 방's foot is one glass (#anim-dock) holding the frames and their buttons: it is the glass
+// that opens, not the clear strip and bar inside it.
+const XRAY_PARTS = ".bar, .toolbar:not(.anim-dock > *), .board-top, .board-modes, .board-rail, .ink-tools, .anim-dock, .anim-strip:not(.anim-dock > *)";
 const XRAY_NEAR = 56; // px: how near the pen comes before the glass opens around it
 const XRAY_WIDE = 144; // px: how far round the pen the lines of the colour being painted open the glass
 const XRAY_REACH = 288; // px: how far round the pen lines are looked at for a shape they close

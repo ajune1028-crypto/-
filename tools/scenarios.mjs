@@ -6886,6 +6886,28 @@ scenario("every room on a 360-wide phone: the top bar, the bottom bar and the dr
   assert.deepEqual(off, {}, "every button is on the screen");
 });
 
+// 애니메이션 방's foot is one glass (the frames and their buttons): drawing near it, that glass opens round
+// the pen (엑스레이, as every bar does), not the clear strip and bar inside it.
+scenario("애니메이션 방: drawing near the foot, its glass opens round the pen (not the strip or the buttons inside it)", async ({ open }) => {
+  const a = await open({ dev: "a", width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "비침 플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && ${q("#anim-dock")}`);
+  const p = await a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); const d = document.getElementById("anim-dock").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, dock: d.top }; })()`);
+  await a.stylus("down", p.x, p.y);
+  for (let i = 1; i <= 10; i++) await a.stylus("move", p.x, p.y + ((p.dock - 14 - p.y) * i) / 10);
+  await a.waitFor(`document.getElementById("anim-dock").classList.contains("xray")`, 2000);
+  const inner = await a.eval(`[...document.querySelectorAll("#anim-dock > *")].filter((el) => el.classList.contains("xray")).map((el) => el.id || el.className)`);
+  assert.deepEqual(inner, [], "only the glass itself opens");
+  await a.stylus("up", p.x, p.dock - 14);
+  await a.waitFor(`!document.getElementById("anim-dock").classList.contains("xray")`, 2000);
+});
+
 // The owner (21 November): "애니도 다른 어플들 다 보라니까… 너무 비효율적… 다 연동이 되어야". The same 올가미 and
 // papers as 그림 방; ‹ › to the frame before and after (FlipaClip, RoughAnimator); a 배경 under every
 // frame (Procreate's background frame); 영상으로 저장 (FlipaClip's MP4).
