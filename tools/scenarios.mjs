@@ -7859,6 +7859,67 @@ scenario("설정 in pages and 방 보기: the first page is short with the rest 
   await page.shot(out("home-cards-wide.png"));
 });
 
+// 방 보기 '보드' (the owner, 27 November: "방을 내가 원하는 그거로 해 놓고 내가 원하는 위치에 넣을 수 있게…
+// 크기를 많이 줄이면은 제목은 아래에 나오고 아이콘"): rooms stand on a board of cells where they are put.
+scenario("home 보드: rooms stand where I put them on a board of cells - held and drawn onto another's place it takes it and the other goes below; held still, a corner grip sizes it, and one column wide it is an icon with its name below; kept after a reload", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.eval(`(() => { const now = Date.now(); window.__app.store.set("rooms", [
+    { id: "boardaaaaaaa", kind: "daily-text", name: "첫 방", memberId: "m1", at: now - 1000, local: true },
+    { id: "boardbbbbbbb", kind: "daily-text", name: "둘째 방", memberId: "m1", at: now - 2000, local: true },
+  ]); setTimeout(() => location.reload(), 50); return true; })()`);
+  await pause(400);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".half.daily .room-cell").length === 2`);
+  // 설정 → 방 보기 → 보드: the window stays out while home lays itself out anew behind it.
+  await click(page, "#home-settings");
+  await click(page, "#room-view-board");
+  await page.waitFor(`document.querySelectorAll(".half.daily .home-board > .room-cell").length === 2`);
+  assert.ok(await page.eval(`!!document.querySelector(".scrim:not(.closing)")`), "설정 is still out");
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim")`, 2000);
+  const spot = (id) => page.eval(`(() => { const c = document.querySelector('.room-cell[data-room="${id}"]'); const r = c.getBoundingClientRect(); return { x: +c.dataset.x, y: +c.dataset.y, w: +c.dataset.w, h: +c.dataset.h, look: c.dataset.look, cx: r.left + r.width / 2, cy: r.top + r.height / 2, l: r.left, t: r.top, r: r.right, b: r.bottom }; })()`);
+  const first = await spot("boardaaaaaaa");
+  const second = await spot("boardbbbbbbb");
+  assert.deepEqual([first.x, first.y, first.look], [0, 0, "card"]);
+  assert.ok(second.y >= first.y + first.h, "the second below the first: " + JSON.stringify(second));
+  // Held and drawn up onto the first's place: a mark shows where it will stand; let go, it takes it
+  // and the first goes below it.
+  await page.front();
+  await page.touch("start", [[second.cx, second.cy]]);
+  await pause(650);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[second.cx, second.cy + ((first.cy - second.cy) * i) / 10]]);
+  await page.waitFor(q(".half.daily .board-spot"), 1500);
+  await page.touch("end");
+  await page.waitFor(`document.querySelector('.room-cell[data-room="boardbbbbbbb"]')?.dataset.y === "0"`, 2000);
+  const pushed = await spot("boardaaaaaaa");
+  assert.ok(pushed.y >= 2, "the first went below it: " + JSON.stringify(pushed));
+  // Held still and let go: a grip at its corner; drawn in to one column, it is an icon, its name below.
+  const b = await spot("boardbbbbbbb");
+  await page.touch("start", [[b.cx, b.cy]]);
+  await pause(650);
+  await page.touch("end");
+  await page.waitFor(q(".tile-grip"), 1500);
+  const grip = await page.eval(`(() => { const r = document.querySelector(".tile-grip").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  assert.ok(Math.abs(grip[0] - b.r) < 30 && Math.abs(grip[1] - b.b) < 30, "the grip at its corner: " + JSON.stringify({ grip, b }));
+  await page.touch("start", [grip]);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[grip[0] - (i * (b.r - b.l) * 0.72) / 10, grip[1] - (i * (b.b - b.t) * 0.5) / 10]]);
+  await page.touch("end");
+  await page.waitFor(`document.querySelector('.room-cell[data-room="boardbbbbbbb"]')?.dataset.look === "icon"`, 2000);
+  const icon = await spot("boardbbbbbbb");
+  assert.equal(icon.w, 1, "one column");
+  const below = await page.eval(`(() => { const c = document.querySelector('.room-cell[data-room="boardbbbbbbb"]'); const n = c.querySelector(".room-name").getBoundingClientRect(); const t = c.querySelector(".room-thumb").getBoundingClientRect(); return n.top >= t.bottom - 1 && n.width > 0; })()`);
+  assert.ok(below, "its name under its icon");
+  await page.shot(out("home-board.png"));
+  // Kept after a reload; 목록 again shows them as rows.
+  const before = { a: await spot("boardaaaaaaa"), b: await spot("boardbbbbbbb") };
+  await page.reload();
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".half.daily .home-board > .room-cell").length === 2`);
+  const after = { a: await spot("boardaaaaaaa"), b: await spot("boardbbbbbbb") };
+  for (const k of ["a", "b"]) assert.deepEqual([after[k].x, after[k].y, after[k].w, after[k].h], [before[k].x, before[k].y, before[k].w, before[k].h], "kept: " + k);
+  await click(page, "#home-settings");
+  await click(page, "#room-view-list");
+  await page.waitFor(`!document.querySelector(".home-board") && document.querySelectorAll(".half.daily .rooms .room-cell").length === 2`);
+});
+
 // The owner (27 November): "일상과 창작 거기 세로선… 가운데보다 약간 위에 그 진짜 안 보이게 그냥 내가 거기를
 // 꾹 누르면 그 창작 부분을 조금 더 왼쪽으로 하거나 오른쪽으로", and "절대 색깔 바꾸지 마… 주황색이 파란색으로
 // 바뀐다던가": the line between the halves, held a little above the middle, moves; each half keeps its own

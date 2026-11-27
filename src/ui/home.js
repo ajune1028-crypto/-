@@ -6,6 +6,7 @@ import { duplicateRoom, putIntoBoard, putRoomIntoSong, roomHistory } from "./roo
 import { displaySettings, diagnostics } from "./room-shell.js";
 import { rememberRoom, forgetRoom } from "../identity.js";
 import { validPreview } from "../core/preview.js";
+import { boardLayout, moveSpot, sizeSpot, tileLook, keptSpots, MAX_ROWS } from "../core/home-board.js";
 import { inkColor } from "./ink.js";
 import { RoomSession } from "../sync/session.js";
 import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from "../core/room.js";
@@ -174,9 +175,45 @@ export function showHome(app) {
   // A long press (or a right click) brings the room's actions: 복제, 링크 복사, 화이트보드에 넣기, 목록에서 빼기.
   /** 방 보기: cards (the room's look large, as many side by side as fit) or rows. */
   const cardView = () => getSettings(app.store).roomView === "cards";
+  /** 방 보기 '보드': each half a board of cells where the rooms stand where I put them (core/home-board.js). */
+  const boardView = () => getSettings(app.store).roomView === "board";
+  const BOARD_CELL = 3.6; // rem: a cell's width at least; a row is a little taller than wide
+  const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  /** How many cells across a half's board, from the width the half has now (the line between may be moved). */
+  function boardCols(side) {
+    const scroll = root.querySelector(`.half.${side} .half-scroll`);
+    const share = Number.isFinite(getSettings(app.store).homeSplit) ? getSettings(app.store).homeSplit : 0.5;
+    const width = scroll?.clientWidth ? scroll.clientWidth - 1.5 * remPx() : (root.clientWidth || innerWidth) * (side === "daily" ? share : 1 - share) - 1.5 * remPx();
+    const gap = 0.5 * remPx();
+    return Math.max(2, Math.min(10, Math.floor((width + gap) / (BOARD_CELL * remPx() + gap))));
+  }
+  const savedSpots = () => app.store.get("homeBoard", {}) || {};
+  function keepSpots(layout) {
+    app.store.set("homeBoard", { ...savedSpots(), ...keptSpots(layout) });
+  }
+  /** The board of a half as it stands: its rooms in their order, its columns, their spots. */
+  function boardOfHalf(side) {
+    const el = root.querySelector(`.half.${side} .home-board`);
+    if (!el) return null;
+    const ids = [...el.querySelectorAll(":scope > .room-cell")].map((c) => c.dataset.room);
+    const cols = Number(el.dataset.cols) || 3;
+    return { el, cols, layout: boardLayout(ids, savedSpots(), cols) };
+  }
+  /** The cell of a half's board under (x, y), or null off it. */
+  function cellAt(board, x, y) {
+    const r = board.el.getBoundingClientRect();
+    if (x < r.left || x > r.right || y < r.top - 8 || y > r.bottom + 4 * remPx()) return null;
+    const style = getComputedStyle(board.el);
+    const gap = parseFloat(style.columnGap) || 0;
+    const colW = (r.width - gap * (board.cols - 1)) / board.cols;
+    const rowH = parseFloat(style.gridAutoRows) || 4.4 * remPx();
+    const rowGap = parseFloat(style.rowGap) || 0;
+    return { x: Math.floor((x - r.left) / (colW + gap)), y: Math.floor((y - r.top) / (rowH + rowGap)), colW, rowH, gap, rowGap };
+  }
 
-  function roomRow(room, when, mine = false) {
+  function roomRow(room, when, mine = false, spot = null) {
     const kind = kindInfo(room.kind);
+    const side = sideOf(room.kind);
     const house = mine ? houseOf(app.store, room.id) : null;
     const isStarred = mine && starred(app.store).has(room.id);
     let held = false;
@@ -235,6 +272,7 @@ export function showHome(app) {
     const endLift = ({ keep = false } = {}) => {
       row.classList.remove("lifted");
       lift?.ghost?.remove();
+      lift?.spotMark?.remove();
       lift?.over?.classList.remove("over");
       lift?.dock?.unpick?.();
       const dock = lift?.dock;
@@ -263,6 +301,7 @@ export function showHome(app) {
       lift.ghost.style.translate = `${x}px ${y}px`;
       lift.at = [x, y];
       overAt(x, y);
+      if (spot) boardAim(x, y);
       // Near either end of the planet, it turns to bring the houses further along.
       lift.dock?.follow(x, y);
     };
@@ -281,19 +320,57 @@ export function showHome(app) {
         lift.over = target;
       }
     };
+    /**
+     * On a board, where the room would stand if let go here: a soft mark of its size in the cells under
+     * the finger (held where it was taken hold of). Over a house, the house takes it instead.
+     */
+    const boardAim = (x, y) => {
+      const board = (lift.board ||= boardOfHalf(side));
+      const me = board?.layout.get(room.id);
+      const c = !lift.over && me ? cellAt(board, x, y) : null;
+      if (!c) {
+        lift.spotMark?.remove();
+        lift.spotMark = null;
+        lift.boardTo = null;
+        return;
+      }
+      if (!lift.grab) {
+        const r = cell.getBoundingClientRect();
+        lift.grab = { x: Math.max(0, Math.floor((start.x - r.left) / (c.colW + c.gap))), y: Math.max(0, Math.floor((start.y - r.top) / (c.rowH + c.rowGap))) };
+      }
+      const to = { x: Math.max(0, Math.min(board.cols - me.w, c.x - lift.grab.x)), y: Math.max(0, c.y - lift.grab.y) };
+      if (lift.boardTo && lift.boardTo.x === to.x && lift.boardTo.y === to.y) return;
+      lift.boardTo = to;
+      lift.spotMark ||= h("div", { class: "board-spot", "aria-hidden": "true" });
+      lift.spotMark.style.gridColumn = `${to.x + 1} / span ${me.w}`;
+      lift.spotMark.style.gridRow = `${to.y + 1} / span ${me.h}`;
+      if (!lift.spotMark.isConnected) board.el.append(lift.spotMark);
+    };
     const drop = () => {
       const target = lift.over;
       const moved = lift.moved;
       const dock = lift.dock;
+      const to = lift.boardTo;
+      const board = lift.board;
       if (!moved) {
-        // Let go where it was held: the world stays for a tap on a house (or + for a new one).
+        // Let go where it was held: the world stays for a tap on a house (or + for a new one); on a
+        // board, a grip at its corner sizes it.
         endLift({ keep: true });
         if (dock) dock.choose(putRoom);
         else toast(root, "집 위로 끌어다 놓아요 · 방의 자세한 것은 두 손가락으로 톡", 2600);
+        if (spot && boardView()) offerSize(cell, side, () => dock?.close());
         return;
       }
       endLift();
-      if (!target) return;
+      if (!target) {
+        // Let go on the board: it stands there, and what it lands on goes down below it.
+        if (to && board) {
+          keepSpots(moveSpot(board.layout, room.id, to.x, to.y, board.cols));
+          buzz(app, 8);
+          draw();
+        }
+        return;
+      }
       putRoom(target.dataset.house || target.dataset.dropHouse || (target.id === "house-new" ? "new" : null));
     };
     // Two fingers on the room at once, a quick tap: its details and what can be done with it (the
@@ -348,7 +425,89 @@ export function showHome(app) {
       held = true;
       roomMenu(room);
     });
-    return h("div", { class: "room-cell" }, row, star);
+    const cell = h("div", { class: "room-cell", data: { room: room.id } }, row, star);
+    if (spot) placeCell(cell, spot);
+    return cell;
+  }
+
+  /** A room's cell on a board: its spot and the look its size gives (one column an icon, one row a line). */
+  function placeCell(cell, spot) {
+    const look = tileLook(spot);
+    Object.assign(cell.dataset, { x: String(spot.x), y: String(spot.y), w: String(spot.w), h: String(spot.h), look });
+    cell.style.gridColumn = `${spot.x + 1} / span ${spot.w}`;
+    cell.style.gridRow = `${spot.y + 1} / span ${spot.h}`;
+    cell.classList.remove("tile-icon", "tile-line", "tile-card");
+    cell.classList.add("tile-" + look);
+  }
+
+  /**
+   * Held still on a board and let go (the planet waits for a house): a grip at the room's corner, as 햇살's
+   * window has, draws it bigger or smaller cell by cell; one column wide it is an icon with its name
+   * below. A press anywhere else puts the grip away.
+   */
+  function offerSize(cell, side, closePlanet = () => {}) {
+    document.querySelectorAll(".tile-grip").forEach((g) => g.remove());
+    const board = boardOfHalf(side);
+    const spot = board?.layout.get(cell.dataset.room);
+    if (!spot) return;
+    // Above everything (the planet waiting for a house catches every other press), at the room's corner.
+    const grip = h("span", { class: "tile-grip", role: "separator", "aria-label": "크기 바꾸기 (끌어서)" });
+    const look = cell.dataset.look;
+    const at = () => {
+      const r = cell.getBoundingClientRect();
+      grip.style.left = r.right + "px";
+      grip.style.top = r.bottom + "px";
+      grip.dataset.look = cell.dataset.look;
+    };
+    at();
+    grip.dataset.look = look;
+    document.body.append(grip);
+    cell.classList.add("sizing-ready");
+    const scroller = cell.closest(".half-scroll");
+    let drag = null;
+    const away = (e) => {
+      if (grip.contains(e.target) || drag) return;
+      done();
+    };
+    function done() {
+      document.removeEventListener("pointerdown", away, true);
+      scroller?.removeEventListener("scroll", done);
+      grip.remove();
+      cell.classList.remove("sizing-ready", "sizing");
+    }
+    setTimeout(() => document.addEventListener("pointerdown", away, true), 0);
+    scroller?.addEventListener("scroll", done);
+    grip.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      try { grip.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      const r = cell.getBoundingClientRect();
+      drag = { id: e.pointerId, left: r.left, top: r.top, size: { w: spot.w, h: spot.h } };
+      cell.classList.add("sizing");
+      closePlanet();
+    });
+    grip.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const c = cellAt(board, e.clientX, e.clientY);
+      if (!c) return;
+      const w = Math.max(1, Math.min(board.cols - spot.x, Math.round((e.clientX - drag.left + c.gap) / (c.colW + c.gap))));
+      const hgt = Math.max(1, Math.min(MAX_ROWS, Math.round((e.clientY - drag.top + c.rowGap) / (c.rowH + c.rowGap))));
+      if (w === drag.size.w && hgt === drag.size.h) return;
+      drag.size = { w, h: hgt };
+      placeCell(cell, { ...spot, w, h: hgt });
+      at();
+      buzz(app, 4);
+    });
+    const lift = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const size = drag.size;
+      drag = null;
+      done();
+      keepSpots(sizeSpot(board.layout, cell.dataset.room, size.w, size.h, board.cols));
+      draw();
+    };
+    grip.addEventListener("pointerup", lift);
+    grip.addEventListener("pointercancel", lift);
   }
 
   /** 햇살's house under (x, y), or the nearest one within 18 px of it; the window itself when it asks for a house. */
@@ -607,13 +766,22 @@ export function showHome(app) {
         h("p", { class: "half-note", text: note })),
       h("div", { class: "half-scroll" },
         mine.length
-          ? h("div", { class: "rooms" + (cardView() ? " cards" : "") }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
+          ? boardView() ? boardFor(side, mine)
+            : h("div", { class: "rooms" + (cardView() ? " cards" : "") }, mine.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true)))
           : h("p", { class: "empty", text: emptyText }),
         elsewhere.length > 0 && [
           h("p", { class: "group-label", text: "다른 기기에서 만든 방" }),
           h("div", { class: "rooms" + (cardView() ? " cards" : ""), id: side === "daily" ? "others" : "others-creative" }, elsewhere.map((r) => roomRow(r, whenLabel(r.at)))),
         ]),
       h("button", { class: "add", id: "add-" + side, type: "button", "aria-label": title + " 방 만들기", onclick: () => chooseKind(side) }, icon("plus")));
+  }
+
+  /** A half's rooms as a board of cells, each where it was put (new ones in the first free places). */
+  function boardFor(side, rooms) {
+    const cols = boardCols(side);
+    const layout = boardLayout(rooms.map((r) => r.id), savedSpots(), cols);
+    return h("div", { class: "home-board", data: { side, cols: String(cols) }, style: { "--cols": String(cols) } },
+      rooms.map((r) => roomRow(r, r.local ? "이 기기만" : whenLabel(r.at), true, layout.get(r.id))));
   }
 
   function draw() {
@@ -624,6 +792,8 @@ export function showHome(app) {
         : serverKind === "firebase" ? "서버에 연결하지 못해서 방을 이 기기에만 만들었어요. 인터넷을 확인해 주세요"
         : "아직 서버가 없어서 방은 이 기기에만 있어요")
       : app.store.available ? null : "이 기기에는 방 목록이 저장되지 않아요";
+    // A window that is out (설정 while 방 보기 changes) stays out while home draws itself again behind it.
+    const sheetsOut = [...root.querySelectorAll(":scope > .scrim:not(.closing)")];
     // The notice takes its own row above the halves, so it never lies over a button.
     mount(root,
       notice && h("div", { class: "notice", id: "notice", role: "status", text: notice }),
@@ -647,6 +817,7 @@ export function showHome(app) {
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
     // 찾기와 집 stays open while home draws itself again behind it.
     if (panelCtl?.isOpen()) root.append(...panelCtl.nodes);
+    root.append(...sheetsOut);
   }
 
   /** How wide 일상 is against 창작 (a share of the width, 0.5 = halves). */
@@ -956,10 +1127,14 @@ export function showHome(app) {
       pages.set("main", main);
       // 방 보기 (the owner: "방 나열을 카드형으로 바꾸는 설정"): rows, or cards with the room's look large.
       const roomView = h("div", { class: "row" }, h("span", { class: "label", text: "방 보기" }),
-        segmented([["list", "목록", "room-view-list"], ["cards", "카드", "room-view-cards"]], getSettings(app.store).roomView === "cards" ? "cards" : "list", (v) => {
-          setSetting(app.store, "roomView", v);
-          for (const el of root.querySelectorAll(".rooms")) el.classList.toggle("cards", v === "cards");
-        }, "roomView"));
+        segmented([["list", "목록", "room-view-list"], ["cards", "카드", "room-view-cards"], ["board", "보드", "room-view-board"]],
+          ["cards", "board"].includes(getSettings(app.store).roomView) ? getSettings(app.store).roomView : "list", (v) => {
+            const was = getSettings(app.store).roomView;
+            setSetting(app.store, "roomView", v);
+            // Between 목록 and 카드 the rooms only change their look; 보드 lays them out anew.
+            if (v === "board" || was === "board") draw();
+            else for (const el of root.querySelectorAll(".rooms")) el.classList.toggle("cards", v === "cards");
+          }, "roomView"));
       main.append(
         // 나의 고유 코드 first (the owner: "설정에서 잘 보이게").
         myCodeSection(app, root, (title, build) => sheet(title, build), { onChange: codeChanged }),

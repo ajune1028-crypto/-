@@ -1619,6 +1619,35 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .rooms.cards .room-thumb .room-preview { inset: 2.2rem 0.55rem 0.55rem 0.55rem; }
 .rooms.cards .room-thumb .room-preview-text { -webkit-line-clamp: 5; }
 .rooms.cards .room-name { font-size: 0.88rem; }
+/* 방 보기 '보드' (core/home-board.js): a half is a board of cells; each room stands where it was put, as
+   big as it was made - one column an icon with its name below, one row a line, else a card. */
+.home-board { position: relative; display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); grid-auto-rows: 4.6rem; gap: 0.5rem; }
+.home-board > .room-cell { min-width: 0; min-height: 0; }
+.home-board .room-row { height: 100%; overflow: hidden; }
+.home-board .tile-card .room-row { gap: 0.3rem; padding: 0.45rem 0.5rem 0.5rem; }
+.home-board .tile-card .room-thumb { flex: 1; min-height: 0; height: auto; }
+.home-board .tile-card .room-name { font-size: 0.86rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.home-board .tile-line .room-row { flex-direction: row; align-items: center; gap: 0.5rem; padding: 0.4rem 0.55rem; }
+.home-board .tile-line .room-thumb { order: -1; flex: none; width: 2.6rem; height: 2.6rem; }
+.home-board .tile-line .room-thumb .room-preview, .home-board .tile-line .room-meta { display: none; }
+.home-board .tile-line .room-logo { left: 50%; top: 50%; translate: -50% -50%; }
+.home-board .tile-line .room-name { flex: 1; min-width: 0; font-size: 0.84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* An icon: the room's look in a small rounded square (its kind's logo on it), its name under it. */
+.home-board .tile-icon .room-row { align-items: center; justify-content: flex-start; gap: 0.25rem; padding: 0.15rem 0 0; border: 0; background: none; box-shadow: none; }
+.home-board .tile-icon .room-thumb { order: -1; flex: none; width: min(100%, 3.1rem); height: auto; aspect-ratio: 1; border-radius: 0.95rem; box-shadow: var(--glass-shine), 0 4px 12px color-mix(in srgb, var(--tint) 22%, transparent); }
+.home-board .tile-icon .room-thumb .room-preview { opacity: 0.35; }
+.home-board .tile-icon .room-logo { left: 50%; top: 50%; translate: -50% -50%; width: 1.9rem; height: 1.9rem; }
+.home-board .tile-icon .room-name { width: 100%; padding: 0; text-align: center; font-size: 0.7rem; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.home-board .tile-icon .room-meta, .home-board .tile-icon .room-star { display: none; }
+.home-board .tile-icon.room-cell .room-name { padding-right: 0; }
+/* Where a held room would stand if let go. */
+.board-spot { border: 2px dashed color-mix(in srgb, var(--accent-ink) 60%, transparent); border-radius: 1.1rem; background: color-mix(in srgb, var(--tint) 10%, transparent); pointer-events: none; }
+/* Held still and let go: its corner grip (as 햇살's window has) sizes it cell by cell. */
+.home-board .sizing-ready .room-row { box-shadow: var(--glass-shine), 0 0 0 2px color-mix(in srgb, var(--accent-ink) 55%, transparent); }
+.tile-grip { --r: 1.1rem; --gap: 0.18rem; --reach: calc(var(--r) - var(--gap) + 0.6rem); position: fixed; z-index: 81; width: 2.5rem; height: 2.5rem; translate: -2.05rem -2.05rem; touch-action: none; cursor: nwse-resize; }
+.tile-grip::before { content: ""; position: absolute; right: calc(0.45rem + var(--gap)); bottom: calc(0.45rem + var(--gap)); width: var(--reach); height: var(--reach); border: 0 solid var(--accent-ink); border-right-width: 0.24rem; border-bottom-width: 0.24rem; border-bottom-right-radius: calc(var(--r) - var(--gap));
+  -webkit-mask-image: radial-gradient(circle var(--reach) at 100% 100%, #000 50%, transparent 100%); mask-image: radial-gradient(circle var(--reach) at 100% 100%, #000 50%, transparent 100%); }
+.tile-grip[data-look="icon"] { translate: -1.8rem -1.6rem; }
 /* Motion on what exists (ui/motion.js), in my colour: a light passes over a chosen mode's name (the
    words never change), a count rolls in out of my colour, a check draws itself in it, a star pops with a
    ring of it. With reduce motion on, nothing moves: my colour fades in and out where it would have. */
