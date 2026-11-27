@@ -171,6 +171,40 @@ function fillOutline(g, poly) {
 /** px: the line's width in px at 1 rem = 16 px (a stroke's widthOf). */
 /** alpha: the stroke's own 불투명 (0.05 to 1), on top of what the brush itself lays down. */
 /** inside: 알파 잠금 - only over what is already drawn there (source-atop). */
+/**
+ * Layers of lines (bottom first: { strokes, visible, opacity, mode, clip }) painted onto g the way
+ * 그림 방 shows them: each layer on its own (알파 잠금's lines inside what is there), a 클리핑 layer only
+ * where the layer under it has ink, then its 불투명 and 섞기. `at`: from page units to g's pixels
+ * [a, b, c, d, e, f]; `colour`: how a stroke's colour is shown (fixed in 그림·애니메이션 방).
+ */
+export function paintLayers(g, layers, w, hgt, at, colour = fixedInk) {
+  let below = null;
+  for (const layer of layers) {
+    const one = document.createElement("canvas");
+    one.width = w;
+    one.height = hgt;
+    const lg = one.getContext("2d");
+    if (!lg) continue;
+    lg.setTransform(...at);
+    for (const s of layer.strokes || []) paintStroke(lg, s.pts, colour(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s), !!s.a);
+    const base = below;
+    below = layer.clip ? below : { canvas: one, visible: layer.visible !== false };
+    if (layer.clip && base) {
+      if (!base.visible) continue;
+      lg.setTransform(1, 0, 0, 1, 0, 0);
+      lg.globalCompositeOperation = "destination-in";
+      lg.drawImage(base.canvas, 0, 0);
+    }
+    if (layer.visible === false) continue;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = layer.opacity ?? 1;
+    g.globalCompositeOperation = layer.mode || "source-over";
+    g.drawImage(one, 0, 0);
+    g.restore();
+  }
+}
+
 export function paintStroke(g, pts, color, px, brush, shaped = false, alpha = 1, inside = false) {
   if (!pts || pts.length < 3) return;
   const base = brushLook(brush);

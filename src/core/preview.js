@@ -4,6 +4,7 @@
 
 import { clipSpan } from "./song.js";
 import { songWidth } from "./board.js";
+import { widthOf, brushOf } from "./ink.js";
 
 const MAX_LINE = 60;
 const SHOWN_MS = 24000; // a long song shows how it begins
@@ -65,18 +66,24 @@ function cardSize(item) {
   return [item.w || Math.min(260, Math.max(60, longest * 14 + 24)), 36 * lines];
 }
 
-/** The board's cards as a small map, [x, y, width, height, kind (s song, n words, p photo)], within 100 × 60. */
-export function boardPreview(board) {
+/**
+ * The board's cards as a small map, [x, y, width, height, kind (s song, n words, p photo)], within
+ * 100 × 60. `ink`: the box what is drawn on the board takes, in board px ([x0, y0, x1, y1]); the map
+ * takes it in, and `map` ([x0, y0, scale, ox, oy]) says where it lies, for home to paint the drawing
+ * under the cards (the owner, 27 November: what was drawn on a board never showed on home).
+ */
+export function boardPreview(board, ink = null) {
   const items = board.items().slice(0, MAX_CARDS);
-  if (!items.length) return null;
+  if (!items.length && !ink) return null;
   const boxes = items.map((it) => {
     const [w, h] = cardSize(it);
     return { x: it.x || 0, y: it.y || 0, w, h, k: it.kind === "song" ? "s" : it.kind === "photo" ? "p" : "n" };
   });
-  const x0 = Math.min(...boxes.map((b) => b.x));
-  const y0 = Math.min(...boxes.map((b) => b.y));
-  const x1 = Math.max(...boxes.map((b) => b.x + b.w));
-  const y1 = Math.max(...boxes.map((b) => b.y + b.h));
+  const all = ink ? [...boxes, { x: ink[0], y: ink[1], w: ink[2] - ink[0], h: ink[3] - ink[1] }] : boxes;
+  const x0 = Math.min(...all.map((b) => b.x));
+  const y0 = Math.min(...all.map((b) => b.y));
+  const x1 = Math.max(...all.map((b) => b.x + b.w));
+  const y1 = Math.max(...all.map((b) => b.y + b.h));
   const scale = Math.min(MAP_W / Math.max(1, x1 - x0), MAP_H / Math.max(1, y1 - y0), MAP_SCALE);
   // What is smaller than the map sits in its middle.
   const ox = Math.max(0, (MAP_W - (x1 - x0) * scale) / 2);
@@ -86,7 +93,7 @@ export function boardPreview(board) {
     const h = Math.max(2, Math.min(MAP_H, Math.round(b.h * scale)));
     return [Math.min(MAP_W - w, Math.round(ox + (b.x - x0) * scale)), Math.min(MAP_H - h, Math.round(oy + (b.y - y0) * scale)), w, h, b.k];
   });
-  return { t: "board", cards };
+  return ink ? { t: "board", cards, map: [x0, y0, scale, ox, oy].map((v) => Math.round(v * 1e4) / 1e4) } : { t: "board", cards };
 }
 
 const MAX_LINES = 40;
@@ -141,6 +148,54 @@ export function drawPreview(layers) {
   };
 }
 
+/**
+ * Where drawn lines are, in their own units, widths included: [x0, y0, x1, y1], or null. `lists`:
+ * the strokes of each part shown (a layer, a frame, the background). Rubbing out is no place.
+ */
+export function inkBox(lists) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const strokes of lists || []) {
+    for (const s of strokes || []) {
+      if (!s || !Array.isArray(s.pts) || s.pts.length < 3 || brushOf(s) === "erase") continue;
+      const r = widthOf(s) * (100 / 16) * 0.6;
+      for (let i = 0; i + 1 < s.pts.length; i += 3) {
+        x0 = Math.min(x0, s.pts[i] - r);
+        x1 = Math.max(x1, s.pts[i] + r);
+        y0 = Math.min(y0, s.pts[i + 1] - r);
+        y1 = Math.max(y1, s.pts[i + 1] + r);
+      }
+    }
+  }
+  return x0 <= x1 ? [x0, y0, x1, y1] : null;
+}
+
+/**
+ * How a box sits in the 100 × 60 map: in its middle with a little room round it (a line at the very
+ * edge looked cut off), a small one drawn larger (never above maxScale per unit).
+ */
+export function boxMap(box, maxScale = DRAW_SCALE, pad = 4) {
+  if (!box) return null;
+  const [x0, y0, x1, y1] = box;
+  const scale = Math.min((MAP_W - 2 * pad) / Math.max(1, x1 - x0), (MAP_H - 2 * pad) / Math.max(1, y1 - y0), maxScale);
+  return { x0, y0, scale, ox: (MAP_W - (x1 - x0) * scale) / 2, oy: (MAP_H - (y1 - y0) * scale) / 2 };
+}
+
+/**
+ * A flipbook on home plays (the owner, 27 November: drawing on any page changed nothing there): the
+ * frames it shows, at most `max`, spread evenly from the first to the last, and how long one pass
+ * takes at its speed (its holds counted), between 0.4 and 6 seconds.
+ */
+export function filmPlan(frames, fps, max = 12) {
+  if (!frames?.length) return null;
+  const n = Math.min(max, frames.length);
+  const ids = Array.from({ length: n }, (_, i) => frames[Math.round((i * (frames.length - 1)) / Math.max(1, n - 1))].id);
+  const ticks = frames.reduce((t, f) => t + (f.hold || 1), 0);
+  return { ids, ms: Math.round(Math.max(400, Math.min(6000, (ticks / Math.max(1, fps)) * 1000))) };
+}
+
 const nums = (a, n) => Array.isArray(a) && a.length === n && a.every((v) => Number.isFinite(v));
 
 /** True for a preview home may draw (what is kept on the device is read back with care). */
@@ -156,7 +211,7 @@ export function validPreview(p) {
       typeof l[0] === "string" && l[0].length <= 24 && l.slice(1).every((v) => Number.isFinite(v)));
   }
   if (p.t === "board") {
-    return Array.isArray(p.cards) && p.cards.length <= 32 &&
+    return Array.isArray(p.cards) && p.cards.length <= 32 && (p.map === undefined || nums(p.map, 5)) &&
       p.cards.every((c) => Array.isArray(c) && c.length === 5 && nums(c.slice(0, 4), 4) && ["s", "n", "p"].includes(c[4]));
   }
   return false;

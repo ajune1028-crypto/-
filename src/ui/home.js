@@ -13,6 +13,7 @@ import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { myCode, myCodeSection, openMyCodeIntro } from "./my-code.js";
 import { gesturesPage, hintOnce } from "./gestures.js";
+import { pictureOf } from "./preview-pic.js";
 import { burst } from "./motion.js";
 import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
 import { sealedTransport } from "../sync/sealed.js";
@@ -98,7 +99,19 @@ function historyView(hist) {
   return parts;
 }
 
-function previewOf(room) {
+/**
+ * What is drawn in a room as it was painted there (ui/preview-pic.js): a picture, or a flipbook's
+ * frames one after another (still when motion is turned down). Null when none is kept.
+ */
+function pictureView(pic) {
+  if (!pic || pic.ink) return null;
+  return h("span", { class: "room-preview room-preview-pic" + (pic.n > 1 ? " film" : ""), "aria-hidden": "true" },
+    h("i", { class: "pv-pic", style: { backgroundImage: `url("${pic.img}")`, "--n": String(pic.n), "--ms": (pic.ms || 1000) + "ms" } }));
+}
+
+function previewOf(room, pic = null) {
+  const shown = pictureView(pic);
+  if (shown) return shown;
   const p = room.preview;
   if (!validPreview(p)) return null;
   if (p.t === "text") return h("span", { class: "room-preview room-preview-text", text: p.line });
@@ -136,6 +149,12 @@ function previewOf(room) {
   svg.setAttribute("class", "room-preview room-preview-board");
   svg.setAttribute("viewBox", "0 0 100 60");
   svg.setAttribute("aria-hidden", "true");
+  // What is drawn on the board, under its cards (painted as drawn; turned for 어둡게 as the board turns it).
+  if (pic?.ink && p.map) {
+    const ink = document.createElementNS(NS, "image");
+    for (const [key, v] of Object.entries({ href: pic.img, x: 0, y: 0, width: 100, height: 60, preserveAspectRatio: "none", class: "pv-ink" + (currentTheme() === "dark" ? " dark" : "") })) ink.setAttribute(key, v);
+    svg.append(ink);
+  }
   for (const [x, y, w, hgt, k] of p.cards) {
     const r = document.createElementNS(NS, "rect");
     for (const [key, v] of Object.entries({ x, y, width: w, height: hgt, rx: 1.6, class: "pv-card pv-" + k })) r.setAttribute(key, v);
@@ -163,6 +182,7 @@ export function showHome(app) {
     let held = false;
     let timer = null;
     let start = null;
+    const pic = ["creative-draw", "creative-anim", "creative-board"].includes(room.kind) ? pictureOf(app.store, room.id) : null;
     const row = h("button", { class: "room-row" + (isStarred ? " starred" : ""), type: "button", data: { id: room.id, roomKind: room.kind || "daily-text" }, onclick: (e) => {
       if (held) {
         held = false;
@@ -175,9 +195,9 @@ export function showHome(app) {
       // what kind of room it is as a round logo with only its icon inside the box at its top left
       // ("무슨 방인지 알려주는 그런 동그란 아이콘은 네모 안에 왼쪽 끝에 위에").
       h("span", { class: "room-name" }, room.name, house && h("span", { class: "room-house", role: "img", "aria-label": `${house.name}에 있어요`, title: house.name }, houseShape(house))),
-      h("span", { class: "room-thumb" + (validPreview(room.preview) ? "" : " no-preview") },
+      h("span", { class: "room-thumb" + (validPreview(room.preview) || pic ? "" : " no-preview") },
         h("span", { class: "room-logo", role: "img", "aria-label": kind?.name || "새 버전의 방", title: kind?.name || "새 버전의 방" }, icon(kind?.icon || "lines")),
-        previewOf(room)),
+        previewOf(room, pic)),
       h("span", { class: "room-meta" },
         when && h("span", { class: "room-when", text: when }),
         // Who is behind the door: the colours of the people in it, once it is more than me.

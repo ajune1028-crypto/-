@@ -2318,3 +2318,13 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* ‹ 3/12 › a little smaller, so more frames are in view on a phone. */
 .anim-dock .anim-step { width: 1.6rem; height: 2.4rem; }
 .anim-dock .anim-where { min-width: 2.3rem; }
+
+/* Home's pictures of drawings (ui/preview-pic.js): painted as the room paints them; a flipbook's frames
+   one after another (still when motion is turned down). */
+.room-preview-pic { display: grid; place-items: center; width: 4.6rem; height: 2.76rem; overflow: hidden; border-radius: 0.45rem; background: #fdfdfb; container-type: size; }
+.room-preview-pic .pv-pic { display: block; width: min(100cqw, 100cqh * 5 / 3); height: min(100cqh, 100cqw * 3 / 5); background-repeat: no-repeat; background-position: 0 0; background-size: calc(var(--n, 1) * 100%) 100%; }
+.room-preview-pic.film .pv-pic { animation: pv-film var(--ms, 1s) steps(var(--n), jump-none) infinite; }
+@keyframes pv-film { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .room-preview-pic.film .pv-pic { animation: none; } }
+.room-thumb .room-preview-pic { width: auto; height: auto; background: #fdfdfb; }
+.room-preview-board .pv-ink.dark { filter: invert(1) hue-rotate(180deg); }

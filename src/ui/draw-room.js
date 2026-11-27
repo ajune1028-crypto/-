@@ -10,7 +10,7 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween, paintLayers } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
@@ -459,28 +459,7 @@ export function mountDrawRoom(body, app, session, frame) {
       g.fillStyle = paper;
       g.fillRect(0, 0, w, hgt);
     }
-    const layers = doc.layers();
-    let below = null; // the last layer's own picture (a clipping layer above keeps only where it has ink)
-    for (const layer of layers) {
-      const one = document.createElement("canvas");
-      one.width = w;
-      one.height = hgt;
-      const lg = one.getContext("2d");
-      lg.setTransform(w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0);
-      for (const s of session.doc(inkDocOf(layer.id)).strokes()) paintStroke(lg, s.pts, fixedInk(s.c), widthOf(s), brushOf(s), !!s.q, opacityOf(s), !!s.a);
-      const base = below;
-      below = layer.clip ? below : { canvas: one, visible: layer.visible };
-      if (layer.clip && base) {
-        if (!base.visible) continue;
-        lg.setTransform(1, 0, 0, 1, 0, 0);
-        lg.globalCompositeOperation = "destination-in";
-        lg.drawImage(base.canvas, 0, 0);
-      }
-      if (!layer.visible) continue;
-      g.globalAlpha = layer.opacity;
-      g.globalCompositeOperation = layer.mode;
-      g.drawImage(one, 0, 0);
-    }
+    paintLayers(g, doc.layers().map((layer) => ({ ...layer, strokes: session.doc(inkDocOf(layer.id)).strokes() })), w, hgt, [w / PAGE_W, 0, 0, hgt / PAGE_H, 0, 0]);
     out.toBlob((blob) => {
       if (!blob) return void toast(root, "저장하지 못했어요");
       const url = URL.createObjectURL(blob);

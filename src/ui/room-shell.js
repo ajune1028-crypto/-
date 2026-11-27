@@ -15,7 +15,8 @@ import { kindInfo, sideOf } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { watchContrast } from "./contrast.js";
 import { textPreview, songPreview, boardPreview, drawPreview } from "../core/preview.js";
-import { inkDocOf } from "../core/draw.js";
+import { inkDocOf, PAPERS } from "../core/draw.js";
+import { drawingPicture, filmPicture, boardInkPicture, boardInkBox, keepPicture } from "./preview-pic.js";
 import { frameDocOf } from "../core/anim.js";
 import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
@@ -182,18 +183,26 @@ export function showRoom(app, roomId) {
     session.setMe(memberId);
     // The room's 역사: who came in when.
     session.noteVisit();
-    // withPreview: also what home shows of the room (its last line, its notes, its cards), worked
-    // out when the room is left or the app goes to the background.
-    const remember = (withPreview = false) => rememberRoom(app.store, {
+    // preview: also what home shows of the room (its last line, its notes, its cards), worked out
+    // when the room is left or the app goes to the background (undefined keeps the one it had).
+    const remember = (preview = undefined) => rememberRoom(app.store, {
       id: roomId, kind: session.room.meta("kind") || "daily-text", name: session.room.meta("name") || "방", memberId,
       people: session.room.members().map((m) => m.color), ...(newKey ? { key: newKey } : {}),
-      ...(withPreview ? { preview: previewNow() } : {}),
+      ...(preview !== undefined ? { preview } : {}),
     });
     remember();
     // Only while the room is still in my list ('방 나가기' takes it out, and leaving must not bring it back).
     const keepPreview = () => {
       if (!roomEntry(app.store, roomId)) return;
-      remember(true);
+      const preview = previewNow();
+      remember(preview);
+      // What is drawn here, painted as the room paints it, for home (ui/preview-pic.js).
+      try {
+        const pic = pictureNow(preview);
+        if (pic !== undefined) keepPicture(app.store, roomId, pic);
+      } catch (err) {
+        console.warn(err);
+      }
       // Its words too, for 찾기 (내용) on home.
       const words = wordsNow();
       if (words !== undefined) keepRoomWords(app.store, roomId, words);
@@ -377,7 +386,8 @@ export function showRoom(app, roomId) {
         return seen || (read.length < days.length ? undefined : null);
       }
       if (kind === "creative-song") return session.isLoaded("song") ? songPreview(session.doc("song")) : undefined;
-      if (kind === "creative-board") return session.isLoaded("board") ? boardPreview(session.doc("board")) : undefined;
+      // A board's map takes in what is drawn on it too (its picture lies under the cards on home).
+      if (kind === "creative-board") return session.isLoaded("board") ? boardPreview(session.doc("board"), session.isLoaded("k:board") ? boardInkBox(session.doc("k:board").strokes()) : null) : undefined;
       // 그림 방: its layers as they show; 애니메이션 방: its first page over its background (the owner,
       // 21 November: "그림 모드나 애니 모드도 미리보기도 나오게").
       if (kind === "creative-draw") {
@@ -395,6 +405,37 @@ export function showRoom(app, roomId) {
       }
     } catch (err) {
       console.warn(err);
+    }
+    return undefined;
+  }
+
+  /**
+   * What is drawn here as home's picture (ui/preview-pic.js): 그림 방 its layers on its paper; 애니메이션
+   * 방 its frames over the background, to play in turn; a whiteboard its drawing, placed as `preview`'s
+   * map. undefined: not read yet (the picture kept before stays); null: nothing drawn.
+   */
+  function pictureNow(preview) {
+    const kind = session.room.meta("kind") || "daily-text";
+    const paperOf = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1] || null;
+    if (kind === "creative-draw") {
+      if (!session.isLoaded("draw")) return undefined;
+      const doc = session.doc("draw");
+      const layers = doc.layers();
+      if (layers.some((l) => !session.isLoaded(inkDocOf(l.id)))) return undefined;
+      return drawingPicture(layers.map((l) => ({ ...l, strokes: session.doc(inkDocOf(l.id)).strokes() })), paperOf(doc.paper()));
+    }
+    if (kind === "creative-anim") {
+      if (!session.isLoaded("anim")) return undefined;
+      const anim = session.doc("anim");
+      const frames = anim.frames();
+      if ([frameDocOf("bg"), ...frames.map((f) => frameDocOf(f.id))].some((d) => !session.isLoaded(d))) return undefined;
+      const bg = session.doc(frameDocOf("bg")).strokes();
+      const { fps, paper } = anim.settings();
+      return filmPicture(frames, fps, (id) => [{ strokes: bg }, { strokes: session.doc(frameDocOf(id)).strokes() }], paperOf(paper));
+    }
+    if (kind === "creative-board") {
+      if (preview === undefined || !session.isLoaded("k:board")) return undefined;
+      return preview?.map ? boardInkPicture(session.doc("k:board").strokes(), preview.map) : null;
     }
     return undefined;
   }

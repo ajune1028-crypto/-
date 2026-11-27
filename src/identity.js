@@ -55,6 +55,29 @@ export function openStore(storage, prefix = "") {
         available = false;
       }
     },
+    /** A write that may not fit (home's pictures): false when there was no room, and the store goes on. */
+    trySet(key, value) {
+      if (!available) {
+        memory.set(key, copy(value));
+        return true;
+      }
+      try {
+        backing.setItem(prefix + key, JSON.stringify(value));
+        memory.set(key, copy(value));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    remove(key) {
+      memory.delete(key);
+      if (!available) return;
+      try {
+        backing.removeItem(prefix + key);
+      } catch {
+        /* nothing to take away */
+      }
+    },
   };
 }
 
@@ -97,6 +120,7 @@ export function roomEntry(store, id) {
 }
 
 export function forgetRoom(store, id) {
+  store.remove?.("pv:" + id);
   store.set("rooms", store.get("rooms", []).filter((r) => r.id !== id));
 }
 

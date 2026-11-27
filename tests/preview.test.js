@@ -118,3 +118,58 @@ test("a drawing with many lines keeps the newest ones; a kept drawing preview is
   assert.ok(!validPreview({ t: "draw", lines: [["red", 1, 0, "x", 2]] }));
   assert.ok(!validPreview({ t: "draw", lines: Array.from({ length: 60 }, () => ["red", 1, 0, 1, 2, 3, 4]) }));
 });
+
+// The owner (27 November): "미리보기 홈화면 ui에서 선이 이상하게 끊겨 보인다던가, 어디는 약간 업데이트가 안
+// 돼었다던가, 직관적이게". Home's pictures of drawings are painted with the room's own brushes now; this is
+// where on the small picture the lines go.
+test("a drawing's picture on home: the box its lines take (widths included, rubbing out is no place) fitted into the map, a small one larger", async () => {
+  const { inkBox, boxMap } = await import("../src/core/preview.js");
+  const line = (x0, y0, x1, y1, extra = {}) => ({ pts: [x0, y0, 50, (x0 + x1) / 2, (y0 + y1) / 2, 50, x1, y1, 50], c: "red", w: 2, ...extra });
+  assert.equal(inkBox([[]]), null, "nothing drawn");
+  assert.equal(inkBox([[line(0, 0, 50, 50, { b: "erase" })]]), null, "rubbing out alone is nothing to show");
+  const box = inkBox([[line(100, 100, 1100, 600)], [line(200, 700, 300, 800, { z: 400 })]]);
+  // A width-2 line (4 px = 25 units across) reaches 15 units past its points; the 40 px one 150.
+  assert.deepEqual(box, [50, 85, 1115, 950]);
+  const m = boxMap(box);
+  const at = (x, y) => [m.ox + (x - m.x0) * m.scale, m.oy + (y - m.y0) * m.scale];
+  const [ax, ay] = at(box[0], box[1]);
+  const [bx, by] = at(box[2], box[3]);
+  assert.ok(ax >= 4 - 1e-9 && ay >= 4 - 1e-9 && bx <= 96 + 1e-9 && by <= 56 + 1e-9, "inside the map, a little room round it: " + [ax, ay, bx, by]);
+  assert.ok(Math.abs(ax - (100 - bx)) < 1e-6 && Math.abs(ay - (60 - by)) < 1e-6, "in its middle");
+  // A doodle is drawn larger, never above 0.2 of the map per page unit.
+  assert.equal(boxMap([0, 0, 20, 10]).scale, 0.2);
+});
+
+test("a board's map takes in what is drawn on it (a board with only a drawing has a map too); home checks it", async () => {
+  const { boardPreview, validPreview: valid } = await import("../src/core/preview.js");
+  const board = new BoardDoc();
+  const clock = new Clock("a");
+  const commit = (made) => { for (const op of made.ops) board.apply(op); return made; };
+  const onlyInk = boardPreview(board, [1000, 500, 1400, 700]);
+  assert.equal(onlyInk.t, "board");
+  assert.deepEqual(onlyInk.cards, []);
+  assert.equal(onlyInk.map.length, 5, "[x0, y0, scale, ox, oy]");
+  assert.ok(valid(onlyInk));
+  commit(addItemOps(clock, board, { kind: "note", x: 0, y: 0, data: { text: "메모" }, by: "m1" }));
+  const both = boardPreview(board, [1000, 500, 1400, 700]);
+  const [x0, y0, scale, ox, oy] = both.map;
+  const at = (x, y) => [ox + (x - x0) * scale, oy + (y - y0) * scale];
+  const [ix, iy] = at(1400, 700);
+  assert.ok(ix <= 100 + 1e-6 && iy <= 60 + 1e-6, "the drawing's far corner is on the map: " + [ix, iy]);
+  assert.ok(both.cards[0][0] < 30, "the note is at the left of the map, the drawing to its right");
+  assert.ok(!valid({ t: "board", cards: [], map: [0, 0, "x", 0, 0] }));
+});
+
+test("a flipbook's picture on home plays its frames: at most twelve, spread evenly from the first to the last, as long as one pass", async () => {
+  const { filmPlan } = await import("../src/core/preview.js");
+  assert.equal(filmPlan([], 12), null);
+  const two = filmPlan([{ id: "a", hold: 1 }, { id: "b", hold: 1 }], 12);
+  assert.deepEqual(two.ids, ["a", "b"]);
+  assert.equal(two.ms, 400, "a very short one plays at least 0.4 s a pass");
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: "f" + i, hold: i === 0 ? 3 : 1 }));
+  const film = filmPlan(many, 8);
+  assert.equal(film.ids.length, 12);
+  assert.equal(film.ids[0], "f0");
+  assert.equal(film.ids[11], "f29");
+  assert.equal(film.ms, Math.round((32 / 8) * 1000), "32 ticks at 8 a second");
+});

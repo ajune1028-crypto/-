@@ -5802,8 +5802,11 @@ scenario("그림 방 ink keeps its colour in 밝게 and 어둡게: a black line 
   assert.ok(light < 200 && Math.abs(light - dark) < 30, "the same in 밝게: " + [dark, light]);
 });
 
-// The owner (21 November): "그림 모드나 애니 모드도 미리보기도 나오게 해 줘라".
-scenario("home previews for 그림 방 and 애니메이션 방: what was drawn shows on home in its own colours", async ({ open, out }) => {
+// The owner (21 November): "그림 모드나 애니 모드도 미리보기도 나오게 해 줘라"; (27 November) "미리보기 홈화면
+// ui에서 선이 이상하게 끈겨보인다던가. 어디는 약간 업데이트가 안돼었다던가. 직관적이게". Home shows what is drawn
+// as the room painted it: what was rubbed out is gone, a flipbook's frames play one after another, and
+// what is drawn on a whiteboard lies under its cards.
+scenario("home previews for 그림 방, 애니메이션 방 and the whiteboard: painted as the room paints them (rubbing out shows), a flipbook's frames in turn, a board's drawing under its cards", async ({ open, out }) => {
   const a = await open({ width: 420, height: 860 });
   const make = async (kind, name) => {
     await click(a, "#add-creative");
@@ -5814,30 +5817,81 @@ scenario("home previews for 그림 방 and 애니메이션 방: what was drawn s
     await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
     await click(a, "#invite-done");
   };
-  const stroke = async (sel) => {
-    await a.waitFor(q(sel));
-    const p = await a.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
-    await pickColor(a, "red");
-    await a.press(p.x + p.w * 0.2, p.y + p.h * 0.3);
-    for (let i = 1; i <= 10; i++) await a.moveTo(p.x + p.w * (0.2 + 0.05 * i), p.y + p.h * (0.3 + 0.02 * i));
-    await a.release(p.x + p.w * 0.7, p.y + p.h * 0.5);
+  const boxOf = (sel) => a.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const drag = async (sel, from, to, steps = 12) => {
+    const p = await boxOf(sel);
+    await a.press(p.x + p.w * from[0], p.y + p.h * from[1]);
+    for (let i = 1; i <= steps; i++) await a.moveTo(p.x + p.w * (from[0] + ((to[0] - from[0]) * i) / steps), p.y + p.h * (from[1] + ((to[1] - from[1]) * i) / steps));
+    await a.release(p.x + p.w * to[0], p.y + p.h * to[1]);
   };
+  // Reads a room's picture on home: per column of each frame, whether it has red (r) or dark (d) ink.
+  const picture = (name) => a.eval(`(async () => {
+    const row = [...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === ${JSON.stringify(name)});
+    const el = row?.querySelector(".room-preview-pic .pv-pic");
+    if (!el) return null;
+    const url = getComputedStyle(el).backgroundImage.slice(5, -2);
+    const n = Number(getComputedStyle(el).getPropertyValue("--n")) || 1;
+    const img = new Image(); img.src = url; await img.decode();
+    const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+    const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    const fw = c.width / n;
+    const frames = [];
+    for (let f = 0; f < n; f++) {
+      const cols = [], rows = [];
+      for (let x = 0; x < fw; x++) { let red = 0; for (let y = 0; y < c.height; y++) { const i = (y * c.width + f * fw + x) * 4; if (d[i] > 150 && d[i + 1] < 110 && d[i + 2] < 110) red++; } cols.push(red); }
+      for (let y = 0; y < c.height; y++) { let ink = 0; for (let x = 0; x < fw; x++) { const i = (y * c.width + f * fw + x) * 4; if (d[i] < 120 && d[i + 1] < 120 && d[i + 2] < 120) ink++; } rows.push(ink); }
+      frames.push({ cols, rows });
+    }
+    return { n, w: fw, h: c.height, film: row.querySelector(".room-preview-pic").classList.contains("film"), frames };
+  })()`);
+  // 그림 방: a red line along the page, its middle rubbed out.
   await make("creative-draw", "그림 미리보기");
   await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
-  await stroke("#draw-page");
+  await pickColor(a, "red");
+  await drag("#draw-page", [0.2, 0.4], [0.8, 0.4], 14);
   await a.waitFor(`window.__app.session.doc("k:L" + window.__app.session.doc("draw").layers()[0].id).strokes().length === 1`);
+  await click(a, "#eraser");
+  await drag("#draw-page", [0.5, 0.3], [0.5, 0.5], 8);
+  await a.waitFor(`window.__app.session.doc("k:L" + window.__app.session.doc("draw").layers()[0].id).strokes().length === 2`);
   await click(a, "#back");
   await a.waitFor(q("#home"));
+  const drawn = await picture("그림 미리보기");
+  assert.ok(drawn && drawn.n === 1, "그림 방 shows its picture: " + JSON.stringify(drawn && { n: drawn.n }));
+  const cols = drawn.frames[0].cols;
+  const third = Math.floor(cols.length / 3);
+  const sum = (from, to) => cols.slice(from, to).reduce((t, v) => t + v, 0);
+  const mid = cols.slice(Math.floor(cols.length * 0.4), Math.ceil(cols.length * 0.6));
+  let gap = 0;
+  for (let run = 0, i = 0; i < mid.length; i++) { run = mid[i] === 0 ? run + 1 : 0; gap = Math.max(gap, run); }
+  assert.ok(sum(0, third) > 20 && sum(2 * third, cols.length) > 20, "the red line's two ends are there: " + [sum(0, third), sum(2 * third, cols.length)]);
+  assert.ok(gap >= 4, "what was rubbed out is gone on home too (a gap in the middle): " + mid);
+  // 애니메이션 방: frame 1 a line near the top, frame 2 one near the bottom: home plays them in turn.
   await make("creative-anim", "애니 미리보기");
-  await stroke("#anim-page");
-  await pause(300);
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2`);
+  const [f1, f2] = await a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  await drag("#anim-page", [0.25, 0.2], [0.75, 0.2]);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes().length === 1`);
+  await click(a, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q(`.anim-frame[data-frame="${f2}"]`)}.classList.contains("on")`);
+  await drag("#anim-page", [0.25, 0.8], [0.75, 0.8]);
+  await a.waitFor(`window.__app.session.doc("k:F${f2}").strokes().length === 1`);
   await click(a, "#back");
   await a.waitFor(q("#home"));
-  const shown = await a.eval(`[...document.querySelectorAll(".room-row")].map((r) => ({ name: r.querySelector(".room-name").textContent, lines: r.querySelectorAll(".room-preview-draw polyline, .room-preview-draw polygon").length, colour: r.querySelector(".room-preview-draw polyline")?.getAttribute("stroke") || "" }))`);
-  const draw = shown.find((r) => r.name === "그림 미리보기");
-  const anim = shown.find((r) => r.name === "애니 미리보기");
-  assert.ok(draw && draw.lines === 1 && /^#|rgb/.test(draw.colour), "그림 방 shows its line: " + JSON.stringify(shown));
-  assert.ok(anim && anim.lines >= 1, "애니메이션 방 shows its first page: " + JSON.stringify(shown));
+  const film = await picture("애니 미리보기");
+  assert.ok(film && film.n === 2 && film.film, "the flipbook's two frames, one after another: " + JSON.stringify(film && { n: film.n, film: film.film }));
+  const topOf = (rows) => rows.findIndex((v) => v > 0);
+  assert.ok(topOf(film.frames[0].rows) < topOf(film.frames[1].rows) - 10, "frame 1's line above frame 2's: " + [topOf(film.frames[0].rows), topOf(film.frames[1].rows)]);
+  // The whiteboard: a line drawn on it shows under its cards.
+  await make("creative-board", "보드 미리보기");
+  await a.waitFor(q("#board-pen"));
+  await click(a, "#board-pen");
+  await a.waitFor(`!${q("#board-ink-tools")}.hidden && ${q("#board-pen")}.getAttribute("aria-pressed") === "true"`);
+  await drag("#room-body", [0.3, 0.5], [0.7, 0.55]);
+  await a.waitFor(`window.__app.session.doc("k:board").strokes().length === 1`, 3000);
+  await click(a, "#back");
+  await a.waitFor(q("#home"));
+  assert.ok(await a.eval(`!![...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === "보드 미리보기")?.querySelector(".room-preview-board image.pv-ink")`), "the board's drawing shows on home");
   await a.shot(out("home-draw-previews.png"));
 });
 
