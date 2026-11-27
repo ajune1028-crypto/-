@@ -1008,7 +1008,7 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 .ink-tools.row .ink-sep { width: 1px; height: 1.4rem; margin: 0 0.1rem; }
 .ink-widths { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; }
 .ink-tools.row .ink-widths { flex-direction: row; }
-.ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: clamp(4.5rem, 22dvh, 9rem); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ink-tools.rail .size-rail { position: relative; left: auto; top: auto; flex: none; width: 1.35rem; height: var(--size-h, clamp(4.5rem, 22dvh, 9rem)); margin: 0.1rem auto; transform: none; opacity: 1; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* 올가미 on drawings: its few actions beside what it holds (faded while it is carried). */
 .ink-lasso-menu { position: fixed; z-index: 70; display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass-bg), color-mix(in srgb, var(--paper) 84%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); animation: pop-in 0.18s var(--ease); }
 .ink-lasso-menu.moving { opacity: 0.25; pointer-events: none; transition: opacity 0.15s; }
@@ -2362,10 +2362,6 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .ink-tools[data-turn="90"] .size-thumb { top: 50%; bottom: auto; left: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); margin: -0.575rem 0 0 -0.575rem; }
 .ink-tools[data-turn="270"] .size-thumb { top: 50%; bottom: auto; left: auto; right: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); margin: -0.575rem -0.575rem 0 0; }
 .ink-tools[data-turn="180"] .size-thumb { top: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); bottom: auto; margin: -0.575rem 0 0 -0.575rem; }
-.ink-tools:is([data-turn="90"], [data-turn="270"]) .size-peek { bottom: calc(100% + 0.9rem); }
-.ink-tools[data-turn="90"] .size-peek { left: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateX(-50%); }
-.ink-tools[data-turn="270"] .size-peek { left: auto; right: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateX(50%); }
-.ink-tools[data-turn="180"] .size-peek { bottom: auto; top: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateY(-50%); }
 /* Coming apart: the pieces part a little, each its own outline, swaying (still when motion is turned down). */
 .ink-tools.pieced.arranging, .ink-tools.pieced.arranging > .ink-stack { touch-action: none; }
 .ink-tools.pieced.arranging > .ink-stack { gap: 0.6rem; padding: 0.15rem; }
@@ -2396,3 +2392,5 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .color-drop-ring { position: fixed; z-index: 97; width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; border-radius: 50%; border: 3px solid var(--c); pointer-events: none; animation: drop-ring 0.55s var(--ease) forwards; }
 @keyframes drop-ring { from { scale: 0.4; opacity: 1; } to { scale: 5; opacity: 0; } }
 .ink-width { touch-action: manipulation; -webkit-touch-callout: none; }
+/* The brush's dot while the size bar is held: on the screen beside the bar (never cut off by the rail). */
+.size-peek.floating { position: fixed; z-index: 90; right: auto; bottom: auto; transform: translate(-50%, -50%); opacity: 1; transition: none; }

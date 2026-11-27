@@ -6279,11 +6279,12 @@ scenario("붓 크기 막대: the thin bar at the left edge makes the brush very 
   // Up to the top: the boldest. The dot beside it shows the size while the finger is on the bar.
   await a.press(rail.x, rail.bottom - 30);
   for (let k = 1; k <= 8; k++) await a.moveTo(rail.x, rail.bottom - 30 - ((rail.bottom - rail.top) * k) / 8);
-  const peek = await a.eval(`(() => { const p = document.querySelector("#size-rail .size-peek"); return { shown: getComputedStyle(p).opacity, w: p.getBoundingClientRect().width }; })()`);
+  const peek = await a.eval(`(() => { const p = document.getElementById("size-peek"); const r = p.getBoundingClientRect(); const bar = document.getElementById("size-rail").getBoundingClientRect(); const box = document.getElementById("ink-tools").getBoundingClientRect(); return { shown: getComputedStyle(p).opacity, w: r.width, beside: r.left > box.right - 2, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, high: Math.abs((r.top + r.bottom) / 2 - bar.top) < 40 }; })()`);
   await a.shot(out("size-rail.png"));
   await a.release(rail.x, rail.top - 10);
   assert.equal(await a.eval(`${q("#size-rail")}.getAttribute("aria-valuenow")`), "40");
-  assert.ok(Number(peek.shown) > 0.5 && peek.w > 25, "the dot shows a bold brush: " + JSON.stringify(peek));
+  assert.ok(Number(peek.shown) > 0.5 && peek.w > 25 && peek.beside && peek.inView && peek.high, "the dot shows a bold brush beside the rail, whole on the screen, by the bar's top: " + JSON.stringify(peek));
+  assert.equal(await a.eval(`!!document.getElementById("size-peek")`), false, "the dot goes when the finger lifts");
   assert.equal(await a.eval(`document.querySelectorAll('#ink-tools .ink-width[aria-pressed="true"]').length`), 0, "no width chosen in the tools");
   const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   const line = async (v) => {
@@ -7694,7 +7695,7 @@ scenario("설정 in pages and 방 보기: the first page is short with the rest 
   })()`);
   assert.ok(first.code && first.theme && first.view, "the first page: my code, the look and 방 보기: " + JSON.stringify(first).slice(0, 200));
   assert.equal(first.tintVisible, false, "색 세기 is one step in");
-  assert.deepEqual(first.links, ["feel", "find", "games", "diag"]);
+  assert.deepEqual(first.links, ["feel", "find", "games", "gestures", "diag"]);
   await page.shot(out("settings-first-page.png"));
   // One step in and back.
   await click(page, '[data-settings-part="find"]');
@@ -8265,7 +8266,15 @@ scenario("그림 방 and 애니메이션 방 on phone and tablet sizes: the draw
       const label = `${kind} ${w}×${hh}: ${JSON.stringify(boxes)}`;
       for (const k of ["strip", "tools", "bar", "page", "prev"]) assert.ok(!overlap(boxes.rail, boxes[k]), `the rail is clear of the ${k}: ${label}`);
       assert.ok(boxes.rail[3] <= hh && boxes.rail[1] >= 0, "the rail is on the screen: " + label);
-      if (kind === "creative-anim") await a.shot(out(`anim-fit-${w}x${hh}.png`));
+      // Pieces standing on their own at first (a short, wide screen) keep clear of the bars too.
+      const floats = await a.eval(`[...document.querySelectorAll(".ink-tools.floating")].map((e) => { const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; })`);
+      for (const f of floats) {
+        for (const k of ["strip", "tools", "bar"]) assert.ok(!overlap(f, boxes[k]), `a piece is clear of the ${k}: ${JSON.stringify(f)} ${label}`);
+        assert.ok(f[0] >= 0 && f[2] <= w && f[1] >= 0 && f[3] <= hh, "a piece is on the screen: " + JSON.stringify(f));
+      }
+      // Nothing of the rail needs scrolling to be reached.
+      assert.ok(await a.eval(`[...document.querySelectorAll(".ink-tools .ink-stack")].every((s) => s.scrollHeight <= s.clientHeight + 2 && s.scrollWidth <= s.clientWidth + 2)`), "every tool in view without scrolling: " + label);
+      await a.shot(out(`${kind === "creative-anim" ? "anim" : "draw"}-fit-${w}x${hh}.png`));
     }
   }
 });

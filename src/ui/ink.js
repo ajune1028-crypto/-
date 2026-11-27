@@ -1592,9 +1592,32 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     const px = () => pen.size || WIDTH_PX[pen.width] || 4;
     const t = (v) => Math.log(v / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
     const from = (k) => Math.round(SIZE_MIN * (SIZE_MAX / SIZE_MIN) ** Math.max(0, Math.min(1, k)) * 10) / 10;
-    const peek = h("span", { class: "size-peek", "aria-hidden": "true" });
+    // The brush's dot beside the bar while a finger is on it, on the screen itself: inside the rail's
+    // glass it was cut off where it stood out of it (so it never showed).
+    const peek = h("span", { class: "size-peek floating", id: "size-peek", "aria-hidden": "true" });
     const bar = h("div", { class: "size-rail", id: "size-rail", role: "slider", tabindex: "0", "aria-label": "붓 크기", "aria-orientation": "vertical",
-      "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), h("span", { class: "size-thumb" }), peek);
+      "aria-valuemin": String(SIZE_MIN), "aria-valuemax": String(SIZE_MAX) }, h("span", { class: "size-track" }), h("span", { class: "size-thumb" }));
+    const placePeek = () => {
+      if (!peek.isConnected) return;
+      const r = bar.getBoundingClientRect();
+      const d = parseFloat(peek.style.width) || 4;
+      const pad = 11;
+      const k = t(px());
+      const turn = Number(bar.closest("[data-turn]")?.dataset.turn) || 0;
+      let x;
+      let y;
+      if (turn === 90 || turn === 270) {
+        x = turn === 90 ? r.left + pad + k * (r.width - 2 * pad) : r.right - pad - k * (r.width - 2 * pad);
+        y = r.top - 14 - d / 2;
+        if (y - d / 2 < 4) y = r.bottom + 14 + d / 2;
+      } else {
+        y = turn === 180 ? r.top + pad + k * (r.height - 2 * pad) : r.bottom - pad - k * (r.height - 2 * pad);
+        x = r.right + 14 + d / 2;
+        if (x + d / 2 > innerWidth - 4) x = r.left - 14 - d / 2;
+      }
+      peek.style.left = x + "px";
+      peek.style.top = y + "px";
+    };
     const paint = () => {
       const v = px();
       bar.style.setProperty("--t", t(v).toFixed(4));
@@ -1605,6 +1628,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       peek.style.width = peek.style.height = d.toFixed(1) + "px";
       peek.style.background = erasing ? "transparent" : shown(pen.color);
       peek.classList.toggle("erase", erasing);
+      placePeek();
     };
     // The size goes to the layers while the bar is still held (a line being drawn takes it from here on).
     const set = (v) => {
@@ -1629,13 +1653,16 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       drag = { id: e.pointerId };
       bar.setPointerCapture?.(e.pointerId);
       bar.classList.add("sizing");
+      document.body.append(peek);
       at(e);
+      placePeek();
     });
     bar.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag.id) at(e); });
     const done = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
       drag = null;
       bar.classList.remove("sizing");
+      peek.remove();
       setTool(pen.tool); // the layers take the size; the quick sizes let go of their choice
     };
     bar.addEventListener("pointerup", done);
@@ -1967,6 +1994,14 @@ export function keepRailBetween(panel) {
     }
     const band = Math.max(80, foot - top - RAIL_GAP * 2);
     panel.style.setProperty("--rail-max", band + "px");
+    // A short screen: the size bar gives way first, so every tool is in view without scrolling.
+    const bar = panel.querySelector(".size-rail");
+    const stack = panel.querySelector(":scope > .ink-stack") || panel;
+    panel.style.removeProperty("--size-h");
+    if (bar) {
+      const over = stack.scrollHeight - stack.clientHeight;
+      if (over > 0) panel.style.setProperty("--size-h", Math.max(56, bar.offsetHeight - over - 2) + "px");
+    }
     const tall = Math.min(band, panel.offsetHeight);
     panel.style.setProperty("--rail-y", Math.round(top + RAIL_GAP + (band - tall) / 2) + "px");
   };
