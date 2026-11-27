@@ -4,6 +4,7 @@
 // (a line the first finger began is put away).
 
 import { h } from "./dom.js";
+import { pickingNow } from "./ink.js";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -75,6 +76,12 @@ export function pageStage(body, { id, width, height, onPinch = () => {}, avoid =
     const s = stage.getBoundingClientRect();
     const mx = (ax + bx) / 2 - s.left;
     const my = (ay + by) / 2 - s.top;
+    if (pickingNow()) {
+      // Two fingers held for 스포이트 read the colour as they go: the page stays where it is (a zoom
+      // after it starts from here).
+      pinch = { ...pinch, d: Math.hypot(bx - ax, by - ay) || 1, zoom, px: (mx - panX) / zoom, py: (my - panY) / zoom };
+      return;
+    }
     zoom = clamp(pinch.zoom * (Math.hypot(bx - ax, by - ay) / pinch.d), 0.3, 8);
     panX = mx - pinch.px * zoom;
     panY = my - pinch.py * zoom;

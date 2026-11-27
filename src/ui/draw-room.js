@@ -11,7 +11,7 @@ import { currentTheme } from "./theme.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { releasePieces } from "./ink-pieces.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween, paintLayers } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween, paintLayers, watchPick } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
@@ -64,6 +64,8 @@ export function mountDrawRoom(body, app, session, frame) {
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
     four: () => toggleBare(stage.closest(".room"), flashHint),
   });
+  // 스포이트: two fingers held still pick the colour that shows between them (every visible layer).
+  const stopPick = watchPick(stage, () => hosts.get(active)?.ink || null);
   // ---- layers on the page ---------------------------------------------------------------------
 
   function layerHost(layer) {
@@ -527,6 +529,7 @@ export function mountDrawRoom(body, app, session, frame) {
       for (const off of offs) off();
       view.destroy();
       stopTaps();
+      stopPick();
       for (const { ink } of hosts.values()) ink.destroy();
       liveInk.close();
       offBand();

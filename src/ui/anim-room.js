@@ -9,7 +9,7 @@
 
 import { rollTo } from "./motion.js";
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween, watchPick } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
@@ -691,6 +691,8 @@ export function mountAnimRoom(body, app, session) {
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
     four: () => toggleBare(stage.closest(".room"), flashHint),
   });
+  // 스포이트: two fingers held still pick the colour drawn between them (not while it plays).
+  const stopPick = watchPick(stage, () => (playing ? null : ink));
 
   // ---- start --------------------------------------------------------------------------------------
 
@@ -764,6 +766,7 @@ export function mountAnimRoom(body, app, session) {
       resize.disconnect();
       view.destroy();
       stopTaps();
+      stopPick();
       ink.destroy();
       liveInk.close();
       session.setPresencePart("anim", null);

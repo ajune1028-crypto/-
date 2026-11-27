@@ -388,9 +388,9 @@ export class InkLayer {
    * LiveInk.on); steady(): 손떨림 보정, 0 (끔) to 3 (강). onStroke returns the stroke op's id.
    */
   /**
-   * onPick(color): a finger held still at the start of a line picks the colour under it (스포이트,
-   * as in Procreate); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare
-   * paper), by default from this layer's own picture.
+   * onPick(color): the colour two fingers held still picked here (스포이트, watched by the room with
+   * watchPick); pick(clientX, clientY) reads that colour ("#rrggbb" or null for bare paper), by
+   * default from this layer's own picture.
    */
   /**
    * onLasso(info | null): what the 올가미 holds now ({ ids, loop, rect } in screen terms, or { moving }),
@@ -485,7 +485,7 @@ export class InkLayer {
    */
   splitLive() {
     const live = this.live;
-    if (!live?.style || !live.pts || live.brush === "erase" || live.brush === "smudge" || live.shape || live.shapeNow || live.picking) return;
+    if (!live?.style || !live.pts || live.brush === "erase" || live.brush === "smudge" || live.shape || live.shapeNow) return;
     const was = live.style;
     const now = this.styleNow();
     if (now.color === was.color && now.size === was.size && now.width === was.width && now.opacity === was.opacity) return;
@@ -495,8 +495,6 @@ export class InkLayer {
     for (let i = 3; i < live.pts.length; i += 3) length += Math.hypot(live.pts[i] - live.pts[i - 3], live.pts[i + 1] - live.pts[i - 2]) / unit;
     if (length >= 10) {
       clearTimeout(live.timer);
-      clearTimeout(live.pickTimer);
-      live.pickTimer = 0;
       // The parts of one line are one step back (cont: the room keeps them as one undo).
       live.split ||= "line" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       const opId = this.onStroke({ pts: live.pts.slice(), color: was.color, width: was.width, size: was.size || undefined, brush: live.brush, opacity: was.opacity < 1 ? was.opacity : undefined, inside: !!this.inside(), cont: live.split });
@@ -603,8 +601,6 @@ export class InkLayer {
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
     clearTimeout(this.live.timer);
-    clearTimeout(this.live.pickTimer);
-    if (this.live.picking) this.loupe?.remove();
     if (this.live.pts && this.live.brush !== "erase") this.share?.end("ink", null);
     if (this.live.light && this.light) {
       this.light.ended = performance.now();
@@ -660,12 +656,6 @@ export class InkLayer {
         const level = Math.max(0, Math.min(3, this.steady() | 0));
         const string = STEADY_PX[level] * this.unitsPerPx();
         this.live = { pointer: e.pointerId, kind: e.pointerType, pts: first, brush, feel, lazy: string > 0 ? new LazyBrush(string, first[0], first[1]) : null, hand: first.slice(0, 2), rope: level >= 2, down: [e.clientX, e.clientY], style: this.styleNow() };
-        // 스포이트: a finger held still where it went down picks the colour there (not a pen,
-        // which often rests a moment before it draws; not the erasers).
-        if (this.onPick && e.pointerType === "touch" && brush !== "erase") {
-          const live = this.live;
-          live.pickTimer = setTimeout(() => this.startPick(live), 450);
-        }
         // Friends see the line from its first point (the eraser's rubbing shows when it is done).
         if (this.share && brush !== "erase") {
           const st = this.live.style;
@@ -709,11 +699,6 @@ export class InkLayer {
         this.share?.grow("laser", this.light.pts);
         return void this.renderSoon();
       }
-      if (live.picking) return void this.movePick(e.clientX, e.clientY);
-      if (live.pickTimer && Math.hypot(e.clientX - live.down[0], e.clientY - live.down[1]) > 6) {
-        clearTimeout(live.pickTimer);
-        live.pickTimer = 0;
-      }
       // Every point the pen passed (not only one per frame), drawn at the next frame: the line
       // keeps up with the pen however fast it goes.
       for (const ev of e.getCoalescedEvents?.() || [e]) this.take(live, this.felt(live, ev));
@@ -754,14 +739,6 @@ export class InkLayer {
         this.share?.end("laser");
         return void this.renderSoon();
       }
-      clearTimeout(live.pickTimer);
-      if (live.picking) {
-        this.live = null;
-        this.loupe?.remove();
-        this.loupe = null;
-        if (e.type === "pointerup" && live.picked) this.onPick?.(live.picked);
-        return void this.render();
-      }
       if (e.type === "pointerup" && !live.erase && !live.shape) for (const ev of e.getCoalescedEvents?.() || []) this.take(live, this.felt(live, ev));
       // With 손떨림 보정 the brush trails the hand on its string: as the pen lifts, the line goes the
       // rest of the way to where it was lifted (Krita's stabiliser "finishes the line" so too).
@@ -790,33 +767,6 @@ export class InkLayer {
     c.addEventListener("pointercancel", end);
     // Losing hold of the pointer without a lift also ends the line, so it never waits forever.
     c.addEventListener("lostpointercapture", end);
-  }
-
-  /** Held still: the line's first dot goes, and the loupe shows the colour under the finger. */
-  startPick(live) {
-    if (this.live !== live || live.shape) return;
-    live.picking = true;
-    live.pickTimer = 0;
-    live.pts = null;
-    this.share?.end("ink", null);
-    // The dot the touch began is taken off the picture first, so it is not what is picked.
-    this.render();
-    this.loupe = h("div", { class: "loupe", "aria-hidden": "true" });
-    this.loupe.style.setProperty("--cur", inkColor(this.color));
-    document.body.append(this.loupe);
-    this.movePick(live.down[0], live.down[1]);
-  }
-
-  movePick(x, y) {
-    const live = this.live;
-    if (!live?.picking || !this.loupe) return;
-    const color = this.readColor(x, y);
-    live.picked = color;
-    this.loupe.style.setProperty("--pick", color || "transparent");
-    this.loupe.classList.toggle("bare", !color);
-    // Above the finger, so the finger does not hide it; below it near the top of the screen.
-    this.loupe.style.left = x + "px";
-    this.loupe.style.top = (y > 110 ? y - 78 : y + 78) + "px";
   }
 
   /** The colour drawn at a point of the screen ("#rrggbb"), or null where nothing is drawn. */
@@ -2020,6 +1970,110 @@ export function keepRailBetween(panel) {
 }
 
 let inkPop = null;
+let picking = false;
+/** Whether two fingers are picking a colour now (the zooms that two fingers make hold still meanwhile). */
+export const pickingNow = () => picking;
+
+/**
+ * 스포이트 (the owner, 27 November: "손가락 대고 가만히 두면 스포이드가 되는데 두 손가락으로 꾹 누르기
+ * 하자"): two fingers that land together on el and stay still a moment pick the colour between them.
+ * A loupe above that point shows it (the upper half what is picked, the lower the colour now); the
+ * fingers moved together, it reads as they go, and the page neither zooms nor moves; one finger
+ * lifted, the colour is the brush's (the layer's onPick). A third finger stops it, taking nothing.
+ * Fingers that moved first (a zoom) and then rest, or came down one after the other (a line and then a
+ * finger), are no pick, nor are they while a pen is on the glass (a resting palm).
+ * layerAt(x, y) gives the InkLayer drawing at that point of the screen, or null where nothing would
+ * be drawn now (a room with its pen off). Returns stop().
+ */
+export function watchPick(el, layerAt, { hold = 450, slop = 10, together = 300 } = {}) {
+  const fingers = new Map(); // touch pointerId → { from: [x, y], at: [x, y] }
+  const pens = new Set();
+  let first = 0;
+  let timer = 0;
+  let pick = null; // { layer, loupe, picked }
+  const quiet = () => { clearTimeout(timer); timer = 0; };
+  const middle = () => {
+    const [a, b] = [...fingers.values()].map((f) => f.at);
+    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  };
+  const begin = () => {
+    timer = 0;
+    if (fingers.size !== 2 || pens.size || !el.isConnected) return;
+    const [x, y] = middle();
+    const layer = layerAt(x, y);
+    if (!layer?.tool || !layer.onPick) return;
+    // A line the first finger began is put away first (the second finger already stopped it), so
+    // its dot is not what is picked.
+    layer.cancelTouch?.();
+    const loupe = h("div", { class: "loupe", "aria-hidden": "true" });
+    loupe.style.setProperty("--cur", inkColor(layer.color, layer.fixedInk));
+    document.body.append(loupe);
+    pick = { layer, loupe, picked: null };
+    picking = true;
+    follow();
+  };
+  const follow = () => {
+    const [x, y] = middle();
+    const color = pick.layer.readColor(x, y);
+    pick.picked = color;
+    pick.loupe.style.setProperty("--pick", color || "transparent");
+    pick.loupe.classList.toggle("bare", !color);
+    // Above the fingers, so they do not hide it; below them near the top of the screen.
+    pick.loupe.style.left = x + "px";
+    pick.loupe.style.top = (y > 110 ? y - 78 : y + 78) + "px";
+  };
+  const finish = (take) => {
+    if (!pick) return;
+    const { layer, loupe, picked } = pick;
+    pick = null;
+    picking = false;
+    loupe.remove();
+    if (take && picked) layer.onPick(picked);
+  };
+  const press = (e) => {
+    if (e.pointerType === "pen") {
+      pens.add(e.pointerId);
+      quiet();
+      return;
+    }
+    if (e.pointerType !== "touch") return;
+    if (!fingers.size) first = e.timeStamp;
+    fingers.set(e.pointerId, { from: [e.clientX, e.clientY], at: [e.clientX, e.clientY] });
+    quiet();
+    if (fingers.size > 2) return void finish(false);
+    if (fingers.size === 2 && !pick && !pens.size && e.timeStamp - first <= together) {
+      for (const f of fingers.values()) f.from = f.at.slice();
+      timer = setTimeout(begin, hold);
+    }
+  };
+  const move = (e) => {
+    const f = fingers.get(e.pointerId);
+    if (!f) return;
+    f.at = [e.clientX, e.clientY];
+    if (pick) return void follow();
+    if (timer && Math.hypot(f.at[0] - f.from[0], f.at[1] - f.from[1]) > slop) quiet();
+  };
+  const lift = (e) => {
+    pens.delete(e.pointerId);
+    if (!fingers.has(e.pointerId)) return;
+    fingers.delete(e.pointerId);
+    quiet();
+    finish(e.type === "pointerup");
+  };
+  el.addEventListener("pointerdown", press, true);
+  window.addEventListener("pointermove", move, true);
+  window.addEventListener("pointerup", lift, true);
+  window.addEventListener("pointercancel", lift, true);
+  return function stop() {
+    quiet();
+    finish(false);
+    el.removeEventListener("pointerdown", press, true);
+    window.removeEventListener("pointermove", move, true);
+    window.removeEventListener("pointerup", lift, true);
+    window.removeEventListener("pointercancel", lift, true);
+  };
+}
+
 export function closeInkPop() {
   const pop = inkPop;
   inkPop = null;

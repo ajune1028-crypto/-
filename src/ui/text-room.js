@@ -22,7 +22,7 @@ import { dayKey } from "../core/time.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { copyItem } from "../clipboard.js";
 import { buzz } from "./chime.js";
-import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions, landInk, boardStrokesCarried } from "./ink.js";
+import { InkLayer, inkColor, drawInkTools as drawInkToolsInto, lassoActions, landInk, boardStrokesCarried, watchPick, pickingNow } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps } from "../core/ink.js";
 
@@ -163,6 +163,14 @@ export function mountTextRoom(body, app, session) {
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
     four: () => toggleBare(body.closest(".room"), flashHint),
   });
+  // 스포이트 while the pen is on: two fingers held still pick the colour between them, on that day's page.
+  const stopPick = watchPick(body, (x, y) => {
+    for (const editor of editors.values()) {
+      const r = editor.ink?.canvas?.getBoundingClientRect();
+      if (r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return editor.ink;
+    }
+    return null;
+  });
   // Two fingers also carry the page (the owner, 21 November: "그림 모드일 때 두 손으로 아래 넘기기도"):
   // moved together they scroll it, spread or pinched they zoom it, both at once as in Procreate.
   let pinch = null;
@@ -173,6 +181,8 @@ export function mountTextRoom(body, app, session) {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
     const m = middle(e.touches);
+    // Two fingers held for 스포이트 read the colour as they go: the page stays (a zoom after starts here).
+    if (pickingNow()) return void (pinch = { d: spread(e.touches), z: pageZoom, m });
     setPageZoom(pinch.z * (spread(e.touches) / pinch.d), m[0], m[1]);
     body.scrollLeft -= m[0] - pinch.m[0];
     body.scrollTop -= m[1] - pinch.m[1];
@@ -891,6 +901,7 @@ export function mountTextRoom(body, app, session) {
     body.classList.remove("text-body");
     fingers.stop();
     stopTaps();
+    stopPick();
     for (const off of offs) off();
     clearInterval(midnight);
     clearTimeout(presenceTimer);

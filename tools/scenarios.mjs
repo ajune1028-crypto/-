@@ -6124,9 +6124,10 @@ scenario("같이 그리기: a friend's line shows while it is drawn, with their 
 });
 
 // The owner (22 November): "프로크리에이터의 손 동작… 두 손가락으로 동시에 터치하면 뒤로 가기, 세 손가락으로
-// 한 번에 터치하면 앞으로 가기, 그런 거와 비슷하게 많이". On the whiteboard with the pen on: the taps, held
-// fingers going on undoing (Procreate's hold), four fingers hiding and showing the tools.
-scenario("whiteboard gestures with the pen on: two fingers tapped undo, three redo; two fingers held keep undoing; four fingers hide the tools and bring them back", async ({ open }) => {
+// 한 번에 터치하면 앞으로 가기, 그런 거와 비슷하게 많이". On the whiteboard with the pen on: the taps, two
+// fingers held still picking the colour between them (스포이트, 27 November: "두 손가락으로 꾹 누르기")
+// and undoing nothing, four fingers hiding and showing the tools.
+scenario("whiteboard gestures with the pen on: two fingers tapped undo, three redo; two fingers held pick the colour between them and undo nothing; four fingers hide the tools and bring them back", async ({ open }) => {
   const page = await open({ width: 420, height: 860 });
   await createBoard(page);
   await click(page, "#board-pen");
@@ -6150,13 +6151,20 @@ scenario("whiteboard gestures with the pen on: two fingers tapped undo, three re
   await pause(60);
   await page.touch("end");
   await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 4`);
-  // Held still: one undo after another until they lift.
+  // Held still either side of a black line, with red in the pen: the loupe; one finger lifted, the
+  // pen is black again; nothing was undone or drawn.
+  await pickColor(page, "red");
   await pause(400);
-  await page.touch("start", [at(0.4, 0.75), at(0.6, 0.76)]);
+  await page.touch("start", [at(0.42, 0.4), at(0.48, 0.4)]);
   await pause(1500);
+  await page.waitFor(q(".loupe"), 1500);
+  await page.touchIds("end", [[1, ...at(0.48, 0.4)]]);
+  await page.waitFor(`!document.querySelector(".loupe")`, 2000);
   await page.touch("end");
-  const left = await count();
-  assert.ok(left <= 1, "held, it went on undoing: " + left);
+  const picked = await page.eval(`${q("#ink-color-now")}.style.getPropertyValue("--c")`);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(picked.slice(i, i + 2), 16));
+  assert.ok(r < 90 && g < 90 && b < 90, "the black line's colour was picked: " + picked);
+  assert.equal(await count(), 4, "held, nothing was undone or drawn");
   // Four fingers: the tools step aside; four again, they are back.
   await pause(400);
   const four = [at(0.2, 0.7), at(0.4, 0.72), at(0.6, 0.7), at(0.8, 0.72)];
@@ -6173,9 +6181,11 @@ scenario("whiteboard gestures with the pen on: two fingers tapped undo, three re
 });
 
 // From the reference study (Procreate's gestures, 하던 대로): two fingers tapped together 되돌리기,
-// three 다시하기, each saying so for a moment; a finger held still where it lands picks the colour
-// under it (스포이트) with a loupe above the finger, and draws nothing.
-scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoes, saying so; a finger held still picks the colour under it (스포이트) and draws nothing", async ({ open, out }) => {
+// three 다시하기, each saying so for a moment. 스포이트 (the owner, 27 November: "손가락 대고 가만히
+// 두면 스포이드가 되는데 두 손가락으로 꾹 누르기 하자"): two fingers held still together pick the colour
+// between them, with a loupe above, and draw or undo nothing; one finger held still only draws; two
+// fingers that zoomed and then rest pick nothing.
+scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoes, saying so; two fingers held still pick the colour between them (스포이트), one finger held still only draws", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 420, height: 860 });
   await click(a, "#add-creative");
   await click(a, '[data-kind="creative-draw"]');
@@ -6215,23 +6225,41 @@ scenario("drawing gestures: a two-finger tap undoes and a three-finger tap redoe
   await a.touch("end");
   await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 2`);
   await a.waitFor(`document.getElementById("gesture-hint")?.textContent === "다시하기"`, 1500);
-  // 스포이트: held still on the red line, the loupe shows; lifted, red is the pen's colour; no dot was drawn.
+  // One finger held still on the red line is no 스포이트: no loupe, and lifted it is a dot like any
+  // line (taken back with two fingers).
   await pickColor(a, "black");
-  const red = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return [r.left + r.width * 0.45, r.top + r.height * 0.3]; })()`);
+  await pause(400);
   await a.front();
-  await a.touch("start", [red]);
-  await pause(650);
+  await a.touch("start", [at(0.45, 0.3)]);
+  await pause(700);
+  assert.equal(await a.eval(`!!document.querySelector(".loupe")`), false, "one finger held still is no 스포이트");
+  await a.touch("end");
+  await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 3`);
+  await pause(400);
+  await a.touch("start", [at(0.4, 0.7), at(0.6, 0.72)]);
+  await pause(60);
+  await a.touch("end");
+  await a.waitFor(`window.__app.session.doc(${JSON.stringify(doc)}).strokes().length === 2`);
+  // 스포이트: two fingers held still either side of the red line, the loupe shows the colour between
+  // them; one finger lifted, red is the pen's colour; nothing was drawn or undone.
+  await pause(400);
+  await a.touch("start", [at(0.42, 0.3), at(0.48, 0.3)]);
+  await pause(700);
   await a.waitFor(q(".loupe"), 1500);
   await a.shot(out("eyedropper.png"));
-  await a.touch("end");
+  await a.touchIds("end", [[1, ...at(0.48, 0.3)]]);
   await a.waitFor(`!document.querySelector(".loupe") && ${q("#ink-color-now")}?.classList.contains("own")`, 2000);
+  await a.touch("end");
   const picked = await a.eval(`${q("#ink-color-now")}.style.getPropertyValue("--c")`);
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(picked.slice(i, i + 2), 16));
   assert.ok(r > 180 && g < 120 && b < 120, "the red was picked: " + picked);
-  assert.equal(await count(), 2, "holding still drew nothing");
-  // Two fingers that move are a zoom, not a tap: nothing is undone.
+  await pause(300);
+  assert.equal(await count(), 2, "two fingers held still drew nothing and undid nothing");
+  // Two fingers that move are a zoom, not a tap: nothing is undone; resting after it, they pick nothing.
   await a.touch("start", [at(0.4, 0.7), at(0.6, 0.72)]);
   for (let i = 1; i <= 6; i++) await a.touch("move", [at(0.4 - 0.02 * i, 0.7), at(0.6 + 0.02 * i, 0.72)]);
+  await pause(700);
+  assert.equal(await a.eval(`!!document.querySelector(".loupe")`), false, "a zoom that rests is no 스포이트");
   await a.touch("end");
   await pause(200);
   assert.equal(await count(), 2, "a pinch undoes nothing");

@@ -34,7 +34,7 @@ import {
   tintLassoOps, rowLayout, boxLoop, strokesInLoop,
 } from "../core/board.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
-import { InkLayer, inkColor, drawInkTools } from "./ink.js";
+import { InkLayer, inkColor, drawInkTools, watchPick, pickingNow } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem, newestOf } from "../clipboard.js";
@@ -1381,6 +1381,8 @@ export function mountBoardRoom(body, app, session, frame) {
     three: () => { if (undo.canRedo) { step("redo"); flashHint("다시하기"); } },
     four: () => toggleBare(surface.closest(".room"), flashHint),
   });
+  // 스포이트 while the pen is on: two fingers held still pick the colour drawn between them.
+  const stopPick = watchPick(surface, () => boardInk);
 
   function wireCard(el, id) {
     el.addEventListener("pointerdown", (e) => {
@@ -1775,6 +1777,8 @@ export function mountBoardRoom(body, app, session, frame) {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
     const [mx, my] = middle(e.touches);
+    // Two fingers held for 스포이트 read the colour as they go: the board stays (a zoom after starts here).
+    if (pickingNow()) return void (pinch = { ...pinch, d: spread(e.touches), zoom, at: toBoard(mx, my) });
     if (mode === "song" && pinch.card) {
       // Two fingers on one song card in 노래: spreading them sideways makes that card longer in time.
       const dx = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
@@ -2996,6 +3000,7 @@ export function mountBoardRoom(body, app, session, frame) {
       boardInk?.destroy();
       liveInk.close();
       stopTaps();
+      stopPick();
       inkTools.remove();
       roomEl?.style.removeProperty("--top-inset");
       roomEl?.style.removeProperty("--bottom-inset");
