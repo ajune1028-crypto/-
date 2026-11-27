@@ -6850,6 +6850,92 @@ scenario("애니메이션 방: two frames to start; the onion skin shows the fra
   await a.shot(out("anim-room.png"));
 });
 
+// The owner (27 November): "현재 3칸까지 있다고 하면… 2번째꺼에… 나갔다가 들어와서 선이 한칸이 사라지거나…
+// 1번 칸에 그렸더니 안그려지거나… 그려졌는데 표시가 안돼고… 실행해보니까 2번칸에 넣어지거나".
+scenario("애니메이션 방 after leaving and coming back: every frame keeps its lines (strip, onion skin, ▶) and a line drawn on frame 1 is on frame 1, seen there", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "세 장");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2`);
+  const frames = () => a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const strokesOn = (f) => a.eval(`window.__app.session.doc("k:F${f}").strokes().length`);
+  const [f1, f2] = await frames();
+  const box = async () => a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (v) => {
+    const b = await box();
+    await a.press(b.x + b.w * 0.3, b.y + b.h * v);
+    for (let k = 1; k <= 8; k++) await a.moveTo(b.x + b.w * (0.3 + k * 0.05), b.y + b.h * v);
+    await a.release(b.x + b.w * 0.7, b.y + b.h * v);
+  };
+  const inkOf = (sel) => a.eval(`(() => { const c = document.querySelector(${JSON.stringify(sel)}); if (!c) return -1; const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`);
+  // Three frames: + on the second makes the third.
+  await click(a, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q(`.anim-frame[data-frame="${f2}"]`)}.classList.contains("on")`);
+  await click(a, "#anim-add");
+  await a.waitFor(`window.__app.session.doc("anim").frames().length === 3`);
+  const [, , f3] = await frames();
+  // A line on frame 2, another on frame 3.
+  await click(a, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q("#anim-where")}.textContent === "2/3"`);
+  await line(0.3);
+  await a.waitFor(`window.__app.session.doc("k:F${f2}").strokes().length === 1`);
+  await click(a, `.anim-frame[data-frame="${f3}"]`);
+  await a.waitFor(`${q("#anim-where")}.textContent === "3/3"`);
+  await line(0.7);
+  await a.waitFor(`window.__app.session.doc("k:F${f3}").strokes().length === 1`);
+  await click(a, `.anim-frame[data-frame="${f2}"]`);
+  await a.waitFor(`${q("#anim-where")}.textContent === "2/3"`);
+  // Out to home, and back in.
+  await click(a, "#back");
+  await a.waitFor(q('.room-row[data-room-kind="creative-anim"]'));
+  await click(a, '.room-row[data-room-kind="creative-anim"]');
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 3 && document.querySelectorAll("#anim-strip .anim-frame:not(.anim-bg)").length === 3`);
+  assert.deepEqual(await frames(), [f1, f2, f3], "the same frames, in the same order");
+  const chosen = await a.eval(`(() => { const on = document.querySelector("#anim-strip .anim-frame.on"); return { cell: on?.dataset.frame, where: document.getElementById("anim-where").textContent }; })()`);
+  await a.front();
+  await pause(400);
+  // Every frame's lines are there: in the strip, and under the frame being drawn (the onion skin).
+  for (const [f, name] of [[f2, "2"], [f3, "3"]]) assert.ok((await inkOf(`.anim-frame[data-frame="${f}"] canvas`)) > 20, `frame ${name}'s small picture shows its line after coming back`);
+  // The frame the strip shows as chosen is the one drawn on.
+  const target = chosen.cell;
+  const before = { [f1]: await strokesOn(f1), [f2]: await strokesOn(f2), [f3]: await strokesOn(f3) };
+  await line(0.5);
+  await a.waitFor(`window.__app.session.doc("k:F${target}").strokes().length === ${before[target] + 1}`, 3000);
+  for (const f of [f1, f2, f3]) if (f !== target) assert.equal(await strokesOn(f), before[f], "the other frames are untouched");
+  await pause(200);
+  assert.ok((await inkOf("#anim-ink canvas")) > 20, "the line is seen on the frame it was drawn on");
+  // Frame 1, chosen, drawn on: there, seen there, and played there.
+  await click(a, `.anim-frame[data-frame="${f1}"]`);
+  await a.waitFor(`${q("#anim-where")}.textContent === "1/3" && ${q(`.anim-frame[data-frame="${f1}"]`)}.classList.contains("on")`);
+  const one = await strokesOn(f1);
+  await line(0.15);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes().length === ${one + 1}`, 3000);
+  assert.equal(await strokesOn(f2), before[f2] + (target === f2 ? 1 : 0), "frame 2 keeps what it had");
+  await pause(200);
+  assert.ok((await inkOf("#anim-ink canvas")) > 20, "frame 1's line is seen on frame 1");
+  // ▶: each frame plays with its own lines (frame 2's line when frame 2 shows, frame 1's new line only on frame 1).
+  const rows = (v) => `(() => { const c = document.getElementById("anim-show"); const g = c.getContext("2d"); const y = Math.round(c.height * ${v}); const d = g.getImageData(0, y - 3, c.width, 7).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()`;
+  await click(a, "#anim-play");
+  const seen = {};
+  const until = Date.now() + 3000;
+  while (Date.now() < until && Object.keys(seen).length < 3) {
+    const got = await a.eval(`(() => { const f = document.getElementById("anim-show").dataset.frame; return f ? { f, top: ${rows(0.15)}, mid: ${rows(0.3)}, low: ${rows(0.7)} } : null; })()`);
+    if (got && !seen[got.f]) seen[got.f] = got;
+    await pause(20);
+  }
+  await click(a, "#anim-play");
+  assert.ok(seen[f1] && seen[f2] && seen[f3], "every frame played: " + JSON.stringify(seen));
+  assert.ok(seen[f1].top > 0 && seen[f2].top === 0 && seen[f3].top === 0, "frame 1's new line plays on frame 1 only: " + JSON.stringify(seen));
+  assert.ok(seen[f2].mid > 0 && seen[f1].mid === 0, "frame 2 plays with its own line: " + JSON.stringify(seen));
+  assert.ok(seen[f3].low > 0, "frame 3 plays with its own line: " + JSON.stringify(seen));
+  await a.shot(out("anim-back-again.png"));
+});
+
 // The owner: "친구한테 미니게임 신청하기… 친구가 수락하면 전체가 조금 불투명하게 바뀌고 가운데 3, 2, 1…
 // 카운트가 끝났을 때 미니게임이 뜨게", "그거 끄는 기능도 홈 화면에서". From the reference study §4.
 // The owner (20 November): "인원수가 많아 질 수록 2인용 게임 말고도 다른것도… 갈틱폰의 느낌". 이어 그리기 for
@@ -7945,4 +8031,24 @@ scenario("엑스레이 inside a shape: a shape drawn before in the painted colou
   await page.shot(out("xray-inside-shape.png"));
   await page.stylus("up", cx + 32, T - 48);
   await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
+});
+
+scenario("PROBE anim sizes", async ({ open, out }) => {
+  for (const [w, hh] of [[360, 640], [412, 780], [844, 390], [820, 1180]]) {
+    const a = await open({ dev: "a", width: w, height: hh });
+    await click(a, "#add-creative");
+    await click(a, '[data-kind="creative-anim"]');
+    await fill(a, "#room-name", "크기");
+    await fill(a, "#my-name", "가람");
+    await click(a, "#create-room");
+    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+    await click(a, "#invite-done");
+    await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2`);
+    await click(a, "#anim-add");
+    await click(a, "#anim-add");
+    await pause(600);
+    const boxes = await a.eval(`(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; }; return { page: r("#anim-page"), rail: r("#ink-tools"), strip: r("#anim-strip"), tools: r("#anim-tools"), bar: r(".room > .bar") }; })()`);
+    console.log("PROBE", w, hh, JSON.stringify(boxes));
+    await a.shot(out(`probe-anim-${w}x${hh}.png`));
+  }
 });

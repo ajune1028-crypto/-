@@ -370,6 +370,10 @@ export function mountAnimRoom(body, app, session) {
         entry = { cell, thumb };
         cells.set(f.id, entry);
         thumbSoon(f.id);
+        // Every frame is read, not only the one drawn on: its small picture, the onion skin and ▶
+        // show what it holds (coming back to the room, frames 2 and 3 were empty until chosen: the
+        // owner, 27 November, "나갔다가 들어와서 선이 한칸이 사라지거나"). Its picture comes when it is read.
+        session.load(frameDocOf(f.id));
       }
       const { cell } = entry;
       const on = f.id === current;
