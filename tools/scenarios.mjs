@@ -5436,6 +5436,41 @@ scenario("햇살 thrown near a corner lights up exactly where it lands; thrown a
   assert.equal(await page.eval(`document.querySelectorAll("#home-panel").length`), 1, "still the one window, where it was");
 });
 
+// The owner (27 November): "햇살 아이콘에서 오른쪽으로 그 스크롤이라고 하면서 스와이프 같은 걸 하면은 인식이
+// 안 돼서 그쪽으로 안 나와". 햇살 sits by the right edge, so a swipe right meets the edge of the glass soon.
+scenario("햇살 swiped right (the edge is close that way) comes out of the right edge, quick or slow to the edge; a tap's slip is still a tap", async ({ open }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.waitFor(q("#home-more"));
+  const [x, y, w] = await page.eval(`(() => { const r = document.getElementById("home-more").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, innerWidth]; })()`);
+  assert.ok(w - x < 30, "햇살 is close to the right edge: " + (w - x));
+  const swipe = async (steps, gap) => {
+    await page.front();
+    await page.touch("start", [[x, y]]);
+    for (const [dx, dy] of steps) {
+      await page.touch("move", [[Math.min(w - 1, x + dx), y + dy]]);
+      if (gap) await pause(gap);
+    }
+    await page.touch("end");
+  };
+  const right = [[5, 0], [10, 0.5], [15, 1], [20, 1], [26, 1.5], [30, 1.5]];
+  // Quick, to the edge: the right edge lights and the window comes out there.
+  await swipe(right, 0);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right"`, 3000);
+  await pause(500);
+  await click(page, "#home-more");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // Slowly, all the way to the edge: still meant.
+  await swipe(right, 45);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right"`, 3000);
+  await pause(500);
+  await click(page, "#home-more");
+  await page.waitFor(`!document.getElementById("home-panel")`, 2000);
+  // A tap whose finger slipped a little right: a tap (where it was last: the right edge, remembered).
+  await page.eval(`window.__app.store.set("homePanelEdge", { edge: "bottom", at: 0.5 })`);
+  await swipe([[3, 0], [6, 1]], 0);
+  await page.waitFor(`${q("#home-panel")}?.dataset.edge === "bottom"`, 3000);
+});
+
 scenario("home 찾기와 집: 별표 to the top; ⋮ opens it (thrown, from that edge, lit); 초성 search ranks and hides; 내용 search; recent searches; a house built; a room dropped into it and taken out; leaving the app puts it away", async ({ open, out }) => {
   const page = await open({ width: 390, height: 800 });
   const roomNames = ["쇼타로 일기", "산책 노트", "우리 쇼핑"];

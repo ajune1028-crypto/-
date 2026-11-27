@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fitPolynomial, VelocityTracker, edgeHit, throwOf, gripThrow, VELOCITY_THRESHOLD, CLOSE_THRESHOLD } from "../src/core/fling.js";
+import { fitPolynomial, VelocityTracker, edgeHit, throwOf, throwMeant, throwReach, gripThrow, VELOCITY_THRESHOLD, CLOSE_THRESHOLD } from "../src/core/fling.js";
 
 const near = (a, b, eps, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg}: ${a} vs ${b}`);
 
@@ -126,4 +126,28 @@ test("a throw goes the way it was thrown, even when its line meets another edge 
   assert.equal(throwOf({ x0: 360, y0: 40, x1: 330, y1: 140, vx: -0.3, vy: 1.1, w: W, h: H }).edge, "bottom");
   assert.equal(throwOf({ x0: 200, y0: 800, x1: 330, y1: 760, vx: 1.1, vy: -0.3, w: W, h: H }).edge, "right");
   assert.equal(throwOf({ x0: 30, y0: 400, x1: 60, y1: 300, vx: 0.2, vy: -1, w: W, h: H }).edge, "top");
+});
+
+// The owner (27 November): "햇살 아이콘에서 오른쪽으로… 스와이프 같은 걸 하면은 인식이 안 돼서 그쪽으로 안
+// 나와". 햇살 sits about 26 px from the right edge, and a throw needed 28 px: a finger swiped right
+// met the edge of the glass before it counted. How far a throw must go is now measured against the
+// room there was that way; a slip in a tap still is not one.
+test("a throw toward a near edge counts with the room there was; a tap's slip never does", () => {
+  const W = 390;
+  const H = 844;
+  const sun = { x0: 364, y0: 38, w: W, h: H };
+  const meant = (x1, y1, vx, vy) => throwMeant(throwOf({ ...sun, x1, y1, vx, vy }), Math.hypot(x1 - sun.x0, y1 - sun.y0));
+  assert.equal(meant(389, 40, 0.7, 0), true, "right, quick, to the edge");
+  assert.equal(meant(389, 39, 0.1, 0), true, "right, slow, all the way to the edge");
+  assert.equal(meant(381, 40, 0.6, 0), true, "right, quick, most of the way");
+  assert.equal(meant(372, 41, 0.2, 0), false, "a slip in a tap");
+  assert.equal(meant(344, 40, -0.1, 0), false, "left, slow and short: plenty of room that way");
+  assert.equal(meant(334, 40, -0.8, 0), true, "left, quick");
+  assert.equal(meant(284, 44, -0.1, 0), true, "left, slow but far");
+  assert.equal(meant(360, 600, 0, 0.1), true, "down, far");
+  assert.equal(meant(362, 14, 0, -0.6), true, "up, quick, toward the near top");
+  assert.equal(throwMeant(null, 30), false, "no throw at all");
+  // What the light shows while aiming is the same rule's distance.
+  assert.ok(throwReach(throwOf({ ...sun, x1: 389, y1: 40 })) < 20, "toward the near right edge, a short way is enough");
+  assert.equal(throwReach(throwOf({ ...sun, x1: 300, y1: 40 })), 28, "toward a far edge, as before");
 });

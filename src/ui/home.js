@@ -24,7 +24,7 @@ import { openHomePanel, houseShape, lastPanelEdge, rememberPanelEdge } from "./h
 // Whether 찾기와 집 opens at its edge or as a window of its own (its top-right button chooses).
 const PANEL_MODE = "homePanelMode";
 import { glowEdge, aimMarker } from "./edge-glow.js";
-import { VelocityTracker, throwOf } from "../core/fling.js";
+import { VelocityTracker, throwOf, throwMeant, throwReach } from "../core/fling.js";
 import { buzz } from "./chime.js";
 import { segmented } from "./dom.js";
 import { memberColor, personColor } from "../core/paint.js";
@@ -143,12 +143,6 @@ function previewOf(room) {
   }
   return svg;
 }
-
-// 햇살 counts as thrown when it clearly is: this far and quick, or far. A finger that slips in a
-// tap moves less than this; a swipe the owner means ("발사한 곳으로 우선") is quicker and longer.
-const THROW_PX = 28;
-const THROW_SPEED = 0.3; // px per ms
-const THROW_FAR = 72;
 
 export function showHome(app) {
   const root = app.root;
@@ -434,7 +428,8 @@ export function showHome(app) {
       const pull = Math.min(24, d * 0.3);
       btn.style.translate = `${(dx / d) * pull}px ${(dy / d) * pull}px`;
       // Where it would land, shown on the edge before letting go.
-      aim.show(d >= THROW_PX ? throwNow(e.clientX, e.clientY) : null);
+      const t = throwNow(e.clientX, e.clientY);
+      aim.show(t && d >= throwReach(t) ? t : null);
     });
     btn.addEventListener("touchmove", (e) => { if (g) e.preventDefault(); }, { passive: false });
     btn.addEventListener("pointercancel", () => { g = null; reset(); });
@@ -443,7 +438,9 @@ export function showHome(app) {
       g.track.add(e.timeStamp, e.clientX, e.clientY);
       const v = g.track.velocity(e.timeStamp);
       const moved = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
-      const hit = moved >= THROW_PX && (Math.hypot(v.vx, v.vy) >= THROW_SPEED || moved >= THROW_FAR) ? throwNow(e.clientX, e.clientY, v) : null;
+      // Thrown as far as the room that way allows (a short swipe at the near right edge counts).
+      const t = throwNow(e.clientX, e.clientY, v);
+      const hit = throwMeant(t, moved) ? t : null;
       g = null;
       reset();
       if (!hit) return void openPanel();

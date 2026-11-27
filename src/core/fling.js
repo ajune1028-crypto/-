@@ -166,6 +166,28 @@ export function throwOf({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, tap = 14 }) {
   return { edge, at: clamp(at, 0, 1), x, y, dist: Math.hypot(x - sx, y - sy), speed, strength: strengthOf(speed, d) };
 }
 
+// 햇살 counts as thrown when it clearly is: this far and quick, or far. A finger that slips in a
+// tap moves less than this; a swipe the owner means ("발사한 곳으로 우선") is quicker and longer.
+// Both are measured against the room there was that way (the owner, 27 November: "햇살 아이콘에서
+// 오른쪽으로… 스와이프 같은 걸 하면은 인식이 안 돼서"): 햇살 sits about 26 px from the right edge, so a
+// finger swiped right met the glass's edge before it had gone the 28 px a throw needed.
+export const THROW_PX = 28;
+export const THROW_SPEED = 0.3; // px per ms
+export const THROW_FAR = 72;
+const SLIP = 14;
+
+/** How far a throw like `hit` (from throwOf) must go to count: 28 px, less toward an edge close by. */
+export function throwReach(hit) {
+  return hit ? clamp(hit.dist * 0.55, SLIP, THROW_PX) : THROW_PX;
+}
+
+/** Whether `hit` (from throwOf), the finger having moved `moved` px, was meant as a throw. */
+export function throwMeant(hit, moved) {
+  if (!hit) return false;
+  const reach = throwReach(hit);
+  return moved >= reach && (hit.speed >= THROW_SPEED || moved >= clamp(hit.dist * 0.8, reach, THROW_FAR));
+}
+
 const OUTWARD = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
 const AWAY = Math.cos((40 * Math.PI) / 180);
 /** From vaul (Emil Kowalski, MIT License; THIRD_PARTY.md): a flick faster than this (px per ms) counts… */
