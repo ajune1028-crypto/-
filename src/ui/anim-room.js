@@ -9,7 +9,7 @@
 
 import { rollTo } from "./motion.js";
 import { h, icon, iconButton, toast, flashHint, closeOnOutside, mount } from "./dom.js";
-import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk, landInk, boardStrokesCarried } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
@@ -47,7 +47,7 @@ export function mountAnimRoom(body, app, session) {
   // ---- the page: the onion skin beneath, the frame I draw on, the frame playing over both ------
 
   let ink = null;
-  const view = pageStage(body, { id: "anim", width: PAGE_W, height: PAGE_H, onPinch: () => ink?.cancelTouch() });
+  const view = pageStage(body, { id: "anim", width: PAGE_W, height: PAGE_H, onPinch: () => ink?.cancelTouch(), avoid: () => inkTools });
   const { page, stage } = view;
   const back = h("canvas", { class: "anim-sheet anim-back", id: "anim-back", "aria-hidden": "true" });
   const onion = h("canvas", { class: "anim-sheet anim-onion", "aria-hidden": "true" });
@@ -129,7 +129,12 @@ export function mountAnimRoom(body, app, session) {
   const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", "aria-haspopup": "menu", title: "재생: 빠르기와 끝나면", onclick: () => playMenu() });
   const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
   const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, saveButton);
-  body.after(strip, inkTools, toolbar);
+  // The frames and what plays them are one thing at the room's foot, as Procreate's Animation Assist
+  // and Dreams keep the timeline as one band under the canvas: one glass, the frames above their
+  // buttons (beside them on a short, wide screen). The rail keeps between the bars, never over it.
+  const dock = h("div", { class: "anim-dock", id: "anim-dock" }, strip, toolbar);
+  body.after(inkTools, dock);
+  const offBand = keepRailBetween(inkTools);
 
   function drawTools() {
     const { fps, loop } = doc.settings();
@@ -752,9 +757,9 @@ export function mountAnimRoom(body, app, session) {
       ink.destroy();
       liveInk.close();
       session.setPresencePart("anim", null);
-      strip.remove();
+      offBand();
+      dock.remove();
       inkTools.remove();
-      toolbar.remove();
     },
   };
 }

@@ -1767,6 +1767,50 @@ export function landInk({ ink, doc, clock, by, commit }, carried) {
 }
 
 /** The one small tools window open now (brushes, colours or the eraser's way). */
+// The rail keeps between the room's top bar and what lies along its foot (the 애니메이션 방's frames and
+// buttons, a toolbar), centred in that band, never over them (the owner, 27 November: "애니메이션 방 ui
+// 겹친다": on a phone the rail stood in the middle of the whole screen and its foot lay over the
+// frames' ‹, so a tap meant for ‹ pressed the rail). The band is measured, as bars differ by room.
+const RAIL_TOP = ".bar, .banner";
+const RAIL_FOOT = ".toolbar, .anim-dock, .anim-strip";
+const RAIL_GAP = 8;
+
+/** Keeps a room's rail in the band between its bars; returns what stops it. */
+export function keepRailBetween(panel) {
+  const room = panel.parentElement;
+  if (!room) return () => {};
+  panel.classList.add("between");
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    if (!panel.isConnected) return;
+    let top = 0;
+    let foot = innerHeight;
+    for (const el of room.children) {
+      if (el === panel || el.hidden || !el.getClientRects().length) continue;
+      const r = el.getBoundingClientRect();
+      if (el.matches(RAIL_TOP) && r.bottom < innerHeight / 2) top = Math.max(top, r.bottom);
+      else if (el.matches(RAIL_FOOT) && r.top > innerHeight / 2) foot = Math.min(foot, r.top);
+    }
+    const band = Math.max(80, foot - top - RAIL_GAP * 2);
+    panel.style.setProperty("--rail-max", band + "px");
+    const tall = Math.min(band, panel.offsetHeight);
+    panel.style.setProperty("--rail-y", Math.round(top + RAIL_GAP + (band - tall) / 2) + "px");
+  };
+  const soon = () => { if (!frame) frame = requestAnimationFrame(measure); };
+  const watch = new ResizeObserver(soon);
+  watch.observe(panel);
+  for (const el of room.children) if (el.matches?.(RAIL_TOP + ", " + RAIL_FOOT)) watch.observe(el);
+  addEventListener("resize", soon);
+  measure();
+  return () => {
+    cancelAnimationFrame(frame);
+    watch.disconnect();
+    removeEventListener("resize", soon);
+    panel.classList.remove("between");
+  };
+}
+
 let inkPop = null;
 export function closeInkPop() {
   const pop = inkPop;

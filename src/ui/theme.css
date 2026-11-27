@@ -993,6 +993,8 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
    at the left edge, the middle of the screen, icons only; where the pen comes near it, it opens around the pen. */
 .ink-tools.rail { position: fixed; left: max(0.45rem, env(safe-area-inset-left)); top: 50%; z-index: 30; flex-direction: column; flex-wrap: nowrap; gap: 0.3rem; width: auto; max-width: none; max-height: calc(100dvh - 8rem); margin: 0; padding: 0.4rem 0.3rem; overflow-y: auto; scrollbar-width: none; transform: translateY(-50%); border-radius: 1.3rem; }
 .ink-tools.rail::-webkit-scrollbar { display: none; }
+/* Kept between the room's bars (keepRailBetween): centred in the band, never over the frames or a toolbar. */
+.ink-tools.rail.between { top: var(--rail-y, 4rem); max-height: var(--rail-max, calc(100dvh - 8rem)); transform: none; }
 .room[data-kind] > .ink-tools.rail { position: fixed; }
 .ink-tools.rail .icon-btn { width: 2.35rem; height: 2.35rem; }
 .ink-tools.rail .icon-btn svg { width: 1.2rem; height: 1.2rem; }
@@ -2300,3 +2302,19 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .gesture-row:last-child { border-bottom: 0; }
 .gesture-how { font-weight: 700; }
 .gesture-what { color: var(--muted); }
+
+/* 애니메이션 방's foot: the frames and their buttons in one glass (the timeline), the frames above;
+   on a short, wide screen side by side, so the page has the height. */
+.anim-dock { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 0.05rem; width: min(100% - 1rem, 40rem); margin: 0 auto 0.65rem; padding: 0.25rem 0.3rem 0.15rem; border: 1px solid var(--glass-edge); border-radius: 1.25rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 62%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.anim-dock > .anim-strip { width: auto; margin: 0; padding: 0.2rem 0.15rem 0.25rem; border: 0; border-radius: 0.9rem; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.anim-dock > .toolbar { margin: 0 auto; padding: 0; border-color: transparent; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.room.bare .anim-dock { opacity: 0; pointer-events: none; }
+.anim-dock { transition: opacity 0.25s var(--ease); }
+@media (orientation: landscape) and (max-height: 560px) {
+  .anim-dock { flex-direction: row; align-items: center; gap: 0.3rem; width: min(100% - 1rem, 64rem); margin-bottom: 0.4rem; }
+  .anim-dock > .anim-strip { order: 2; flex: 1 1 auto; min-width: 0; }
+  .anim-dock > .toolbar { order: 1; margin: 0; }
+}
+/* ‹ 3/12 › a little smaller, so more frames are in view on a phone. */
+.anim-dock .anim-step { width: 1.6rem; height: 2.4rem; }
+.anim-dock .anim-where { min-width: 2.3rem; }

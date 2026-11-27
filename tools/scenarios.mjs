@@ -8033,22 +8033,32 @@ scenario("엑스레이 inside a shape: a shape drawn before in the painted colou
   await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
 });
 
-scenario("PROBE anim sizes", async ({ open, out }) => {
+// The owner (27 November): "애니메이션 방 ui겹친다". On phones the drawing rail stood in the middle of the
+// whole screen and its foot lay over the strip's ‹ (a tap meant for ‹ pressed the rail, so the frame
+// stayed where it was). The rail keeps between the bars; the page fits beside it.
+scenario("그림 방 and 애니메이션 방 on phone and tablet sizes: the drawing rail never lies over the bars, the frame strip or the page as it first fits", async ({ open, out }) => {
+  const overlap = (a, b) => a && b && a[0] < b[2] - 1 && b[0] < a[2] - 1 && a[1] < b[3] - 1 && b[1] < a[3] - 1;
   for (const [w, hh] of [[360, 640], [412, 780], [844, 390], [820, 1180]]) {
-    const a = await open({ dev: "a", width: w, height: hh });
-    await click(a, "#add-creative");
-    await click(a, '[data-kind="creative-anim"]');
-    await fill(a, "#room-name", "크기");
-    await fill(a, "#my-name", "가람");
-    await click(a, "#create-room");
-    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
-    await click(a, "#invite-done");
-    await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2`);
-    await click(a, "#anim-add");
-    await click(a, "#anim-add");
-    await pause(600);
-    const boxes = await a.eval(`(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; }; return { page: r("#anim-page"), rail: r("#ink-tools"), strip: r("#anim-strip"), tools: r("#anim-tools"), bar: r(".room > .bar") }; })()`);
-    console.log("PROBE", w, hh, JSON.stringify(boxes));
-    await a.shot(out(`probe-anim-${w}x${hh}.png`));
+    for (const [kind, page] of [["creative-anim", "#anim-page"], ["creative-draw", "#draw-page"]]) {
+      const a = await open({ dev: "a", width: w, height: hh });
+      await click(a, "#add-creative");
+      await click(a, `[data-kind="${kind}"]`);
+      await fill(a, "#room-name", "크기");
+      await fill(a, "#my-name", "가람");
+      await click(a, "#create-room");
+      await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+      await click(a, "#invite-done");
+      await a.waitFor(`${q(page)} && ${q("#ink-tools")}`);
+      if (kind === "creative-anim") {
+        await click(a, "#anim-add");
+        await click(a, "#anim-add");
+      }
+      await pause(500);
+      const boxes = await a.eval(`(() => { const r = (s) => { const e = document.querySelector(s); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; }; return { page: r(${JSON.stringify(page)}), rail: r("#ink-tools"), strip: r("#anim-strip"), tools: r(".room > .toolbar, .room .anim-tools, #draw-tools"), bar: r(".room > .bar"), prev: r("#anim-prev") }; })()`);
+      const label = `${kind} ${w}×${hh}: ${JSON.stringify(boxes)}`;
+      for (const k of ["strip", "tools", "bar", "page", "prev"]) assert.ok(!overlap(boxes.rail, boxes[k]), `the rail is clear of the ${k}: ${label}`);
+      assert.ok(boxes.rail[3] <= hh && boxes.rail[1] >= 0, "the rail is on the screen: " + label);
+      if (kind === "creative-anim") await a.shot(out(`anim-fit-${w}x${hh}.png`));
+    }
   }
 });

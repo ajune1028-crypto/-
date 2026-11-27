@@ -10,7 +10,7 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
-import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried } from "./ink.js";
+import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
 import { addLayerOps, setLayerOps, removeLayerOps, moveLayerOps, invertDrawOps, inkDocOf, BLEND_MODES, MAX_LAYERS, PAPERS, paperOps } from "../core/draw.js";
@@ -40,7 +40,7 @@ export function mountDrawRoom(body, app, session, frame) {
   const liveInk = new LiveInk(session);
 
   // The page fitted to the screen; two fingers zoom and move it (ui/page-stage.js).
-  const view = pageStage(body, { id: "draw", width: PAGE_W, height: PAGE_H, onPinch: () => { for (const { ink } of hosts.values()) ink.cancelTouch(); } });
+  const view = pageStage(body, { id: "draw", width: PAGE_W, height: PAGE_H, onPinch: () => { for (const { ink } of hosts.values()) ink.cancelTouch(); }, avoid: () => inkTools });
   const { page, stage } = view;
   const inkTools = h("div", { class: "ink-tools", id: "ink-tools", role: "toolbar", "aria-label": "그리기 도구" });
   const panel = h("aside", { class: "layers-panel", id: "layers-panel", hidden: true, "aria-label": "레이어" });
@@ -52,6 +52,8 @@ export function mountDrawRoom(body, app, session, frame) {
   const toolbar = h("div", { class: "toolbar draw-tools", id: "draw-tools" }, undoButton, redoButton, layersButton, replayButton, saveButton);
   body.append(panel);
   body.after(inkTools, toolbar);
+  // The rail keeps between the bars (never over the toolbar), and the page fits beside it.
+  const offBand = keepRailBetween(inkTools);
 
   // The brush's size is on the tools' rail (ui/ink.js), as in every room that draws.
 
@@ -537,6 +539,7 @@ export function mountDrawRoom(body, app, session, frame) {
       stopTaps();
       for (const { ink } of hosts.values()) ink.destroy();
       liveInk.close();
+      offBand();
       inkTools.remove();
       toolbar.remove();
     },

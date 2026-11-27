@@ -7,7 +7,7 @@ import { h } from "./dom.js";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-export function pageStage(body, { id, width, height, onPinch = () => {} }) {
+export function pageStage(body, { id, width, height, onPinch = () => {}, avoid = () => null }) {
   const page = h("div", { class: "draw-page", id: id + "-page", style: { width: width / 100 + "rem", height: height / 100 + "rem" } });
   const stage = h("div", { class: "draw-stage", id: id + "-stage" }, page);
   body.classList.add("draw-body");
@@ -19,14 +19,30 @@ export function pageStage(body, { id, width, height, onPinch = () => {} }) {
   let pinch = null;
 
   const place = () => { page.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`; };
+  /**
+   * How much of the stage's left or right the page keeps clear of as it fits: the drawing rail
+   * standing at that side (avoid() gives it), so the page is never under it at first (the owner, 27
+   * November: "애니메이션 방 ui겹친다"). Zoomed or moved by hand, the page goes where it is put.
+   */
+  function clearOf(el) {
+    if (!el || el.hidden || !el.isConnected) return { left: 0, right: 0 };
+    const r = el.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    if (!r.width || r.bottom <= s.top || r.top >= s.bottom || r.right <= s.left || r.left >= s.right) return { left: 0, right: 0 };
+    return (r.left + r.right) / 2 < s.left + s.width / 2 ? { left: Math.max(0, r.right - s.left), right: 0 } : { left: 0, right: Math.max(0, s.right - r.left) };
+  }
   function fit(smooth = false) {
     const w = page.offsetWidth;
     const hgt = page.offsetHeight;
     const sw = stage.clientWidth;
     const sh = stage.clientHeight;
     if (!w || !sw || !sh) return;
-    zoom = Math.min((sw - 24) / w, (sh - 24) / hgt);
-    panX = (sw - w * zoom) / 2;
+    let { left, right } = clearOf(avoid());
+    // A rail as wide as most of the stage (a very narrow screen) is not given the room.
+    if (sw - left - right < sw * 0.6) left = right = 0;
+    const free = sw - left - right;
+    zoom = Math.min((free - 24) / w, (sh - 24) / hgt);
+    panX = left + (free - w * zoom) / 2;
     panY = (sh - hgt * zoom) / 2;
     fitted = true;
     if (smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
