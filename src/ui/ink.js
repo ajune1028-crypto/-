@@ -11,9 +11,10 @@
 // 채우기 fills the region a tap lands in; 문지르기 pulls the paint along under the finger.
 // Used by the text room, the whiteboard, 그림 방 and 애니메이션 방.
 
-import { h, icon, iconButton, closeOnOutside, mount } from "./dom.js";
+import { h, icon, iconButton, closeOnOutside, mount, flashHint } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, enclosedSpots, carryStrokes, landStrokesOps, BOARD_INK_UNIT } from "../core/ink.js";
+import { placePieces, railParts } from "./ink-pieces.js";
+import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, nearestWidth, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, enclosedSpots, carryStrokes, landStrokesOps, BOARD_INK_UNIT } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
 import { LIGHT_MS } from "./live-ink.js";
@@ -1510,13 +1511,16 @@ function brushPreview(brush, color, width) {
  * units(): stroke units in a screen pixel now (the size dot shows the brush as big as it will draw).
  */
 /** restyle(): the pen's look goes to the drawing layers at once, while the size bar is still held. */
-export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false, restyle = null }) {
+export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false, restyle = null, pieces = null, drop = null }) {
   // In 그림 방 and 애니메이션 방 black is shown as the black it draws (it never turns with 어둡게).
   const shown = (c) => inkColor(c, fixed);
   const drawn = (c) => (fixed ? fixedInk(c) : c);
   panel.hidden = !pen.tool;
+  for (const el of railParts(panel)) el.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return void closeInkPop();
+  // A button of this rail wherever its piece is (the rail may be in pieces: ui/ink-pieces.js).
+  const inRail = (sel) => railParts(panel).map((el) => el.querySelector(sel)).find(Boolean) || null;
   const rail = layout === "rail";
   panel.classList.toggle("rail", rail);
   panel.classList.toggle("row", !rail);
@@ -1537,15 +1541,51 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
   const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
   lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
-  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")",
+  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")" + (drop ? " · 꾹 눌러 끌어다 놓으면 채우기" : ""),
     "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": shown(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
-  const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기" },
-    ...[3, 2, 1].map((w) => h("button", { class: "ink-width", type: "button", data: { width: String(w) }, "aria-label": "굵기 " + w, "aria-pressed": String(!pen.size && pen.width === w),
-      onclick: () => { pen.width = w; pen.size = null; setTool(pen.tool); } }, h("span", { style: { width: 0.2 + w * 0.18 + "rem", height: 0.2 + w * 0.18 + "rem" } }))));
-  const parts = [brushNow, eraserButton, lassoButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow].filter(Boolean);
-  if (rail && !pointing) parts.push(h("span", { class: "ink-sep", "aria-hidden": "true" }), sizeBar(), widths);
-  else if (!pointing) parts.push(widths);
-  panel.replaceChildren(...parts);
+  // 컬러드롭 (Procreate's ColorDrop; the owner, 27 November: "체우기는 색을 꾹 눌러서 어디다가 가져다 두면"):
+  // the colour held and dragged onto the drawing fills where it is let go.
+  if (drop) wireColorDrop(colorNow, () => shown(pen.color), drop);
+  // 빠른 굵기: three sizes at a tap; held, a button takes the size the brush has now (the owner, 27
+  // November: "브러쉬 크기 바꾸는 버튼 3개 나열되어있는거 꾹누르면 그거 설치하기도").
+  const quick = quickSizes(store);
+  const pxNow = pen.size || WIDTH_PX[pen.width] || 4;
+  const widths = h("div", { class: "ink-widths", role: "group", "aria-label": "빠른 굵기 (꾹 누르면 지금 굵기를 넣어요)" },
+    ...[3, 2, 1].map((w, i) => {
+      const px = quick[i] || WIDTH_PX[w];
+      const on = quick[i] ? pen.size === px || (!pen.size && WIDTH_PX[pen.width] === px) : !pen.size && pen.width === w;
+      const dot = quick[i] ? dotRem(px) : 0.2 + w * 0.18;
+      const b = h("button", { class: "ink-width", type: "button", data: { width: String(w), px: String(px) }, "aria-label": `굵기 ${px}px (꾹 누르면 지금 굵기를 넣어요)`, "aria-pressed": String(on) },
+        h("span", { style: { width: dot + "rem", height: dot + "rem" } }));
+      holdToSet(b, () => {
+        setQuickSize(store, i, pxNow);
+        flashHint(`이 굵기를 넣었어요 · ${pxNow}px`);
+        setTool(pen.tool);
+      });
+      b.addEventListener("click", () => {
+        if (b.dataset.held) return void delete b.dataset.held;
+        if (quick[i]) {
+          pen.size = px;
+          pen.width = nearestWidth(px);
+        } else {
+          pen.width = w;
+          pen.size = null;
+        }
+        setTool(pen.tool);
+      });
+      return b;
+    }));
+  const size = rail && !pointing ? sizeBar() : null;
+  if (rail && pieces) {
+    // 그림 방, 애니메이션 방: the rail in pieces, where this kind of room keeps them.
+    placePieces(panel, { tools: [brushNow, eraserButton, lassoButton, laserButton].filter(Boolean), color: [colorNow], size: size ? [size] : [], widths: pointing ? [] : [widths] },
+      { store, kind: pieces, hidden: new Set(pointing ? ["size", "widths"] : []), redraw: () => setTool(pen.tool) });
+  } else {
+    const parts = [brushNow, eraserButton, lassoButton, laserButton, h("span", { class: "ink-sep", "aria-hidden": "true" }), colorNow].filter(Boolean);
+    if (size) parts.push(h("span", { class: "ink-sep", "aria-hidden": "true" }), size, widths);
+    else if (!pointing) parts.push(widths);
+    panel.replaceChildren(...parts);
+  }
 
   /** The size bar: 0.5 to 40 px on a doubling scale; while a finger is on it a dot shows the brush. */
   function sizeBar() {
@@ -1574,10 +1614,14 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
       restyle?.();
     };
     let drag = null;
+    // Along the bar as its piece is turned: upright, the big end at the top; a quarter turned, at the right.
     const at = (e) => {
       const r = bar.getBoundingClientRect();
       const pad = 9;
-      set(from(1 - (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2)));
+      const turn = Number(bar.closest("[data-turn]")?.dataset.turn) || 0;
+      const across = (e.clientX - r.left - pad) / Math.max(1, r.width - pad * 2);
+      const down = (e.clientY - r.top - pad) / Math.max(1, r.height - pad * 2);
+      set(from(turn === 90 ? across : turn === 270 ? 1 - across : turn === 180 ? down : 1 - down));
     };
     bar.addEventListener("pointerdown", (e) => {
       if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
@@ -1619,7 +1663,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     inkPop = pop;
     pop.fill();
     place(pop);
-    for (const b of panel.querySelectorAll("[aria-expanded]")) b.setAttribute("aria-expanded", String(b === anchor));
+    for (const part of railParts(panel)) for (const b of part.querySelectorAll("[aria-expanded]")) b.setAttribute("aria-expanded", String(b === anchor));
   }
 
   function fillPop(pop) {
@@ -1661,7 +1705,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     const well = h("button", { class: "ink-color more" + (own ? " has" : ""), id: "ink-more", type: "button", "aria-label": own ? "고른 색 " + pen.color + " · 색 원판" : "색 더 고르기 (색 원판)",
       "aria-pressed": String(own && !erasing), style: own ? { "--well": pen.color } : {},
       onclick: () => {
-        const anchor = colorNow.isConnected ? colorNow : panel.querySelector("#ink-color-now") || well;
+        const anchor = colorNow.isConnected ? colorNow : inRail("#ink-color-now") || well;
         closeInkPop();
         openColorWheel({
           anchor,
@@ -1671,7 +1715,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
           onPick: (hex, done) => {
             if (done) return void choose({ color: hex });
             pen.color = hex;
-            panel.querySelector("#ink-color-now")?.style.setProperty("--c", hex);
+            inRail("#ink-color-now")?.style.setProperty("--c", hex);
           },
           onRecent: (list) => setSetting(store, "inkRecent", list),
           alive: () => panel.isConnected && !panel.hidden && pen.tool === "pen",
@@ -1680,24 +1724,30 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     return well;
   }
 
-  // Beside the rail at its button's height (inside the screen); above the row in a card.
+  // Beside the rail (or the piece it is in) at its button's height, on whichever side has room; above
+  // or below a piece lying on its side; above the row in a card. Always inside the screen.
   function place(pop) {
     const a = pop.anchor.getBoundingClientRect();
-    const box = panel.getBoundingClientRect();
+    const stack = pop.anchor.closest(".ink-tools") || panel;
+    const box = stack.getBoundingClientRect();
     const w = pop.el.offsetWidth;
     const ht = pop.el.offsetHeight;
-    if (rail) {
-      pop.el.style.left = Math.min(innerWidth - w - 8, box.right + 8) + "px";
+    const turn = Number(stack.dataset.turn) || 0;
+    if (rail && (turn === 0 || turn === 180)) {
+      const right = box.right + 8;
+      const left = box.left - 8 - w;
+      pop.el.style.left = (right + w <= innerWidth - 8 || left < 8 ? Math.max(8, Math.min(innerWidth - w - 8, right)) : left) + "px";
       pop.el.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
     } else {
       pop.el.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
-      pop.el.style.top = Math.max(8, box.top - ht - 8) + "px";
+      const above = box.top - ht - 8;
+      pop.el.style.top = (above >= 8 || !rail ? Math.max(8, above) : Math.min(innerHeight - ht - 8, box.bottom + 8)) + "px";
     }
   }
 
   // An open window keeps up with the tools (the brush in the new colour, what is chosen).
   if (inkPop && inkPop.panel === panel) {
-    const anchor = panel.querySelector(inkPop.kind === "brush" ? "#ink-brush-now" : inkPop.kind === "color" ? "#ink-color-now" : "#eraser");
+    const anchor = inRail(inkPop.kind === "brush" ? "#ink-brush-now" : inkPop.kind === "color" ? "#ink-color-now" : "#eraser");
     if (!anchor || (inkPop.kind === "erase" && !erasing)) closeInkPop();
     else {
       inkPop.anchor = anchor;
@@ -1801,6 +1851,95 @@ export function landInk({ ink, doc, clock, by, commit }, carried) {
 }
 
 /** The one small tools window open now (brushes, colours or the eraser's way). */
+// 빠른 굵기 put in by hand (held): [px for the first button, the second, the third], 0 = its own width.
+const QUICK = "inkQuick";
+function quickSizes(store) {
+  const v = store.get(QUICK, null);
+  return Array.isArray(v) ? [0, 1, 2].map((i) => (Number.isFinite(v[i]) && v[i] >= SIZE_MIN && v[i] <= SIZE_MAX ? v[i] : 0)) : [0, 0, 0];
+}
+function setQuickSize(store, i, px) {
+  const v = quickSizes(store);
+  v[i] = Math.round(px * 10) / 10;
+  store.set(QUICK, v);
+}
+// A size as the dot that shows it on its button (a doubling scale, within the button).
+const dotRem = (px) => Math.max(0.24, Math.min(1.1, 0.22 + 0.17 * Math.log2(Math.max(1, px))));
+
+/** Held a moment, a button does `act` instead of its tap (its click that follows is let go). */
+function holdToSet(button, act, ms = 450) {
+  let timer = 0;
+  let at = null;
+  button.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    at = [e.clientX, e.clientY];
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      button.dataset.held = "1";
+      try { navigator.vibrate?.(10); } catch { /* not every device buzzes */ }
+      act();
+    }, ms);
+  });
+  button.addEventListener("pointermove", (e) => { if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > 10) clearTimeout(timer); });
+  for (const end of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(end, () => clearTimeout(timer));
+  button.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
+/**
+ * 컬러드롭: the colour button held (a moment) and dragged: a drop of the colour follows the finger, its
+ * tip where it will land; let go, drop(x, y) fills there (true when it did, and a ring spreads). A
+ * short tap is still the colour window; let go off the drawing, nothing happens.
+ */
+function wireColorDrop(btn, colourOf, drop) {
+  let g = null;
+  btn.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const id = e.pointerId;
+    g = { id, x0: e.clientX, y0: e.clientY, bead: null, colour: colourOf() };
+    g.timer = setTimeout(() => {
+      if (!g || g.id !== id) return;
+      g.bead = h("div", { class: "color-drop", id: "color-drop", "aria-hidden": "true", style: { "--c": g.colour, left: g.x0 + "px", top: g.y0 + "px" } });
+      document.body.append(g.bead);
+      btn.dataset.held = "1";
+      try { btn.setPointerCapture(id); } catch { /* fine */ }
+      try { navigator.vibrate?.(10); } catch { /* not every device buzzes */ }
+    }, 300);
+  });
+  btn.addEventListener("pointermove", (e) => {
+    if (!g || e.pointerId !== g.id) return;
+    if (!g.bead) {
+      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > 10) {
+        clearTimeout(g.timer);
+        g = null;
+      }
+      return;
+    }
+    g.bead.style.left = e.clientX + "px";
+    g.bead.style.top = e.clientY + "px";
+  });
+  const end = (e, landed) => {
+    if (!g || e.pointerId !== g.id) return;
+    clearTimeout(g.timer);
+    const { bead, colour } = g;
+    g = null;
+    if (!bead) return;
+    bead.remove();
+    if (!landed || !drop(e.clientX, e.clientY)) return;
+    const ring = h("div", { class: "color-drop-ring", "aria-hidden": "true", style: { "--c": colour, left: e.clientX + "px", top: e.clientY + "px" } });
+    document.body.append(ring);
+    setTimeout(() => ring.remove(), 600);
+  };
+  btn.addEventListener("pointerup", (e) => end(e, true));
+  btn.addEventListener("pointercancel", (e) => end(e, false));
+  // The tap that ends a drop does not open the colour window.
+  btn.addEventListener("click", (e) => {
+    if (!btn.dataset.held) return;
+    delete btn.dataset.held;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
 // The rail keeps between the room's top bar and what lies along its foot (the 애니메이션 방's frames and
 // buttons, a toolbar), centred in that band, never over them (the owner, 27 November: "애니메이션 방 ui
 // 겹친다": on a phone the rail stood in the middle of the whole screen and its foot lay over the

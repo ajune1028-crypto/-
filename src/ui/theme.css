@@ -2328,3 +2328,71 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 @media (prefers-reduced-motion: reduce) { .room-preview-pic.film .pv-pic { animation: none; } }
 .room-thumb .room-preview-pic { width: auto; height: auto; background: #fdfdfb; }
 .room-preview-board .pv-ink.dark { filter: invert(1) hue-rotate(180deg); }
+
+/* ---- 그리기 막대 조각 (ui/ink-pieces.js): the rail's pieces come apart, stand anywhere, join, turn. ---- */
+.ink-tools.pieced { overflow: visible; }
+.ink-tools.pieced > .ink-stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; max-height: calc(var(--rail-max, calc(100dvh - 8rem)) - 0.8rem); overflow-y: auto; scrollbar-width: none; }
+.ink-tools.pieced > .ink-stack::-webkit-scrollbar { display: none; }
+.ink-tools.floating > .ink-stack { max-height: calc(100dvh - 2rem); }
+.ink-piece { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.ink-piece[hidden] { display: none; }
+.ink-tools.pieced.empty { display: none; }
+.ink-tools.pieced.empty.arranging { display: flex; min-width: 3rem; min-height: 7rem; border-style: dashed; background: color-mix(in srgb, var(--tint) 6%, transparent); box-shadow: none; }
+.ink-tools.floating { top: 0; left: 0; transform: none; max-height: none; }
+/* The tab sticking out of a stack's end: held, the pieces come loose; while they are, a tap turns a float. */
+.ink-tab { position: absolute; left: 50%; top: 100%; z-index: 1; display: grid; place-items: center; width: 2.4rem; height: 1.05rem; margin: -0.15rem 0 0 -1.2rem; padding: 0; border: 0; background: none; touch-action: none; cursor: grab; -webkit-touch-callout: none; user-select: none; }
+.ink-tab-grip { display: grid; place-items: center; width: 1.6rem; height: 0.5rem; border-radius: 0 0 0.7rem 0.7rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: 0 0 0 1px var(--glass-edge), 0 2px 4px rgb(0 0 0 / 0.12); }
+.ink-tools[data-turn="180"] > .ink-tab { top: auto; bottom: 100%; margin: 0 0 -0.15rem -1.2rem; }
+.ink-tools[data-turn="180"] .ink-tab-grip { border-radius: 0.7rem 0.7rem 0 0; }
+.ink-tools[data-turn="90"] > .ink-tab { left: auto; right: 100%; top: 50%; width: 1.05rem; height: 2.4rem; margin: -1.2rem -0.15rem 0 0; }
+.ink-tools[data-turn="270"] > .ink-tab { left: 100%; top: 50%; width: 1.05rem; height: 2.4rem; margin: -1.2rem 0 0 -0.15rem; }
+.ink-tools[data-turn="90"] .ink-tab-grip { width: 0.5rem; height: 1.6rem; border-radius: 0.7rem 0 0 0.7rem; }
+.ink-tools[data-turn="270"] .ink-tab-grip { width: 0.5rem; height: 1.6rem; border-radius: 0 0.7rem 0.7rem 0; }
+/* Turned: the order turns with it, the icons stay upright; a quarter turned, it lies along. */
+.ink-tools[data-turn="180"] > .ink-stack, .ink-tools[data-turn="180"] .ink-piece, .ink-tools[data-turn="180"] .ink-widths { flex-direction: column-reverse; }
+.ink-tools[data-turn="90"] > .ink-stack, .ink-tools[data-turn="90"] .ink-piece, .ink-tools[data-turn="90"] .ink-widths { flex-direction: row-reverse; }
+.ink-tools[data-turn="270"] > .ink-stack, .ink-tools[data-turn="270"] .ink-piece, .ink-tools[data-turn="270"] .ink-widths { flex-direction: row; }
+.ink-tools:is([data-turn="90"], [data-turn="270"]) > .ink-stack { max-height: none; max-width: calc(100vw - 2rem); overflow: auto hidden; }
+.ink-tools:is([data-turn="90"], [data-turn="270"]) .ink-sep { width: 1px; height: 1.4rem; margin: 0 0.1rem; }
+.ink-tools:is([data-turn="90"], [data-turn="270"]) .size-rail { width: clamp(4.5rem, 24dvw, 9rem); height: 1.35rem; margin: auto 0.1rem; cursor: ew-resize; }
+.ink-tools:is([data-turn="90"], [data-turn="270"]) .size-track { left: 0.7rem; right: 0.7rem; top: 0.3rem; bottom: 0.3rem; }
+.ink-tools[data-turn="90"] .size-track { clip-path: polygon(0 44%, 100% 0, 100% 100%, 0 56%); }
+.ink-tools[data-turn="270"] .size-track { clip-path: polygon(0 0, 100% 44%, 100% 56%, 0 100%); }
+.ink-tools[data-turn="180"] .size-track { clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); }
+.ink-tools[data-turn="90"] .size-thumb { top: 50%; bottom: auto; left: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); margin: -0.575rem 0 0 -0.575rem; }
+.ink-tools[data-turn="270"] .size-thumb { top: 50%; bottom: auto; left: auto; right: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); margin: -0.575rem -0.575rem 0 0; }
+.ink-tools[data-turn="180"] .size-thumb { top: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); bottom: auto; margin: -0.575rem 0 0 -0.575rem; }
+.ink-tools:is([data-turn="90"], [data-turn="270"]) .size-peek { bottom: calc(100% + 0.9rem); }
+.ink-tools[data-turn="90"] .size-peek { left: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateX(-50%); }
+.ink-tools[data-turn="270"] .size-peek { left: auto; right: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateX(50%); }
+.ink-tools[data-turn="180"] .size-peek { bottom: auto; top: calc(0.7rem + var(--t, 0.5) * (100% - 1.4rem)); transform: translateY(-50%); }
+/* Coming apart: the pieces part a little, each its own outline, swaying (still when motion is turned down). */
+.ink-tools.pieced.arranging, .ink-tools.pieced.arranging > .ink-stack { touch-action: none; }
+.ink-tools.pieced.arranging > .ink-stack { gap: 0.6rem; padding: 0.15rem; }
+.ink-tools.pieced.arranging .ink-piece { padding: 0.2rem; border-radius: 0.85rem; background: color-mix(in srgb, var(--tint) 9%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--tint) 50%, transparent); animation: piece-sway 0.5s ease-in-out infinite alternate; cursor: grab; }
+.ink-tools.pieced.arranging .ink-piece:nth-child(4n+3) { animation-delay: -0.25s; }
+.ink-tools.pieced.arranging .ink-sep { display: none; }
+@keyframes piece-sway { from { rotate: -1.5deg; } to { rotate: 1.5deg; } }
+@media (prefers-reduced-motion: reduce) { .ink-tools.pieced.arranging .ink-piece { animation: none; } }
+.ink-tools.floating.arranging > .ink-tab { width: 2.1rem; height: 2.1rem; margin-left: -1.05rem; }
+.ink-tools.floating.arranging[data-turn="90"] > .ink-tab, .ink-tools.floating.arranging[data-turn="270"] > .ink-tab { margin-top: -1.05rem; }
+.ink-tools.floating.arranging .ink-tab-grip { width: 1.65rem; height: 1.65rem; border-radius: 50%; background: color-mix(in srgb, var(--tint) 30%, var(--paper)); }
+.ink-tools.floating.arranging .ink-tab-grip::after { content: "↻"; font: 800 0.95rem/1 var(--font); color: var(--ink); }
+.ink-tools.lifted { z-index: 95; scale: 1.05; box-shadow: var(--glass-shine), 0 16px 36px rgb(0 0 0 / 0.28); }
+.ink-ghost { z-index: 95; pointer-events: none; }
+/* Where a piece brought near will join: that end lights up in my colour. */
+.ink-tools.snap::after { content: ""; position: absolute; border-radius: 999px; background: var(--tint); box-shadow: 0 0 12px var(--tint); pointer-events: none; }
+.ink-tools.snap[data-snap="top"]::after { left: 12%; right: 12%; top: -6px; height: 3px; }
+.ink-tools.snap[data-snap="bottom"]::after { left: 12%; right: 12%; bottom: -6px; height: 3px; }
+.ink-tools.snap[data-snap="left"]::after { top: 12%; bottom: 12%; left: -6px; width: 3px; }
+.ink-tools.snap[data-snap="right"]::after { top: 12%; bottom: 12%; right: -6px; width: 3px; }
+/* What can be done while the pieces are loose, at the top; 처음대로, 다 됐어요. */
+.ink-arrange { position: fixed; left: 50%; top: max(0.6rem, env(safe-area-inset-top)); z-index: 96; translate: -50% 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.35rem 0.6rem; width: max-content; max-width: calc(100vw - 1rem); padding: 0.45rem 0.65rem; border: 1px solid var(--glass-edge); border-radius: 1.1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 88%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 0.78rem; font-weight: 700; color: var(--ink); word-break: keep-all; text-align: center; animation: pop-in 0.18s var(--ease); }
+.ink-arrange-buttons { display: flex; gap: 0.35rem; }
+.ink-arrange .chip { height: 1.9rem; padding: 0 0.75rem; }
+/* 컬러드롭: a drop of the colour, its tip where it lands; a ring spreads where it filled. */
+.ink-color-now { touch-action: none; -webkit-touch-callout: none; }
+.color-drop { position: fixed; z-index: 97; width: 2.2rem; height: 2.2rem; margin: -2.66rem 0 0 -1.1rem; border-radius: 50% 50% 50% 0; rotate: -45deg; background: var(--c); box-shadow: 0 0 0 2.5px #fff, 0 6px 16px rgb(0 0 0 / 0.3); pointer-events: none; }
+.color-drop-ring { position: fixed; z-index: 97; width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; border-radius: 50%; border: 3px solid var(--c); pointer-events: none; animation: drop-ring 0.55s var(--ease) forwards; }
+@keyframes drop-ring { from { scale: 0.4; opacity: 1; } to { scale: 5; opacity: 0; } }
+.ink-width { touch-action: manipulation; -webkit-touch-callout: none; }

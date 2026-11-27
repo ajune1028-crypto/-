@@ -6302,7 +6302,7 @@ scenario("붓 크기 막대: the thin bar at the left edge makes the brush very 
   await a.waitFor(`window.__app.session.doc(${layerDoc}).strokes().length === 2`);
   assert.deepEqual(await a.eval(`window.__app.session.doc(${layerDoc}).strokes().map((s) => [s.z, s.w])`), [[400, 3], [5, 1]], "each its own size, with the nearest width");
   // How thick each line is on the page.
-  const thick = (v) => a.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; const c = document.querySelector('.draw-layer[data-layer="' + l.id + '"] canvas'); const r = c.getBoundingClientRect(); const g = c.getContext("2d"); const x = Math.round((${box.x + box.w * 0.5} - r.left) * c.width / r.width); const d = g.getImageData(x, 0, 1, c.height).data; const y0 = (${box.y + box.h * v} - r.top) * c.height / r.height; let n = 0; for (let y = Math.max(0, Math.round(y0 - 200)); y < Math.min(c.height, Math.round(y0 + 200)); y++) if (d[y * 4 + 3] > 40) n++; return n * r.height / c.height; })()`);
+  const thick = (v) => a.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; const c = document.querySelector('.draw-layer[data-layer="' + l.id + '"] canvas'); const r = c.getBoundingClientRect(); const g = c.getContext("2d"); const x = Math.round((${box.x + box.w * 0.5} - r.left) * c.width / r.width); const d = g.getImageData(x, 0, 1, c.height).data; const k = c.height / r.height; const y0 = (${box.y + box.h * v} - r.top) * k; const span = 45 * k; let n = 0; for (let y = Math.max(0, Math.round(y0 - span)); y < Math.min(c.height, Math.round(y0 + span)); y++) if (d[y * 4 + 3] > 40) n++; return n / k; })()`);
   const bold = await thick(0.3);
   const fine = await thick(0.55);
   assert.ok(bold > 20 && fine < 3 && fine > 0, `bold ${bold.toFixed(1)} px, fine ${fine.toFixed(1)} px`);
@@ -6988,6 +6988,159 @@ scenario("애니메이션 방 after leaving and coming back: every frame keeps i
   assert.ok(seen[f2].mid > 0 && seen[f1].mid === 0, "frame 2 plays with its own line: " + JSON.stringify(seen));
   assert.ok(seen[f3].low > 0, "frame 3 plays with its own line: " + JSON.stringify(seen));
   await a.shot(out("anim-back-again.png"));
+});
+
+// The owner (27 November): "그림과 애니메이션에서… '바'라고 하나. 막 색깔 선택하고 그런 거. 그거에서 그거 따로
+// 분리 할 수 있게해줘 기능마다… 곂쳤을때는 끝부분에꺼가 좀 튀어나오는데 그거 꾹 누르면. 뭐가 뜨고 거기서
+// 각자거를 빼고… 어디다가 눌 수도 있고. 다시 조립할 수도… 분리된거에서… 아래에 조그마낫게 뭐가 티어나오고…
+// 90도마다… 가까이두면 마찬가지로 곂칠수도".
+scenario("그리기 막대 조각: the rail's tab held, its pieces come loose; the colour pulled out stands on its own, turns a quarter at a tap of its tab, takes 빠른 굵기 brought near it, stays where it was after leaving the room; 처음대로 puts them back", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  const enterDraw = async () => {
+    await click(a, "#add-creative");
+    await click(a, '[data-kind="creative-draw"]');
+    await fill(a, "#room-name", "조각");
+    await fill(a, "#my-name", "가람");
+    await click(a, "#create-room");
+    await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+    await click(a, "#invite-done");
+    await a.waitFor(`${q("#draw-page")} && ${q("#ink-tools .ink-tab")}`);
+  };
+  await enterDraw();
+  const centre = (sel) => a.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const press = async (sel, ms) => {
+    const at = await centre(sel);
+    await a.front();
+    await a.touch("start", [at]);
+    await pause(ms);
+    await a.touch("end");
+  };
+  const dragTo = async (sel, to) => {
+    const at = await centre(sel);
+    await a.front();
+    await a.touch("start", [at]);
+    for (let i = 1; i <= 10; i++) await a.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 10, at[1] + ((to[1] - at[1]) * i) / 10]]);
+    await pause(60);
+    await a.touch("end");
+  };
+  // The tab sticks out under the rail.
+  const [dock, tab] = await Promise.all([a.eval(`(() => { const r = document.getElementById("ink-tools").getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()`), centre("#ink-tools > .ink-tab")]);
+  assert.ok(tab[1] > dock[3] - 4 && tab[0] > dock[0] && tab[0] < dock[2], "the tab sticks out of the rail's foot: " + JSON.stringify({ dock, tab }));
+  // A quick tap on the tab does nothing; held, the pieces come loose and a line says what to do.
+  await press("#ink-tools > .ink-tab", 80);
+  await pause(300);
+  assert.equal(await a.eval(`!!document.getElementById("ink-arrange")`), false, "a tap is not a hold");
+  await press("#ink-tools > .ink-tab", 650);
+  await a.waitFor(`${q("#ink-arrange")} && ${q("#ink-tools")}.classList.contains("arranging")`, 2000);
+  // While loose, a tap on a tool does nothing.
+  const tool = await a.eval(`document.getElementById("eraser").getAttribute("aria-pressed")`);
+  await click(a, "#eraser");
+  assert.equal(await a.eval(`document.getElementById("eraser").getAttribute("aria-pressed")`), tool, "tools rest while the pieces are loose");
+  // The colour pulled out to the right: it stands there on its own.
+  await dragTo('#ink-tools .ink-piece[data-piece="color"]', [300, 330]);
+  await a.waitFor(`document.querySelectorAll(".ink-tools.floating:not(.ink-ghost)").length === 1 && !!document.querySelector(".ink-tools.floating #ink-color-now")`, 2000);
+  const float = await a.eval(`(() => { const r = document.querySelector(".ink-tools.floating").getBoundingClientRect(); return [r.left, r.top]; })()`);
+  assert.ok(Math.abs(float[0] + 20 - 300) < 60 && Math.abs(float[1] + 20 - 330) < 60, "where it was let go: " + float);
+  // Its own tab, tapped while loose: a quarter turn (lying, the tab at its left).
+  await press(".ink-tools.floating > .ink-tab", 80);
+  await a.waitFor(`document.querySelector(".ink-tools.floating")?.dataset.turn === "90"`, 2000);
+  // 빠른 굵기 brought onto it: they join, one glass.
+  const target = await centre(".ink-tools.floating");
+  await dragTo('#ink-tools .ink-piece[data-piece="widths"]', [target[0] - 6, target[1]]);
+  await a.waitFor(`document.querySelectorAll(".ink-tools.floating").length === 1 && document.querySelectorAll(".ink-tools.floating .ink-piece").length === 2`, 2000);
+  const pieces = await a.eval(`[...document.querySelectorAll(".ink-tools.floating .ink-piece")].map((p) => p.dataset.piece)`);
+  assert.deepEqual([...pieces].sort(), ["color", "widths"]);
+  await a.shot(out("rail-pieces-loose.png"));
+  // 다 됐어요: tools again; the colour opens its window beside the piece, on the screen.
+  await click(a, "#ink-arrange-done");
+  await a.waitFor(`!document.getElementById("ink-arrange") && !document.querySelector(".ink-tools.arranging")`);
+  await click(a, "#ink-color-now");
+  await a.waitFor(`document.querySelector('#ink-pop')?.dataset.kind === "color"`, 2000);
+  const pop = await a.eval(`(() => { const r = document.getElementById("ink-pop").getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()`);
+  assert.ok(pop[0] >= 0 && pop[1] >= 0 && pop[2] <= 390 && pop[3] <= 844, "the colour window is on the screen: " + pop);
+  await click(a, '#ink-pop [data-ink="red"]');
+  await a.shot(out("rail-pieces.png"));
+  // Out of the room and back: the pieces are where they were.
+  const kept = await a.eval(`JSON.stringify(window.__app.store.get("inkRail:creative-draw", null))`);
+  await click(a, "#back");
+  await a.waitFor(q('.room-row[data-room-kind="creative-draw"]'));
+  await click(a, '.room-row[data-room-kind="creative-draw"]');
+  await a.waitFor(`${q("#draw-page")} && document.querySelectorAll(".ink-tools.floating .ink-piece").length === 2`, 4000);
+  assert.equal(await a.eval(`document.querySelector(".ink-tools.floating").dataset.turn`), "90");
+  assert.equal(await a.eval(`JSON.stringify(window.__app.store.get("inkRail:creative-draw", null))`), kept);
+  // 처음대로: one rail again, every piece in it.
+  await press(".ink-tools.floating > .ink-tab", 650);
+  await a.waitFor(q("#ink-arrange-reset"), 2000);
+  await click(a, "#ink-arrange-reset");
+  await a.waitFor(`document.querySelectorAll(".ink-tools.floating").length === 0 && document.querySelectorAll("#ink-tools .ink-piece:not([hidden])").length === 4`, 2000);
+  await click(a, "#ink-arrange-done");
+});
+
+// The owner (27 November): "체우기는 색을 꾹 눌러서 어디다가 가져다 두면 되는거로… 프로크리에이트거 참고해봐"
+// (ColorDrop) and "브러쉬 크기 바꾸는 버튼 3개 나열되어있는거 꾹누르면. 그거 설치하기도".
+scenario("컬러드롭 and 빠른 굵기: the colour held and dragged into a drawn ring fills it (a short tap still opens the colours); a quick size held takes the brush's size, and a tap on it draws at that size", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "채우기");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const strokes = () => a.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().map((s) => ({ b: s.s || s.b || "pen", c: s.c, z: s.z || 0 })); })()`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  // A closed ring in black.
+  const cx = box.x + box.w * 0.55;
+  const cy = box.y + box.h * 0.4;
+  const rad = box.w * 0.22;
+  await a.press(cx + rad, cy);
+  for (let i = 1; i <= 40; i++) await a.moveTo(cx + rad * Math.cos((i / 40) * Math.PI * 2), cy + rad * Math.sin((i / 40) * Math.PI * 2));
+  await a.release(cx + rad, cy + 1);
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 1; })()`);
+  // Red chosen; a short tap on the colour still opens its window.
+  await pickColor(a, "red");
+  await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  await click(a, "#ink-color-now");
+  await a.waitFor(`document.querySelector('#ink-pop')?.dataset.kind === "color"`, 2000);
+  await click(a, "#ink-color-now");
+  await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  // Held and dragged into the ring: a drop of red follows, and where it is let go is filled.
+  const from = await a.eval(`(() => { const r = document.getElementById("ink-color-now").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [from]);
+  await pause(420);
+  for (let i = 1; i <= 12; i++) await a.touch("move", [[from[0] + ((cx - from[0]) * i) / 12, from[1] + ((cy - from[1]) * i) / 12]]);
+  assert.ok(await a.eval(`!!document.getElementById("color-drop")`), "a drop of the colour follows the finger");
+  await a.touch("end");
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().some((s) => (s.s || s.b) === "fill"); })()`, 3000);
+  const filled = (await strokes()).find((s) => s.b === "fill");
+  assert.equal(filled.c.toLowerCase(), "red", "filled in the colour that was dropped: " + JSON.stringify(filled));
+  assert.equal(await a.eval(`!!document.getElementById("ink-pop") || !!document.getElementById("color-drop")`), false, "no colour window after a drop, and the drop is gone");
+  await a.shot(out("color-drop.png"));
+  // The size bar near its top (a big brush), then the first quick size held: it takes that size.
+  const rail = await a.eval(`(() => { const r = document.getElementById("size-rail").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height * 0.2]; })()`);
+  await a.front();
+  await a.touch("start", [rail]);
+  await a.touch("end");
+  const big = await a.eval(`Number(document.getElementById("size-rail").getAttribute("aria-valuenow"))`);
+  assert.ok(big > 10, "a big brush: " + big);
+  const first = await a.eval(`(() => { const r = document.querySelector('.ink-width[data-width="3"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [first]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(`(window.__app.store.get("inkQuick", [])[0] || 0) === ${big}`, 2000);
+  assert.equal(await a.eval(`document.querySelector('.ink-width[data-width="3"]').dataset.px`), String(big));
+  // Another quick size, then this one: the next line is drawn at the size it took.
+  await click(a, '.ink-width[data-width="1"]');
+  await click(a, '.ink-width[data-width="3"]');
+  await a.press(box.x + box.w * 0.2, box.y + box.h * 0.8);
+  for (let i = 1; i <= 8; i++) await a.moveTo(box.x + box.w * (0.2 + i * 0.06), box.y + box.h * 0.8);
+  await a.release(box.x + box.w * 0.7, box.y + box.h * 0.8);
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 3; })()`, 3000);
+  const last = (await strokes()).at(-1);
+  assert.equal(last.z, Math.round(big * 10), "drawn at the size the button took: " + JSON.stringify(last));
 });
 
 // The owner: "친구한테 미니게임 신청하기… 친구가 수락하면 전체가 조금 불투명하게 바뀌고 가운데 3, 2, 1…

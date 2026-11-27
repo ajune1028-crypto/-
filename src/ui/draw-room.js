@@ -10,6 +10,7 @@ import { personColor } from "../core/paint.js";
 import { currentTheme } from "./theme.js";
 import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
+import { releasePieces } from "./ink-pieces.js";
 import { InkLayer, drawInkTools, paintStroke, pixelAt, lassoActions, fixedInk, landInk, boardStrokesCarried, keepRailBetween, paintLayers } from "./ink.js";
 import { copyItem } from "../clipboard.js";
 import { LiveInk } from "./live-ink.js";
@@ -174,9 +175,19 @@ export function mountDrawRoom(body, app, session, frame) {
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
     drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1,
-      restyle: () => { for (const { ink } of hosts.values()) ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }); } });
+      restyle: () => { for (const { ink } of hosts.values()) ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }); },
+      pieces: "creative-draw", drop: (x, y) => dropFill(x, y) });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
+  }
+
+  /** 컬러드롭: the colour let go on the page fills there, on the layer being drawn (as 채우기 does). */
+  function dropFill(x, y) {
+    const r = page.getBoundingClientRect();
+    const entry = hosts.get(active);
+    if (readOnly() || !entry || !doc.layer(active)?.visible || x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+    entry.ink.fillAt({ clientX: x, clientY: y });
+    return true;
   }
 
   function setTool(tool) {
@@ -519,6 +530,7 @@ export function mountDrawRoom(body, app, session, frame) {
       for (const { ink } of hosts.values()) ink.destroy();
       liveInk.close();
       offBand();
+      releasePieces(inkTools);
       inkTools.remove();
       toolbar.remove();
     },
