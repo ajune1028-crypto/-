@@ -7859,6 +7859,56 @@ scenario("설정 in pages and 방 보기: the first page is short with the rest 
   await page.shot(out("home-cards-wide.png"));
 });
 
+// The owner (27 November): "일상과 창작 거기 세로선… 가운데보다 약간 위에 그 진짜 안 보이게 그냥 내가 거기를
+// 꾹 누르면 그 창작 부분을 조금 더 왼쪽으로 하거나 오른쪽으로", and "절대 색깔 바꾸지 마… 주황색이 파란색으로
+// 바뀐다던가": the line between the halves, held a little above the middle, moves; each half keeps its own
+// colour, so where 일상 grows its orange comes with it. A tap or a quick slide there does nothing.
+scenario("home: the line between 일상 and 창작, held a little above the middle (nothing shows there), moves left or right; each half's colour comes with it; kept after a reload; a tap or a quick slide does nothing", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await page.waitFor(q("#home-split"));
+  const halves = () => page.eval(`(() => { const d = document.querySelector(".half.daily").getBoundingClientRect(); const c = document.querySelector(".half.creative").getBoundingClientRect(); return { d: d.width, c: c.width, line: d.right }; })()`);
+  const spot = await page.eval(`(() => { const r = document.getElementById("home-split").getBoundingClientRect(); const h = document.getElementById("home").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: h.height, top: h.top, look: getComputedStyle(document.getElementById("home-split")).backgroundColor }; })()`);
+  const start = await halves();
+  assert.ok(Math.abs(start.d - start.c) < 2, "two equal halves at first: " + JSON.stringify(start));
+  assert.ok(Math.abs(spot.x - start.line) < 2, "it lies on the line");
+  assert.ok(spot.y < spot.top + spot.h / 2 && spot.y > spot.top + spot.h * 0.25, "a little above the middle: " + JSON.stringify(spot));
+  assert.equal(spot.look, "rgba(0, 0, 0, 0)", "nothing shows there");
+  // A tap, and a quick slide, change nothing.
+  await page.front();
+  await page.touch("start", [[spot.x, spot.y]]);
+  await page.touch("end");
+  for (let i = 0; i < 1; i++) {
+    await page.touch("start", [[spot.x, spot.y]]);
+    for (let k = 1; k <= 6; k++) await page.touch("move", [[spot.x + k * 10, spot.y]]);
+    await page.touch("end");
+  }
+  await pause(200);
+  assert.ok(Math.abs((await halves()).d - start.d) < 1, "a tap or a quick slide moves nothing");
+  // Held, then drawn to the left: 창작 grows; to the right: 일상 grows.
+  await page.touch("start", [[spot.x, spot.y]]);
+  await pause(550);
+  await page.waitFor(`document.querySelector(".home-wrap").classList.contains("splitting")`, 1500);
+  for (let k = 1; k <= 8; k++) await page.touch("move", [[spot.x - k * 8, spot.y]]);
+  await pause(120);
+  const left = await halves();
+  assert.ok(left.c > left.d + 40, "drawn left, 창작 is wider: " + JSON.stringify(left));
+  for (let k = 1; k <= 16; k++) await page.touch("move", [[spot.x - 64 + k * 8, spot.y]]);
+  await pause(120);
+  const right = await halves();
+  assert.ok(right.d > right.c + 40, "drawn right, 일상 is wider: " + JSON.stringify(right));
+  await page.shot(out("home-split.png"));
+  await page.touch("end");
+  await page.waitFor(`!document.querySelector(".home-wrap").classList.contains("splitting")`, 1500);
+  // Where 창작 was, 일상 is now, in its own colour (each half paints its own).
+  const there = await page.eval(`document.elementFromPoint(${spot.x + 20}, ${spot.top + spot.h * 0.6}).closest(".half")?.dataset.side`);
+  assert.equal(there, "daily", "the orange half reaches where 창작 was");
+  await page.reload();
+  await page.waitFor("window.__app && window.__app.booted");
+  await page.waitFor(q("#home-split"));
+  const kept = await halves();
+  assert.ok(Math.abs(kept.d - right.d) < 3, "kept after a reload: " + JSON.stringify({ kept, right }));
+});
+
 // The owner's motion references (22 November: "모드 바꿀 때 사람 말이 아닌 것 같은 느낌을 아주 조금", "절대로
 // 뭐 바꾸지 말고 시스템을"), then (27 November): "글자가 잠시 이상하게 됨" of the scramble, and "애니메이션도
 // … 색이 나와야 되는데 하나도 안 나오고". A chosen mode's name: a light in my colour passes over it once

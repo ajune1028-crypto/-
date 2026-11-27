@@ -628,9 +628,10 @@ export function showHome(app) {
     mount(root,
       notice && h("div", { class: "notice", id: "notice", role: "status", text: notice }),
       h("div", { class: "home-wrap" + (getSettings(app.store).reference ? "" : " one-row") },
-        h("div", { class: "home", id: "home" },
+        h("div", { class: "home", id: "home", style: splitStyle(getSettings(app.store).homeSplit) },
           half("daily", SIDES.daily.title, SIDES.daily.note, "아직 방이 없어요. 아래 +로 오늘을 같이 적을 방을 만들어 보세요."),
           half("creative", SIDES.creative.title, SIDES.creative.note, "아직 방이 없어요. 아래 +로 같이 부르고 놓을 방을 만들어 보세요.")),
+        splitHandle(),
         // 설정 and 햇살 side by side at the top right, 비서 under 햇살 (the owner, 21 November: "찾기와 집
         // 그거 기능을 레퍼런스 아이콘 위로"), so nothing lies over 창작's title.
         h("div", { class: "home-top" },
@@ -646,6 +647,129 @@ export function showHome(app) {
           h("button", { class: "pill", id: "by-code", type: "button", text: "코드로 들어가기", onclick: openCode }))));
     // 찾기와 집 stays open while home draws itself again behind it.
     if (panelCtl?.isOpen()) root.append(...panelCtl.nodes);
+  }
+
+  /** How wide 일상 is against 창작 (a share of the width, 0.5 = halves). */
+  function splitStyle(share) {
+    const a = Number.isFinite(share) ? Math.min(0.75, Math.max(0.25, share)) : 0.5;
+    return { "--split-a": (a * 100).toFixed(2) + "fr", "--split-b": ((1 - a) * 100).toFixed(2) + "fr" };
+  }
+
+  /**
+   * The line between 일상 and 창작 moves (the owner, 27 November: "세로선… 가운데보다 약간 위에 그 진짜 안 보이게
+   * 그냥 내가 거기를 꾹 누르면 그 창작 부분을 조금 더 왼쪽으로 하거나 오른쪽으로"): an unseen spot on the line,
+   * a little above the middle. Held still a moment it wakes (a short buzz, a thin mark of my colour on the
+   * line), then the line follows the finger; near the middle it settles on halves. Each half keeps its
+   * own colour, so the orange or the blue comes along with its half ("절대 색깔 바꾸지 마"). 창작 keeps room
+   * for its title beside the round buttons at the top right; 일상 for its own. Kept on this device (and
+   * with my code, wherever I am).
+   */
+  function splitHandle() {
+    const grip = h("div", { class: "home-split", id: "home-split", role: "separator", "aria-orientation": "vertical", "aria-label": "일상·창작 너비 (꾹 눌러 옮기기)" },
+      h("span", { class: "home-split-mark", "aria-hidden": "true" }));
+    let hold = null;
+    const wrapOf = () => grip.closest(".home-wrap");
+    const place = (share) => { grip.style.left = (share * 100).toFixed(2) + "%"; };
+    // What a half needs at its top: its title's own words where they stand in it (the title is a block as
+    // wide as its half), and for 창작 the round buttons over its right end beside them. 창작's title may
+    // become a little smaller (down to SHRINK) so the line can go further its way on a phone.
+    const SHRINK = 0.72;
+    const words = (half) => {
+      const title = half?.querySelector(".half-title");
+      if (!title) return null;
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const r = range.getBoundingClientRect();
+      const k = Number(title.style.getPropertyValue("--title-k")) || 1;
+      return { pad: r.left - half.getBoundingClientRect().left, w: r.width / k };
+    };
+    const buttonsSpan = (wrap) => {
+      const top = wrap?.querySelector(".home-top")?.getBoundingClientRect();
+      return top ? wrap.getBoundingClientRect().right - top.left : 0;
+    };
+    const limits = () => {
+      const wrap = wrapOf();
+      const w = wrap?.getBoundingClientRect().width || innerWidth;
+      const d = words(wrap?.querySelector(".half.daily"));
+      const c = words(wrap?.querySelector(".half.creative"));
+      const lo = Math.max(0.25, d ? (d.pad + d.w + 12) / w : 0.25);
+      const hi = Math.min(0.75, c ? 1 - (c.pad + c.w * SHRINK + 12 + buttonsSpan(wrap)) / w : 0.75);
+      return [lo, Math.max(lo, hi)];
+    };
+    // 창작's title, smaller only as much as it must be to stay clear of the buttons.
+    const fitTitle = () => {
+      const wrap = wrapOf();
+      const half = wrap?.querySelector(".half.creative");
+      const title = half?.querySelector(".half-title");
+      const c = words(half);
+      if (!title || !c) return;
+      const room = half.getBoundingClientRect().width - c.pad - 12 - buttonsSpan(wrap);
+      const k = Math.max(SHRINK, Math.min(1, room / c.w));
+      if (k >= 0.999) title.style.removeProperty("--title-k");
+      else title.style.setProperty("--title-k", k.toFixed(3));
+    };
+    requestAnimationFrame(() => {
+      fitTitle();
+      // A turned or resized screen: fitted again (and let go with the home it belongs to).
+      const wrap = wrapOf();
+      if (!wrap || typeof ResizeObserver !== "function") return;
+      const watch = new ResizeObserver(() => { if (!grip.isConnected) watch.disconnect(); else fitTitle(); });
+      watch.observe(wrap);
+    });
+    place(Number.isFinite(getSettings(app.store).homeSplit) ? getSettings(app.store).homeSplit : 0.5);
+    grip.addEventListener("pointerdown", (e) => {
+      if (hold || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      try { grip.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      hold = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false, timer: 0 };
+      const h0 = hold;
+      hold.timer = setTimeout(() => {
+        if (hold !== h0) return;
+        h0.on = true;
+        h0.limits = limits();
+        wrapOf()?.classList.add("splitting");
+        buzz(app, 10);
+      }, 380);
+    });
+    grip.addEventListener("pointermove", (e) => {
+      if (!hold || e.pointerId !== hold.id) return;
+      if (!hold.on) {
+        if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 8) {
+          clearTimeout(hold.timer);
+          hold.dead = true;
+        }
+        return;
+      }
+      const wrap = wrapOf();
+      const r = wrap.getBoundingClientRect();
+      const [lo, hi] = hold.limits;
+      let share = (e.clientX - r.left) / r.width;
+      if (Math.abs(share - 0.5) < 0.025 && lo <= 0.5 && hi >= 0.5) {
+        if (hold.share !== 0.5) buzz(app, 6);
+        share = 0.5;
+      }
+      share = Math.min(hi, Math.max(lo, share));
+      hold.share = share;
+      const style = splitStyle(share);
+      const home = wrap.querySelector(".home");
+      home.style.setProperty("--split-a", style["--split-a"]);
+      home.style.setProperty("--split-b", style["--split-b"]);
+      place(share);
+      fitTitle();
+    });
+    const done = (e) => {
+      if (!hold || e.pointerId !== hold.id) return;
+      clearTimeout(hold.timer);
+      const was = hold;
+      hold = null;
+      wrapOf()?.classList.remove("splitting");
+      if (was.on && Number.isFinite(was.share)) setSetting(app.store, "homeSplit", Math.round(was.share * 1000) / 1000);
+    };
+    grip.addEventListener("pointerup", done);
+    grip.addEventListener("pointercancel", done);
+    grip.addEventListener("lostpointercapture", done);
+    grip.addEventListener("contextmenu", (e) => e.preventDefault());
+    return grip;
   }
 
   function sheet(title, build, opts) {

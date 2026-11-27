@@ -267,7 +267,8 @@ h1, h2, p { margin: 0; }
 .home-wrap { position: relative; }
 .home {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* The line between the halves moves (--split-a and --split-b, from the unseen spot on it). */
+  grid-template-columns: minmax(0, var(--split-a, 1fr)) minmax(0, var(--split-b, 1fr));
   /* One row exactly the screen's height (not as tall as the rooms): each half's rooms scroll inside
      it, and its + stays in view however many rooms there are (the owner, 21 November). */
   grid-template-rows: minmax(0, 1fr);
@@ -292,7 +293,13 @@ h1, h2, p { margin: 0; }
 }
 .half-scroll > .rooms:first-child, .half-scroll > .empty:first-child { margin-top: 0; }
 .half + .half { box-shadow: var(--split); }
-.half-title { padding: 0 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
+/* The unseen spot on the line, a little above the middle: nothing shows until it is held; then a thin
+   mark of my colour runs along the line and the line follows the finger. */
+.home-split { position: absolute; z-index: 3; top: 38%; left: 50%; width: 1.75rem; height: 7.5rem; translate: -50% 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: col-resize; }
+.home-split-mark { position: absolute; left: 50%; top: 0; bottom: 0; width: 0.22rem; translate: -50% 0; border-radius: 999px; background: var(--accent-ink); box-shadow: 0 0 0.6rem color-mix(in srgb, var(--tint) 55%, transparent); opacity: 0; scale: 1 0.6; transition: opacity 0.2s var(--ease), scale 0.25s var(--ease); pointer-events: none; }
+.home-wrap.splitting .home-split-mark { opacity: 1; scale: 1 1; }
+.home-wrap.splitting .half { transition: none; }
+.half-title { padding: 0 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; scale: var(--title-k, 1); transform-origin: 0 50%; }
 .half-note { margin-top: 0.2rem; padding: 0 0.25rem; font-size: 0.75rem; color: var(--muted); }
 .rooms { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.4rem; }
 .room-row {
