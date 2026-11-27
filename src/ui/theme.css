@@ -1612,20 +1612,36 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .rooms.cards .room-thumb .room-preview { inset: 2.2rem 0.55rem 0.55rem 0.55rem; }
 .rooms.cards .room-thumb .room-preview-text { -webkit-line-clamp: 5; }
 .rooms.cards .room-name { font-size: 0.88rem; }
-/* Motion on what exists (ui/motion.js): a chosen mode's name settles out of a brief scramble drawn
-   over it (the words themselves never change), a count rolls in, a check draws itself, a star pops. */
-.decoding { position: relative; color: transparent !important; }
-.decoding::after { content: attr(data-scramble); position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: var(--scramble-color); white-space: nowrap; pointer-events: none; }
-.rolling { display: inline-block; animation: roll-in 0.32s var(--ease); }
-@keyframes roll-in { from { opacity: 0; transform: translateY(0.55em); } }
-.drawn-check { flex: none; width: 1em; height: 1em; margin-right: 0.3em; vertical-align: -0.12em; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Motion on what exists (ui/motion.js), in my colour: a light passes over a chosen mode's name (the
+   words never change), a count rolls in out of my colour, a check draws itself in it, a star pops with a
+   ring of it. With reduce motion on, nothing moves: my colour fades in and out where it would have. */
+.shine, .shine-still { position: relative; }
+.shine::after { content: attr(data-shine); position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 1; white-space: nowrap; pointer-events: none; color: transparent;
+  background: linear-gradient(100deg, transparent 0% 33%, var(--accent-ink) 46% 54%, transparent 67% 100%) no-repeat; background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; animation: shine-pass 0.7s cubic-bezier(0.45, 0, 0.25, 1) both; }
+@keyframes shine-pass { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.shine-still { animation: shine-fade 0.7s ease-out; }
+@keyframes shine-fade { 30% { color: var(--accent-ink); } }
+.rolling { display: inline-block; animation: roll-in 0.42s var(--ease); }
+@keyframes roll-in { from { opacity: 0; transform: translateY(0.55em); color: var(--accent-ink); } 55% { color: var(--accent-ink); } }
+.drawn-check { flex: none; width: 1em; height: 1em; margin-right: 0.3em; vertical-align: -0.12em; fill: none; stroke: var(--accent-ink); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .drawn-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw-check 0.36s var(--ease) 0.05s forwards; }
 @keyframes draw-check { to { stroke-dashoffset: 0; } }
 .room-star.bursting { animation: star-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .room-star.bursting::after { content: ""; position: absolute; inset: 0.2rem; border-radius: 50%; pointer-events: none; animation: star-ring 0.6s ease-out forwards; }
-@keyframes star-pop { 40% { transform: scale(1.32); } }
+@keyframes star-pop { 40% { transform: scale(1.32); color: var(--accent-ink); } }
 @keyframes star-ring { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tint) 70%, transparent); } to { box-shadow: 0 0 0 0.9rem transparent; } }
-@media (prefers-reduced-motion: reduce) { .rolling, .drawn-check path, .room-star.bursting, .room-star.bursting::after { animation: none; } }
+/* The mark of what is chosen, while it flows to the new choice, carries a little of my colour. */
+.seg-pill { transition: box-shadow 0.32s var(--ease); }
+.seg-pill.flowing { box-shadow: var(--glass-shine), inset 0 0 0 100vmax color-mix(in srgb, var(--tint) 14%, transparent), 0 2px 10px color-mix(in srgb, var(--tint) 34%, transparent); }
+@media (prefers-reduced-motion: reduce) {
+  .rolling { animation: count-fade 0.5s ease-out; }
+  .drawn-check path { animation: none; stroke-dashoffset: 0; }
+  .room-star.bursting { animation: star-fade 0.5s ease-out; }
+  .room-star.bursting::after { animation: none; }
+}
+@keyframes count-fade { from { color: var(--accent-ink); } }
+@keyframes star-fade { 30% { color: var(--accent-ink); } }
 /* 벤토 (the song room's clip tiles): the side panel's grid packs with no holes and a wide tile takes two
    columns; held, the tiles shake as a phone's home screen does, each with a '−', and below them the
    ones put away come back with '+' and 완료 ends it. The floating menu keeps the same tiles in a row. */

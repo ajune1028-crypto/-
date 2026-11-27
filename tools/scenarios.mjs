@@ -7860,27 +7860,36 @@ scenario("설정 in pages and 방 보기: the first page is short with the rest 
 });
 
 // The owner's motion references (22 November: "모드 바꿀 때 사람 말이 아닌 것 같은 느낌을 아주 조금", "절대로
-// 뭐 바꾸지 말고 시스템을"): a chosen mode's name settles out of a brief scramble drawn over it while
-// the words stay the words; a starred room's star pops.
-scenario("motion: a chosen mode's name settles out of a brief scramble (its words never change), and is plain again at once; a star turned on pops", async ({ open }) => {
+// 뭐 바꾸지 말고 시스템을"), then (27 November): "글자가 잠시 이상하게 됨" of the scramble, and "애니메이션도
+// … 색이 나와야 되는데 하나도 안 나오고". A chosen mode's name: a light in my colour passes over it once
+// while the words stay the words (no glyphs); a starred room's star pops.
+scenario("motion: a chosen mode's name has a light in my colour pass over it (its words never change, no glyphs), and is plain again at once; a star turned on pops", async ({ open }) => {
   const page = await open({ width: 390, height: 844 });
   await page.waitFor(q("#home-settings"));
   await click(page, "#home-settings");
   await page.waitFor(q('[data-theme-choice="dark"]'));
+  await click(page, '[data-key="green"]');
   await page.eval(`(() => {
     window.__seen = [];
     const b = document.querySelector('[data-theme-choice="dark"]');
-    const watch = new MutationObserver(() => window.__seen.push({ cls: b.classList.contains("decoding"), scramble: b.dataset.scramble || null, text: b.textContent }));
-    watch.observe(b, { attributes: true, attributeFilter: ["class", "data-scramble"] });
+    const ink = () => { const i = document.createElement("i"); i.style.color = "var(--accent-ink)"; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; };
+    const watch = new MutationObserver(() => window.__seen.push({
+      shine: b.classList.contains("shine"), glyphs: b.classList.contains("decoding") || !!b.dataset.scramble, text: b.textContent,
+      light: b.classList.contains("shine") ? getComputedStyle(b, "::after").backgroundImage : "", ink: ink(),
+    }));
+    watch.observe(b, { attributes: true, attributeFilter: ["class", "data-scramble", "data-shine"] });
     window.__stopSeen = () => watch.disconnect();
     return true;
   })()`);
   await click(page, '[data-theme-choice="dark"]');
-  await pause(500);
+  await pause(950);
   const seen = await page.eval(`(() => { window.__stopSeen(); return window.__seen; })()`);
-  assert.ok(seen.some((s) => s.cls && s.scramble && s.scramble !== "어둡게"), "a scramble was drawn over it: " + JSON.stringify(seen.slice(0, 4)));
+  const lit = seen.find((s) => s.shine && s.light);
+  assert.ok(lit, "a light passed over it: " + JSON.stringify(seen.slice(0, 4)));
+  assert.ok(lit.light.replace(/\s/g, "").includes(lit.ink.replace(/\s/g, "")), "in my colour: " + JSON.stringify(lit));
+  assert.ok(seen.every((s) => !s.glyphs), "no glyphs over the words");
   assert.ok(seen.every((s) => s.text === "어둡게"), "its words never changed");
-  assert.equal(await page.eval(`document.querySelector('[data-theme-choice="dark"]').classList.contains("decoding")`), false, "plain again at once");
+  assert.equal(await page.eval(`document.querySelector('[data-theme-choice="dark"]').classList.contains("shine")`), false, "plain again at once");
   await page.key("Escape");
   await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
   await page.eval(`(() => { window.__app.store.set("rooms", [{ id: "starroomaaaa", kind: "daily-text", name: "별 방", memberId: "m1", at: Date.now(), local: true }]); setTimeout(() => location.reload(), 50); return true; })()`);

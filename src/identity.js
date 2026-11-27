@@ -31,12 +31,16 @@ export function openStore(storage, prefix = "") {
     available = false;
   }
   const copy = (value) => (value === undefined ? value : JSON.parse(JSON.stringify(value)));
+  // Keys whose last write did not fit on the device (its space full): read from here until one does.
+  // Only they are; everything else is still read from the device (one full write used to make every
+  // later read say "nothing set": my colour, my theme, my rooms).
+  const stuck = new Set();
   return {
     get available() {
       return available;
     },
     get(key, fallback) {
-      if (available) {
+      if (available && !stuck.has(key)) {
         try {
           const raw = backing.getItem(prefix + key);
           return raw === null ? copy(fallback) : JSON.parse(raw);
@@ -51,8 +55,9 @@ export function openStore(storage, prefix = "") {
       if (!available) return;
       try {
         backing.setItem(prefix + key, JSON.stringify(value));
+        stuck.delete(key);
       } catch {
-        available = false;
+        stuck.add(key);
       }
     },
     /** A write that may not fit (home's pictures): false when there was no room, and the store goes on. */
@@ -64,6 +69,7 @@ export function openStore(storage, prefix = "") {
       try {
         backing.setItem(prefix + key, JSON.stringify(value));
         memory.set(key, copy(value));
+        stuck.delete(key);
         return true;
       } catch {
         return false;
@@ -71,6 +77,7 @@ export function openStore(storage, prefix = "") {
     },
     remove(key) {
       memory.delete(key);
+      stuck.delete(key);
       if (!available) return;
       try {
         backing.removeItem(prefix + key);

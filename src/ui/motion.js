@@ -1,47 +1,37 @@
 // Small motions on what already exists (the owner, 22 November: "애니메이션… 절대로 뭐 바꾸지 말고 시스템을…
-// 그냥 뭔가 좋을 것 같은 '애니메이션'", and with the references sent: "모드 바꿀 때 사람 말이 아닌 것 같은
-// 느낌을 아주 조금"). Nothing here changes what a control says or does: the words stay the words (a
-// scramble is drawn over them, never written into them), a number is set at once and only rolls in.
-// Ideas from the references the owner sent (Kokonut UI, MIT: dynamic text, ai-text-loading; NumberFlow,
-// MIT: rolling numbers), written anew for this app.
+// 그냥 뭔가 좋을 것 같은 '애니메이션'"), in my colour (27 November: "애니메이션도 막 그런 걸로 색이 나와야
+// 되는데 하나도 안 나오고"). Nothing here changes what a control says or does: a light is drawn over the
+// words and goes, a number is set at once and only rolls in. With 동작 줄이기 (reduce motion) on, nothing
+// moves but my colour still comes and goes (a fade is not motion).
+// Ideas from the references the owner sent (Kokonut UI, MIT: ai-text-loading's light over words;
+// NumberFlow, MIT: rolling numbers), written anew for this app.
 
 const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Shapes that read as no one's letters (the owner: "사람 말이 아닌 것 같은 느낌").
-const GLYPHS = "░▒▓▖▗▘▙▚▛▜▝▞▟◐◑◒◓◆◇";
-
 /**
- * A chosen mode's name settles out of a brief scramble, left to right (about a quarter second). The
- * label itself never changes: the scramble lies over it and goes.
+ * A chosen mode's name: a light in my colour passes over it once, left to right (under a second).
+ * The words never change shape (the owner, 27 November: "글자가 잠시 이상하게 됨" of the scramble that was
+ * here); the light is drawn over them and goes. Still screens: my colour fades in and out instead.
  */
-export function decodeLabel(el, ms = 240) {
-  if (!el || still()) return;
+export function shineLabel(el, ms = 700) {
+  if (!el) return;
   const text = el.textContent;
   if (!text || el.children.length) return; // icons only, or a label with parts: leave it be
-  cancelAnimationFrame(el._decode || 0);
-  el.style.setProperty("--scramble-color", getComputedStyle(el).color);
-  el.classList.add("decoding");
-  const chars = [...text];
-  const start = performance.now();
-  const step = (now) => {
-    const t = Math.min(1, (now - start) / ms);
-    const solid = Math.floor(t * (chars.length + 1));
-    el.dataset.scramble = chars.map((c, i) => (i < solid || c === " " ? c : GLYPHS[(Math.random() * GLYPHS.length) | 0])).join("");
-    if (t < 1 && el.isConnected) el._decode = requestAnimationFrame(step);
-    else {
-      el.classList.remove("decoding");
-      delete el.dataset.scramble;
-      el._decode = 0;
-    }
-  };
-  el._decode = requestAnimationFrame(step);
+  clearTimeout(el._shine);
+  el.classList.remove("shine", "shine-still");
+  el.dataset.shine = text;
+  void el.offsetWidth;
+  el.classList.add(still() ? "shine-still" : "shine");
+  el._shine = setTimeout(() => {
+    el.classList.remove("shine", "shine-still");
+    delete el.dataset.shine;
+  }, ms + 40);
 }
 
 /** A number or a short count changes and rolls in from below (the text is right at once). */
 export function rollTo(el, text) {
   if (!el || el.textContent === text) return;
   el.textContent = text;
-  if (still()) return;
   el.classList.remove("rolling");
   void el.offsetWidth;
   el.classList.add("rolling");
@@ -49,7 +39,7 @@ export function rollTo(el, text) {
 
 /** Done (copied): a check draws itself at the start of the button, then goes. */
 export function drawCheck(button, ms = 1400) {
-  if (!button || still()) return;
+  if (!button) return;
   button.querySelector(":scope > .drawn-check")?.remove();
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "drawn-check");
@@ -64,7 +54,7 @@ export function drawCheck(button, ms = 1400) {
 
 /** A star turned on: it springs and a ring of small lights goes out from it. */
 export function burst(el) {
-  if (!el || still()) return;
+  if (!el) return;
   el.classList.remove("bursting");
   void el.offsetWidth;
   el.classList.add("bursting");

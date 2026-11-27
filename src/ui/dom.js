@@ -1,6 +1,6 @@
 // Small helpers for building the screens. Text always goes in as text, never as markup.
 
-import { decodeLabel } from "./motion.js";
+import { shineLabel } from "./motion.js";
 
 const ICONS = {
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -239,7 +239,7 @@ export function segmented(options, current, onPick, attr) {
       const changed = e.currentTarget.getAttribute("aria-pressed") !== "true";
       paint(value);
       onPick(value);
-      if (changed) decodeLabel(e.currentTarget);
+      if (changed) shineLabel(e.currentTarget);
     } }));
   }
   paint(current);
@@ -285,6 +285,11 @@ function flowingPill(seg) {
       { transform: "translate(0, 0) scale(1.05, 1.06)", offset: 0.88 },
       { transform: "none", offset: 1 },
     ], { duration: 460, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+    // While it flows it carries a little of my colour, and gives it back as it settles.
+    pill.classList.add("flowing");
+    const mine = run;
+    const settle = () => { if (run === mine) pill.classList.remove("flowing"); };
+    run.finished.then(settle, settle);
   };
   let queued = false;
   const soon = (animate) => {
