@@ -5,7 +5,11 @@
 // "힐링받게 간결하면서도 디테일에서 좋은 느낌"). Its rings draw themselves out from the top to both
 // sides, then the houses grow up out of the ground from the middle out. Drawn onto a house the room
 // goes in (held near either end, the planet turns to bring more houses); let go without moving, it
-// stays for a tap on a house, and a finger sliding along it turns it (outside, it closes).
+// stays for a tap on a house, and a finger sliding along it turns it (outside, it closes). While the
+// room is still held, another finger slides it round (the owner, 27 November: "그 행성 그 원 나올 때 내
+// 손가락으로도 스크롤 할 수 있게"; as a phone's home screen turns its pages under an icon one finger
+// holds). A house grows a little as the room comes near and takes it from close by, not only right
+// over it ("조금만 근처에 다가가도 크기가 키워져서… 포함 범위가 너무 작기도 하고").
 // Where things stand is ui/house-arc-geometry.js.
 
 import { h, icon, swallowPress } from "./dom.js";
@@ -16,15 +20,16 @@ const RISE = "cubic-bezier(0.22, 1.12, 0.36, 1)";
 
 /**
  * houses: [{ id, name }], shapeOf(house) → its house element. Returns { el, choose(onPick), follow(x, y),
- * onSpin, close() }: choose() keeps it open for a tap (onPick(id), id "new" for +); follow() is the held
- * room's finger (near an end, the planet turns; onSpin() then runs so the house under it is read again);
- * close() sinks it away.
+ * pick(x, y), onSpin, close() }: choose() keeps it open for a tap (onPick(id), id "new" for +); follow()
+ * is the held room's finger (near an end, the planet turns; onSpin() then runs so the house under it is
+ * read again); pick() is the house that takes the room there (null for none); close() sinks it away.
  */
 export function openHouseArc({ houses, shapeOf }) {
   const w = innerWidth;
   const hgt = innerHeight;
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const g = planet(w, hgt, houses.length, { house: 2.7 * rem, gap: 0.7 * rem, low: 2.6 * rem });
+  const houseW = 2.7 * rem;
+  const g = planet(w, hgt, houses.length, { house: houseW, gap: 0.7 * rem, low: 2.6 * rem });
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let turn = g.start;
   const el = (name, attrs) => {
@@ -76,7 +81,7 @@ export function openHouseArc({ houses, shapeOf }) {
     return { tile, slot };
   });
   const more = slots.length > seen(g);
-  const hint = h("p", { class: "dock-hint arc-hint", text: houses.length ? (more ? "집 위에 놓으면 들어가요 · 끝으로 가면 행성이 돌아요" : "집 위에 놓으면 그 집에 들어가요") : "새 집 위에 놓으면 집을 지어 넣어요" });
+  const hint = h("p", { class: "dock-hint arc-hint", text: houses.length ? (more ? "집 가까이 놓기 · 다른 손가락으로 돌리기" : "집 가까이 놓으면 들어가요") : "새 집 가까이 놓으면 지어 넣어요" });
   box.append(hint);
 
   /** Every house where the turn puts it, standing up from the ground; past the visible rim it fades. */
@@ -118,7 +123,7 @@ export function openHouseArc({ houses, shapeOf }) {
   let aim = turn;
   let speed = 0;
   let holdAt = null; // the held room's finger, when it is near an end
-  const api = { el: box, choose, follow, close, onSpin: null };
+  const api = { el: box, choose, follow, pick, near, close, onSpin: null };
   function frame(now, last) {
     const dt = Math.min(0.033, (now - last) / 1000);
     if (holdAt) {
@@ -171,17 +176,55 @@ export function openHouseArc({ houses, shapeOf }) {
     box.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${Math.round(g.cap * 0.4)}px)` }], { duration: 220, easing: "ease-in", fill: "forwards" })
       .finished.then(() => box.remove(), () => box.remove());
   }
-  /** Stays for a tap: a house or + picks it, a slide along it turns it, anywhere else closes it. */
-  function choose(onPick) {
-    if (closed) return;
-    box.classList.add("choosing");
-    hint.textContent = more ? "넣을 집을 눌러요 · 옆으로 밀면 행성이 돌아요" : "넣을 집을 눌러요";
-    catcher = h("div", { class: "arc-catcher", "aria-hidden": "true" });
-    catcher.addEventListener("pointerdown", (e) => { swallowPress(e); close(); });
-    document.body.insertBefore(catcher, box);
-    let drag = null;
+  /**
+   * The house (or +) the held room is brought to at (x, y): the nearest one seen, within about a house
+   * and a third of the middle of it (at least 48 px), takes it. On the way, the ones near grow a little,
+   * more the nearer the room comes (as a dock's icons swell under a finger), so where it will go is
+   * seen before it is let go.
+   */
+  function pick(x, y) {
+    if (closed) return null;
+    if (!near(x, y)) {
+      unpick();
+      return null;
+    }
+    const size = houseW * g.scale;
+    let best = null;
+    let far = Infinity;
+    for (const { tile, slot } of slots) {
+      if (tile.classList.contains("far")) {
+        tile.style.removeProperty("--near");
+        continue;
+      }
+      const a = slotAngle(g, slot, turn);
+      const p = spotAt(g, a);
+      // The middle of the house standing up out of the ground there.
+      const d = Math.hypot(x - (p.x + Math.sin(a) * size * 0.5), y - (p.y - Math.cos(a) * size * 0.5));
+      tile.style.setProperty("--near", Math.max(0, 1 - d / (size * 2.8)).toFixed(3));
+      if (d < far) {
+        far = d;
+        best = tile;
+      }
+    }
+    return far <= Math.max(48, size * 1.3) ? best : null;
+  }
+  /** Whether (x, y) is over the planet or among its houses: a room brought there is for the planet. */
+  function near(x, y) {
+    return !closed && Math.hypot(x - g.cx, y - g.cy) <= g.r + houseW * g.scale * 3.6;
+  }
+  /** The room let go or taken away: the houses stand at their own size again. */
+  function unpick() {
+    for (const { tile } of slots) tile.style.removeProperty("--near");
+  }
+  api.unpick = unpick;
+
+  // A finger sliding along the planet turns it: after the room is let go, or another finger while
+  // it is still held. Past either end it gives a little and pulls back; let go moving, it coasts on
+  // and settles on the nearest house.
+  let drag = null;
+  {
     const down = (e) => {
-      if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      if (closed || drag || (e.pointerType === "mouse" && e.button !== 0)) return;
       drag = { id: e.pointerId, x0: e.clientX, turn0: turn, moved: false, t: [[e.timeStamp, e.clientX]] };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
     };
@@ -199,6 +242,7 @@ export function openHouseArc({ houses, shapeOf }) {
       cancelAnimationFrame(spin);
       spin = 0;
       place();
+      api.onSpin?.();
       drag.t.push([e.timeStamp, e.clientX]);
       if (drag.t.length > 6) drag.t.shift();
     };
@@ -222,6 +266,17 @@ export function openHouseArc({ houses, shapeOf }) {
       part.addEventListener("pointerup", up);
       part.addEventListener("pointercancel", up);
     }
+  }
+
+  /** Stays for a tap: a house or + picks it, a slide along it turns it, anywhere else closes it. */
+  function choose(onPick) {
+    if (closed) return;
+    box.classList.add("choosing");
+    unpick();
+    hint.textContent = more ? "넣을 집을 눌러요 · 옆으로 밀면 행성이 돌아요" : "넣을 집을 눌러요";
+    catcher = h("div", { class: "arc-catcher", "aria-hidden": "true" });
+    catcher.addEventListener("pointerdown", (e) => { swallowPress(e); close(); });
+    document.body.insertBefore(catcher, box);
     for (const { tile } of slots) {
       tile.addEventListener("click", () => {
         // A slide that began on a house turned the planet; it is not a pick.

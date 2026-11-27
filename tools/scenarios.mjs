@@ -5391,6 +5391,104 @@ scenario("home 집 고르기: held, a room raises a small planet with my houses 
   await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`, 2000);
 });
 
+// The owner (27 November, with two pictures of 햇살's window at the right): "너무 그거 늘어날때 집이 크기도
+// 하고", "여기에서 창 크기 줄이면 햇빛 아이콘이랑 많이 곂쳐". Wide, the houses keep their size (more in a row);
+// narrow (houses alone), the first one stands clear of 햇살.
+scenario("햇살 window at the right: drawn wide, its houses keep a modest size side by side; drawn narrow, the first house stands clear of 햇살's button", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await createRoom(page, { room: "한 방" });
+  await click(page, "#back");
+  await page.waitFor(q("#home"));
+  const seedAt = (size) => page.eval(`(() => { const st = window.__app.store; st.set("houses", ["가족", "친구", "일", "취미"].map((name, i) => ({ id: "h" + i, name, color: ["coral", "blue", "green", "violet"][i], icon: "home", rooms: [], at: i }))); st.set("homePanelEdge", { edge: "right", at: 0.5 }); st.set("homePanelSize", { right: ${size} }); location.reload(); return true; })()`);
+  const overlap = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  for (const [size, name] of [[300, "wide"], [140, "narrow"]]) {
+    await seedAt(size);
+    await pause(300);
+    await page.waitFor(`window.__app?.booted && ${q("#home-more")}`);
+    await click(page, "#home-more");
+    await page.waitFor(`${q("#home-panel")}?.dataset.edge === "right" && ${q("#home-panel .house-tile[data-house]")}`, 3000);
+    await pause(700);
+    const seen = await page.eval(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width }; }; return { sun: r(document.getElementById("home-more")), houses: [...document.querySelectorAll("#home-panel .house-tile[data-house] .house-shape")].map(r), compact: document.getElementById("home-panel").classList.contains("compact") }; })()`);
+    const rem = 16;
+    assert.ok(seen.houses.every((h) => h.w <= 4.4 * rem + 1), `${name}: houses of a modest size: ` + seen.houses.map((h) => Math.round(h.w)));
+    assert.ok(seen.houses.every((h) => !overlap(h, seen.sun)), `${name}: no house under 햇살: ` + JSON.stringify({ sun: seen.sun, first: seen.houses[0] }));
+    if (name === "narrow") assert.ok(seen.compact, "narrow: houses alone");
+    await page.shot(out(`panel-right-${name}.png`));
+    await click(page, "#home-more");
+    await page.waitFor(`!document.getElementById("home-panel")`, 3000);
+  }
+});
+
+// The owner (27 November): "그 행성 그 원 나올 때 내 손가락으로도 스크롤 할 수 있게 해주고, 그 다음에 그 방을
+// 집에다가 넣을 때 이게 거기에 조금만 근처에 다가가도 크기가 키워져서 거기에 넣을 수 있다는 거를 알려주셨으면…
+// 넣었는데 안 넣어주는 경우, 즉 이게 너무 포함 범위가 너무 작기도 하고". While one finger holds the room,
+// another slides the planet (as a phone's home screen turns its pages under an icon held by one
+// finger); a house grows as the room comes near and takes it from close by, not only right over it.
+scenario("행성 while a room is held: another finger slides the planet round; a house grows as the room comes near, and takes it from close by (not only right over it)", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  for (const room of ["첫 방", "둘째 방"]) {
+    await createRoom(page, { room });
+    await click(page, "#back");
+    await page.waitFor(q("#home"));
+  }
+  const names = ["가족", "친구", "일", "취미", "여행", "운동", "공부", "요리", "음악"];
+  await page.eval(`(() => { const st = window.__app.store; st.set("houses", ${JSON.stringify(names)}.map((name, i) => ({ id: "h" + i, name, color: ["coral", "blue", "green", "violet"][i % 4], icon: "home", rooms: [], at: i }))); location.reload(); return true; })()`);
+  await pause(300);
+  await page.waitFor(`window.__app?.booted && document.querySelectorAll(".room-row").length === 2`);
+  const rowOf = (name) => `[...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === ${JSON.stringify(name)})`;
+  const at = await page.eval(`(() => { const b = ${rowOf("첫 방")}.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  const middle = () => page.eval(`(() => { let best = null, d = 1e9; for (const t of document.querySelectorAll("#house-dock .dock-house")) { const r = t.querySelector(".dock-body").getBoundingClientRect(); const x = Math.abs(r.left + r.width / 2 - innerWidth / 2); if (x < d) { d = x; best = t.dataset.house; } } return best; })()`);
+  const body = (id) => page.eval(`(() => { const r = document.querySelector('#house-dock [data-house="${id}"] .dock-body').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, w: r.width }; })()`);
+  await page.front();
+  await page.touch("start", [at]);
+  await pause(700);
+  await page.waitFor(q("#house-dock"));
+  await pause(1100);
+  assert.equal(await middle(), "h0", "house 1 in the middle first");
+  // The room still held by the first finger, another finger slides the planet to the left.
+  const y = 844 - 60;
+  await page.touch("start", [at, [300, y]]);
+  for (let i = 1; i <= 10; i++) await page.touch("move", [at, [300 - i * 20, y]]);
+  await page.touchIds("end", [[1, 100, y]]);
+  await pause(900);
+  const now = await middle();
+  assert.ok(Number(now.slice(1)) >= 3, "another finger turned the planet while the room was held: " + now);
+  assert.ok(await page.eval(`!!document.querySelector(".room-row.lifted")`), "the room is still held");
+  // Toward the house in the middle: still well short of it, it has already grown a little.
+  const base = await body(now);
+  const far = [base.x + 12, base.top - 62];
+  for (let i = 1; i <= 10; i++) await page.touch("move", [[at[0] + ((far[0] - at[0]) * i) / 10, at[1] + ((far[1] - at[1]) * i) / 10]]);
+  await pause(350);
+  const near = await body(now);
+  assert.ok(near.w > base.w * 1.03, "a house grows as the room comes near it: " + [base.w, near.w]);
+  // Closer (yet not over the house itself): it lights up as the one that takes the room.
+  const close = [base.x + 18, base.top - 26];
+  for (let i = 1; i <= 4; i++) await page.touch("move", [[far[0] + ((close[0] - far[0]) * i) / 4, far[1] + ((close[1] - far[1]) * i) / 4]]);
+  await page.waitFor(`document.querySelector('#house-dock [data-house="${now}"]').classList.contains("over")`, 2000);
+  await page.shot(out("house-arc-near.png"));
+  await page.touch("end");
+  await page.waitFor(`!document.getElementById("house-dock") && window.__app.store.get("houses", []).find((h) => h.id === ${JSON.stringify(now)}).rooms.length === 1`, 3000);
+  // An iPad is the same phone, bigger (the owner, 27 November: "아이패드에서 꾹 누르니까 행성이 안 나와"): with
+  // 햇살's window out, as a big screen keeps it, a held room still raises the planet.
+  const pad = await open({ width: 820, height: 1180 });
+  await createRoom(pad, { room: "큰 방" });
+  await click(pad, "#back");
+  await pad.waitFor(q("#home"));
+  await pad.eval(`(() => { window.__app.store.set("houses", [{ id: "h0", name: "가족", color: "coral", icon: "home", rooms: [], at: 0 }]); location.reload(); return true; })()`);
+  await pause(300);
+  await pad.waitFor(`window.__app?.booted && [...document.querySelectorAll(".room-row .room-name")].some((n) => n.textContent === "큰 방")`);
+  await click(pad, "#home-more");
+  await pad.waitFor(q("#home-panel"), 3000);
+  await pause(600);
+  const big = await pad.eval(`(() => { const b = [...document.querySelectorAll(".room-row")].find((r) => r.querySelector(".room-name").textContent === "큰 방").getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await pad.front();
+  await pad.touch("start", [big]);
+  await pause(700);
+  await pad.waitFor(q("#house-dock .dock-house[data-house='h0']"), 2000);
+  await pad.touch("end");
+  await pad.waitFor(q("#house-dock.choosing"), 2000);
+});
+
 // The owner (21 November): thrown to the very end of an edge the light did not start where it was
 // thrown ("끝쪽으로 쐈을 때… 내가 쏜 거 기준으로서 중앙에 애니가 발생되지 않아… 애니메이션은 절대 바꾸지 마");
 // thrown again at the edge the window is on, nothing happened ("찌그러졌다가… 빨리 복구").
@@ -6500,7 +6598,8 @@ scenario("찾기와 집 leaves home touchable: half the screen; a room beside it
   await page.front();
   await page.touch("start", [from]);
   await pause(700);
-  assert.ok(!(await page.eval(`!!document.getElementById("house-dock")`)), "no dock of houses from below while the panel is out");
+  // The planet rises as ever (a phone and an iPad alike: the owner, 27 November), and the window's own house still takes the room.
+  assert.ok(await page.eval(`!!document.getElementById("house-dock")`), "the planet rises while the panel is out too");
   for (let i = 1; i <= 12; i++) await page.touch("move", [[from[0] + ((to[0] - from[0]) * i) / 12, from[1] + ((to[1] - from[1]) * i) / 12]]);
   await page.waitFor(q("#home-panel .house-tile[data-house].over"));
   await page.shot(out("panel-drop-house.png"));

@@ -155,6 +155,17 @@ export function openHomePanel(app, { edge: firstEdge = "bottom", at = 0.5, rooms
       if (sun.left + sun.width / 2 >= r.left + r.width / 2) row.style.setProperty("--sun-r", Math.ceil(r.right - sun.left + 6) + "px");
       else row.style.setProperty("--sun-l", Math.ceil(sun.right - r.left + 6) + "px");
     }
+    // Houses alone (a small window): the first ones lay under 햇살 (the owner, 27 November: "창 크기 줄이면
+    // 햇빛 아이콘이랑 많이 곂쳐") → a tall one starts below it, a wide one keeps beside it.
+    const body = panel.querySelector(".home-panel-body");
+    if (!body) return;
+    for (const k of ["--sun-t", "--sun-r", "--sun-l"]) body.style.removeProperty(k);
+    if (!sun || !sun.width || !panel.classList.contains("compact")) return;
+    const b = body.getBoundingClientRect();
+    if (!(sun.bottom > b.top && sun.top < b.bottom && sun.right > b.left && sun.left < b.right)) return;
+    if (panel.classList.contains("tall")) body.style.setProperty("--sun-t", Math.ceil(sun.bottom - b.top + 6) + "px");
+    else if (sun.left + sun.width / 2 >= b.left + b.width / 2) body.style.setProperty("--sun-r", Math.ceil(b.right - sun.left + 6) + "px");
+    else body.style.setProperty("--sun-l", Math.ceil(sun.right - b.left + 6) + "px");
   }
   addEventListener("resize", keepClearOfSun);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;

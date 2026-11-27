@@ -223,8 +223,10 @@ export function showHome(app) {
       if (fingers.size > 1) return;
       held = true;
       clearTimeout(timer);
-      // With 햇살 out, its own houses take the room; otherwise the world of houses rises from below.
-      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: panelCtl?.isOpen() ? null : houseArc() };
+      // The world of houses rises from below, always (the same on a phone and an iPad: the owner, 27
+      // November, "아이패드에서 꾹 누르니까 행성이 안 나와" - with 햇살 left out, as a big screen keeps it,
+      // it never came); 햇살's own houses take the room too while it is out.
+      lift = { x: start.x, y: start.y, moved: false, over: null, ghost: null, dock: houseArc() };
       if (lift.dock) lift.dock.onSpin = () => { if (lift?.moved && lift.at) overAt(...lift.at); };
       row.classList.add("lifted");
       try { row.setPointerCapture(start.id); } catch { /* the pointer may be gone already */ }
@@ -234,6 +236,7 @@ export function showHome(app) {
       row.classList.remove("lifted");
       lift?.ghost?.remove();
       lift?.over?.classList.remove("over");
+      lift?.dock?.unpick?.();
       const dock = lift?.dock;
       lift = null;
       if (dock && !keep) dock.close();
@@ -263,9 +266,14 @@ export function showHome(app) {
       // Near either end of the planet, it turns to bring the houses further along.
       lift.dock?.follow(x, y);
     };
-    /** The house under the finger lights up (read again as the planet turns under a still finger). */
+    /**
+     * The house the room would go into lights up (read again as the planet turns under a still finger):
+     * on the planet the nearest house within reach; in 햇살's window the house under the finger or
+     * just beside it (a finger covers more than a point: the owner, 27 November, "포함 범위가 너무 작기도").
+     */
     const overAt = (x, y) => {
-      const target = document.elementFromPoint(x, y)?.closest?.(".dock-house:not(.far), .home-panel .house-tile, .home-panel[data-drop-house]") || null;
+      // A house of the planet close by, else 햇살's window (when it is out) under or beside the finger.
+      const target = lift.dock?.pick(x, y) || panelHouseAt(x, y);
       if (target !== lift.over) {
         lift.over?.classList.remove("over");
         target?.classList.add("over");
@@ -341,6 +349,24 @@ export function showHome(app) {
       roomMenu(room);
     });
     return h("div", { class: "room-cell" }, row, star);
+  }
+
+  /** 햇살's house under (x, y), or the nearest one within 18 px of it; the window itself when it asks for a house. */
+  function panelHouseAt(x, y) {
+    const under = document.elementFromPoint(x, y)?.closest?.(".home-panel .house-tile, .home-panel[data-drop-house]");
+    if (under) return under;
+    let best = null;
+    let far = 18;
+    for (const tile of document.querySelectorAll(".home-panel .house-tile")) {
+      const r = tile.getBoundingClientRect();
+      if (!r.width) continue;
+      const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+      if (d <= far) {
+        far = d;
+        best = tile;
+      }
+    }
+    return best;
   }
 
   /** The world of houses that rises while a room is held (ui/house-arc.js). */
