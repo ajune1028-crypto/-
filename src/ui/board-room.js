@@ -298,10 +298,10 @@ export function mountBoardRoom(body, app, session, frame) {
       point: (cx, cy) => { const p = toBoard(cx, cy); return [p.x * INK_UNIT, p.y * INK_UNIT]; },
       matrix: () => [(zoom * sx) / INK_UNIT, 0, 0, zoom / INK_UNIT, panX, panY],
     },
-    onStroke: ({ pts, color, width, size, brush, shape }) => {
-      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, size, brush, shape, by: session.memberId });
+    onStroke: ({ pts, color, width, size, brush, shape, opacity, cont }) => {
+      const made = strokeOps(session.clock, session.doc(INK_DOC), { pts, color, width, size, brush, shape, opacity, by: session.memberId });
       session.commit(INK_DOC, made.ops);
-      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })));
+      record(made.atoms.map((atom) => ({ ...atom, doc: INK_DOC })), cont);
       return made.ops[0]?.id;
     },
     onErase: (id) => {
@@ -320,7 +320,7 @@ export function mountBoardRoom(body, app, session, frame) {
     pen.tool = tool;
     boardInk.setTool(tool);
     boardInk.setStyle(pen);
-    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store, units: () => boardInk.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store, units: () => boardInk.unitsPerPx(), restyle: () => boardInk.setStyle(pen) });
     penButton.setAttribute("aria-pressed", String(!!tool));
     if (tool) {
       finishWriting();
@@ -1805,8 +1805,9 @@ export function mountBoardRoom(body, app, session, frame) {
   // ---- editing --------------------------------------------------------------------
 
   /** One undo step; 되돌리기 and 다시하기 say at once whether they can (a stroke draws no cards). */
-  function record(atoms) {
-    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false });
+  /** cont: a part of one line drawn in pieces (its look changed mid-line): one step with the parts before it. */
+  function record(atoms, cont = null) {
+    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false, group: cont || null });
     toolbar.querySelector("#board-undo").disabled = !undo.canUndo;
     toolbar.querySelector("#board-redo").disabled = !undo.canRedo;
   }

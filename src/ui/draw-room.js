@@ -98,11 +98,11 @@ export function mountDrawRoom(body, app, session, frame) {
       maxPixels: 3.2e6,
       shapes: () => getSettings(app.store).inkShapes !== false,
       onShape: () => buzz(app),
-      onStroke: ({ pts, color, width, size, brush, shape, opacity, inside }) => {
+      onStroke: ({ pts, color, width, size, brush, shape, opacity, inside, cont }) => {
         if (readOnly()) return;
         const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, inside, by: session.memberId });
         session.commit(name, made.ops);
-        record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+        record(made.atoms.map((atom) => ({ ...atom, doc: name })), cont);
         thumbSoon(layer.id);
         return made.ops[0]?.id;
       },
@@ -171,7 +171,8 @@ export function mountDrawRoom(body, app, session, frame) {
       if (ink.tool !== tool) ink.setTool(tool);
       ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     }
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1 });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1,
+      restyle: () => { for (const { ink } of hosts.values()) ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }); } });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
@@ -199,6 +200,7 @@ export function mountDrawRoom(body, app, session, frame) {
     stopOutside?.();
     stopOutside = null;
     if (!on) return;
+    opened = null; // it opens small, every time
     drawPanel();
     stopOutside = closeOnOutside((t) => panel.contains(t), () => { stopOutside = null; showPanel(false); }, panel);
   }
@@ -272,9 +274,14 @@ export function mountDrawRoom(body, app, session, frame) {
     toast(root, `'${below.name}'에 합쳤어요 (되돌리기로 나눠요)`);
   }
 
+  // What is opened under a layer's row, if anything (one at a time): its actions, or its look
+  // (불투명 and 섞기). Nothing at first: the list stays small (the owner, 27 November: "UI를 처음부터
+  // 그렇게 뜨고 그러는 거 좀 비효율적" - Procreate's layers: tap the layer for its options, 'N' for its look).
+  let opened = null;
   function drawPanel() {
     const list = doc.layers().slice().reverse(); // top first, as one looks at them
     const can = !readOnly();
+    if (opened && !list.some((l) => l.id === opened.id)) opened = null;
     panel.replaceChildren(
       h("div", { class: "layers-head" },
         h("h2", { class: "layers-title", text: "레이어" }),
@@ -284,16 +291,34 @@ export function mountDrawRoom(body, app, session, frame) {
         const thumb = thumbs.get(layer.id) || h("canvas", { class: "layer-thumb", width: 45, height: 60, "aria-hidden": "true" });
         thumbs.set(layer.id, thumb);
         thumbSoon(layer.id);
-        const row = h("div", { class: "layer-row" + (on ? " active" : ""), data: { layer: layer.id } },
-          h("button", { class: "layer-pick", type: "button", "aria-pressed": String(on), "aria-label": layer.name + (on ? " (그리는 레이어)" : " 고르기"), onclick: () => { active = layer.id; drawLayers(); } },
-            thumb, h("span", { class: "layer-name", text: layer.name }),
-            layer.mode !== "source-over" && h("span", { class: "layer-mode", text: BLEND_NAMES[layer.mode] }),
-            // 알파 잠금 and 클리핑 at a glance (as Procreate marks them).
-            layer.lock && h("span", { class: "layer-mode", data: { mark: "lock" }, text: "알파 잠금" }),
-            layer.clip && h("span", { class: "layer-mode", data: { mark: "clip" }, text: "↳ 클리핑" })),
+        const open = opened?.id === layer.id ? opened.what : null;
+        const look = (layer.mode === "source-over" ? "보통" : BLEND_NAMES[layer.mode]) + " " + Math.round(layer.opacity * 100) + "%";
+        const row = h("div", { class: "layer-row" + (on ? " active" : "") + (open ? " open" : ""), data: { layer: layer.id } },
+          // Another layer: draw on it. The layer drawn on, again: its actions open (and close).
+          h("button", { class: "layer-pick", type: "button", "aria-pressed": String(on), "aria-expanded": String(open === "actions"), "aria-label": layer.name + (on ? " (그리는 레이어, 누르면 할 일)" : " 고르기"),
+            onclick: () => {
+              if (!on) {
+                active = layer.id;
+                opened = null;
+                return void drawLayers();
+              }
+              opened = open === "actions" || !can ? null : { id: layer.id, what: "actions" };
+              drawPanel();
+            } },
+            thumb,
+            h("span", { class: "layer-text" },
+              h("span", { class: "layer-name", text: layer.name }),
+              // 알파 잠금 and 클리핑 at a glance (as Procreate marks them), under the name.
+              (layer.lock || layer.clip) && h("span", { class: "layer-marks" },
+                layer.clip && h("span", { data: { mark: "clip" }, text: "↳ 클리핑" }),
+                layer.lock && h("span", { data: { mark: "lock" }, text: "알파 잠금" })))),
+          // Its look (섞기 and 불투명) in a word; pressed, the slider and the ways of blending open under it.
+          can && h("button", { class: "layer-look", type: "button", data: { look: layer.id }, "aria-expanded": String(open === "look"), "aria-label": "섞기와 불투명 " + look,
+            onclick: () => { opened = open === "look" ? null : { id: layer.id, what: "look" }; drawPanel(); } }, look),
           h("button", { class: "icon-btn layer-eye", type: "button", data: { eye: layer.id }, "aria-pressed": String(layer.visible), "aria-label": layer.visible ? "숨기기" : "보이기",
             onclick: () => change(layer.id, { visible: !layer.visible }) }, icon(layer.visible ? "eye" : "eyeOff")));
-        if (on && can) row.append(layerControls(layer, list));
+        if (open === "look") row.append(layerLook(layer));
+        else if (open === "actions") row.append(layerActions(layer, list));
         return row;
       })),
       // 종이 at the bottom, under every layer (as Procreate's background colour lies under its layers).
@@ -311,16 +336,21 @@ export function mountDrawRoom(body, app, session, frame) {
           style: c ? { background: c } : {}, onclick: () => { if (k !== paper) apply(paperOps(session.clock, doc, k)); } }))));
   }
 
-  function layerControls(layer, list) {
+  /** A layer's look: 불투명 and how it blends with what is under it. */
+  function layerLook(layer) {
+    const pct = h("span", { class: "layer-pct", text: Math.round(layer.opacity * 100) + "%" });
     const opacity = h("input", { type: "range", class: "layer-opacity", id: "layer-opacity", min: 0, max: 100, step: 1, value: Math.round(layer.opacity * 100), "aria-label": "불투명도",
-      oninput: () => { const el = hosts.get(layer.id)?.el; if (el) el.style.opacity = String(opacity.value / 100); },
+      oninput: () => { const el = hosts.get(layer.id)?.el; if (el) el.style.opacity = String(opacity.value / 100); pct.textContent = opacity.value + "%"; },
       onchange: () => change(layer.id, { opacity: Number(opacity.value) / 100 }) });
     const mode = h("select", { class: "input layer-blend", id: "layer-blend", "aria-label": "섞는 방식", onchange: () => change(layer.id, { mode: mode.value }) },
       BLEND_MODES.map((m) => h("option", { value: m, selected: m === layer.mode, text: BLEND_NAMES[m] })));
+    return h("div", { class: "layer-controls" }, h("label", { class: "layer-label" }, "불투명", opacity, pct), mode);
+  }
+
+  /** What a layer can be asked to do (Procreate's layer options, the few that matter here). */
+  function layerActions(layer, list) {
     const at = list.findIndex((l) => l.id === layer.id); // 0 is the top
     return h("div", { class: "layer-controls" },
-      h("label", { class: "layer-label" }, "불투명", opacity, h("span", { class: "layer-pct", text: Math.round(layer.opacity * 100) + "%" })),
-      mode,
       h("div", { class: "layer-actions" },
         h("button", { class: "chip", id: "layer-up", type: "button", disabled: at === 0, onclick: () => apply(moveLayerOps(session.clock, doc, layer.id, 1)) }, "↑ 위로"),
         h("button", { class: "chip", id: "layer-down", type: "button", disabled: at === list.length - 1, onclick: () => apply(moveLayerOps(session.clock, doc, layer.id, -1)) }, "↓ 아래로"),
@@ -350,8 +380,9 @@ export function mountDrawRoom(body, app, session, frame) {
 
   // ---- changes, undo --------------------------------------------------------------------------
 
-  function record(atoms) {
-    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false });
+  /** cont: a part of one line drawn in pieces (its look changed mid-line): one step with the parts before it. */
+  function record(atoms, cont = null) {
+    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false, group: cont || null });
     undoButton.disabled = !undo.canUndo;
     redoButton.disabled = !undo.canRedo;
   }

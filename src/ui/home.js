@@ -12,6 +12,7 @@ import { newRoomId, newMemberId, makeVerifier, validPin, createRoomOps } from ".
 import { SIDES, kindsOf, sideOf, kindInfo } from "./kinds.js";
 import { openReference } from "./reference.js";
 import { myCode, myCodeSection, openMyCodeIntro } from "./my-code.js";
+import { gesturesPage, hintOnce } from "./gestures.js";
 import { burst } from "./motion.js";
 import { roomKeyFrom, keyText, validRoomPassword } from "../core/lock.js";
 import { sealedTransport } from "../sync/sealed.js";
@@ -801,6 +802,7 @@ export function showHome(app) {
           link("feel", "색 세기 · 효과음 · 진동"),
           link("find", "찾기 · 햇살 · 비서"),
           link("games", "미니게임"),
+          link("gestures", "몸짓", "손가락으로 할 수 있는 것"),
           link("diag", "연결 진단", "문제가 있을 때")));
       panel.append(main,
         page("feel", "색 세기 · 효과음 · 진동", displaySettings(app, { withColors: false, part: "feel" })),
@@ -819,6 +821,7 @@ export function showHome(app) {
         page("games", "미니게임",
           toggle("games-on", "방에서 친구와 미니게임", settings.games !== false, (on) => setSetting(app.store, "games", on)),
           h("p", { class: "help small", text: "끄면 방 위의 게임 버튼이 사라지고 친구의 신청도 오지 않아요." })),
+        page("gestures", "몸짓", gesturesPage()),
         page("diag", "연결 진단", diagnostics(app, null)));
     });
   }
@@ -832,6 +835,10 @@ export function showHome(app) {
   const offMe = app.events.on("me-changed", () => {
     if (alive && !root.querySelector(".scrim:not(.closing)")) draw();
   });
+  // 몸짓 on home, once there are rooms to hold and throw (never over a sheet).
+  const homeHint = setTimeout(() => {
+    if (alive && app.store.get("rooms", []).length && !document.querySelector(".scrim:not(.closing)")) hintOnce(app, "home");
+  }, 2200);
   // The first time the app opens, 나의 고유 코드 is handed over once the home has come up (the owner,
   // 21 November: "처음 이 앱을 들어왔을 때 생기는… 코드"). Tests open with ?dev and skip it.
   const welcome = app.welcome && !myCode(app.store).shown && setTimeout(() => {
@@ -879,6 +886,7 @@ export function showHome(app) {
     alive = false;
     clearTimeout(slowTimer);
     clearTimeout(welcome);
+    clearTimeout(homeHint);
     offMe();
     closeSheet?.();
     watchWindows.disconnect();

@@ -5851,6 +5851,10 @@ scenario("그림 방: two friends draw on one page; a new layer drawn on, hidden
   assert.equal(await strokesOn(a, 0), 1, "the first layer keeps its line");
   // See-through, multiplied, hidden: the friend's page shows the same.
   await click(a, "#draw-layers");
+  // Nothing is opened at first; the layer's look ('보통 100%') opens its 불투명 and 섞기.
+  await a.waitFor(q(".layer-row.active [data-look]"));
+  assert.ok(!(await a.eval(q("#layer-opacity"))), "the list opens small");
+  await click(a, ".layer-row.active [data-look]");
   await a.waitFor(q("#layer-opacity"));
   {
     const r = await a.eval(`(() => { const b = document.getElementById("layer-opacity").getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2, w: b.width }; })()`);
@@ -7743,6 +7747,10 @@ scenario("그림 방 레이어: 알파 잠금 keeps a new line inside what the l
   await a.waitFor(`${strokesOf(0)}.length === 1`);
   // 알파 잠금 on the bottom layer: a line across it (and past it) only shows where the base line is.
   await click(a, "#draw-layers");
+  // The layer drawn on, pressed: its actions open under it.
+  await a.waitFor(q(".layer-row.active .layer-pick"));
+  assert.ok(!(await a.eval(q("#layer-lock"))), "nothing is opened at first");
+  await click(a, ".layer-row.active .layer-pick");
   await a.waitFor(q("#layer-lock"));
   await click(a, "#layer-lock");
   await a.waitFor(`${layers}[0].lock === true && ${q("#layer-lock")}?.getAttribute("aria-pressed") === "true"`);
@@ -7760,6 +7768,7 @@ scenario("그림 방 레이어: 알파 잠금 keeps a new line inside what the l
   await click(a, "#draw-layers");
   await click(a, "#layer-add");
   await a.waitFor(`${layers}.length === 2`);
+  await click(a, ".layer-row.active .layer-pick");
   await a.waitFor(q("#layer-clip"));
   await click(a, "#layer-clip");
   await a.waitFor(`${layers}[1].clip === true`);
@@ -7775,10 +7784,130 @@ scenario("그림 방 레이어: 알파 잠금 keeps a new line inside what the l
   await a.shot(out("draw-layers-clip.png"));
   // 아래로 합치기: its line goes into the layer below; undo brings the layer and its line back.
   await click(a, "#draw-layers");
+  await click(a, ".layer-row.active .layer-pick");
   await a.waitFor(q("#layer-merge"));
   await a.shot(out("draw-layers-panel.png"));
   await click(a, "#layer-merge");
   await a.waitFor(`${layers}.length === 1 && ${strokesOf(0)}.length === 3`);
   await click(a, "#draw-undo");
   await a.waitFor(`${layers}.length === 2 && ${strokesOf(0)}.length === 2 && ${strokesOf(1)}.length === 1`);
+});
+
+// The day's plan 8 (the 검토's discomfort "몸짓을 알 길이 없다"): 설정 has a 몸짓 page, and each kind of
+// place says its gestures in one short line the first time only.
+scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing room says its gestures once the first time, and never again", async ({ open, out }) => {
+  const page = await open({ query: "hints=1" });
+  await click(page, "#home-settings");
+  await page.waitFor(q('[data-settings-part="gestures"]'));
+  await click(page, '[data-settings-part="gestures"]');
+  await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
+  const text = await page.eval(`document.getElementById("gestures").textContent`);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "클립 꾹", "방 꾹", "햇살을 던지기"]) assert.ok(text.includes(words), "it tells: " + words);
+  await page.front();
+  await page.shot(out("settings-gestures.png"));
+  await page.key("Escape");
+  await page.waitFor(`!document.querySelector(".scrim:not(.closing)")`);
+  // A whiteboard, the first time: one line about the drawing gestures.
+  await createBoard(page);
+  await page.waitFor(`/두 손가락 톡 되돌리기/.test(document.querySelector(".toast")?.textContent || "")`, 4000);
+  await click(page, "#back");
+  await createBoard(page, { room: "둘째 보드" });
+  await pause(1700);
+  assert.ok(!/두 손가락 톡 되돌리기/.test(await page.eval(`document.querySelector(".toast")?.textContent || ""`)), "once only");
+});
+
+// The owner (27 November): "브러쉬 긋고 있는 것도 실시간으로 그 부분에서 올리거나 크기를 낮춘 대로 반영이 되게끔".
+// A pen draws while a finger moves the size bar: what was drawn keeps its size, the line goes on from
+// that very point in the new size, and one undo takes the whole line back.
+scenario("그리던 중 크기를 바꾸면: a finger on the size bar while the pen draws changes the line from that point on (the part drawn before keeps its size), one undo takes it all", async ({ open }) => {
+  const a = await open({ width: 420, height: 860 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "굵기 바꾸기");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const rail = await a.eval(`(() => { const r = document.getElementById("size-rail").getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, h: r.height }; })()`);
+  const strokes = `window.__app.session.doc("k:L" + window.__app.session.doc("draw").layers()[0].id).strokes()`;
+  const y = box.y + box.h * 0.35;
+  await a.front();
+  await a.stylus("down", box.x + box.w * 0.3, y);
+  for (let i = 1; i <= 8; i++) {
+    await a.stylus("move", box.x + box.w * (0.3 + 0.02 * i), y);
+    await pause(16);
+  }
+  // A finger on the size bar, near its top (large), while the pen is still down.
+  await a.touch("start", [[rail.x, rail.top + rail.h * 0.15]]);
+  await a.touch("end");
+  await a.waitFor(`${strokes}.length === 1`, 2000);
+  for (let i = 1; i <= 8; i++) {
+    await a.stylus("move", box.x + box.w * (0.46 + 0.02 * i), y);
+    await pause(16);
+  }
+  await a.stylus("up", box.x + box.w * 0.62, y);
+  await a.waitFor(`${strokes}.length === 2`, 2000);
+  const [first, second] = await a.eval(`${strokes}.map((s) => ({ z: s.z || 0, w: s.w, start: s.pts.slice(0, 2), end: s.pts.slice(-3, -1) }))`);
+  assert.ok(second.z > first.z, "the part after the change is larger: " + JSON.stringify([first, second]));
+  assert.ok(Math.hypot(second.start[0] - first.end[0], second.start[1] - first.end[1]) < 2, "it goes on from that very point: " + JSON.stringify([first.end, second.start]));
+  // One undo takes the whole line back.
+  await click(a, "#draw-undo");
+  await a.waitFor(`${strokes}.length === 0`, 2000);
+});
+
+// The owner (27 November): "색 같거나 비슷한 게 테두리 쳐져 있다면 그 안에까지… 안까지 꽉 채워서 UI 안 보이게는
+// 하지 말고… 테두리의 선부터 중간 부분까지 그라데이션으로… 가운데가 좀 비어 있어야… 지금 칠하고 있는 것이 기준".
+// A shape drawn before, in the colour being painted, round a stretch of the tool bar: drawing near it,
+// the bar shows through most just inside the shape's line and not at all in its middle.
+scenario("엑스레이 inside a shape: a shape drawn before in the painted colour lets the bar over its inside show through most by its line and not in its middle, while a line is drawn near it", async ({ open, out }) => {
+  const page = await open({ width: 390, height: 844 });
+  await createBoard(page);
+  await click(page, "#board-pen");
+  const bar = await page.eval(`(() => { const t = document.querySelector(".room .toolbar").getBoundingClientRect(); return { left: t.left, right: t.right, top: t.top, bottom: t.bottom }; })()`);
+  // A box round the bar's middle, from above the bar to just below it (kept on the screen).
+  const L = bar.left + 8, R = bar.right - 8, T = bar.top - 40, B = Math.min(838, bar.bottom + 8);
+  const path = [[L, T], [R, T], [R, B], [L, B], [L, T + 2]];
+  await page.stylus("down", ...path[0]);
+  for (let k = 1; k < path.length; k++) {
+    for (let i = 1; i <= 10; i++) {
+      await page.stylus("move", path[k - 1][0] + ((path[k][0] - path[k - 1][0]) * i) / 10, path[k - 1][1] + ((path[k][1] - path[k - 1][1]) * i) / 10);
+      await pause(8);
+    }
+  }
+  await page.stylus("up", ...path.at(-1));
+  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1 && !document.querySelector(".xray-map")`, 3000);
+  // A line drawn near it, above the bar, in the same colour.
+  const cx = (L + R) / 2;
+  await page.stylus("down", cx - 40, T - 60);
+  for (let i = 1; i <= 6; i++) {
+    await page.stylus("move", cx - 40 + i * 12, T - 60 + i * 2);
+    await pause(30);
+  }
+  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map")`, 3000);
+  await pause(450);
+  const seen = await page.eval(`(async () => {
+    const el = document.querySelector(".room .toolbar");
+    const r = el.getBoundingClientRect();
+    const url = el.style.getPropertyValue("--xr-map").trim().replace(/^url\\(["']?/, "").replace(/["']?\\)$/, "");
+    const [px, py] = el.style.getPropertyValue("--xr-pos").trim().split(/\\s+/).map(parseFloat);
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const at = (x, y) => g.getImageData(Math.floor((x - r.left - px) / 8), Math.floor((y - r.top - py) / 8), 1, 1).data[3] / 255;
+    const y = r.top + r.height * 0.3;
+    return { edge: at(${L} + 14, y), middle: at(${cx}, y) };
+  })()`);
+  assert.ok(seen.edge < 0.75, "just inside the shape's line the bar shows through: " + JSON.stringify(seen));
+  assert.ok(seen.middle > 0.85 && seen.middle - seen.edge > 0.3, "toward the middle of the shape the bar stays (a gradient from its line): " + JSON.stringify(seen));
+  await page.front();
+  await page.shot(out("xray-inside-shape.png"));
+  await page.stylus("up", cx + 32, T - 48);
+  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
 });

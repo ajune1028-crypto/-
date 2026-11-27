@@ -8,15 +8,18 @@ export class UndoStack {
     this.undone = [];
   }
 
-  /** `typing` steps that follow each other within `mergeMs` become one step. */
-  record(atoms, { now, typing }) {
+  /**
+   * `typing` steps that follow each other within `mergeMs` become one step; steps of one `group` (the
+   * parts of one line drawn in pieces) are one step whatever the time between them.
+   */
+  record(atoms, { now, typing, group = null }) {
     if (!atoms.length) return;
     const top = this.done[this.done.length - 1];
-    if (typing && top && top.typing && now - top.at < this.mergeMs) {
+    if ((group && top && top.group === group) || (typing && top && top.typing && now - top.at < this.mergeMs)) {
       top.atoms.push(...atoms);
       top.at = now;
     } else {
-      this.done.push({ atoms: atoms.slice(), at: now, typing: !!typing });
+      this.done.push({ atoms: atoms.slice(), at: now, typing: !!typing, group });
       if (this.done.length > this.limit) this.done.shift();
     }
     this.undone.length = 0;

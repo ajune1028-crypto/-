@@ -254,29 +254,32 @@ test("a stroke keeps its 불투명; moving, copying and recolouring keep it too"
   assert.equal(recolorStrokesOps(clock, ink, [id], "red", "a").ops.find((op) => op.t === "stroke").o, 40);
 });
 
-import { closedLoop } from "../src/core/ink.js";
-// 엑스레이, wider (the owner, 26 November: "어딜 감싸고 있다고 약간 인식되면 그 안 전체까지"): a line that comes
-// back to where it began, or crosses itself, closes round something; a plain stroke does not.
-test("a line closes round something when its ends meet or it crosses itself, not when it only goes on", () => {
-  const circle = Array.from({ length: 60 }, (_, i) => [200 + 80 * Math.cos((i / 60) * 2 * Math.PI * 0.97), 200 + 80 * Math.sin((i / 60) * 2 * Math.PI * 0.97)]);
-  assert.ok(closedLoop(circle, 16), "a circle drawn almost round: its ends meet");
-  const straight = Array.from({ length: 40 }, (_, i) => [10 + i * 8, 50]);
-  assert.equal(closedLoop(straight, 16), null, "a straight line closes nothing");
-  // A loop drawn past its start: the line crosses itself.
-  const curl = [...Array.from({ length: 50 }, (_, i) => [300 + 70 * Math.cos(-Math.PI / 2 + (i / 50) * 2.3 * Math.PI), 300 + 70 * Math.sin(-Math.PI / 2 + (i / 50) * 2.3 * Math.PI)])];
-  const loop = closedLoop([[300, 150], [300, 200], ...curl], 16);
-  assert.ok(loop && loop.length > 8, "drawn past its start, it crosses itself and closes");
-  // Looked at while it is drawn, a little at a time (only where it grew): found all the same.
-  const drawn = [[300, 150], [300, 200], ...curl];
-  const thinned = [];
-  for (const p of drawn) if (!thinned.length || Math.hypot(p[0] - thinned[thinned.length - 1][0], p[1] - thinned[thinned.length - 1][1]) > 4) thinned.push(p);
-  let found = null;
-  let since = 0;
-  for (let n = 5; n <= thinned.length && !found; n += 5) {
-    found = closedLoop(thinned.slice(0, n), 16, since);
-    since = n;
-  }
-  assert.ok(found && found.length > 8, "found while being drawn");
+import { enclosedSpots } from "../src/core/ink.js";
+// 엑스레이 (the owner, 27 November: "색 같거나 비슷한 게 테두리 쳐져 있다면 그 안에까지… 테두리의 선부터
+// 중간 부분까지 그라데이션으로… 가운데가 좀 비어 있어야"): what a drawing's lines close round, and how far in.
+test("lines that close round something have an inside (a small gap still closes), deeper toward the middle; an open line has none", () => {
+  const n = 24;
+  const grid = () => new Uint8Array(n * n);
+  const ring = (gap = 0) => {
+    const g = grid();
+    for (let t = 4; t <= 19; t++) {
+      g[4 * n + t] = 1;
+      g[19 * n + t] = 1;
+      g[t * n + 4] = 1;
+      if (t < 10 || t >= 10 + gap) g[t * n + 19] = 1;
+    }
+    return g;
+  };
+  const closed = enclosedSpots(ring(), n);
+  assert.equal(closed.inside[12 * n + 12], 1, "the middle is inside");
+  assert.equal(closed.inside[2 * n + 2], 0, "the corner outside is not");
+  assert.equal(closed.depth[6 * n + 12], 1, "right by the line: depth 1");
+  assert.ok(closed.depth[12 * n + 12] > closed.depth[7 * n + 12], "deeper toward the middle");
+  assert.equal(enclosedSpots(ring(1), n).inside[12 * n + 12], 1, "a gap of a spot still closes");
+  assert.equal(enclosedSpots(ring(4), n).inside[12 * n + 12], 0, "a wide gap leaves it open");
+  const open = grid();
+  for (let t = 4; t <= 19; t++) open[10 * n + t] = 1;
+  assert.ok(!enclosedSpots(open, n).inside.some(Boolean), "a plain line closes nothing");
 });
 
 import { carryStrokes, landStrokesOps } from "../src/core/ink.js";

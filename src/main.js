@@ -84,6 +84,8 @@ export function boot(root) {
     transport: null, limited: false, connecting: true, session: null, handoff: null, fresh: null, booted: false,
     // 나의 고유 코드 is handed over on the first open; test devices (?dev) skip it unless ?welcome=1.
     welcome: !dev || params.get("welcome") === "1",
+    // 몸짓's one line the first time in each kind of place (ui/gestures.js); test devices only with ?hints=1.
+    hints: !dev || params.get("hints") === "1",
     /** The published page's own address, when the build names one (the trial page). */
     shareBase: () => document.querySelector('meta[name="share-base"]')?.content || null,
     linkFor: (roomId) => roomLink(app.shareBase() || location.href, roomId),

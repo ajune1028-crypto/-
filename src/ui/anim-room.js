@@ -83,12 +83,12 @@ export function mountAnimRoom(body, app, session) {
     shapes: () => getSettings(app.store).inkShapes !== false,
     onShape: () => buzz(app),
     onPick: (color) => { pen.color = color; setTool(pen.tool); },
-    onStroke: ({ pts, color, width, size, brush, shape, opacity }) => {
+    onStroke: ({ pts, color, width, size, brush, shape, opacity, cont }) => {
       if (readOnly() || !current) return null;
       const name = curDoc();
       const made = strokeOps(session.clock, session.doc(name), { pts, color: fixedInk(color), width, size, brush, shape, opacity, by: session.memberId });
       session.commit(name, made.ops);
-      record(made.atoms.map((atom) => ({ ...atom, doc: name })));
+      record(made.atoms.map((atom) => ({ ...atom, doc: name })), cont);
       thumbSoon(current);
       return made.ops[0]?.id;
     },
@@ -148,7 +148,8 @@ export function mountAnimRoom(body, app, session) {
     pen.tool = tool;
     ink.setTool(playing || readOnly() ? null : tool);
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
-    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx() });
+    drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx(),
+      restyle: () => ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }) });
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -630,8 +631,9 @@ export function mountAnimRoom(body, app, session) {
 
   // ---- changes, undo --------------------------------------------------------------------------------
 
-  function record(atoms) {
-    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false });
+  /** cont: a part of one line drawn in pieces (its look changed mid-line): one step with the parts before it. */
+  function record(atoms, cont = null) {
+    if (atoms.length) undo.record(atoms, { now: Date.now(), typing: false, group: cont || null });
     drawTools();
   }
 

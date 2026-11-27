@@ -222,7 +222,7 @@ export function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, restyle: () => { for (const editor of editors.values()) editor.ink?.setStyle(pen); }, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
   }
 
   function buttons() {
@@ -232,8 +232,8 @@ export function mountTextRoom(body, app, session) {
     penButton.setAttribute("aria-pressed", String(!!pen.tool));
   }
 
-  const record = (atoms, typing) => {
-    undo.record(atoms, { now: Date.now(), typing });
+  const record = (atoms, typing, group = null) => {
+    undo.record(atoms, { now: Date.now(), typing, group });
     buttons();
   };
 
@@ -318,10 +318,10 @@ export function mountTextRoom(body, app, session) {
         // already reaches the bottom of the screen; a long one grows past its last line).
         room: () => (day === today ? editor.draw.offsetHeight + body.clientHeight * 0.6 : 0),
         ink: () => session.doc(inkDoc),
-        onStroke: ({ pts, color, width, size, brush, shape }) => {
-          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, size, brush, shape, by: session.memberId });
+        onStroke: ({ pts, color, width, size, brush, shape, opacity, cont }) => {
+          const made = strokeOps(session.clock, session.doc(inkDoc), { pts, color, width, size, brush, shape, opacity, by: session.memberId });
           session.commit(inkDoc, made.ops);
-          record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false);
+          record(made.atoms.map((atom) => ({ ...atom, doc: inkDoc })), false, cont || null);
           return made.ops[0]?.id;
         },
         onErase: (id) => {

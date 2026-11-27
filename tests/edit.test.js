@@ -205,3 +205,14 @@ test("undo depth is 100", () => {
   while (u.undo()) n++;
   assert.equal(n, 100);
 });
+
+// One line drawn in pieces (its look changed mid-line, the day's plan 1): its parts are one step back,
+// however slowly it was drawn; another line is a step of its own.
+test("undo steps of one group stay one step whatever the time between them", () => {
+  const u = new UndoStack();
+  u.record([{ k: "a" }], { now: 0, typing: false, group: "g1" });
+  u.record([{ k: "b" }], { now: 5000, typing: false, group: "g1" });
+  u.record([{ k: "c" }], { now: 5100, typing: false, group: "g2" });
+  assert.deepEqual(u.undo().map((a) => a.k), ["c"]);
+  assert.deepEqual(u.undo().map((a) => a.k), ["a", "b"]);
+});

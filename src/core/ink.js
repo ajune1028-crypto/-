@@ -331,33 +331,69 @@ export function invertInkOps(ink, clock, atoms, dir) {
 }
 
 /**
- * A line that came back on itself: the points it closes round, or null (ends meeting, or crossing itself).
- * `since`: how many of its points (4 px apart) were looked at before, so a line being drawn is only
- * looked at where it grew.
+ * The spots a drawing's lines close round, on an n × n grid of spots (line[k] = 1 where a line is):
+ * lines are made a spot thicker first, so a gap of a spot or so still closes; whatever cannot be
+ * reached from the grid's edge without crossing a line is inside. depth[k] is how many spots an inside
+ * spot lies from the (thickened) line, 1 right by it. (엑스레이: the owner, 27 November.)
  */
-export function closedLoop(path, rem = 16, since = 0) {
-  const pts = [];
-  for (const p of path) {
-    const q = pts[pts.length - 1];
-    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 4) pts.push(p);
-  }
-  if (pts.length < 8) return null;
-  const length = (list) => list.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - list[i - 1][0], p[1] - list[i - 1][1]) : 0), 0);
-  const last = pts[pts.length - 1];
-  if (length(pts) > 10 * rem && Math.hypot(last[0] - pts[0][0], last[1] - pts[0][1]) < 2.5 * rem) return pts;
-  const cross = (a, b, c, d) => {
-    const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
-  };
-  for (let j = Math.max(1, since); j < pts.length; j++) {
-    for (let i = 0; i < j - 2; i++) {
-      if (cross(pts[i], pts[i + 1], pts[j - 1], pts[j])) {
-        const loop = pts.slice(i + 1, j);
-        return length(loop) > 6 * rem ? loop : null;
+export function enclosedSpots(line, n) {
+  const size = n * n;
+  const wall = new Uint8Array(size);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (!line[j * n + i]) continue;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const a = i + di;
+          const b = j + dj;
+          if (a >= 0 && b >= 0 && a < n && b < n) wall[b * n + a] = 1;
+        }
       }
     }
   }
-  return null;
+  // From the edge inward, over everything but the lines: that is outside.
+  const outside = new Uint8Array(size);
+  const queue = new Int32Array(size);
+  let head = 0;
+  let tail = 0;
+  const reach = (k) => {
+    if (!wall[k] && !outside[k]) {
+      outside[k] = 1;
+      queue[tail++] = k;
+    }
+  };
+  for (let t = 0; t < n; t++) {
+    reach(t);
+    reach((n - 1) * n + t);
+    reach(t * n);
+    reach(t * n + n - 1);
+  }
+  while (head < tail) {
+    const k = queue[head++];
+    const i = k % n;
+    if (i > 0) reach(k - 1);
+    if (i < n - 1) reach(k + 1);
+    if (k >= n) reach(k - n);
+    if (k < size - n) reach(k + n);
+  }
+  const inside = new Uint8Array(size);
+  for (let k = 0; k < size; k++) inside[k] = !wall[k] && !outside[k] ? 1 : 0;
+  // How far in: steps from the lines, through the inside.
+  const depth = new Uint16Array(size);
+  head = 0;
+  tail = 0;
+  for (let k = 0; k < size; k++) if (wall[k]) queue[tail++] = k;
+  while (head < tail) {
+    const k = queue[head++];
+    const i = k % n;
+    const d = depth[k] + 1;
+    for (const m of [i > 0 ? k - 1 : -1, i < n - 1 ? k + 1 : -1, k >= n ? k - n : -1, k < size - n ? k + n : -1]) {
+      if (m < 0 || !inside[m] || depth[m]) continue;
+      depth[m] = d;
+      queue[tail++] = m;
+    }
+  }
+  return { inside, depth };
 }
 
 /** Stroke units per whiteboard pixel (as on a sheet: hundredths of a 16 px rem). */

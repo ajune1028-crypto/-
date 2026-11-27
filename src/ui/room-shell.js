@@ -21,6 +21,7 @@ import { RoomSession } from "../sync/session.js";
 import { getSettings, setSetting, rememberRoom, roomEntry, forgetRoom } from "../identity.js";
 import { keepRoomWords } from "../houses.js";
 import { mountGames } from "./game.js";
+import { hintOnce } from "./gestures.js";
 import { memberColor, personColor, PALETTE } from "../core/paint.js";
 import { memberOps, makeVerifier, validPin } from "../core/room.js";
 
@@ -318,8 +319,23 @@ export function showRoom(app, roomId) {
     screen = typeof made === "function" ? { close: made } : made || {};
     offs.push(() => screen.close?.());
     drawBanner();
-    if (app.fresh === roomId) openInvite();
+    const fresh = app.fresh === roomId;
+    if (fresh) openInvite();
     app.fresh = null;
+    // The first time in each kind of place: one short line about its gestures (설정 → 몸짓 has them all).
+    // It waits for the invitation sheet (a new room) or any other sheet to go first.
+    const hintKind = kind === "creative-song" ? "song" : kind === "daily-text" ? "text" : ["creative-draw", "creative-anim", "creative-board"].includes(kind) ? "draw" : null;
+    if (hintKind) {
+      let ticks = 0;
+      const timer = setInterval(() => {
+        ticks++;
+        if (ticks > 60) return void clearInterval(timer);
+        if (ticks < 2 || document.querySelector(".scrim:not(.closing)")) return;
+        clearInterval(timer);
+        hintOnce(app, hintKind);
+      }, 600);
+      offs.push(() => clearInterval(timer));
+    }
   }
 
   const isLocal = () => !!roomEntry(app.store, roomId)?.local;
