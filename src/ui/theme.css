@@ -1724,10 +1724,15 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .record-way .btn { width: 100%; justify-content: center; }
 .record-way .help { margin: 0; }
 /* 엑스레이: glass the pen comes near opens a soft round window around the pen, like a tree a game
-   character walks behind (the owner, 22 November); everything else stays as it is while drawing. Only
-   that window, and smaller (the owner, 28 November: "얼룩이 왜 생기냐면… 그 색깔 비슷한 것들이 거기에도
-   지워지거나 남아 있어서… 안 보이게 하는 범위도 약간 줄여 주고"). */
+   character walks behind (the owner, 22 November); everything else stays as it is while drawing. Smaller
+   (the owner, 28 November: "안 보이게 하는 범위도 약간 줄여 주고"). */
 .xray { -webkit-mask-image: radial-gradient(circle 3.2rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); mask-image: radial-gradient(circle 3.2rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%); }
+/* Wider: the shape being drawn (its lines near the pen, the inside they close) shows through a glass as a
+   small picture of its own laid over it, one pixel a spot, smoothed as it is stretched (ink.js xrayPaint);
+   with the pen's window, both at once. */
+.xray-map { -webkit-mask-image: var(--xr-map); mask-image: var(--xr-map); -webkit-mask-size: var(--xr-size, 100% 100%); mask-size: var(--xr-size, 100% 100%); -webkit-mask-position: var(--xr-pos, 0 0); mask-position: var(--xr-pos, 0 0); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.xray.xray-map { -webkit-mask-image: radial-gradient(circle 3.2rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map); mask-image: radial-gradient(circle 3.2rem at var(--xr-x, 50%) var(--xr-y, 50%), rgb(0 0 0 / 0.07) 0, rgb(0 0 0 / 0.07) 34%, rgb(0 0 0 / 0.6) 70%, #000 100%), var(--xr-map);
+  -webkit-mask-size: auto, var(--xr-size, 100% 100%); mask-size: auto, var(--xr-size, 100% 100%); -webkit-mask-position: 0 0, var(--xr-pos, 0 0); mask-position: 0 0, var(--xr-pos, 0 0); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
 .bar-order { display: grid; gap: 0.3rem; }
 .bar-order-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.3rem; }
 .bar-order-name { font-weight: 700; }
