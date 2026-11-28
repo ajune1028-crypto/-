@@ -1308,18 +1308,20 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
    좋아… 반짝이는 세로줄이 오른쪽으로 가서 사라지는 효과 그거만 없애주고": no light runs across them). */
 .w.sparkle { position: relative; --spark: 255 190 60; text-shadow: 0 0 6px rgb(var(--spark) / 0.9); animation: sparkle-breathe 2.6s ease-in-out infinite; }
 .w.sparkle::after { content: ""; position: absolute; inset: -0.08em -0.18em; border-radius: 0.35em; pointer-events: none; }
-.w.sparkle.charging::after { animation: sparkle-charge 2s linear forwards; }
+.w.sparkle.charging::after { animation: sparkle-charge 1s linear forwards; }
 @keyframes sparkle-breathe { 0%, 100% { text-shadow: 0 0 4px rgb(var(--spark) / 0.7); } 50% { text-shadow: 0 0 9px rgb(var(--spark) / 1), 0 0 2px rgb(255 245 215 / 0.9); } }
 @keyframes sparkle-charge { from { box-shadow: 0 0 0 0 rgb(255 196 70 / 0); background-color: rgb(255 236 170 / 0); } to { box-shadow: 0 0 26px 10px rgb(255 196 70 / 0.95); background-color: rgb(255 236 170 / 0.7); } }
 .reveal { position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 0.8rem; padding: 1.2rem; background: rgb(8 8 14 / 0.64); animation: reveal-fade 0.3s var(--ease); }
 .reveal-burst { position: fixed; left: 50%; top: 50%; width: 1px; height: 1px; pointer-events: none; }
 .reveal-burst::before { content: ""; position: absolute; left: -40vmin; top: -40vmin; width: 80vmin; height: 80vmin; border-radius: 50%; background: radial-gradient(circle, rgb(255 240 190 / 0.95), rgb(255 200 80 / 0.45) 32%, transparent 66%); animation: reveal-burst 0.9s var(--ease) forwards; }
-.reveal-img { position: relative; max-width: min(86vw, 30rem); max-height: 62vh; width: auto; height: auto; border-radius: 1.2rem; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 46px rgb(255 210 110 / 0.85); animation: reveal-pop 0.7s var(--spring) both; }
+.reveal-img { position: relative; max-width: min(86vw, 30rem); max-height: 62vh; width: auto; height: auto; border-radius: 1.2rem; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 46px rgb(255 210 110 / 0.85); touch-action: none; will-change: transform; }
+/* Out of the word and back into it: text-room.js (revealBox) moves the photo; the dark and the rest only fade. */
+.reveal { touch-action: none; }
+.reveal.closing > :not(.reveal-img):not(.sound-orb) { opacity: 0; transition: opacity 0.18s ease-out; }
 .reveal-who { position: relative; margin: 0; color: #fff; font-size: 0.85rem; font-weight: 700; text-shadow: 0 1px 3px rgb(0 0 0 / 0.6); }
 .reveal-actions { position: relative; display: flex; gap: 0.5rem; }
 .reveal-actions .btn { width: auto; padding: 0 1.2rem; }
 @keyframes reveal-fade { from { background: rgb(8 8 14 / 0); } }
-@keyframes reveal-pop { from { transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.04); opacity: 0; filter: brightness(2.6); } 55% { opacity: 1; } to { transform: none; filter: none; } }
 @keyframes reveal-burst { from { transform: scale(0.1); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w.sparkle, .w.sparkle::after, .w.sparkle.charging::after, .reveal, .reveal-img, .reveal-burst::before, .sound-orb { animation: none; } }
 /* A photo comes out over a soft, wide glow of itself, so any photo sits well. */
@@ -1327,7 +1329,7 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 @keyframes reveal-fade-in { from { opacity: 0; } }
 /* A recording hidden in words sparkles blue; it comes out as a round player. */
 .w.sparkle.sound { --spark: 90 170 255; text-shadow: 0 0 6px rgb(var(--spark) / 0.95); }
-.sound-orb { position: relative; display: grid; place-items: center; width: min(46vmin, 13rem); height: min(46vmin, 13rem); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.95), rgb(190 220 255 / 0.85) 45%, rgb(110 160 255 / 0.75)); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 60px rgb(120 180 255 / 0.8); color: #13213f; animation: reveal-pop 0.7s var(--spring) both; }
+.sound-orb { position: relative; display: grid; place-items: center; width: min(46vmin, 13rem); height: min(46vmin, 13rem); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.95), rgb(190 220 255 / 0.85) 45%, rgb(110 160 255 / 0.75)); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 0 60px rgb(120 180 255 / 0.8); color: #13213f; touch-action: none; }
 /* While it plays the orb breathes (on its own layer, so the fly-in is never started again). */
 .sound-orb::after { content: ""; position: absolute; inset: -6%; border-radius: 50%; box-shadow: 0 0 70px rgb(120 180 255 / 0.9); opacity: 0; pointer-events: none; }
 .sound-orb.on::after { animation: orb-breathe 1.6s ease-in-out infinite; }

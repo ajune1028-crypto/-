@@ -4,7 +4,7 @@ import { h, icon, iconButton, mount, toast, openSheet, flashHint, nextFrame, clo
 import { shrinkPhoto } from "./photo.js";
 import { watchPickers } from "./picker-watch.js";
 import { watchFingers, watchFingerTaps, toggleBare } from "./fingers.js";
-import { onThemeChange } from "./theme.js";
+import { onThemeChange, reducedMotion } from "./theme.js";
 import { SheetEditor } from "./editor.js";
 import { UndoStack } from "../core/undo.js";
 import { invertOps, spliceOps, attachOps, rangeOps, unrangeOps, attachSoundOps, dayLockOps, moveTextOps, lockedEdit } from "../core/edit.js";
@@ -761,23 +761,113 @@ export function mountTextRoom(body, app, session) {
    * A reveal closes on a tap around it (not the lift of the finger that held the word,
    * whose press began before it was there), on a swipe down, and on Escape.
    */
+  /**
+   * The window a hidden photo or recording comes out in (the owner, 28 November: "그 사진은 어떤 식으로
+   * 나올지… 애니메이션에 대해서 설명한 게 있었을 텐데"; apple-design: what comes out of something goes back
+   * into it, a material arrives with its blur and size together, no bounce unless thrown, and a drag
+   * follows the finger the whole way). The photo (or the round player) grows out of the sparkling word's
+   * own place and size while the dark comes up; closed, it goes back into the word the same way; drawn
+   * down it follows the finger, smaller as it goes and the dark lighter, and let go far enough (or
+   * thrown down) it goes into the word, else back up. Returns shut().
+   */
   function revealBox(id, label, from, children, onShut = () => {}) {
     for (const old of document.querySelectorAll(".reveal")) old.remove();
-    let pressedHere = null;
+    const still = reducedMotion();
+    let gone = false;
+    let grab = null;
+    const box = h("div", { class: "reveal", id, role: "dialog", "aria-label": label }, ...children);
+    const hero = () => box.querySelector(".reveal-img, .sound-orb");
+    // From the hero's place on the screen to the word's: [dx, dy, scale].
+    const toWord = () => {
+      const el = hero();
+      if (!el || !from?.width) return null;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      const s = Math.max(0.06, Math.min(0.5, Math.max(from.width / r.width, from.height / r.height)));
+      return [from.left + from.width / 2 - (r.left + r.width / 2), from.top + from.height / 2 - (r.top + r.height / 2), s];
+    };
     const shut = () => {
-      box.remove();
+      if (gone) return;
+      gone = true;
       document.removeEventListener("keydown", onKey);
       onShut();
+      const el = hero();
+      const w = still ? null : toWord();
+      if (!el || !w) {
+        box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: "ease-out" }).finished.then(() => box.remove(), () => box.remove());
+        return;
+      }
+      box.classList.add("closing");
+      const now = getComputedStyle(el).transform;
+      el.animate([{ transform: now === "none" ? "none" : now, opacity: 1, filter: "blur(0px)" },
+        { transform: `translate(${w[0]}px, ${w[1]}px) scale(${w[2]})`, opacity: 0, filter: "blur(6px)" }],
+      { duration: 320, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" });
+      box.animate([{ backgroundColor: getComputedStyle(box).backgroundColor }, { backgroundColor: "rgb(8 8 14 / 0)" }], { duration: 320, easing: "ease-out", fill: "forwards" })
+        .finished.then(() => box.remove(), () => box.remove());
     };
     const onKey = (e) => { if (e.key === "Escape") shut(); };
-    const box = h("div", { class: "reveal", id, role: "dialog", "aria-label": label,
-      onpointerdown: (e) => { pressedHere = { around: e.target === box, y: e.clientY }; },
-      onpointerup: (e) => { if (pressedHere && e.clientY - pressedHere.y > 80) shut(); },
-      onclick: (e) => { if (e.target === box && pressedHere?.around) shut(); } }, ...children);
-    box.style.setProperty("--dx", Math.round(from.left + from.width / 2 - innerWidth / 2) + "px");
-    box.style.setProperty("--dy", Math.round(from.top + from.height / 2 - innerHeight / 2) + "px");
+    // A tap on the dark closes it; a drag (from anywhere but a button) draws the photo down.
+    box.addEventListener("pointerdown", (e) => {
+      if (gone || grab || e.target.closest?.("button, a, label, input")) return;
+      const el = hero();
+      grab = { id: e.pointerId, x: e.clientX, y: e.clientY, onDark: e.target === box, moved: false, el, track: [[e.timeStamp, e.clientY]] };
+      try { box.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    });
+    box.addEventListener("pointermove", (e) => {
+      if (!grab || e.pointerId !== grab.id) return;
+      const dx = e.clientX - grab.x;
+      const dy = e.clientY - grab.y;
+      if (!grab.moved && Math.hypot(dx, dy) < 8) return;
+      grab.moved = true;
+      grab.track.push([e.timeStamp, e.clientY]);
+      if (grab.track.length > 6) grab.track.shift();
+      const down = Math.max(0, dy);
+      const k = Math.min(1, down / 420);
+      if (grab.el) grab.el.style.transform = `translate(${dx}px, ${dy}px) scale(${1 - 0.3 * k})`;
+      box.style.backgroundColor = `rgb(8 8 14 / ${(0.64 * (1 - k)).toFixed(3)})`;
+    });
+    const letGo = (e) => {
+      if (!grab || e.pointerId !== grab.id) return;
+      const g = grab;
+      grab = null;
+      if (!g.moved) {
+        if (g.onDark) shut();
+        return;
+      }
+      const [t0, y0] = g.track[0];
+      const speed = (e.clientY - y0) / Math.max(1, e.timeStamp - t0); // px per ms, down is plus
+      if (e.clientY - g.y > 140 || speed > 0.6) return void shut();
+      // Back up where it was.
+      const el = g.el;
+      if (el) {
+        const now = el.style.transform;
+        el.style.transform = "";
+        if (!still && now) el.animate([{ transform: now }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" });
+      }
+      box.style.backgroundColor = "";
+    };
+    box.addEventListener("pointerup", letGo);
+    box.addEventListener("pointercancel", letGo);
     app.root.append(box);
     document.addEventListener("keydown", onKey);
+    // Out of the word: its place and size first, the blur clearing as it grows (no bounce).
+    const el = hero();
+    if (el && !still) {
+      el.style.opacity = "0";
+      const grow = () => {
+        if (gone) return;
+        el.style.opacity = "";
+        const w = toWord();
+        el.animate(w
+          ? [{ transform: `translate(${w[0]}px, ${w[1]}px) scale(${w[2]})`, opacity: 0.35, filter: "blur(8px) brightness(1.8)" }, { transform: "none", opacity: 1, filter: "blur(0px) brightness(1)" }]
+          : [{ transform: "scale(0.94)", opacity: 0, filter: "blur(8px)" }, { transform: "none", opacity: 1, filter: "blur(0px)" }],
+        { duration: 420, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" });
+      };
+      // A photo is laid out once it is decoded (its size comes from it); not more than a moment's wait.
+      const img = el.tagName === "IMG" ? el : null;
+      if (img && !img.complete) Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 160))]).then(grow);
+      else grow();
+    }
     return shut;
   }
 

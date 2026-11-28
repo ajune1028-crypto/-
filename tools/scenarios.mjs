@@ -2440,7 +2440,7 @@ scenario("text room: today's sheet runs to the bottom of the screen, and a tap l
   await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄 이어서"`);
 });
 
-scenario("text room: a photo hidden in words sparkles; held 1 second it comes out (not before, nothing chosen meanwhile), for the friend too; a tap puts the caret there; it can be taken out", async ({ open, out, fixtures }) => {
+scenario("text room: a photo hidden in words sparkles; held 1 second it grows out of the word (not before, nothing chosen meanwhile), for the friend too; drawn down it follows the finger, closed it goes back into the word; a tap puts the caret there; it can be taken out", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("우리 바다 갔던 날");
@@ -2465,13 +2465,48 @@ scenario("text room: a photo hidden in words sparkles; held 1 second it comes ou
   await hold(b, 600);
   assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 1 second");
   assert.equal(await b.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return ta.selectionEnd - ta.selectionStart; })()`), 0, "a hold on it chooses nothing");
+  // It comes out of the word (the owner: "그 사진은 어떤 식으로 나올지"): frame by frame from the word's
+  // place and size to the middle, large.
+  const wordAt = await b.eval(`(() => { const r = ${TODAY}.querySelector(".draw .w.sparkle").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await b.eval(`(() => { window.__frames = []; window.__watching = false; const mo = new MutationObserver(() => { const img = document.querySelector("#photo-reveal .reveal-img"); if (!img || window.__watching) return; window.__watching = true; mo.disconnect(); const t0 = performance.now(); const step = () => { const r = img.getBoundingClientRect(); window.__frames.push([Math.round(performance.now() - t0), r.left + r.width / 2, r.top + r.height / 2, r.width, img.getAnimations().length]); if (performance.now() - t0 < 800) requestAnimationFrame(step); }; step(); }); mo.observe(document.body, { childList: true, subtree: true }); return true; })()`);
   await hold(b, 1250);
   await b.waitFor(`document.querySelector("#photo-reveal img")?.naturalWidth > 0`);
   assert.match(await text(b, ".reveal-who"), /가람 님이 숨겨 둔 사진/);
   await pause(800);
+  const frames = await b.eval(`window.__frames`);
+  const moving = frames.filter((f) => f[4] > 0);
+  assert.ok(moving.length >= 3, "it moves: " + JSON.stringify(frames.slice(0, 6)));
+  assert.ok(Math.hypot(moving[0][1] - wordAt[0], moving[0][2] - wordAt[1]) < 90 && moving[0][3] < 140, "it starts at the word, small: " + JSON.stringify({ first: moving[0], wordAt }));
+  const centreOf = () => b.eval(`(() => { const img = document.querySelector("#photo-reveal .reveal-img"); if (!img) return null; const r = img.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, r.width, innerWidth]; })()`);
+  const full = await centreOf();
+  assert.ok(full[2] > 150 && Math.abs(full[0] - full[3] / 2) < 40, "large, in the middle: " + full);
   await b.shot(out("text-photo-reveal.png"));
+  // Drawn down a little it follows the finger; let go, it goes back up.
+  await b.front();
+  await b.touch("start", [[full[0], full[1]]]);
+  for (let i = 1; i <= 6; i++) await b.touch("move", [[full[0], full[1] + i * 10]]);
+  const pulled = await centreOf();
+  assert.ok(Math.abs(pulled[1] - (full[1] + 60)) < 22, "it follows the finger: " + JSON.stringify({ pulled, full }));
+  await b.touch("end");
+  await pause(500);
+  const back = await centreOf();
+  assert.ok(Math.abs(back[1] - full[1]) < 6 && Math.abs(back[2] - full[2]) < 4, "back where it was: " + JSON.stringify({ back, full }));
+  // 닫기: it goes back into the word the way it came, then the window is gone.
   await click(b, "#photo-close");
-  await b.waitFor(`!${q("#photo-reveal")}`);
+  await pause(120);
+  const closing = await centreOf();
+  assert.ok(closing && closing[2] < full[2] && Math.hypot(closing[0] - wordAt[0], closing[1] - wordAt[1]) < Math.hypot(full[0] - wordAt[0], full[1] - wordAt[1]), "on its way into the word: " + JSON.stringify({ closing, full, wordAt }));
+  await b.waitFor(`!${q("#photo-reveal")}`, 2000);
+  // Drawn far down and let go, it goes too.
+  await hold(b, 1250);
+  await b.waitFor(`document.querySelector("#photo-reveal img")?.naturalWidth > 0`);
+  await pause(500);
+  const again = await centreOf();
+  await b.front();
+  await b.touch("start", [[again[0], again[1]]]);
+  for (let i = 1; i <= 11; i++) await b.touch("move", [[again[0], again[1] + i * 20]]);
+  await b.touch("end");
+  await b.waitFor(`!${q("#photo-reveal")}`, 2000);
   // A short tap on it puts the caret in it (where it touched), and no photo.
   const word = await b.eval(`(() => { const r = ${TODAY}.querySelector(".draw .w.sparkle").getBoundingClientRect(); return [r.left + 2, r.top + r.height / 2]; })()`);
   await b.touch("start", [word]);
