@@ -14,7 +14,7 @@ const DOC = "bundles";
 /** Settings that are mine wherever I am. Where a bar or panel stands, and a device's own delay fix, stay on the device. */
 export const SHARED_SETTINGS = ["theme", "accent", "textScale", "tintAmount", "colors", "mixing", "songMode", "pianoTone", "showWave", "songSpeed",
   "metronome", "snap", "grid", "countIn", "inkBrush", "inkEraser", "inkSteady", "inkShapes", "reference", "panelCycle", "games", "recentSearchMax",
-  "soundEffects", "haptics", "lineColors", "animOnion", "boardText", "roomView", "songTiles"];
+  "soundEffects", "haptics", "lineColors", "animOnion", "boardText", "roomView", "songTiles", "homeSplit"];
 
 function deviceOf(store) {
   let id = store.get("meDevice", null);

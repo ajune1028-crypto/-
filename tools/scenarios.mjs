@@ -8409,7 +8409,7 @@ scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing r
   await click(page, '[data-settings-part="gestures"]');
   await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
   const text = await page.eval(`document.getElementById("gestures").textContent`);
-  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "클립 꾹", "방 꾹", "햇살을 던지기"]) assert.ok(text.includes(words), "it tells: " + words);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹"]) assert.ok(text.includes(words), "it tells: " + words);
   await page.front();
   await page.shot(out("settings-gestures.png"));
   await page.key("Escape");
