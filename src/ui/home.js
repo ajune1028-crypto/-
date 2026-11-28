@@ -1186,9 +1186,12 @@ export function showHome(app) {
     if (alive && app.store.get("rooms", []).length && !document.querySelector(".scrim:not(.closing)")) hintOnce(app, "home");
   }, 2200);
   // The first time the app opens, 나의 고유 코드 is handed over once the home has come up (the owner,
-  // 21 November: "처음 이 앱을 들어왔을 때 생기는… 코드"). Tests open with ?dev and skip it.
+  // 21 November: "처음 이 앱을 들어왔을 때 생기는… 코드"). Tests open with ?dev and skip it. Not over a
+  // window that is out (비서 holding a sound just shared from the recorder app, 햇살's window): it would
+  // close it, one window at a time; it waits for the next time home comes up clear.
   const welcome = app.welcome && !myCode(app.store).shown && setTimeout(() => {
-    if (alive && !document.querySelector(".scrim:not(.closing)")) openMyCodeIntro(app, root, (title, build) => sheet(title, build), { onChange: codeChanged });
+    if (!alive || document.querySelector(".scrim:not(.closing)") || document.getElementById("reference") || panelCtl?.isOpen()) return;
+    openMyCodeIntro(app, root, (title, build) => sheet(title, build), { onChange: codeChanged });
   }, 450);
   const slowTimer = setTimeout(() => {
     if (!app.connecting) return;
