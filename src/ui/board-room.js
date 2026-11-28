@@ -322,7 +322,8 @@ export function mountBoardRoom(body, app, session, frame) {
     pen.tool = tool;
     boardInk.setTool(tool);
     boardInk.setStyle(pen);
-    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store, units: () => boardInk.unitsPerPx(), restyle: () => boardInk.setStyle(pen) });
+    // The rail in pieces as in 그림 방 (held by its tab: pulled apart, put anywhere, turned), kept for this kind of room.
+    drawInkTools(inkTools, { pen, setTool: setPen, store: app.store, pieces: "creative-board", units: () => boardInk.unitsPerPx(), restyle: () => boardInk.setStyle(pen) });
     penButton.setAttribute("aria-pressed", String(!!tool));
     if (tool) {
       finishWriting();

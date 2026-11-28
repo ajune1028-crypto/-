@@ -2432,7 +2432,9 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .ink-piece[hidden] { display: none; }
 .ink-tools.pieced.empty { display: none; }
 .ink-tools.pieced.empty.arranging { display: flex; min-width: 3rem; min-height: 7rem; border-style: dashed; background: color-mix(in srgb, var(--tint) 6%, transparent); box-shadow: none; }
-.ink-tools.floating { top: 0; left: 0; transform: none; max-height: none; }
+/* A piece put somewhere stays there (placed by its left and top): the whiteboard's rules that move its
+   rail to the right when the modes stand at the left are the dock's only. */
+.ink-tools.floating { top: 0; left: 0; right: auto !important; bottom: auto !important; transform: none; max-height: none; }
 /* The tab sticking out of a stack's end: held, the pieces come loose; while they are, a tap turns a float. */
 .ink-tab { position: absolute; left: 50%; top: 100%; z-index: 1; display: grid; place-items: center; width: 2.4rem; height: 1.05rem; margin: -0.15rem 0 0 -1.2rem; padding: 0; border: 0; background: none; touch-action: none; cursor: grab; -webkit-touch-callout: none; user-select: none; }
 .ink-tab-grip { display: grid; place-items: center; width: 1.6rem; height: 0.5rem; border-radius: 0 0 0.7rem 0.7rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 72%, transparent); box-shadow: 0 0 0 1px var(--glass-edge), 0 2px 4px rgb(0 0 0 / 0.12); }

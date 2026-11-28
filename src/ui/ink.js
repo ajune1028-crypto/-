@@ -1806,13 +1806,18 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
     if (rail && (turn === 0 || turn === 180)) {
       const right = box.right + 8;
       const left = box.left - 8 - w;
-      pop.el.style.left = (right + w <= innerWidth - 8 || left < 8 ? Math.max(8, Math.min(innerWidth - w - 8, right)) : left) + "px";
-      pop.el.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
-    } else {
-      pop.el.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
-      const above = box.top - ht - 8;
-      pop.el.style.top = (above >= 8 || !rail ? Math.max(8, above) : Math.min(innerHeight - ht - 8, box.bottom + 8)) + "px";
+      const fitsRight = right + w <= innerWidth - 8;
+      if (fitsRight || left >= 8) {
+        pop.el.style.left = (fitsRight ? right : left) + "px";
+        pop.el.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
+        return;
+      }
+      // No room on either side (a piece put in the middle of a phone): above it or below it, never over
+      // it (over it, the window covered the very button that opens and closes it).
     }
+    pop.el.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
+    const above = box.top - ht - 8;
+    pop.el.style.top = (above >= 8 || !rail ? Math.max(8, above) : Math.min(innerHeight - ht - 8, box.bottom + 8)) + "px";
   }
 
   // An open window keeps up with the tools (the brush in the new colour, what is chosen).

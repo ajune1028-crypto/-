@@ -2631,7 +2631,9 @@ scenario("text room: two fingers zoom the page, words and drawings together; not
   await click(a, "#pen");
   await a.waitFor(`!${q("#ink-tools")}.hidden`);
   const y = w1.y + w1.h + 24;
-  const x0 = Math.max(w1.x, 20);
+  // On the page, clear of the drawing rail at the left edge (a press on the rail is the rail's).
+  const railRight = await a.eval(`document.getElementById("ink-tools").getBoundingClientRect().right`);
+  const x0 = Math.max(w1.x, railRight + 12);
   await a.press(x0, y);
   for (let i = 1; i <= 8; i++) await a.moveTo(x0 + (60 * i) / 8, y);
   await a.release(x0 + 60, y);
@@ -3532,7 +3534,8 @@ scenario("whiteboard 그리기: the pen (from any mode it brings 전체) draws o
   // Two fingers zoom while the pen is on; nothing is drawn.
   await pickBrush(a, "pen");
   const before = await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`);
-  await a.pinch([[v.x, v.y + 260], [v.x + 100, v.y + 260]], [[v.x - 40, v.y + 260], [v.x + 140, v.y + 260]]);
+  // (On the board, clear of the drawing rail at the left edge: a finger on the rail is the rail's.)
+  await a.pinch([[v.x + 60, v.y + 260], [v.x + 160, v.y + 260]], [[v.x + 20, v.y + 260], [v.x + 200, v.y + 260]]);
   await frames(a);
   assert.equal(await strokes(a), 1, "a pinch draws nothing");
   assert.notEqual(await a.eval(`getComputedStyle(document.getElementById("board-content")).transform`), before, "the pinch zoomed");
@@ -7416,6 +7419,64 @@ scenario("그리기 막대 조각: the rail's tab held, its pieces come loose; t
   await click(a, "#ink-arrange-done");
 });
 
+// The owner (28 November): "그림이나 무슨 뭐 하는 바같은거 꾹 누르면 위치 내가 원하는곳… 잘 하고 있지?". The
+// text room and the whiteboard draw with the same rail as 그림 방: now in the same pieces, each kind of
+// room keeping its own arrangement on this device.
+scenario("그리기 막대 조각 in 글 방 and on the whiteboard too: the rail's tab held, the colour pulled out to the right stays there; putting the pen away takes the pieces with it, taking it up brings them back; each kind of room keeps its own", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  const centre = (sel) => a.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const press = async (sel, ms) => {
+    const at = await centre(sel);
+    await a.front();
+    await a.touch("start", [at]);
+    await pause(ms);
+    await a.touch("end");
+  };
+  const dragTo = async (sel, to) => {
+    const at = await centre(sel);
+    await a.front();
+    await a.touch("start", [at]);
+    for (let i = 1; i <= 10; i++) await a.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 10, at[1] + ((to[1] - at[1]) * i) / 10]]);
+    await pause(60);
+    await a.touch("end");
+  };
+  const pullColourOut = async (rail) => {
+    await a.waitFor(`${q(`#${rail} > .ink-tab`)} && !${q(`#${rail}`)}.hidden`, 3000);
+    await press(`#${rail} > .ink-tab`, 650);
+    await a.waitFor(`${q("#ink-arrange")} && ${q(`#${rail}`)}.classList.contains("arranging")`, 2000);
+    await dragTo(`#${rail} .ink-piece[data-piece="color"]`, [300, 420]);
+    await a.waitFor(`document.querySelectorAll(".ink-tools.floating:not(.ink-ghost)").length === 1 && !!document.querySelector(".ink-tools.floating #ink-color-now")`, 2000);
+    await click(a, "#ink-arrange-done");
+    await a.waitFor(`!document.getElementById("ink-arrange")`, 2000);
+    const r = await a.eval(`(() => { const r = document.querySelector(".ink-tools.floating").getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()`);
+    assert.ok(Math.abs((r[0] + r[2]) / 2 - 300) < 50 && Math.abs((r[1] + r[3]) / 2 - 420) < 60 && r[2] <= 390, "where it was let go, on the screen: " + r);
+  };
+  // 글 방.
+  await createRoom(a, { room: "글 조각" });
+  await click(a, "#pen");
+  await pullColourOut("ink-tools");
+  await a.shot(out("rail-pieces-text.png"));
+  await click(a, "#pen");
+  await a.waitFor(`[...document.querySelectorAll(".ink-tools.floating")].every((el) => el.hidden)`, 2000);
+  await click(a, "#pen");
+  await a.waitFor(`[...document.querySelectorAll(".ink-tools.floating")].some((el) => !el.hidden && el.querySelector("#ink-color-now"))`, 2000);
+  assert.ok(await a.eval(`!!window.__app.store.get("inkRail:daily-text", null)`), "kept for the text rooms");
+  // The colour, from where it now stands, still opens its window on the screen.
+  await click(a, "#ink-color-now");
+  await a.waitFor(`document.querySelector('#ink-pop')?.dataset.kind === "color"`, 2000);
+  const pop = await a.eval(`(() => { const r = document.getElementById("ink-pop").getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()`);
+  assert.ok(pop[0] >= 0 && pop[1] >= 0 && pop[2] <= 390 && pop[3] <= 844, "the colour window is on the screen: " + pop);
+  await click(a, "#ink-color-now");
+  await click(a, "#back");
+  // The whiteboard keeps its own (its rail whole at first).
+  await createBoard(a, { room: "보드 조각" });
+  await click(a, "#board-pen");
+  await a.waitFor(`${q("#board-ink-tools > .ink-tab")} && document.querySelectorAll(".ink-tools.floating:not([hidden])").length === 0`, 3000);
+  await pullColourOut("board-ink-tools");
+  assert.ok(await a.eval(`!!window.__app.store.get("inkRail:creative-board", null)`), "kept for the whiteboards");
+  await a.shot(out("rail-pieces-board.png"));
+});
+
 // The owner (27 November): "체우기는 색을 꾹 눌러서 어디다가 가져다 두면 되는거로… 프로크리에이트거 참고해봐"
 // (ColorDrop) and "브러쉬 크기 바꾸는 버튼 3개 나열되어있는거 꾹누르면. 그거 설치하기도".
 scenario("컬러드롭 and 빠른 굵기: the colour held and dragged into a drawn ring fills it (a short tap still opens the colours); a quick size held takes the brush's size, and a tap on it draws at that size", async ({ open, out }) => {
@@ -8665,7 +8726,7 @@ scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing r
   await click(page, '[data-settings-part="gestures"]');
   await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
   const text = await page.eval(`document.getElementById("gestures").textContent`);
-  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기"]) assert.ok(text.includes(words), "it tells: " + words);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기", "막대 끝 손잡이 꾹"]) assert.ok(text.includes(words), "it tells: " + words);
   await page.front();
   await page.shot(out("settings-gestures.png"));
   await page.key("Escape");

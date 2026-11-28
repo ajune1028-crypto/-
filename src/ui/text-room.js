@@ -232,7 +232,8 @@ export function mountTextRoom(body, app, session) {
   }
 
   function drawInkTools() {
-    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, restyle: () => { for (const editor of editors.values()) editor.ink?.setStyle(pen); }, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
+    // The rail in pieces as in 그림 방 (held by its tab: pulled apart, put anywhere, turned), kept for this kind of room.
+    drawInkToolsInto(inkTools, { pen, setTool, store: app.store, lasso: true, pieces: "daily-text", restyle: () => { for (const editor of editors.values()) editor.ink?.setStyle(pen); }, units: () => editors.get(today)?.ink?.unitsPerPx() || [...editors.values()].find((e) => e.ink)?.ink.unitsPerPx() || 1 });
   }
 
   function buttons() {
