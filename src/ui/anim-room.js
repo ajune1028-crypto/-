@@ -412,23 +412,75 @@ export function mountAnimRoom(body, app, session) {
     }
   }
 
-  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). */
+  /**
+   * A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). A frame held and
+   * then dragged along the strip goes where it is let go instead (FlipaClip and Procreate Dreams move a
+   * frame so): a mark shows the place between the frames, the strip scrolls at its ends, and the move
+   * is one step back for 되돌리기, for everyone.
+   */
   function wireCell(cell, id, hold = () => frameMenu(cell, id)) {
     let timer = 0;
     let held = false;
-    cell.addEventListener("pointerdown", () => {
+    let lift = null; // { pointer, x, y, moved, to }
+    let press = null;
+    const movable = id !== BG;
+    cell.addEventListener("pointerdown", (e) => {
       held = false;
       clearTimeout(timer);
+      lift = null;
+      const start = { pointer: e.pointerId, x: e.clientX, y: e.clientY };
+      press = start;
       timer = setTimeout(() => {
         held = true;
         buzz(app, 8);
-        hold();
+        if (!movable || readOnly()) return void hold();
+        // Held: it may yet be dragged (then it moves) or let go where it is (then its menu).
+        lift = { ...start, moved: false, to: null };
+        cell.classList.add("lifting");
+        try { cell.setPointerCapture(start.pointer); } catch { /* fine */ }
       }, 480);
     });
-    const off = () => clearTimeout(timer);
-    cell.addEventListener("pointerup", off);
-    cell.addEventListener("pointercancel", off);
-    cell.addEventListener("pointerleave", off);
+    cell.addEventListener("pointermove", (e) => {
+      if (!lift || e.pointerId !== lift.pointer) {
+        // Moved before the hold (a scroll of the strip): no hold.
+        if (!held && press && e.pointerId === press.pointer && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) clearTimeout(timer);
+        return;
+      }
+      if (!lift.moved && Math.hypot(e.clientX - lift.x, e.clientY - lift.y) < 8) return;
+      lift.moved = true;
+      cell.style.translate = `${e.clientX - lift.x}px 0`;
+      // Near the strip's ends it scrolls, so a frame goes anywhere in a long flipbook.
+      const box = strip.getBoundingClientRect();
+      if (e.clientX < box.left + 28) strip.scrollLeft -= 10;
+      else if (e.clientX > box.right - 28) strip.scrollLeft += 10;
+      lift.to = dropIndex(e.clientX);
+      showDrop(lift.to);
+    });
+    const end = (e) => {
+      clearTimeout(timer);
+      if (!lift || (e && e.pointerId !== lift.pointer)) return;
+      const was = lift;
+      lift = null;
+      cell.classList.remove("lifting");
+      cell.style.translate = "";
+      strip.querySelector(".anim-drop")?.remove();
+      if (!was.moved) return void hold();
+      if (e?.type !== "pointerup" || was.to == null) return;
+      const list = doc.frames();
+      const from = list.findIndex((f) => f.id === id);
+      // The place among the others: before the frame at `to` (counted with this one taken out).
+      const to = was.to > from ? was.to - 1 : was.to;
+      if (from >= 0 && to !== from) {
+        apply(moveFrameOps(session.clock, doc, id, to - from));
+        buzz(app, 8);
+      }
+    };
+    cell.addEventListener("pointerup", end);
+    cell.addEventListener("pointercancel", end);
+    cell.addEventListener("lostpointercapture", (e) => { if (lift) end(e); });
+    cell.addEventListener("pointerleave", () => { if (!lift && !held) clearTimeout(timer); });
+    // Held, the finger moves the frame, not the strip.
+    cell.addEventListener("touchmove", (e) => { if (lift) e.preventDefault(); }, { passive: false });
     cell.addEventListener("contextmenu", (e) => e.preventDefault());
     cell.addEventListener("click", () => {
       if (held) return;
@@ -439,6 +491,27 @@ export function mountAnimRoom(body, app, session) {
         flashHint("배경은 모든 장 밑에 깔려요 · 꾹 누르면 종이");
       }
     });
+  }
+
+  /** Where among the frames a frame dragged to x would go: the index of the frame it would stand before. */
+  function dropIndex(x) {
+    const list = doc.frames();
+    for (let i = 0; i < list.length; i++) {
+      const c = cells.get(list[i].id)?.cell;
+      if (!c || c.classList.contains("lifting")) continue;
+      const r = c.getBoundingClientRect();
+      if (x < r.left + r.width / 2) return i;
+    }
+    return list.length;
+  }
+  /** A thin mark of my colour between the frames where the dragged one would go. */
+  function showDrop(index) {
+    const list = doc.frames();
+    let mark = strip.querySelector(".anim-drop");
+    if (!mark) mark = h("span", { class: "anim-drop", "aria-hidden": "true" });
+    const before = list[index] ? cells.get(list[index].id)?.cell : addButton.isConnected ? addButton : null;
+    if (before) strip.insertBefore(mark, before);
+    else strip.append(mark);
   }
 
   let closeMenu = null;

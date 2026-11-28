@@ -2151,6 +2151,10 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-strip[data-paper="clear"] .anim-frame { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px; }
 .anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }
 .anim-frame.on { border-color: var(--tint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint) 35%, transparent); }
+/* A frame held to be moved: it lifts and follows the finger along the strip; a thin mark of my colour
+   stands where it will go. */
+.anim-frame.lifting { z-index: 2; scale: 1.08; box-shadow: 0 6px 16px color-mix(in srgb, var(--tint) 35%, transparent); transition: scale 0.15s var(--ease); }
+.anim-drop { flex: none; align-self: stretch; width: 0.22rem; margin: 0.2rem -0.05rem; border-radius: 999px; background: var(--accent-ink); box-shadow: 0 0 0.5rem color-mix(in srgb, var(--tint) 55%, transparent); pointer-events: none; }
 .anim-frame.playing { border-color: color-mix(in srgb, var(--tint) 70%, #fff); box-shadow: 0 0 0.8rem color-mix(in srgb, var(--tint) 55%, transparent); }
 .anim-num { position: absolute; left: 0.2rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 700; color: color-mix(in srgb, #1b2030 60%, transparent); }
 .anim-hold { position: absolute; right: 0.22rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 800; color: var(--tint); }

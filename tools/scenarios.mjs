@@ -6887,6 +6887,46 @@ scenario("every room on a 360-wide phone: the top bar, the bottom bar and the dr
   assert.deepEqual(off, {}, "every button is on the screen");
 });
 
+// 장 순서 (the owner, 20 November: "프로크리에이트 드림이나 그런 거"; FlipaClip and Procreate Dreams move a
+// frame by holding and dragging it): a frame held and dragged along the strip goes where it is let go,
+// for everyone, one 되돌리기 brings it back; held still and let go, its menu as before.
+scenario("애니메이션 방: a frame held and dragged along the strip goes where it is let go, 되돌리기 puts it back; held still, its menu", async ({ open }) => {
+  const a = await open({ dev: "a", width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "순서 플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2`);
+  await click(a, "#anim-add");
+  await a.waitFor(`window.__app.session.doc("anim").frames().length === 3`);
+  const order = () => a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const before = await order();
+  const cell = (id) => a.eval(`(() => { const r = document.querySelector('.anim-frame[data-frame="${id}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const [x0, y0] = await cell(before[0]);
+  const [x2] = await cell(before[2]);
+  // Held, then dragged past the third frame: it is last now.
+  await a.front();
+  await a.touch("start", [[x0, y0]]);
+  await pause(600);
+  for (let i = 1; i <= 10; i++) await a.touch("move", [[x0 + ((x2 + 30 - x0) * i) / 10, y0]]);
+  await a.waitFor(q(".anim-strip .anim-drop"), 1500);
+  await a.touch("end");
+  await a.waitFor(`JSON.stringify(window.__app.session.doc("anim").frames().map((f) => f.id)) === ${JSON.stringify(JSON.stringify([before[1], before[2], before[0]]))}`, 2000);
+  assert.ok(!(await a.eval(`!!document.querySelector(".anim-menu, #anim-menu")`)), "a drag opens no menu");
+  // 되돌리기: the order it had.
+  await click(a, "#anim-undo");
+  await a.waitFor(`JSON.stringify(window.__app.session.doc("anim").frames().map((f) => f.id)) === ${JSON.stringify(JSON.stringify(before))}`, 2000);
+  // Held still and let go: its menu, as before.
+  const [x1, y1] = await cell(before[1]);
+  await a.touch("start", [[x1, y1]]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q("#anim-menu-left"), 1500);
+});
+
 // 애니메이션 방's foot is one glass (the frames and their buttons): drawing near it, that glass opens round
 // the pen (엑스레이, as every bar does), not the clear strip and bar inside it.
 scenario("애니메이션 방: drawing near the foot, its glass opens round the pen (not the strip or the buttons inside it)", async ({ open }) => {
