@@ -117,13 +117,15 @@ export function openColorWheel({ anchor, color, recent = [], onPick, onRecent = 
   // Above the tools it came from, over the button (below them when there is no room above), inside
   // the screen: the brushes and colours stay in view beneath it.
   const a = anchor.getBoundingClientRect();
-  const toolsEl = anchor.closest(".ink-tools");
+  const toolsEl = anchor.closest(".ink-tools, .board-rail");
   const tools = toolsEl?.getBoundingClientRect() || a;
   const w = box.offsetWidth;
   const ht = box.offsetHeight;
-  if (toolsEl?.classList.contains("rail")) {
-    // Beside the tools' rail, at the colour's height.
-    box.style.left = Math.min(innerWidth - w - 8, tools.right + 8) + "px";
+  if (toolsEl && (toolsEl.classList.contains("rail") || toolsEl.classList.contains("board-rail"))) {
+    // Beside the rail (the drawing tools' or the whiteboard's), on the side with the room, at the
+    // button's height: none of the rail's buttons is covered.
+    const left = tools.left + tools.width / 2 < innerWidth / 2 ? tools.right + 8 : tools.left - w - 8;
+    box.style.left = Math.max(8, Math.min(innerWidth - w - 8, left)) + "px";
     box.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
   } else {
     box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";

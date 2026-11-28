@@ -4137,7 +4137,7 @@ scenario("whiteboard 잇기: the order is saved in slot 1, the lines cleared, an
   await page.waitFor(`${board}.links().length === 0`);
 });
 
-scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains them in that order (one undo step); lines are 무지개, 파스텔 or 내 색; a photo card goes on, moves and comes off", async ({ open, out, fixtures }) => {
+scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains them in that order (one undo step); lines are 무지개, 파스텔, 내 색 or any colour from the wheel (a small window beside the rail); a photo card goes on, moves and comes off", async ({ open, out, fixtures }) => {
   const page = await open({ width: 600, height: 800 });
   await createBoard(page);
   for (const memo of ["하나", "둘", "셋"]) {
@@ -4171,18 +4171,47 @@ scenario("whiteboard 잇기 by a line: a finger drawn from card to card chains t
   assert.deepEqual(await page.eval(`${board}.links().map((l) => [l.a, l.b])`), [[passed[0], passed[1]], [passed[1], passed[2]]]);
   assert.ok(!(await page.eval(`document.querySelector(".card[data-chain]") || document.querySelector(".chain-line")`)), "the drawing marks are gone");
   assert.equal(await page.eval(`${board}.items().filter((i) => i.x !== undefined).length`), 3);
-  // Line colours: 무지개, then 파스텔, then the person's own colour; the numbers stay readable.
+  // Line colours from a small window beside the rail: 무지개, 파스텔, the person's own colour, or any
+  // colour from the wheel (the first description: "파스텔, 직접 정하기"); the numbers stay readable.
   const firstStroke = () => page.eval(`document.querySelector(".board-lines path").getAttribute("stroke")`);
+  const allStrokes = () => page.eval(`[...document.querySelectorAll(".board-lines path")].map((p) => p.getAttribute("stroke"))`);
+  const lineWay = async (way) => {
+    await click(page, "#line-colors");
+    await page.waitFor(q(`#line-colors-menu [data-line="${way}"]`), 2000);
+    await click(page, `#line-colors-menu [data-line="${way}"]`);
+  };
   assert.equal(await firstStroke(), "#e5484d");
   await click(page, "#line-colors");
-  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") === "#f4a3a6"`);
-  assert.equal(await page.eval(`document.querySelector(".board-lines .badge text").style.fill`), "rgb(29, 36, 51)", "dark numbers on pastel");
-  await click(page, "#line-colors");
-  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") !== "#f4a3a6"`);
-  const strokes = await page.eval(`[...document.querySelectorAll(".board-lines path")].map((p) => p.getAttribute("stroke"))`);
-  assert.equal(new Set(strokes).size, 1, "one colour of my own");
-  assert.equal(await text(page, "#line-colors .rail-cap"), "내 색");
+  await page.waitFor(`document.querySelectorAll("#line-colors-menu [data-line]").length === 4`, 2000);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#line-colors-menu [data-line]")].map((b) => b.dataset.line + ":" + b.getAttribute("aria-checked"))`), ["rainbow:true", "pastel:false", "mine:false", "own:false"]);
   await page.shot(out("board-line-colors.png"));
+  await click(page, "#line-colors");
+  await page.waitFor(`!document.getElementById("line-colors-menu")`, 2000);
+  await lineWay("pastel");
+  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") === "#f4a3a6" && !document.getElementById("line-colors-menu")`);
+  assert.equal(await page.eval(`document.querySelector(".board-lines .badge text").style.fill`), "rgb(29, 36, 51)", "dark numbers on pastel");
+  await lineWay("mine");
+  await page.waitFor(`document.querySelector(".board-lines path").getAttribute("stroke") !== "#f4a3a6"`);
+  assert.equal(new Set(await allStrokes()).size, 1, "one colour of my own");
+  assert.equal(await text(page, "#line-colors .rail-cap"), "내 색");
+  // 고른 색: the 그림 방's wheel; every line takes the colour as the ring turns.
+  await lineWay("own");
+  await page.waitFor(q("#color-wheel"), 2000);
+  const beside = await page.eval(`(() => { const w = document.getElementById("color-wheel").getBoundingClientRect(); const r = document.querySelector(".board-rail").getBoundingClientRect(); return w.right <= r.left && w.left >= 0; })()`);
+  assert.ok(beside, "the wheel stands beside the rail, covering none of its buttons");
+  const disc = await page.eval(`(() => { const r = document.getElementById("cw-disc").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 }; })()`);
+  const ringAt = (deg) => [disc.x + (disc.r - 11) * Math.sin((deg * Math.PI) / 180), disc.y - (disc.r - 11) * Math.cos((deg * Math.PI) / 180)];
+  await page.press(...ringAt(150));
+  for (let k = 1; k <= 6; k++) await page.moveTo(...ringAt(150 + k * 5));
+  await page.release(...ringAt(180));
+  const chosen = await page.eval(`document.getElementById("color-wheel").dataset.color`);
+  await page.waitFor(`[...document.querySelectorAll(".board-lines path")].every((p) => p.getAttribute("stroke") === "${chosen}")`, 2000);
+  assert.equal(await text(page, "#line-colors .rail-cap"), "고른 색");
+  await page.shot(out("board-line-own.png"));
+  // 줄 색 pressed again puts the wheel away; the colour joins the last colours (as in drawing).
+  await click(page, "#line-colors");
+  await page.waitFor(`!document.getElementById("color-wheel") && !document.getElementById("line-colors-menu")`, 2000);
+  assert.equal(await page.eval(`window.__app.store.get("settings").inkRecent?.[0]`), chosen);
   // One undo takes the whole line away.
   await click(page, "#board-undo");
   await page.waitFor(`${board}.links().length === 0`);

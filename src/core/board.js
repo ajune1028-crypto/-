@@ -31,9 +31,13 @@ export const ITEM_KINDS = ["note", "song", "photo"];
 /** A picture on the board is a small JPEG/PNG/WebP kept in the card (as a text room's hidden photo). */
 export const MAX_PHOTO_CHARS = 60000;
 
-/** The colour of order line n (1, 2, 3…): 무지개 (default), 파스텔, or one colour of the person's own. */
-export function orderColor(n, style = "rainbow", mine = ORDER_COLORS[4]) {
+/**
+ * The colour of order line n (1, 2, 3…): 무지개 (default), 파스텔, one colour of the person's own, or
+ * one colour chosen on the wheel ("own": `own`, a #rrggbb; 무지개 while there is none).
+ */
+export function orderColor(n, style = "rainbow", mine = ORDER_COLORS[4], own = null) {
   if (style === "mine") return mine;
+  if (style === "own" && /^#[0-9a-f]{6}$/i.test(own || "")) return own.toLowerCase();
   const list = style === "pastel" ? PASTEL_COLORS : ORDER_COLORS;
   return list[(n - 1) % list.length];
 }

@@ -31,11 +31,12 @@ import {
   addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong,
   cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps,
   lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop,
-  tintLassoOps, rowLayout, boxLoop, strokesInLoop,
+  tintLassoOps, rowLayout, boxLoop, strokesInLoop, ORDER_COLORS, PASTEL_COLORS,
 } from "../core/board.js";
 import { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } from "../core/ink.js";
 import { InkLayer, inkColor, drawInkTools, watchPick, pickingNow } from "./ink.js";
 import { LiveInk } from "./live-ink.js";
+import { openColorWheel } from "./color-wheel.js";
 import { addRefNote, addRefSound } from "../reference.js";
 import { clipboardItem, copyItem, newestOf } from "../clipboard.js";
 import { solfege } from "../audio/notes.js";
@@ -60,7 +61,8 @@ const SVG = "http://www.w3.org/2000/svg";
 const MIN_ZOOM = 0.04;
 const MAX_ZOOM = 5;
 const SLOTS_SHOWN = 5;
-const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색" };
+const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색", own: "고른 색" };
+const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export function mountBoardRoom(body, app, session, frame) {
@@ -561,6 +563,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const items = new Map(board.items().map((i) => [i.id, moving?.[i.id] ? { ...i, ...moving[i.id] } : i]));
     const style = settings().lineColors || "rainbow";
     const mine = colorOf(session.memberId);
+    const own = settings().lineColor;
     const parts = [];
     for (const l of board.links()) {
       const a = items.get(l.a);
@@ -586,7 +589,7 @@ export function mountBoardRoom(body, app, session, frame) {
         const bend = Math.max(40, Math.abs(x2 - x1) / 2) * s1;
         d = `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
       }
-      const color = orderColor(l.n, style, mine);
+      const color = orderColor(l.n, style, mine, own);
       const ink = contrast(color, "#ffffff") >= contrast(color, "#1d2433") ? "#ffffff" : "#1d2433";
       parts.push(`<path d="${d}" stroke="${color}" />`);
       const mx = (x1 + x2) / 2;
@@ -1134,7 +1137,7 @@ export function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", JSON.stringify(writeStyle()), focusLoop, focusOff, board.lassos().length].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", s.lineColor || "", JSON.stringify(writeStyle()), focusLoop, focusOff, board.lassos().length].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -1159,7 +1162,7 @@ export function mountBoardRoom(body, app, session, frame) {
       link: [
         railButton("order-list", "lines", "순서 목록", () => openOrderList()),
         railButton("order-slots", "slots", "순서 칸", () => openSlots()),
-        railButton("line-colors", "palette", LINE_STYLES[s.lineColors || "rainbow"], () => nextLineColors()),
+        lineColorsButton(LINE_STYLES[s.lineColors] ? s.lineColors : "rainbow"),
         can && railButton("unlink-all", "eraser", "줄 지우기", () => unlinkAll()),
       ],
       song: [
@@ -1495,11 +1498,78 @@ export function mountBoardRoom(body, app, session, frame) {
     draw();
   }
 
-  function nextLineColors() {
-    const order = ["rainbow", "pastel", "mine"];
-    const now = settings().lineColors || "rainbow";
-    setSetting(app.store, "lineColors", order[(order.indexOf(now) + 1) % order.length]);
-    draw();
+  function lineColorsButton(style) {
+    const b = railButton("line-colors", "palette", LINE_STYLES[style], () => openLineColors(b));
+    b.setAttribute("aria-haspopup", "menu");
+    return b;
+  }
+
+  /**
+   * 줄 색 (the first description: "줄 색을 설정에서 바꾸기, 파스텔, 직접 정하기"): 무지개, 파스텔, 내 색, or
+   * any colour from the wheel (the 그림 방's, with the same last colours), beside the rail. My own
+   * way of seeing the lines (this device); pressed again, it closes.
+   */
+  let lineWheel = null;
+  function openLineColors(anchor) {
+    if (document.getElementById("line-colors-menu")) return void closeExtra?.();
+    // The rail lets presses through (it never closes what is open): its own button puts its wheel away.
+    if (lineWheel?.box.isConnected) {
+      lineWheel.close();
+      lineWheel = null;
+      return;
+    }
+    closeExtra?.();
+    const s = settings();
+    const now = LINE_STYLES[s.lineColors] ? s.lineColors : "rainbow";
+    const own = isHex(s.lineColor) ? s.lineColor : null;
+    const look = {
+      rainbow: { background: `linear-gradient(90deg, ${ORDER_COLORS.slice(0, 7).join(", ")})` },
+      pastel: { background: `linear-gradient(90deg, ${PASTEL_COLORS.slice(0, 7).join(", ")})` },
+      mine: { background: colorOf(session.memberId) },
+      own: own ? { "--well": own } : {},
+    };
+    const choose = (style) => {
+      close();
+      setSetting(app.store, "lineColors", style);
+      draw();
+    };
+    const box = h("div", { class: "clip-menu card-menu line-colors", id: "line-colors-menu", role: "menu", "aria-label": "줄 색" },
+      ...Object.keys(LINE_STYLES).map((k) => h("button", { type: "button", class: "line-style", role: "menuitemradio", data: { line: k }, "aria-checked": String(now === k),
+        onclick: (e) => { e.stopPropagation(); k === "own" ? wheel() : choose(k); } },
+        h("span", { class: "line-swatch" + (k === "own" ? " own" + (own ? " has" : "") : ""), "aria-hidden": "true", style: look[k] }),
+        h("span", { text: LINE_STYLES[k] }))));
+    body.append(box);
+    const area = body.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
+    box.style.left = Math.max(6, r.left - area.left - box.offsetWidth - 8) + "px";
+    box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.top - area.top)) + "px";
+    let open = true;
+    const stopGuard = closeOnOutside((t) => box.contains(t) || anchor.contains(t), () => close(), box);
+    function close() {
+      if (!open) return;
+      open = false;
+      stopGuard();
+      box.remove();
+      if (closeExtra === close) closeExtra = null;
+    }
+    closeExtra = close;
+    // 고른 색: the wheel; the lines take each colour as the finger turns it.
+    function wheel() {
+      close();
+      lineWheel = openColorWheel({
+        anchor,
+        color: own || colorOf(session.memberId),
+        recent: settings().inkRecent || [],
+        onPick: (hex, done) => {
+          setSetting(app.store, "lineColor", hex);
+          setSetting(app.store, "lineColors", "own");
+          if (done) draw();
+          else drawLines();
+        },
+        onRecent: (list) => setSetting(app.store, "inkRecent", list),
+        alive: () => alive && mode === "link",
+      });
+    }
   }
 
   function tapToLink(id) {

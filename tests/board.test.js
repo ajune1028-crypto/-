@@ -267,6 +267,10 @@ test("photo cards: a small picture stands on the board, moves and goes like any 
   assert.equal(orderColor(9, "rainbow"), ORDER_COLORS[0]);
   assert.equal(orderColor(2, "pastel"), PASTEL_COLORS[1]);
   assert.equal(orderColor(5, "mine", "#123456"), "#123456");
+  // Or any colour from the wheel, the same for every line; without one yet, 무지개.
+  assert.equal(orderColor(3, "own", "#123456", "#AB12CD"), "#ab12cd");
+  assert.equal(orderColor(3, "own", "#123456", null), ORDER_COLORS[2]);
+  assert.equal(orderColor(3, "own", "#123456", "red; x"), ORDER_COLORS[2], "only a colour");
 });
 
 test("plain text on the board takes a colour and a size; a loop finds every card inside it, of any kind", async () => {
