@@ -683,6 +683,21 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 }
 /* Above the drawing tools or the chosen words' row while they are out. */
 #app:has(.sel-tools:not([hidden])) .toast { bottom: 11.4rem; }
+/* A notice with one thing to do: only its button takes a tap. */
+.toast.with-act { display: flex; align-items: center; gap: 0.7rem; padding: 0.35rem 0.4rem 0.35rem 0.95rem; white-space: nowrap; }
+.toast-act {
+  pointer-events: auto;
+  flex: none;
+  min-height: 2rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+}
+.toast-act:active { scale: 0.96; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -1238,6 +1253,13 @@ html[data-orient="landscape"] .song-start { max-width: 26rem; }
 .card.memo.writing .card-text { visibility: hidden; }
 .card.memo.writing { outline: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 4px; }
 .write-colors { flex-wrap: nowrap; }
+/* 줄 색: the four ways down beside the rail, each with a sample of its line (고른 색: the wheel's ring). */
+.line-colors { flex-direction: column; align-items: stretch; gap: 0.1rem; }
+.line-colors .line-style { display: flex; align-items: center; gap: 0.5rem; padding: 0.42rem 0.8rem 0.42rem 0.55rem; text-align: left; }
+.line-colors .line-style[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
+.line-swatch { flex: none; position: relative; width: 1.7rem; height: 0.45rem; border-radius: 999px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); }
+.line-swatch.own { width: 0.95rem; height: 0.95rem; margin: 0 0.375rem; box-shadow: none; background: conic-gradient(from 0deg, #ff4d4d, #ffb33b, #f4e04d, #45d36b, #3bc1ff, #4d6bff, #b44dff, #ff4d4d); }
+.line-swatch.own::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--well, var(--paper)); }
 /* The mode's own tools: small glass icons standing at the board's right edge. */
 /* A grid that fills downwards and, on a short screen (landscape), opens another column to the left. No scrolling. */
 .board-rail { position: absolute; top: 0.5rem; right: 1rem; bottom: 0.6rem; z-index: 3; display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 2.9rem); gap: 0.35rem; align-content: start; direction: rtl; pointer-events: none; }
@@ -2161,6 +2183,10 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-strip[data-paper="clear"] .anim-frame { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px; }
 .anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }
 .anim-frame.on { border-color: var(--tint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint) 35%, transparent); }
+/* A frame held to be moved: it lifts and follows the finger along the strip; a thin mark of my colour
+   stands where it will go. */
+.anim-frame.lifting { z-index: 2; scale: 1.08; box-shadow: 0 6px 16px color-mix(in srgb, var(--tint) 35%, transparent); transition: scale 0.15s var(--ease); }
+.anim-drop { flex: none; align-self: stretch; width: 0.22rem; margin: 0.2rem -0.05rem; border-radius: 999px; background: var(--accent-ink); box-shadow: 0 0 0.5rem color-mix(in srgb, var(--tint) 55%, transparent); pointer-events: none; }
 .anim-frame.playing { border-color: color-mix(in srgb, var(--tint) 70%, #fff); box-shadow: 0 0 0.8rem color-mix(in srgb, var(--tint) 55%, transparent); }
 .anim-num { position: absolute; left: 0.2rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 700; color: color-mix(in srgb, #1b2030 60%, transparent); }
 .anim-hold { position: absolute; right: 0.22rem; bottom: 0.08rem; font-size: 0.56rem; font-weight: 800; color: var(--tint); }
@@ -2467,6 +2493,15 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* 컬러드롭: a drop of the colour, its tip where it lands; a ring spreads where it filled. */
 .ink-color-now { touch-action: none; -webkit-touch-callout: none; }
 .color-drop { position: fixed; z-index: 97; width: 2.2rem; height: 2.2rem; margin: -2.66rem 0 0 -1.1rem; border-radius: 50% 50% 50% 0; rotate: -45deg; background: var(--c); box-shadow: 0 0 0 2.5px #fff, 0 6px 16px rgb(0 0 0 / 0.3); pointer-events: none; }
+/* Held still where it landed, the drop gives way to what it would fill. */
+.color-drop.landed { opacity: 0; transition: opacity 0.18s var(--ease); }
+/* 채우는 정도: what the fill would take, over its layer (as it will look), and a bar at the top that
+   says how much, where gestures say their names (the finger never covers it). */
+canvas.fill-preview { position: absolute; z-index: 0; pointer-events: none; }
+.fill-amount { position: fixed; z-index: 96; top: calc(env(safe-area-inset-top) + 4.6rem); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.85rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), 0 6px 18px color-mix(in srgb, var(--tint) 22%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; white-space: nowrap; animation: rise 0.18s var(--ease); }
+.fill-amount-track { position: relative; width: 7.5rem; height: 0.4rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 14%, transparent); overflow: hidden; }
+.fill-amount-level { position: absolute; inset: 0 auto 0 0; width: calc(var(--k, 0.2) * 100%); border-radius: inherit; background: var(--accent-ink, var(--accent)); }
+.fill-amount-num { min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
 .color-drop-ring { position: fixed; z-index: 97; width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; border-radius: 50%; border: 3px solid var(--c); pointer-events: none; animation: drop-ring 0.55s var(--ease) forwards; }
 @keyframes drop-ring { from { scale: 0.4; opacity: 1; } to { scale: 5; opacity: 0; } }
 .ink-width { touch-action: manipulation; -webkit-touch-callout: none; }
@@ -4097,9 +4132,13 @@ const ITEM_KINDS = ["note", "song", "photo"];
 /** A picture on the board is a small JPEG/PNG/WebP kept in the card (as a text room's hidden photo). */
 const MAX_PHOTO_CHARS = 60000;
 
-/** The colour of order line n (1, 2, 3…): 무지개 (default), 파스텔, or one colour of the person's own. */
-function orderColor(n, style = "rainbow", mine = ORDER_COLORS[4]) {
+/**
+ * The colour of order line n (1, 2, 3…): 무지개 (default), 파스텔, one colour of the person's own, or
+ * one colour chosen on the wheel ("own": `own`, a #rrggbb; 무지개 while there is none).
+ */
+function orderColor(n, style = "rainbow", mine = ORDER_COLORS[4], own = null) {
   if (style === "mine") return mine;
+  if (style === "own" && /^#[0-9a-f]{6}$/i.test(own || "")) return own.toLowerCase();
   const list = style === "pastel" ? PASTEL_COLORS : ORDER_COLORS;
   return list[(n - 1) % list.length];
 }
@@ -5366,6 +5405,8 @@ const DEFAULT_SETTINGS = {
   metronome: false, snap: true, grid: 8,
   // Drawing: the brush, and whether the eraser rubs out an area or whole strokes.
   inkBrush: "pen", inkEraser: "area",
+  // 채우기 and 컬러드롭: how alike a colour must be to be filled (0..255 a channel; 채우는 정도, held and slid).
+  fillTol: 48,
   // 레퍼런스 (private notes) everywhere; off hides every way to it.
   reference: true,
 };
@@ -7788,12 +7829,18 @@ function openFloat(root, { id, title, pos, dock = null }, build) {
 }
 
 let toastTimer = null;
-function toast(root, text, ms = 2600) {
+/**
+ * A short notice at the foot that goes by itself. action { label, run }: one small button in it (a
+ * GIF just saved: 보내기); only that button takes a tap, the rest of the notice never stands in the way.
+ */
+function toast(root, text, ms = 2600, action = null) {
   root.querySelector(".toast")?.remove();
   clearTimeout(toastTimer);
-  const el = h("div", { class: "toast", role: "status", text });
+  const el = action
+    ? h("div", { class: "toast with-act", role: "status" }, h("span", { text }), h("button", { class: "toast-act", type: "button", text: action.label, onclick: () => { el.remove(); action.run(); } }))
+    : h("div", { class: "toast", role: "status", text });
   root.append(el);
-  toastTimer = setTimeout(() => el.remove(), ms);
+  toastTimer = setTimeout(() => el.remove(), action ? Math.max(ms, 6000) : ms);
 }
 
 return { h, icon, flashHint, iconButton, swallowPress, closeOnOutside, mount, inputRow, formBox, segmented, toggle, nextFrame, openSheet, openFloat, toast };
@@ -18146,13 +18193,15 @@ function openColorWheel({ anchor, color, recent = [], onPick, onRecent = () => {
   // Above the tools it came from, over the button (below them when there is no room above), inside
   // the screen: the brushes and colours stay in view beneath it.
   const a = anchor.getBoundingClientRect();
-  const toolsEl = anchor.closest(".ink-tools");
+  const toolsEl = anchor.closest(".ink-tools, .board-rail");
   const tools = toolsEl?.getBoundingClientRect() || a;
   const w = box.offsetWidth;
   const ht = box.offsetHeight;
-  if (toolsEl?.classList.contains("rail")) {
-    // Beside the tools' rail, at the colour's height.
-    box.style.left = Math.min(innerWidth - w - 8, tools.right + 8) + "px";
+  if (toolsEl && (toolsEl.classList.contains("rail") || toolsEl.classList.contains("board-rail"))) {
+    // Beside the rail (the drawing tools' or the whiteboard's), on the side with the room, at the
+    // button's height: none of the rail's buttons is covered.
+    const left = tools.left + tools.width / 2 < innerWidth / 2 ? tools.right + 8 : tools.left - w - 8;
+    box.style.left = Math.max(8, Math.min(innerWidth - w - 8, left)) + "px";
     box.style.top = Math.max(8, Math.min(innerHeight - ht - 8, a.top + a.height / 2 - ht / 2)) + "px";
   } else {
     box.style.left = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2)) + "px";
@@ -18214,6 +18263,17 @@ const STEADY_PX = [0, 6, 14, 26];
 const STEADY_NAMES = ["끔", "약", "중", "강"];
 /** How long a line is held still before it becomes a shape. */
 const SHAPE_HOLD_MS = 600;
+/** 채우는 정도: how long a fill is held still before its amount shows, and how much a pixel slid changes it. */
+const FILL_HOLD_MS = 450;
+const TOL_PER_PX = 0.85; // 255 × 1% / 3 px
+/** How alike a colour must be (0..255 a channel) to be filled: kept on this device (drawInkTools reads it). */
+let fillTol = 48;
+let keepTol = null;
+const clampTol = (v) => Math.max(0, Math.min(255, Math.round(Number(v)))) || 0;
+function setFillTol(v) {
+  fillTol = clampTol(v);
+  keepTol?.(fillTol);
+}
 
 function inkColor(c, fixed = false) {
   if (c === "black") return fixed ? INK.light : INK[currentTheme()];
@@ -18784,6 +18844,7 @@ class InkLayer {
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
     clearTimeout(this.live.timer);
+    this.live.hold?.end(false);
     if (this.live.pts && this.live.brush !== "erase") this.share?.end("ink", null);
     if (this.live.light && this.light) {
       this.light.ended = performance.now();
@@ -18828,8 +18889,12 @@ class InkLayer {
         this.share?.grow("laser", this.light.pts);
         this.renderSoon();
       } else if (this.tool === "pen" && this.brush === "fill") {
-        // 채우기: a tap, not a line.
-        this.fillAt(e);
+        // 채우기: a tap fills where it is let go; held still, 채우는 정도 first (slide right for more,
+        // left for less), as the colour dropped from the bar does.
+        const live = (this.live = { pointer: e.pointerId, kind: e.pointerType, fill: [e.clientX, e.clientY], hold: null });
+        live.timer = setTimeout(() => {
+          if (this.live === live && !live.moved) live.hold = holdFill(this, live.fill[0], live.fill[1]);
+        }, FILL_HOLD_MS);
       } else {
         const first = this.point(e);
         const brush = this.tool === "eraser" ? "erase" : this.brush;
@@ -18853,6 +18918,11 @@ class InkLayer {
       this.xrayAt(e.clientX, e.clientY);
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
+      if (live.fill) {
+        if (live.hold) live.hold.move(e.clientX);
+        else if (Math.hypot(e.clientX - live.fill[0], e.clientY - live.fill[1]) > 10) live.moved = true;
+        return;
+      }
       if (live.moving) {
         const [x, y] = this.point(e);
         this.shift = { dx: x - live.x0, dy: y - live.y0, ids: this.selection.ids };
@@ -18893,6 +18963,13 @@ class InkLayer {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       this.xrayEnd();
       const live = this.live;
+      if (live.fill) {
+        this.live = null;
+        clearTimeout(live.timer);
+        if (live.hold) live.hold.end(e.type === "pointerup");
+        else if (e.type === "pointerup") this.fillAt({ clientX: live.fill[0], clientY: live.fill[1] });
+        return;
+      }
       if (live.moving) {
         this.live = null;
         const { dx, dy } = this.shift || { dx: 0, dy: 0 };
@@ -18964,18 +19041,11 @@ class InkLayer {
    * layers above or below), grown a little under the soft edges of its lines, kept as a shape (its
    * edge and its holes) in my colour. Too thin a sliver to see is not kept.
    */
-  fillAt(e) {
-    if (!this.kept) this.render();
-    const kept = this.kept;
-    if (!kept?.canvas || !kept.t) return;
-    const c = kept.canvas;
-    const box = this.canvas.getBoundingClientRect();
-    if (!box.width || !box.height) return;
-    const sx = c.width / box.width;
-    const sy = c.height / box.height;
-    const g = c.getContext("2d", { willReadFrequently: true });
-    const img = g.getImageData(0, 0, c.width, c.height);
-    const mask = fillMask(img.data, c.width, c.height, (e.clientX - box.left) * sx, (e.clientY - box.top) * sy, { tolerance: 48, grow: Math.max(1, Math.round(sx)) });
+  fillAt(e, tolerance = fillTol) {
+    const region = this.fillRegion(e.clientX, e.clientY, tolerance);
+    this.endFillPreview();
+    if (!region) return;
+    const { mask, c, sx, kept } = region;
     let eps = 0.75 * sx;
     let rings = maskRings(mask, c.width, c.height).map((r) => simplifyRing(r, eps));
     // A stroke holds at most 3000 points: a very ragged region is simplified more.
@@ -18988,6 +19058,73 @@ class InkLayer {
     if (pts.length < 9) return;
     this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined, inside: !!this.inside() });
     this.render();
+  }
+
+  /**
+   * The region a fill at a point of the screen takes with this tolerance: { mask, c (the picture's
+   * canvas), sx, kept }, or null. The picture is read once while a fill is held in one place.
+   */
+  fillRegion(x, y, tolerance) {
+    if (!this.kept) this.render();
+    const kept = this.kept;
+    if (!kept?.canvas || !kept.t) return null;
+    const c = kept.canvas;
+    let src = this.fillSrc;
+    if (!src || src.kept !== kept || src.w !== c.width || src.h !== c.height) {
+      const box = this.canvas.getBoundingClientRect();
+      if (!box.width || !box.height) return null;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      src = this.fillSrc = { kept, w: c.width, h: c.height, box, sx: c.width / box.width, sy: c.height / box.height, data: g.getImageData(0, 0, c.width, c.height).data };
+    }
+    const mask = fillMask(src.data, c.width, c.height, (x - src.box.left) * src.sx, (y - src.box.top) * src.sy, { tolerance: clampTol(tolerance), grow: Math.max(1, Math.round(src.sx)) });
+    return { mask, c, sx: src.sx, kept };
+  }
+
+  /**
+   * 채우는 정도: what a fill at this point would take, shown on this layer in the colour (over this
+   * layer, under the layers above it: as it will look). Returns how many pixels it takes.
+   */
+  fillPreview(x, y, tolerance) {
+    const region = this.fillRegion(x, y, tolerance);
+    if (!region) return 0;
+    const { mask, c } = region;
+    let o = this.fillShow;
+    if (!o) {
+      o = this.fillShow = h("canvas", { class: "fill-preview", "aria-hidden": "true" });
+      this.canvas.after(o);
+    }
+    Object.assign(o.style, { left: this.canvas.offsetLeft + "px", top: this.canvas.offsetTop + "px", width: this.canvas.offsetWidth + "px", height: this.canvas.offsetHeight + "px" });
+    if (o.width !== c.width || o.height !== c.height) {
+      o.width = c.width;
+      o.height = c.height;
+      this.fillImg = null;
+    }
+    const g = o.getContext("2d");
+    if (!g) return 0;
+    const img = this.fillImg || (this.fillImg = g.createImageData(c.width, c.height));
+    const [r, gr, b] = rgbOfCss(inkColor(this.color, this.fixedInk));
+    const a = Math.round(235 * this.opacity);
+    const d = img.data;
+    let n = 0;
+    for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
+      if (mask[i]) {
+        d[p] = r;
+        d[p + 1] = gr;
+        d[p + 2] = b;
+        d[p + 3] = a;
+        n++;
+      } else d[p + 3] = 0;
+    }
+    g.putImageData(img, 0, 0);
+    o.dataset.filled = String(n);
+    return n;
+  }
+
+  endFillPreview() {
+    this.fillShow?.remove();
+    this.fillShow = null;
+    this.fillImg = null;
+    this.fillSrc = null;
   }
 
   /** The point of an event, a finger's pressure read from its speed. */
@@ -19647,6 +19784,9 @@ function brushPreview(brush, color, width) {
 function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false, restyle = null, pieces = null, drop = null }) {
   // In 그림 방 and 애니메이션 방 black is shown as the black it draws (it never turns with 어둡게).
   const shown = (c) => inkColor(c, fixed);
+  // 채우는 정도, the same in every room's 채우기 and 컬러드롭: as this device last set it.
+  fillTol = clampTol(getSettings(store).fillTol ?? 48);
+  keepTol = (v) => setSetting(store, "fillTol", v);
   const drawn = (c) => (fixed ? fixedInk(c) : c);
   panel.hidden = !pen.tool;
   for (const el of railParts(panel)) el.hidden = !pen.tool;
@@ -20044,10 +20184,81 @@ function holdToSet(button, act, ms = 450) {
   button.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
+/** A colour as [r, g, b] (a "#rrggbb", or anything a canvas understands). */
+function rgbOfCss(css) {
+  let hex = /^#[0-9a-f]{6}$/i.test(css) ? css : null;
+  if (!hex) {
+    const g = document.createElement("canvas").getContext("2d");
+    if (g) {
+      g.fillStyle = "#000000";
+      g.fillStyle = css;
+      hex = g.fillStyle;
+    }
+  }
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
+}
+
+/** The bar at the top while a fill is held: 채우는 정도 and how much, in my colour. */
+function showFillAmount(tol) {
+  let bar = document.getElementById("fill-amount");
+  if (!bar) {
+    bar = h("div", { class: "fill-amount", id: "fill-amount", role: "status" },
+      h("span", { class: "fill-amount-name", text: "채우는 정도" }),
+      h("span", { class: "fill-amount-track", "aria-hidden": "true" }, h("span", { class: "fill-amount-level" })),
+      h("b", { class: "fill-amount-num" }));
+    document.body.append(bar);
+  }
+  const pct = Math.round((tol / 255) * 100);
+  bar.style.setProperty("--k", String(tol / 255));
+  bar.dataset.amount = String(pct);
+  bar.querySelector(".fill-amount-num").textContent = pct + "%";
+}
+
+/**
+ * 채우는 정도 (Procreate's ColorDrop Threshold): a fill held where it lands. What it would take shows
+ * on the layer in the colour and a bar at the top says how much; the finger slid right takes in more
+ * alike colours, left fewer; let go, it is filled there, and the amount is kept for the next fill.
+ */
+function holdFill(layer, x, y) {
+  const from = fillTol;
+  let tol = from;
+  let frame = 0;
+  const show = () => {
+    frame = 0;
+    showFillAmount(tol);
+    layer.fillPreview(x, y, tol);
+  };
+  show();
+  try { navigator.vibrate?.(8); } catch { /* not every device buzzes */ }
+  return {
+    at: [x, y],
+    move(cx) {
+      const next = clampTol(from + (cx - x) * TOL_PER_PX);
+      if (next === tol) return;
+      tol = next;
+      if (!frame) frame = requestAnimationFrame(show);
+    },
+    /** keep: fill (the finger let go); else only put it away. True when it filled. */
+    end(keep) {
+      cancelAnimationFrame(frame);
+      document.getElementById("fill-amount")?.remove();
+      if (!keep) {
+        layer.endFillPreview();
+        return false;
+      }
+      setFillTol(tol);
+      layer.fillAt({ clientX: x, clientY: y }, tol);
+      return true;
+    },
+  };
+}
+
 /**
  * 컬러드롭: the colour button held (a moment) and dragged: a drop of the colour follows the finger, its
- * tip where it will land; let go, drop(x, y) fills there (true when it did, and a ring spreads). A
- * short tap is still the colour window; let go off the drawing, nothing happens.
+ * tip where it will land; let go, it fills there (drop(x, y) gives the layer under it, or null) and a
+ * ring spreads. Held still on the drawing first, 채우는 정도 (holdFill). A short tap is still the
+ * colour window; let go off the drawing, nothing happens.
  */
 function wireColorDrop(btn, colourOf, drop) {
   let g = null;
@@ -20073,18 +20284,40 @@ function wireColorDrop(btn, colourOf, drop) {
       }
       return;
     }
+    if (g.hold) return void g.hold.move(e.clientX);
     g.bead.style.left = e.clientX + "px";
     g.bead.style.top = e.clientY + "px";
+    // Held still on the drawing: 채우는 정도 there.
+    if (g.still && Math.hypot(e.clientX - g.still[0], e.clientY - g.still[1]) <= 6) return;
+    const at = (g.still = [e.clientX, e.clientY]);
+    const mine = g;
+    clearTimeout(g.stillTimer);
+    g.stillTimer = setTimeout(() => {
+      if (g !== mine || g.hold || g.still !== at) return;
+      const layer = drop(at[0], at[1]);
+      if (!layer) return;
+      g.bead.classList.add("landed");
+      g.hold = holdFill(layer, at[0], at[1]);
+    }, FILL_HOLD_MS);
   });
   const end = (e, landed) => {
     if (!g || e.pointerId !== g.id) return;
     clearTimeout(g.timer);
-    const { bead, colour } = g;
+    clearTimeout(g.stillTimer);
+    const { bead, colour, hold } = g;
     g = null;
     if (!bead) return;
     bead.remove();
-    if (!landed || !drop(e.clientX, e.clientY)) return;
-    const ring = h("div", { class: "color-drop-ring", "aria-hidden": "true", style: { "--c": colour, left: e.clientX + "px", top: e.clientY + "px" } });
+    let at = [e.clientX, e.clientY];
+    if (hold) {
+      if (!hold.end(landed)) return;
+      at = hold.at;
+    } else {
+      const layer = landed ? drop(e.clientX, e.clientY) : null;
+      if (!layer) return;
+      layer.fillAt({ clientX: e.clientX, clientY: e.clientY });
+    }
+    const ring = h("div", { class: "color-drop-ring", "aria-hidden": "true", style: { "--c": colour, left: at[0] + "px", top: at[1] + "px" } });
     document.body.append(ring);
     setTimeout(() => ring.remove(), 600);
   };
@@ -24379,10 +24612,11 @@ const { memberColor, personColor, INK, contrast, PALETTE } = __m["src/core/paint
 const { UndoStack } = __m["src/core/undo.js"];
 const { Clock } = __m["src/core/crdt.js"];
 const { SongDoc, MAX_TAKE_MS, CLIP_SPEEDS, packMs, noteInSeconds, unpackNote } = __m["src/core/song.js"];
-const { addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong, cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps, lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop, tintLassoOps, rowLayout, boxLoop, strokesInLoop } = __m["src/core/board.js"];
+const { addItemOps, setItemOps, removeItemOps, linkOps, unlinkOps, invertBoardOps, playOrder, boardSong, cardsSong, cardFromClip, songCardData, splitCardOps, saveSlotOps, useSlotOps, songWidth, keepOf, keptFields, slotOrder, orderOps, nameSlotOps, lassoOps, moveLassoOps, removeLassoOps, lassoOrder, orderColor, MAX_PHOTO_CHARS, itemsInLoop, insideLoop, tintLassoOps, rowLayout, boxLoop, strokesInLoop, ORDER_COLORS, PASTEL_COLORS } = __m["src/core/board.js"];
 const { INK_COLORS, strokeOps, eraseOps, invertInkOps, moveStrokesOps, recolorStrokesOps } = __m["src/core/ink.js"];
 const { InkLayer, inkColor, drawInkTools, watchPick, pickingNow } = __m["src/ui/ink.js"];
 const { LiveInk } = __m["src/ui/live-ink.js"];
+const { openColorWheel } = __m["src/ui/color-wheel.js"];
 const { addRefNote, addRefSound } = __m["src/reference.js"];
 const { clipboardItem, copyItem, newestOf } = __m["src/clipboard.js"];
 const { solfege } = __m["src/audio/notes.js"];
@@ -24407,7 +24641,8 @@ const SVG = "http://www.w3.org/2000/svg";
 const MIN_ZOOM = 0.04;
 const MAX_ZOOM = 5;
 const SLOTS_SHOWN = 5;
-const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색" };
+const LINE_STYLES = { rainbow: "무지개", pastel: "파스텔", mine: "내 색", own: "고른 색" };
+const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 function mountBoardRoom(body, app, session, frame) {
@@ -24908,6 +25143,7 @@ function mountBoardRoom(body, app, session, frame) {
     const items = new Map(board.items().map((i) => [i.id, moving?.[i.id] ? { ...i, ...moving[i.id] } : i]));
     const style = settings().lineColors || "rainbow";
     const mine = colorOf(session.memberId);
+    const own = settings().lineColor;
     const parts = [];
     for (const l of board.links()) {
       const a = items.get(l.a);
@@ -24933,7 +25169,7 @@ function mountBoardRoom(body, app, session, frame) {
         const bend = Math.max(40, Math.abs(x2 - x1) / 2) * s1;
         d = `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
       }
-      const color = orderColor(l.n, style, mine);
+      const color = orderColor(l.n, style, mine, own);
       const ink = contrast(color, "#ffffff") >= contrast(color, "#1d2433") ? "#ffffff" : "#1d2433";
       parts.push(`<path d="${d}" stroke="${color}" />`);
       const mx = (x1 + x2) / 2;
@@ -25481,7 +25717,7 @@ function mountBoardRoom(body, app, session, frame) {
     const s = settings();
     const can = !readOnly();
     // Built again only when what it shows changes, not on every draw.
-    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", JSON.stringify(writeStyle()), focusLoop, focusOff, board.lassos().length].join("|");
+    const key = [mode, can, s.songSpeed || 1, s.songMode, s.lineColors || "rainbow", s.lineColor || "", JSON.stringify(writeStyle()), focusLoop, focusOff, board.lassos().length].join("|");
     if (rail.dataset.key === key) return;
     rail.dataset.key = key;
     const chosen = selected ? board.item(selected) : null;
@@ -25506,7 +25742,7 @@ function mountBoardRoom(body, app, session, frame) {
       link: [
         railButton("order-list", "lines", "순서 목록", () => openOrderList()),
         railButton("order-slots", "slots", "순서 칸", () => openSlots()),
-        railButton("line-colors", "palette", LINE_STYLES[s.lineColors || "rainbow"], () => nextLineColors()),
+        lineColorsButton(LINE_STYLES[s.lineColors] ? s.lineColors : "rainbow"),
         can && railButton("unlink-all", "eraser", "줄 지우기", () => unlinkAll()),
       ],
       song: [
@@ -25842,11 +26078,78 @@ function mountBoardRoom(body, app, session, frame) {
     draw();
   }
 
-  function nextLineColors() {
-    const order = ["rainbow", "pastel", "mine"];
-    const now = settings().lineColors || "rainbow";
-    setSetting(app.store, "lineColors", order[(order.indexOf(now) + 1) % order.length]);
-    draw();
+  function lineColorsButton(style) {
+    const b = railButton("line-colors", "palette", LINE_STYLES[style], () => openLineColors(b));
+    b.setAttribute("aria-haspopup", "menu");
+    return b;
+  }
+
+  /**
+   * 줄 색 (the first description: "줄 색을 설정에서 바꾸기, 파스텔, 직접 정하기"): 무지개, 파스텔, 내 색, or
+   * any colour from the wheel (the 그림 방's, with the same last colours), beside the rail. My own
+   * way of seeing the lines (this device); pressed again, it closes.
+   */
+  let lineWheel = null;
+  function openLineColors(anchor) {
+    if (document.getElementById("line-colors-menu")) return void closeExtra?.();
+    // The rail lets presses through (it never closes what is open): its own button puts its wheel away.
+    if (lineWheel?.box.isConnected) {
+      lineWheel.close();
+      lineWheel = null;
+      return;
+    }
+    closeExtra?.();
+    const s = settings();
+    const now = LINE_STYLES[s.lineColors] ? s.lineColors : "rainbow";
+    const own = isHex(s.lineColor) ? s.lineColor : null;
+    const look = {
+      rainbow: { background: `linear-gradient(90deg, ${ORDER_COLORS.slice(0, 7).join(", ")})` },
+      pastel: { background: `linear-gradient(90deg, ${PASTEL_COLORS.slice(0, 7).join(", ")})` },
+      mine: { background: colorOf(session.memberId) },
+      own: own ? { "--well": own } : {},
+    };
+    const choose = (style) => {
+      close();
+      setSetting(app.store, "lineColors", style);
+      draw();
+    };
+    const box = h("div", { class: "clip-menu card-menu line-colors", id: "line-colors-menu", role: "menu", "aria-label": "줄 색" },
+      ...Object.keys(LINE_STYLES).map((k) => h("button", { type: "button", class: "line-style", role: "menuitemradio", data: { line: k }, "aria-checked": String(now === k),
+        onclick: (e) => { e.stopPropagation(); k === "own" ? wheel() : choose(k); } },
+        h("span", { class: "line-swatch" + (k === "own" ? " own" + (own ? " has" : "") : ""), "aria-hidden": "true", style: look[k] }),
+        h("span", { text: LINE_STYLES[k] }))));
+    body.append(box);
+    const area = body.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
+    box.style.left = Math.max(6, r.left - area.left - box.offsetWidth - 8) + "px";
+    box.style.top = Math.max(4, Math.min(area.height - box.offsetHeight - 4, r.top - area.top)) + "px";
+    let open = true;
+    const stopGuard = closeOnOutside((t) => box.contains(t) || anchor.contains(t), () => close(), box);
+    function close() {
+      if (!open) return;
+      open = false;
+      stopGuard();
+      box.remove();
+      if (closeExtra === close) closeExtra = null;
+    }
+    closeExtra = close;
+    // 고른 색: the wheel; the lines take each colour as the finger turns it.
+    function wheel() {
+      close();
+      lineWheel = openColorWheel({
+        anchor,
+        color: own || colorOf(session.memberId),
+        recent: settings().inkRecent || [],
+        onPick: (hex, done) => {
+          setSetting(app.store, "lineColor", hex);
+          setSetting(app.store, "lineColors", "own");
+          if (done) draw();
+          else drawLines();
+        },
+        onRecent: (list) => setSetting(app.store, "inkRecent", list),
+        alive: () => alive && mode === "link",
+      });
+    }
   }
 
   function tapToLink(id) {
@@ -27976,18 +28279,17 @@ function mountDrawRoom(body, app, session, frame) {
     }
     drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1,
       restyle: () => { for (const { ink } of hosts.values()) ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }); },
-      pieces: "creative-draw", drop: (x, y) => dropFill(x, y) });
+      pieces: "creative-draw", drop: (x, y) => dropTarget(x, y) });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
 
   /** 컬러드롭: the colour let go on the page fills there, on the layer being drawn (as 채우기 does). */
-  function dropFill(x, y) {
+  function dropTarget(x, y) {
     const r = page.getBoundingClientRect();
     const entry = hosts.get(active);
-    if (readOnly() || !entry || !doc.layer(active)?.visible || x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
-    entry.ink.fillAt({ clientX: x, clientY: y });
-    return true;
+    if (readOnly() || !entry || !doc.layer(active)?.visible || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    return entry.ink;
   }
 
   function setTool(tool) {
@@ -28340,6 +28642,416 @@ function mountDrawRoom(body, app, session, frame) {
 
 return { PAGE_W, PAGE_H, mountDrawRoom };
 })();
+__m["src/core/gif.js"] = (() => {
+// GIF로 저장 (the owner, 20 November: "영상·GIF로 저장"): a flipbook as an animated GIF, the one moving
+// picture every chat app shows on its own and plays over and over. Written for this app without any
+// library. The byte layout and the LZW packing follow the GIF89a specification and gifenc (MIT, Matt
+// DesLauriers), whose writer comes from Kevin Weiner's encoder and the old `compress` program;
+// writing only the part of a frame that changed is the idea of gifsicle's frame optimisation. The
+// colours are brought to 256 with a median cut (Heckbert 1982) that splits the box whose colours are
+// furthest apart, where they part best, written anew: gifenc's own quantiser comes from a GPL line,
+// so only the idea of counting colours in coarse boxes was taken.
+//
+// One colour table serves every frame (a colour never flickers between frames) and there is no
+// dithering (drawings are mostly flat colours, and dither dots would boil from frame to frame).
+
+const BINS = 1 << 15; // 32 × 32 × 32 boxes of colour
+const keyOf = (r, g, b) => ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+/** On see-through paper a pixel at least this opaque is drawn; anything fainter stays clear. */
+const SOLID = 128;
+
+/**
+ * GIF delays (hundredths of a second) for frames held `holds` ticks each at `fps`: rounded where the
+ * time has got to, so the whole keeps its pace (12 a second: 8, 9, 8, … and 100 in a second). Never
+ * under 2: browsers slow anything shorter down to a tenth of a second.
+ */
+function gifDelays(holds, fps) {
+  const out = [];
+  let ticks = 0;
+  let said = 0;
+  for (const n of holds) {
+    ticks += n;
+    const d = Math.max(2, Math.round((ticks * 100) / fps) - said);
+    out.push(d);
+    said += d;
+  }
+  return out;
+}
+
+/** The colours of every frame, counted in coarse boxes (each keeps the sum of its true colours). */
+class ColourCount {
+  constructor() {
+    this.n = new Float64Array(BINS);
+    this.r = new Float64Array(BINS);
+    this.g = new Float64Array(BINS);
+    this.b = new Float64Array(BINS);
+  }
+
+  /** One frame's RGBA pixels; clear: only what is drawn (see-through paper). */
+  add(rgba, clear = false) {
+    const { n, r, g, b } = this;
+    for (let i = 0; i < rgba.length; i += 4) {
+      if (clear && rgba[i + 3] < SOLID) continue;
+      const k = keyOf(rgba[i], rgba[i + 1], rgba[i + 2]);
+      n[k]++;
+      r[k] += rgba[i];
+      g[k] += rgba[i + 1];
+      b[k] += rgba[i + 2];
+    }
+  }
+
+  /** At most `max` colours ([r, g, b]) standing for everything counted. */
+  palette(max = 256) {
+    const bins = [];
+    for (let k = 0; k < BINS; k++) {
+      const c = this.n[k];
+      if (c) bins.push({ n: c, c: [this.r[k] / c, this.g[k] / c, this.b[k] / c] });
+    }
+    if (!bins.length) return [];
+    let boxes = [boxOf(bins)];
+    while (boxes.length < max) {
+      let at = -1;
+      for (let i = 0; i < boxes.length; i++) if (boxes[i].bins.length > 1 && (at < 0 || boxes[i].err > boxes[at].err)) at = i;
+      if (at < 0 || boxes[at].err <= 0) break;
+      const [a, b] = split(boxes[at]);
+      boxes.splice(at, 1, a, b);
+    }
+    return boxes.map((box) => box.mean.map((v) => Math.min(255, Math.max(0, Math.round(v)))));
+  }
+}
+
+/** A box of bins: its pixel count, mean colour and squared error (how far apart its colours are). */
+function boxOf(bins) {
+  let n = 0;
+  const s = [0, 0, 0];
+  const q = [0, 0, 0];
+  for (const bin of bins) {
+    n += bin.n;
+    for (let ch = 0; ch < 3; ch++) {
+      s[ch] += bin.n * bin.c[ch];
+      q[ch] += bin.n * bin.c[ch] * bin.c[ch];
+    }
+  }
+  let err = 0;
+  for (let ch = 0; ch < 3; ch++) err += q[ch] - (s[ch] * s[ch]) / n;
+  return { bins, n, mean: s.map((v) => v / n), err };
+}
+
+/** The box cut in two along the channel and at the place that leaves the least error on both sides. */
+function split(box) {
+  let best = null;
+  for (let ch = 0; ch < 3; ch++) {
+    const sorted = box.bins.slice().sort((x, y) => x.c[ch] - y.c[ch]);
+    // Running totals from the left, so each place's two errors come in one step.
+    const total = boxSums(sorted);
+    const left = { n: 0, s: [0, 0, 0], q: [0, 0, 0] };
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const bin = sorted[i];
+      left.n += bin.n;
+      for (let c = 0; c < 3; c++) {
+        left.s[c] += bin.n * bin.c[c];
+        left.q[c] += bin.n * bin.c[c] * bin.c[c];
+      }
+      if (sorted[i + 1].c[ch] === bin.c[ch]) continue; // cut only between different colours
+      const rn = total.n - left.n;
+      let err = 0;
+      for (let c = 0; c < 3; c++) {
+        err += left.q[c] - (left.s[c] * left.s[c]) / left.n;
+        const rs = total.s[c] - left.s[c];
+        err += total.q[c] - left.q[c] - (rs * rs) / rn;
+      }
+      if (!best || err < best.err) best = { err, sorted, at: i + 1 };
+    }
+  }
+  if (!best) {
+    // Every bin the same along all three channels cannot happen (bins differ), but stay safe.
+    const half = box.bins.length >> 1;
+    return [boxOf(box.bins.slice(0, half)), boxOf(box.bins.slice(half))];
+  }
+  return [boxOf(best.sorted.slice(0, best.at)), boxOf(best.sorted.slice(best.at))];
+}
+
+function boxSums(bins) {
+  const t = { n: 0, s: [0, 0, 0], q: [0, 0, 0] };
+  for (const bin of bins) {
+    t.n += bin.n;
+    for (let c = 0; c < 3; c++) {
+      t.s[c] += bin.n * bin.c[c];
+      t.q[c] += bin.n * bin.c[c] * bin.c[c];
+    }
+  }
+  return t;
+}
+
+/** A byte buffer that grows as it is written. */
+class Bytes {
+  constructor(size = 1 << 16) {
+    this.buf = new Uint8Array(size);
+    this.length = 0;
+  }
+  room(n) {
+    if (this.length + n <= this.buf.length) return;
+    let size = this.buf.length * 2;
+    while (size < this.length + n) size *= 2;
+    const next = new Uint8Array(size);
+    next.set(this.buf.subarray(0, this.length));
+    this.buf = next;
+  }
+  byte(v) {
+    this.room(1);
+    this.buf[this.length++] = v & 255;
+  }
+  u16(v) {
+    this.byte(v);
+    this.byte(v >> 8);
+  }
+  text(s) {
+    for (let i = 0; i < s.length; i++) this.byte(s.charCodeAt(i));
+  }
+  bytes(arr, n = arr.length) {
+    this.room(n);
+    this.buf.set(arr.subarray(0, n), this.length);
+    this.length += n;
+  }
+  done() {
+    return this.buf.slice(0, this.length);
+  }
+}
+
+/**
+ * Writes an animated GIF frame by frame (so a long flipbook never sits in memory whole): the colour
+ * table first (from a ColourCount of every frame), then each frame as it is painted.
+ */
+class GifWriter {
+  /** palette: up to 256 colours (255 on see-through paper); loop: play for ever, else once. */
+  constructor({ width, height, palette, loop = true, clear = false }) {
+    this.w = width;
+    this.h = height;
+    this.clear = clear;
+    const colours = palette.slice(0, clear ? 255 : 256);
+    if (!colours.length && !clear) colours.push([255, 255, 255]);
+    this.colours = colours;
+    this.see = clear ? colours.length : -1; // the see-through index
+    const count = colours.length + (clear ? 1 : 0);
+    this.bits = Math.max(1, Math.ceil(Math.log2(count)));
+    this.lookup = new Int16Array(BINS).fill(-1);
+    this.table = new Int32Array(1 << 20); // (prefix << 8 | index) → code, for the current generation
+    this.gen = 0;
+    this.screen = null; // what a viewer shows now (palette indices), on solid paper
+    this.pending = null; // the last frame, kept until the next one differs (then its time is known)
+    const out = (this.out = new Bytes());
+    out.text("GIF89a");
+    out.u16(width);
+    out.u16(height);
+    out.byte(0x80 | ((this.bits - 1) << 4) | (this.bits - 1)); // a global table of 2^bits colours
+    out.byte(0); // background
+    out.byte(0); // square pixels
+    for (let i = 0; i < 1 << this.bits; i++) {
+      const c = colours[i] || [0, 0, 0];
+      out.byte(c[0]);
+      out.byte(c[1]);
+      out.byte(c[2]);
+    }
+    if (loop) {
+      out.byte(0x21);
+      out.byte(0xff);
+      out.byte(11);
+      out.text("NETSCAPE2.0");
+      out.byte(3);
+      out.byte(1);
+      out.u16(0); // for ever
+      out.byte(0);
+    }
+  }
+
+  /** Palette indices for a frame's RGBA pixels: the nearest colour, looked up once per box of colour. */
+  indicesOf(rgba) {
+    const n = this.w * this.h;
+    const out = new Uint8Array(n);
+    const { lookup, colours, see } = this;
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      if (see >= 0 && rgba[p + 3] < SOLID) {
+        out[i] = see;
+        continue;
+      }
+      const k = keyOf(rgba[p], rgba[p + 1], rgba[p + 2]);
+      let at = lookup[k];
+      if (at < 0) at = lookup[k] = nearest(colours, rgba[p], rgba[p + 1], rgba[p + 2]);
+      out[i] = at;
+    }
+    return out;
+  }
+
+  /** The next frame (RGBA, width × height) shown for `delay` hundredths of a second. */
+  frame(rgba, delay) {
+    const idx = this.indicesOf(rgba);
+    if (this.pending && same(idx, this.pending.idx)) {
+      this.pending.delay += delay;
+      return;
+    }
+    this.flush();
+    this.pending = { idx, delay };
+  }
+
+  flush() {
+    if (!this.pending) return;
+    const { idx, delay } = this.pending;
+    this.pending = null;
+    const { w, h, out } = this;
+    // The part to write: on solid paper what differs from the screen (the rest stays, disposal 1);
+    // on see-through paper what is drawn (the frame is cleared after it is shown, disposal 2).
+    let x0 = w;
+    let y0 = h;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const v = idx[row + x];
+        const keep = this.clear ? v === this.see : this.screen !== null && this.screen[row + x] === v;
+        if (keep) continue;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        y1 = y;
+      }
+    }
+    if (x1 < 0) {
+      x0 = y0 = x1 = y1 = 0; // nothing drawn at all: one clear pixel
+    }
+    const rw = x1 - x0 + 1;
+    const rh = y1 - y0 + 1;
+    out.byte(0x21);
+    out.byte(0xf9);
+    out.byte(4);
+    out.byte(((this.clear ? 2 : 1) << 2) | (this.clear ? 1 : 0));
+    out.u16(delay);
+    out.byte(this.clear ? this.see : 0);
+    out.byte(0);
+    out.byte(0x2c);
+    out.u16(x0);
+    out.u16(y0);
+    out.u16(rw);
+    out.u16(rh);
+    out.byte(0); // the global table, not interlaced
+    const part = new Uint8Array(rw * rh);
+    for (let y = 0; y < rh; y++) part.set(idx.subarray((y0 + y) * w + x0, (y0 + y) * w + x0 + rw), y * rw);
+    this.lzw(part);
+    if (!this.clear) this.screen = idx;
+  }
+
+  /**
+   * The indices as GIF LZW codes in sub-blocks of at most 255 bytes: codes grow from one bit more than
+   * the colours need to 12 bits, and when 4096 codes are used the table starts again with a clear code.
+   */
+  lzw(indices) {
+    const out = this.out;
+    const min = Math.max(2, this.bits);
+    const clear = 1 << min;
+    const end = clear + 1;
+    const table = this.table;
+    let size = min + 1;
+    let next = end + 1;
+    let base = ++this.gen << 12; // entries of an older generation read as empty
+    let acc = 0;
+    let have = 0;
+    const block = new Uint8Array(255);
+    let fill = 0;
+    const put = (code) => {
+      acc |= code << have;
+      have += size;
+      while (have >= 8) {
+        block[fill++] = acc & 255;
+        acc >>>= 8;
+        have -= 8;
+        if (fill === 255) {
+          out.byte(255);
+          out.bytes(block, 255);
+          fill = 0;
+        }
+      }
+    };
+    out.byte(min);
+    put(clear);
+    let prefix = indices[0];
+    for (let i = 1; i < indices.length; i++) {
+      const c = indices[i];
+      const key = (prefix << 8) | c;
+      const v = table[key];
+      if (v >= base) {
+        prefix = v - base;
+        continue;
+      }
+      put(prefix);
+      if (next >= 1 << size && size < 12) size++;
+      if (next < 4096) {
+        table[key] = base + next++;
+      } else {
+        put(clear);
+        base = ++this.gen << 12;
+        next = end + 1;
+        size = min + 1;
+      }
+      prefix = c;
+    }
+    put(prefix);
+    if (next >= 1 << size && size < 12) size++;
+    put(end);
+    if (have > 0) {
+      block[fill++] = acc & 255;
+      if (fill === 255) {
+        out.byte(255);
+        out.bytes(block, 255);
+        fill = 0;
+      }
+    }
+    if (fill) {
+      out.byte(fill);
+      out.bytes(block, fill);
+    }
+    out.byte(0);
+  }
+
+  /** The whole file. */
+  finish() {
+    this.flush();
+    this.out.byte(0x3b);
+    return this.out.done();
+  }
+}
+
+/** The palette colour nearest a pixel's own colour (the first one met in its box stands for the box). */
+function nearest(colours, r, g, b) {
+  let at = 0;
+  let best = Infinity;
+  for (let i = 0; i < colours.length; i++) {
+    const c = colours[i];
+    const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
+    if (d < best) {
+      best = d;
+      at = i;
+    }
+  }
+  return at;
+}
+
+function same(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/** A whole GIF from frames in memory ({ rgba, delay }): for short ones and for tests. */
+function gifBytes({ width, height, frames, loop = true, clear = false }) {
+  const count = new ColourCount();
+  for (const f of frames) count.add(f.rgba, clear);
+  const writer = new GifWriter({ width, height, palette: count.palette(clear ? 255 : 256), loop, clear });
+  for (const f of frames) writer.frame(f.rgba, f.delay);
+  return writer.finish();
+}
+
+return { gifDelays, ColourCount, GifWriter, gifBytes };
+})();
 __m["src/ui/anim-room.js"] = (() => {
 // 애니메이션 방: a flipbook drawn together. From the reference study (specs/2026-11-20-reference-study.md
 // §3): FlipaClip's strip of frames along the bottom; onion skin (the frame before faintly in red, the
@@ -28362,6 +29074,7 @@ const { PAGE_W, PAGE_H } = __m["src/ui/draw-room.js"];
 const { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } = __m["src/core/anim.js"];
 const { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } = __m["src/core/ink.js"];
 const { PAPERS } = __m["src/core/draw.js"];
+const { ColourCount, GifWriter, gifDelays } = __m["src/core/gif.js"];
 const { UndoStack } = __m["src/core/undo.js"];
 const { getSettings, setSetting, roomEntry } = __m["src/identity.js"];
 const { buzz } = __m["src/ui/chime.js"];
@@ -28375,6 +29088,9 @@ const MAX_PIXELS = 3.2e6;
 // frame as it is drawn, played, shown small and saved.
 const BG = "bg";
 const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
+// A GIF this wide: plenty for a chat (it shows a few hundred points wide there) and a small file.
+const GIF_W = 480;
+const canRecord = () => typeof HTMLCanvasElement !== "undefined" && typeof HTMLCanvasElement.prototype.captureStream === "function" && typeof window.MediaRecorder === "function";
 
 function mountAnimRoom(body, app, session) {
   const root = app.root;
@@ -28468,10 +29184,11 @@ function mountAnimRoom(body, app, session) {
   }, "양파");
   // 빠르기 and what happens at the end share one chip and one small menu (Procreate keeps them in its
   // Animation Assist settings), so the bar fits a 360-wide phone; the paper is held in the 배경 cell,
-  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 영상으로 저장 as the
-  // other drawing rooms save.
+  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 저장 gives GIF (a chat
+  // plays it by itself, over and over) or 영상, as FlipaClip and Procreate export both.
   const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", "aria-haspopup": "menu", title: "재생: 빠르기와 끝나면", onclick: () => playMenu() });
-  const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
+  const saveButton = iconButton("anim-save", "save", "저장: GIF나 영상으로", () => saveMenu(), "저장");
+  saveButton.setAttribute("aria-haspopup", "menu");
   const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, saveButton);
   // The frames and what plays them are one thing at the room's foot, as Procreate's Animation Assist
   // and Dreams keep the timeline as one band under the canvas: one glass, the frames above their
@@ -28499,15 +29216,14 @@ function mountAnimRoom(body, app, session) {
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx(),
       restyle: () => ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }),
-      pieces: "creative-anim", drop: (x, y) => dropFill(x, y) });
+      pieces: "creative-anim", drop: (x, y) => dropTarget(x, y) });
   }
 
   /** 컬러드롭: the colour let go on the page fills there, on the frame being drawn (as 채우기 does). */
-  function dropFill(x, y) {
+  function dropTarget(x, y) {
     const r = page.getBoundingClientRect();
-    if (readOnly() || !current || playing || x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
-    ink.fillAt({ clientX: x, clientY: y });
-    return true;
+    if (readOnly() || !current || playing || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    return ink;
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------
@@ -28755,23 +29471,75 @@ function mountAnimRoom(body, app, session) {
     }
   }
 
-  /** A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). */
+  /**
+   * A tap goes to the frame; held, its menu: 길게, 복제, 앞으로·뒤로, 지우기 (배경's: 종이). A frame held and
+   * then dragged along the strip goes where it is let go instead (FlipaClip and Procreate Dreams move a
+   * frame so): a mark shows the place between the frames, the strip scrolls at its ends, and the move
+   * is one step back for 되돌리기, for everyone.
+   */
   function wireCell(cell, id, hold = () => frameMenu(cell, id)) {
     let timer = 0;
     let held = false;
-    cell.addEventListener("pointerdown", () => {
+    let lift = null; // { pointer, x, y, moved, to }
+    let press = null;
+    const movable = id !== BG;
+    cell.addEventListener("pointerdown", (e) => {
       held = false;
       clearTimeout(timer);
+      lift = null;
+      const start = { pointer: e.pointerId, x: e.clientX, y: e.clientY };
+      press = start;
       timer = setTimeout(() => {
         held = true;
         buzz(app, 8);
-        hold();
+        if (!movable || readOnly()) return void hold();
+        // Held: it may yet be dragged (then it moves) or let go where it is (then its menu).
+        lift = { ...start, moved: false, to: null };
+        cell.classList.add("lifting");
+        try { cell.setPointerCapture(start.pointer); } catch { /* fine */ }
       }, 480);
     });
-    const off = () => clearTimeout(timer);
-    cell.addEventListener("pointerup", off);
-    cell.addEventListener("pointercancel", off);
-    cell.addEventListener("pointerleave", off);
+    cell.addEventListener("pointermove", (e) => {
+      if (!lift || e.pointerId !== lift.pointer) {
+        // Moved before the hold (a scroll of the strip): no hold.
+        if (!held && press && e.pointerId === press.pointer && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) clearTimeout(timer);
+        return;
+      }
+      if (!lift.moved && Math.hypot(e.clientX - lift.x, e.clientY - lift.y) < 8) return;
+      lift.moved = true;
+      cell.style.translate = `${e.clientX - lift.x}px 0`;
+      // Near the strip's ends it scrolls, so a frame goes anywhere in a long flipbook.
+      const box = strip.getBoundingClientRect();
+      if (e.clientX < box.left + 28) strip.scrollLeft -= 10;
+      else if (e.clientX > box.right - 28) strip.scrollLeft += 10;
+      lift.to = dropIndex(e.clientX);
+      showDrop(lift.to);
+    });
+    const end = (e) => {
+      clearTimeout(timer);
+      if (!lift || (e && e.pointerId !== lift.pointer)) return;
+      const was = lift;
+      lift = null;
+      cell.classList.remove("lifting");
+      cell.style.translate = "";
+      strip.querySelector(".anim-drop")?.remove();
+      if (!was.moved) return void hold();
+      if (e?.type !== "pointerup" || was.to == null) return;
+      const list = doc.frames();
+      const from = list.findIndex((f) => f.id === id);
+      // The place among the others: before the frame at `to` (counted with this one taken out).
+      const to = was.to > from ? was.to - 1 : was.to;
+      if (from >= 0 && to !== from) {
+        apply(moveFrameOps(session.clock, doc, id, to - from));
+        buzz(app, 8);
+      }
+    };
+    cell.addEventListener("pointerup", end);
+    cell.addEventListener("pointercancel", end);
+    cell.addEventListener("lostpointercapture", (e) => { if (lift) end(e); });
+    cell.addEventListener("pointerleave", () => { if (!lift && !held) clearTimeout(timer); });
+    // Held, the finger moves the frame, not the strip.
+    cell.addEventListener("touchmove", (e) => { if (lift) e.preventDefault(); }, { passive: false });
     cell.addEventListener("contextmenu", (e) => e.preventDefault());
     cell.addEventListener("click", () => {
       if (held) return;
@@ -28782,6 +29550,27 @@ function mountAnimRoom(body, app, session) {
         flashHint("배경은 모든 장 밑에 깔려요 · 꾹 누르면 종이");
       }
     });
+  }
+
+  /** Where among the frames a frame dragged to x would go: the index of the frame it would stand before. */
+  function dropIndex(x) {
+    const list = doc.frames();
+    for (let i = 0; i < list.length; i++) {
+      const c = cells.get(list[i].id)?.cell;
+      if (!c || c.classList.contains("lifting")) continue;
+      const r = c.getBoundingClientRect();
+      if (x < r.left + r.width / 2) return i;
+    }
+    return list.length;
+  }
+  /** A thin mark of my colour between the frames where the dragged one would go. */
+  function showDrop(index) {
+    const list = doc.frames();
+    let mark = strip.querySelector(".anim-drop");
+    if (!mark) mark = h("span", { class: "anim-drop", "aria-hidden": "true" });
+    const before = list[index] ? cells.get(list[index].id)?.cell : addButton.isConnected ? addButton : null;
+    if (before) strip.insertBefore(mark, before);
+    else strip.append(mark);
   }
 
   let closeMenu = null;
@@ -28914,6 +29703,118 @@ function mountAnimRoom(body, app, session) {
     openMenu(speedChip, menu);
   }
 
+  /** 저장: GIF or 영상 from one small menu; where a video cannot be made, the GIF straight away. */
+  function saveMenu() {
+    if (menuFor === saveButton) return void closeMenu?.();
+    if (saving) return;
+    if (!canRecord()) return void saveGif();
+    const clear = !paperColour(doc.settings().paper);
+    const menu = h("div", { class: "anim-menu", id: "anim-save-menu", role: "menu" },
+      h("div", { class: "anim-menu-row", role: "group", "aria-label": "저장" },
+        h("span", { class: "anim-menu-label", text: "저장" }),
+        h("button", { class: "chip", type: "button", id: "anim-save-gif", text: "GIF", title: clear ? "움짤로: 투명한 종이는 투명하게" : "움짤로: 대화창에서 저절로 돌아요", onclick: () => { close(); saveGif(); } }),
+        h("button", { class: "chip", type: "button", id: "anim-save-video", text: "영상", title: "영상 파일로", onclick: () => { close(); saveVideo(); } })));
+    const close = openMenu(saveButton, menu);
+  }
+
+  const fileName = () => String(session.room.meta("name") || "플립북").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+
+  /** The file handed to the browser to keep (on a phone, in its downloads). */
+  function handOver(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = h("a", { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+  }
+
+  /**
+   * GIF로 저장: once through as it plays (back and forth once for 왕복), at its own speed and holds;
+   * 반복·왕복 go round for ever, 한 번 plays once. On 투명 paper what is not drawn stays see-through, a
+   * sticker in a chat. Two goes over the frames: their colours (one table for all, so no colour
+   * flickers), then each frame written, a rest between frames so the screen never stalls.
+   */
+  async function saveGif() {
+    if (saving) return;
+    const pass = onePass(doc);
+    if (!pass.length) return;
+    saving = true;
+    if (playing) stopPlay();
+    const runs = [];
+    for (const id of pass) {
+      const last = runs[runs.length - 1];
+      if (last?.id === id) last.n++;
+      else runs.push({ id, n: 1 });
+    }
+    const { fps, loop, paper } = doc.settings();
+    const fill = paperColour(paper);
+    const W = GIF_W;
+    const H = Math.round((W * PAGE_H) / PAGE_W);
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const g = canvas.getContext("2d", { willReadFrequently: true });
+    const picture = (id) => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.clearRect(0, 0, W, H);
+      if (fill) {
+        g.fillStyle = fill;
+        g.fillRect(0, 0, W, H);
+      }
+      paintWhole(g, id, W, H);
+      return g.getImageData(0, 0, W, H).data;
+    };
+    const ids = [...new Set(pass)];
+    const steps = ids.length + runs.length;
+    let done = 0;
+    saveButton.disabled = true;
+    saveButton.dataset.cap = "GIF 0%";
+    const rest = async () => {
+      done++;
+      saveButton.dataset.cap = `GIF ${Math.round((done / steps) * 100)}%`;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return alive;
+    };
+    const end = () => {
+      saving = false;
+      if (!alive) return;
+      saveButton.disabled = false;
+      saveButton.dataset.cap = "저장";
+    };
+    let bytes = null;
+    try {
+      await Promise.all([...ids, BG].map((id) => session.load(frameDocOf(id))));
+      const count = new ColourCount();
+      for (const id of ids) {
+        count.add(picture(id), !fill);
+        if (!(await rest())) return end(); // left the room part way: no half a picture
+      }
+      const writer = new GifWriter({ width: W, height: H, palette: count.palette(fill ? 256 : 255), loop: loop !== "once", clear: !fill });
+      const delays = gifDelays(runs.map((r) => r.n), fps);
+      for (let i = 0; i < runs.length; i++) {
+        writer.frame(picture(runs[i].id), delays[i]);
+        if (!(await rest())) return end();
+      }
+      bytes = writer.finish();
+    } catch {
+      end();
+      return void toast(root, "GIF를 만들지 못했어요");
+    }
+    end();
+    const name = fileName();
+    const file = new File([bytes], `${name}.gif`, { type: "image/gif" });
+    toolbar.dataset.gif = String(file.size);
+    handOver(file, file.name);
+    // 보내기: the phone's share sheet (a chat app, a friend) with the GIF, from a tap of its own.
+    let canSend = false;
+    try {
+      canSend = !!navigator.canShare?.({ files: [file] });
+    } catch {}
+    toast(root, "GIF로 저장했어요", 2600, canSend ? { label: "보내기", run: () => navigator.share({ files: [file], title: name }).catch(() => {}) } : null);
+  }
+
   /**
    * 영상으로 저장 (FlipaClip's MP4): the flipbook once through at its own speed (back and forth once for
    * 왕복), each frame on its paper with the background beneath, recorded from a canvas.
@@ -28981,13 +29882,7 @@ function mountAnimRoom(body, app, session) {
     saveButton.dataset.cap = "저장";
     const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
     toolbar.dataset.saved = String(blob.size);
-    const url = URL.createObjectURL(blob);
-    const title = session.room.meta("name") || "플립북";
-    const a = h("a", { href: url, download: `${title}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    handOver(blob, `${fileName()}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}`);
     toast(root, "영상으로 저장했어요");
   }
 
@@ -31110,6 +32005,13 @@ const GESTURES = [
     ["두 손가락 꾹", "스포이트 (두 손가락 사이 색 고르기)"],
     ["선을 긋고 잠깐 멈추기", "모양 잡기 (직선·원·네모…)"],
     ["두 손가락 벌리기·오므리기", "확대·축소"],
+    ["색 버튼 꾹 들어 종이에 놓기", "그 자리 채우기 (그림·애니메이션)"],
+    ["놓기 전에 멈추고 좌우로 (채우기 붓은 누른 채)", "채우는 정도"],
+  ]],
+  ["애니메이션", [
+    ["장 꾹 들어 끌기", "장 순서 바꾸기"],
+    ["장 꾹 하고 그대로 떼기", "길게·복제·지우기"],
+    ["배경 칸 꾹", "종이 고르기"],
   ]],
   ["노래 방", [
     ["두 손가락 가로·세로", "시간·줄 높이 확대"],
