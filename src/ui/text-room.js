@@ -82,7 +82,7 @@ export function mountTextRoom(body, app, session) {
     const made = attachOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, data: photo.data, w: photo.w, h: photo.h, by: session.memberId });
     session.commit(target.editor.doc, made.ops);
     record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
-    toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 1초 꾹 누르면 나와요", 3600);
+    toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 꾹 누르면 나와요", 3600);
   });
   const stopPhotoWatch = watchPickers([photoInput], () => toast(app.root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200));
   const readOnlyNow = () => !!session.transport.readOnly;
@@ -672,7 +672,7 @@ export function mountTextRoom(body, app, session) {
     closeSound?.();
     closeSound = openSheet(app.root, "글자에 녹음 숨기기", (panel, close, onClose) => {
       const ways = h("div", { class: "form", id: "text-sound" },
-        h("p", { class: "help", text: "녹음이 고른 글자 속에 숨어요. 반짝이는 글자를 1초 꾹 누르면 들려요. 1분까지 돼요." }),
+        h("p", { class: "help", text: "녹음이 고른 글자 속에 숨어요. 반짝이는 글자를 꾹 누르면 들려요. 1분까지 돼요." }),
         ...waysIn({ app, roomId: session.roomId, root: app.root, name: "text", prefix: "text-", mic, canRecord: !readOnlyNow(), onRecord: () => recordInto(target, ways, close) }));
       panel.append(ways);
       onClose(() => {
@@ -743,7 +743,7 @@ export function mountTextRoom(body, app, session) {
     const made = attachSoundOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, file: file.id, dur: (kept.length / SOUND_RATE) * 1000, by: session.memberId });
     session.commit(target.editor.doc, made.ops);
     record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
-    toast(app.root, "녹음을 숨겼어요. 반짝이는 글자를 1초 꾹 누르면 들려요", 3600);
+    toast(app.root, "녹음을 숨겼어요. 반짝이는 글자를 꾹 누르면 들려요", 3600);
   }
 
   /** Puts text at the end of today's sheet, as its own line (레퍼런스 → 이 방에 붙이기). */

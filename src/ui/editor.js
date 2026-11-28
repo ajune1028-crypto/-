@@ -17,8 +17,10 @@ import { getSettings } from "../identity.js";
 
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 24;
-// Holding a sparkling word this long brings out the photo or the recording hidden in it.
-const REVEAL_MS = 1000;
+// Holding a sparkling word this long brings out the photo or the recording hidden in it (the owner, 28
+// November: 2 s, then "1초", then "0.6초나 그렇게"; the touch is ours from its start, so the phone's own
+// half-second long press never comes between).
+const REVEAL_MS = 600;
 const HOLD_SLOP_PX = 10;
 
 /** The nearest box around el that scrolls up and down (or the page). */
@@ -84,7 +86,7 @@ export class SheetEditor {
     // who wrote them and when is the first line of the row under them (text-room.js). A touch on
     // locked words says who locked them.
     //
-    // A sparkling word, held 1 second, brings out its photo or its recording (the owner, 28 November:
+    // A sparkling word, held 0.6 second, brings out its photo or its recording (the owner, 28 November:
     // "1초간 누르고 있으면… 여러 개랑 겹쳐서 안 나온다는 거였어"). A finger on it is ours from the start:
     // otherwise the phone's own long press (half a second) chose the word, put its copy menu there and
     // took the finger, and the hold never came to its end. So on it a tap puts the caret where it

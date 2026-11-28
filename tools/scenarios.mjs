@@ -2440,7 +2440,7 @@ scenario("text room: today's sheet runs to the bottom of the screen, and a tap l
   await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄 이어서"`);
 });
 
-scenario("text room: a photo hidden in words sparkles; held 1 second it grows out of the word (not before, nothing chosen meanwhile), for the friend too; drawn down it follows the finger, closed it goes back into the word; a tap puts the caret there; it can be taken out", async ({ open, out, fixtures }) => {
+scenario("text room: a photo hidden in words sparkles; held 0.6 second it grows out of the word (not before, nothing chosen meanwhile), for the friend too; drawn down it follows the finger, closed it goes back into the word; a tap puts the caret there; it can be taken out", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("우리 바다 갔던 날");
@@ -2462,8 +2462,8 @@ scenario("text room: a photo hidden in words sparkles; held 1 second it grows ou
   // The owner (28 November): "1초간 누르고 있으면… 여러 개랑 겹쳐서 안 나온다는 거였어". Not at 0.6 s; at
   // 1 s it comes out, and nothing of the phone's (choosing the word) comes between.
   await b.front();
-  await hold(b, 600);
-  assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 1 second");
+  await hold(b, 300);
+  assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 0.6 second");
   assert.equal(await b.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return ta.selectionEnd - ta.selectionStart; })()`), 0, "a hold on it chooses nothing");
   // It comes out of the word (the owner: "그 사진은 어떤 식으로 나올지"): frame by frame from the word's
   // place and size to the middle, large.
@@ -2524,7 +2524,7 @@ scenario("text room: a photo hidden in words sparkles; held 1 second it grows ou
   await b.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`, 8000);
 });
 
-scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠금; a highlight and a lock reach the friend, who cannot change locked words; a recording hidden in words sparkles and a 1-second hold plays it in a round player", async ({ open, out, fixtures }) => {
+scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠금; a highlight and a lock reach the friend, who cannot change locked words; a recording hidden in words sparkles and a 0.6-second hold plays it in a round player", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("바다에 갔어 노을이 예뻤어");
@@ -8748,44 +8748,52 @@ scenario("song ● with the phone's recorder app: held, ● asks how to record; 
   await page.waitFor(`window.__app.store.get("settings", {}).recordWith === "app" && !!document.getElementById("record")`, 3000);
 });
 
-// The owner (26 November): "주변에 같은 색이 있다면 일정 부분이 거기도 약간 투명하게… 어딜 감싸고 있다고 인식되면
-// 그 안 전체까지 다 투명화… 목적이 잘 보이라고… 지금 너무 가까이만 되고 있다". Drawing by a bar: my colour's
-// drawing near the pen shows through the glass over it, and a line closed round something shows all of
-// its inside; when the pen lifts, it goes again gently.
-scenario("엑스레이 wider: a line closed round a spot under the tool bar shows that inside through the bar; my colour's drawing near the pen shows through too; it goes when the pen lifts", async ({ open, out }) => {
+// The owner (28 November, four photos of a whiteboard drawn on in white: "드러워지고… 깜빡임이 그 소리야..
+// 그림 그리기에서… 얼룩이 왜 생기냐면 내가 그렸던 그 색깔 비슷한 것들이 거기에도 지워지거나 남아 있어서…
+// 인식이 제대로 안 된 거지… 안 보이게 하는 범위도 약간 줄여 주고"): drawing by a bar opens only a small
+// round window round the pen; lines of the same colour under the bar never spot it; no glass ever takes a
+// mask picture (changing it made the whole glass blink); the window closes when the pen lifts.
+scenario("엑스레이 only round the pen: a small round window opens where the pen comes near the tool bar and nothing else; a ring of the same colour half under the bar spots nothing; no glass takes a mask picture; it closes when the pen lifts", async ({ open, out }) => {
   const page = await open({ width: 390, height: 844 });
   await createBoard(page);
   await click(page, "#board-pen");
-  const bar = await page.eval(`(() => { const t = document.querySelector(".room .toolbar").getBoundingClientRect(); return { cx: t.left + t.width / 2, top: t.top, bottom: t.bottom, h: t.height }; })()`);
-  // A ring round a spot that is half under the bar: it starts above the bar and comes back to its start.
+  // Every change to the glass while drawing: none may be a mask picture.
+  await page.eval(`(() => { window.__masks = 0; const mo = new MutationObserver((list) => { for (const m of list) { const el = m.target; if (el.classList?.contains("xray-map") || /--xr-map|url\\(/.test(el.getAttribute?.("style") || "")) window.__masks++; } }); mo.observe(document.querySelector(".room"), { subtree: true, attributes: true, attributeFilter: ["class", "style"] }); return true; })()`);
+  const bar = await page.eval(`(() => { const t = document.querySelector(".room .toolbar").getBoundingClientRect(); return { cx: t.left + t.width / 2, top: t.top }; })()`);
+  // A ring round a spot half under the bar, in the pen's colour (it used to spot the bar).
   const cx = bar.cx;
   const cy = bar.top;
   const R = 70;
   const at = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)];
   let pt = at(-Math.PI / 2);
+  let look = null;
   await page.stylus("down", pt[0], pt[1]);
   for (let i = 1; i <= 40; i++) {
     pt = at(-Math.PI / 2 + (i / 40) * 2 * Math.PI * 0.99);
     await page.stylus("move", pt[0], pt[1]);
     await pause(12);
+    // At the ring's foot the pen is on the bar: its own small window, a gradient (no picture), 3.2rem round.
+    if (i === 20) look = await page.eval(`(() => { const el = document.querySelector(".room .toolbar"); const cs = getComputedStyle(el); return { on: el.classList.contains("xray"), mask: cs.maskImage || cs.webkitMaskImage, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) }; })()`);
   }
-  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map") && /url\\(/.test(document.querySelector(".room .toolbar").style.getPropertyValue("--xr-map"))`, 3000);
-  const mask = await page.eval(`(() => { const el = document.querySelector(".room .toolbar"); const cs = getComputedStyle(el); return cs.maskImage || cs.webkitMaskImage; })()`);
-  assert.ok(/url\(/.test(mask), "the bar is masked by what shows through: " + mask.slice(0, 80));
+  assert.ok(look.on && /radial-gradient/.test(look.mask) && !/url\(/.test(look.mask), "the pen's window only: " + look.mask.slice(0, 90));
+  // The window's size as the browser keeps it ("circle 51.2px" or "circle 3.2rem").
+  const size = /radial-gradient\((?:circle )?([\d.]+)(px|rem)/.exec(look.mask);
+  const r = size ? Number(size[1]) * (size[2] === "rem" ? look.rem : 1) : NaN;
+  assert.ok(r > 0 && r <= 3.25 * look.rem, "a small window: " + r + "px in " + look.mask.slice(0, 60));
   await page.front();
-  await page.shot(out("xray-wide-loop.png"));
+  await page.shot(out("xray-pen-only.png"));
   await page.stylus("up", pt[0], pt[1]);
-  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
-  // My colour's drawing near the pen: a new line beside the ring under the bar opens the bar there too.
-  const near = [cx + R + 20, bar.top - 30];
-  await page.stylus("down", near[0], near[1]);
-  for (let i = 1; i <= 6; i++) {
-    await page.stylus("move", near[0] - i * 4, near[1] + i * 3);
-    await pause(30);
+  await page.waitFor(`!document.querySelector(".xray")`, 1000);
+  // A line beside the ring but further from the bar than the window's reach: the bar stays whole.
+  const far = [cx + R + 30, bar.top - 90];
+  await page.stylus("down", far[0], far[1]);
+  for (let i = 1; i <= 8; i++) {
+    await page.stylus("move", far[0] - i * 4, far[1] + i * 2);
+    await pause(20);
   }
-  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map")`, 3000);
-  await page.stylus("up", near[0] - 24, near[1] + 18);
-  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
+  assert.equal(await page.eval(`document.querySelectorAll(".xray").length`), 0, "away from the bar, no glass opens");
+  await page.stylus("up", far[0] - 32, far[1] + 16);
+  assert.equal(await page.eval(`window.__masks`), 0, "no glass ever took a mask picture");
 });
 
 // The owner (26 November): "다른 진짜 녹음 어플로 들어가서 녹음, 거기도 저장되고 여기로 또 옮겨지고". On a public
@@ -9056,60 +9064,6 @@ scenario("그리던 중 크기를 바꾸면: a finger on the size bar while the 
   await a.waitFor(`${strokes}.length === 0`, 2000);
 });
 
-// The owner (27 November): "색 같거나 비슷한 게 테두리 쳐져 있다면 그 안에까지… 안까지 꽉 채워서 UI 안 보이게는
-// 하지 말고… 테두리의 선부터 중간 부분까지 그라데이션으로… 가운데가 좀 비어 있어야… 지금 칠하고 있는 것이 기준".
-// A shape drawn before, in the colour being painted, round a stretch of the tool bar: drawing near it,
-// the bar shows through most just inside the shape's line and not at all in its middle.
-scenario("엑스레이 inside a shape: a shape drawn before in the painted colour lets the bar over its inside show through most by its line and not in its middle, while a line is drawn near it", async ({ open, out }) => {
-  const page = await open({ width: 390, height: 844 });
-  await createBoard(page);
-  await click(page, "#board-pen");
-  const bar = await page.eval(`(() => { const t = document.querySelector(".room .toolbar").getBoundingClientRect(); return { left: t.left, right: t.right, top: t.top, bottom: t.bottom }; })()`);
-  // A box round the bar's middle, from above the bar to just below it (kept on the screen).
-  const L = bar.left + 8, R = bar.right - 8, T = bar.top - 40, B = Math.min(838, bar.bottom + 8);
-  const path = [[L, T], [R, T], [R, B], [L, B], [L, T + 2]];
-  await page.stylus("down", ...path[0]);
-  for (let k = 1; k < path.length; k++) {
-    for (let i = 1; i <= 10; i++) {
-      await page.stylus("move", path[k - 1][0] + ((path[k][0] - path[k - 1][0]) * i) / 10, path[k - 1][1] + ((path[k][1] - path[k - 1][1]) * i) / 10);
-      await pause(8);
-    }
-  }
-  await page.stylus("up", ...path.at(-1));
-  await page.waitFor(`window.__app.session.doc("k:board").strokes().length === 1 && !document.querySelector(".xray-map")`, 3000);
-  // A line drawn near it, above the bar, in the same colour.
-  const cx = (L + R) / 2;
-  await page.stylus("down", cx - 40, T - 60);
-  for (let i = 1; i <= 6; i++) {
-    await page.stylus("move", cx - 40 + i * 12, T - 60 + i * 2);
-    await pause(30);
-  }
-  await page.waitFor(`document.querySelector(".room .toolbar").classList.contains("xray-map")`, 3000);
-  await pause(450);
-  const seen = await page.eval(`(async () => {
-    const el = document.querySelector(".room .toolbar");
-    const r = el.getBoundingClientRect();
-    const url = el.style.getPropertyValue("--xr-map").trim().replace(/^url\\(["']?/, "").replace(/["']?\\)$/, "");
-    const [px, py] = el.style.getPropertyValue("--xr-pos").trim().split(/\\s+/).map(parseFloat);
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const c = document.createElement("canvas");
-    c.width = img.width;
-    c.height = img.height;
-    const g = c.getContext("2d");
-    g.drawImage(img, 0, 0);
-    const at = (x, y) => g.getImageData(Math.floor((x - r.left - px) / 8), Math.floor((y - r.top - py) / 8), 1, 1).data[3] / 255;
-    const y = r.top + r.height * 0.3;
-    return { edge: at(${L} + 14, y), middle: at(${cx}, y) };
-  })()`);
-  assert.ok(seen.edge < 0.75, "just inside the shape's line the bar shows through: " + JSON.stringify(seen));
-  assert.ok(seen.middle > 0.85 && seen.middle - seen.edge > 0.3, "toward the middle of the shape the bar stays (a gradient from its line): " + JSON.stringify(seen));
-  await page.front();
-  await page.shot(out("xray-inside-shape.png"));
-  await page.stylus("up", cx + 32, T - 48);
-  await page.waitFor(`!document.querySelector(".xray-map")`, 2000);
-});
 
 // The owner (27 November): "애니메이션 방 ui겹친다". On phones the drawing rail stood in the middle of the
 // whole screen and its foot lay over the strip's ‹ (a tap meant for ‹ pressed the rail, so the frame
