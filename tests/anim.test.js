@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock } from "../src/core/crdt.js";
-import { AnimDoc, addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, timeline, frameAt, FPS_CHOICES, MAX_FRAMES, MAX_HOLD } from "../src/core/anim.js";
+import { AnimDoc, addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, timeline, frameAt, FPS_CHOICES, MAX_FRAMES, MAX_HOLD, tickAtMs, msAtTick, tickOfFrame, passMs } from "../src/core/anim.js";
 import { shuffle, rng } from "./helpers.js";
 
 const apply = (doc, made) => { for (const op of made.ops) doc.apply(op); return made; };
@@ -110,4 +110,27 @@ test("a flipbook's paper is one of the 그림 방's, set for everyone (later win
   assert.deepEqual(onePass(doc), [a.id, b.id, b.id, c.id], "once through, each as long as it is held");
   put(setAnimOps(clock, doc, { loop: "pingpong" }));
   assert.deepEqual(onePass(doc), [a.id, b.id, b.id, c.id, b.id, b.id], "왕복: there and back to before the first");
+});
+
+// 소리 붙이기 (specs/2026-11-28-anim-sound-design.md): a sound stands at a time in ms; the frames are
+// ticks at so many a second. Changing the speed moves the frames against the sound, not the sound.
+test("time and frames: a tick begins at its time and a time falls in its tick; a frame's first tick; one pass in ms", () => {
+  assert.equal(msAtTick(3, 12), 250);
+  assert.equal(tickAtMs(249, 12), 2);
+  assert.equal(tickAtMs(250, 12), 3);
+  assert.equal(tickAtMs(-40, 12), 0, "before the start is the start");
+  assert.equal(msAtTick(1, 24), 42, "whole ms");
+  for (const fps of FPS_CHOICES) for (let t = 0; t < 200; t++) assert.equal(tickAtMs(msAtTick(t, fps), fps), t, `a tick's own (rounded) time is that tick: ${t} at ${fps}`);
+  const doc = new AnimDoc();
+  const clock = new Clock("a");
+  const a = apply(doc, addFrameOps(clock, doc, { by: "m" }));
+  const b = apply(doc, addFrameOps(clock, doc, { by: "m" }));
+  const c = apply(doc, addFrameOps(clock, doc, { by: "m" }));
+  apply(doc, setFrameOps(clock, doc, b.id, { hold: 3 }));
+  apply(doc, setFrameOps(clock, doc, c.id, { hold: 2 }));
+  assert.deepEqual([a.id, b.id, c.id].map((id) => tickOfFrame(doc, id)), [0, 1, 4]);
+  assert.equal(tickOfFrame(doc, "nope"), -1);
+  assert.equal(passMs(doc), 500, "six ticks at 12 a second");
+  apply(doc, setAnimOps(clock, doc, { fps: 6 }));
+  assert.equal(passMs(doc), 1000, "slower, the same frames take longer");
 });

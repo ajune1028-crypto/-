@@ -233,6 +233,35 @@ export function onePass(doc) {
   return [...line, ...line.slice(1, -1).reverse()];
 }
 
+/**
+ * 소리 붙이기 (specs/2026-11-28-anim-sound-design.md): a sound stands at a time in ms and the frames are
+ * ticks at so many a second. The tick showing at a time (a time within half a ms of a tick's start, as
+ * msAtTick rounds it, is that tick)…
+ */
+export function tickAtMs(ms, fps) {
+  return Math.max(0, Math.floor(((Math.max(0, ms) + 0.5) * fps) / 1000));
+}
+
+/** …and when a tick begins, in whole ms. */
+export function msAtTick(tick, fps) {
+  return Math.round((Math.max(0, tick) * 1000) / fps);
+}
+
+/** A frame's first tick on the timeline, or -1 when it is not there. */
+export function tickOfFrame(doc, frameId) {
+  let t = 0;
+  for (const f of doc.frames()) {
+    if (f.id === frameId) return t;
+    t += f.hold;
+  }
+  return -1;
+}
+
+/** How long the frames take once through, in ms (where a sound longer than them is no longer seen). */
+export function passMs(doc) {
+  return msAtTick(timeline(doc).length, doc.settings().fps);
+}
+
 /** The frame shown at a tick, as the animation plays (looping, back and forth, or once). */
 export function frameAt(doc, tick) {
   const line = timeline(doc);

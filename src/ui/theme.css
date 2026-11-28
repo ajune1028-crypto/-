@@ -2169,6 +2169,20 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 .anim-record { position: fixed; left: -10000px; top: 0; pointer-events: none; }
 .anim-strip { display: flex; align-items: flex-end; gap: 0.35rem; width: min(100% - 1rem, 40rem); margin: 0 auto 0.3rem; padding: 0.35rem 0.45rem; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border: 1px solid var(--glass-edge); border-radius: 1rem; background: var(--glass-bg), color-mix(in srgb, var(--paper) 62%, transparent); box-shadow: var(--glass-shine), var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .anim-strip::-webkit-scrollbar { display: none; }
+/* 소리 줄: the sounds under the frames they play with (FlipaClip's sound track), scrolling with them. */
+.anim-strip { position: relative; }
+.anim-strip.with-sound, .anim-dock > .anim-strip.with-sound { padding-bottom: calc(0.45rem + var(--sound-rows, 1) * 1.15rem); }
+.anim-sound { position: absolute; left: 0; bottom: 0.3rem; height: calc(var(--sound-rows, 1) * 1.15rem); pointer-events: none; }
+.anim-strip:not(.with-sound) .anim-sound { display: none; }
+.anim-clip { position: absolute; top: calc(var(--row, 0) * 1.15rem); height: 1rem; min-width: 6px; padding: 0 0.15rem; border: 0; border-radius: 0.4rem; overflow: hidden; pointer-events: auto; touch-action: manipulation; -webkit-touch-callout: none; user-select: none; color: var(--c, var(--tint));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c, var(--tint)) 30%, transparent) var(--shown, 100%), color-mix(in srgb, var(--c, var(--tint)) 9%, transparent) var(--shown, 100%)); }
+/* Longer than the frames: it fades out at their end (more is there); after them all: a faint chip. */
+.anim-clip.longer { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 1.2rem), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 1.2rem), transparent); }
+.anim-clip.after { opacity: 0.55; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--c, var(--tint)) 35%, transparent) 0 3px, transparent 3px 6px); }
+.anim-clip.playing { box-shadow: 0 0 0.6rem color-mix(in srgb, var(--c, var(--tint)) 60%, transparent); }
+.anim-clip.lifting { z-index: 3; box-shadow: 0 4px 12px color-mix(in srgb, var(--c, var(--tint)) 45%, transparent); }
+.anim-wave { display: block; width: 100%; height: 100%; }
+.anim-wave path { fill: currentColor; opacity: 0.85; }
 .anim-frame { position: relative; flex: none; display: grid; place-items: center; width: calc(2.6rem + (var(--hold, 1) - 1) * 1.1rem); height: 3.5rem; padding: 0.15rem; border: 1.5px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 0.6rem; background: var(--paper-c, #fffdf8); touch-action: manipulation; }
 .anim-strip[data-paper="clear"] .anim-frame { background: repeating-conic-gradient(#dfe1e6 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px; }
 .anim-frame .anim-thumb { width: 2.1rem; height: 2.8rem; pointer-events: none; }

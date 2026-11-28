@@ -16,7 +16,10 @@ import { watchFingerTaps, toggleBare } from "./fingers.js";
 import { pageStage } from "./page-stage.js";
 import { releasePieces } from "./ink-pieces.js";
 import { PAGE_W, PAGE_H } from "./draw-room.js";
-import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
+import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, tickOfFrame, tickAtMs, msAtTick, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
+import { invertSongOps } from "../core/song.js";
+import { audioContext } from "../audio/engine.js";
+import { animSound } from "./anim-sound.js";
 import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } from "../core/ink.js";
 import { PAPERS } from "../core/draw.js";
 import { ColourCount, GifWriter, gifDelays } from "../core/gif.js";
@@ -45,6 +48,7 @@ export function mountAnimRoom(body, app, session) {
   let alive = true;
   let current = null; // the frame I draw on
   let playing = null;
+  let sound = null; // the 소리 줄 (anim-sound.js), made once the strip is
   const pen = { tool: "pen", brush: getSettings(app.store).inkBrush || "pen", color: "black", width: 2 };
   const liveInk = new LiveInk(session);
   const onionOn = () => getSettings(app.store).animOnion !== false;
@@ -265,10 +269,18 @@ export function mountAnimRoom(body, app, session) {
 
   // ---- ▶ ----------------------------------------------------------------------------------------
 
-  function startPlay() {
-    if (!timeline(doc).length) return;
+  /**
+   * ▶ from the frame being drawn (FlipaClip plays from where you are), round again from the start; the
+   * sounds go with the frames, from the start each time they go round (in 왕복 only on the way there).
+   */
+  function startPlay(fromTick = null) {
+    const n = timeline(doc).length;
+    if (!n) return;
     ink.cancelTouch();
-    playing = { start: performance.now(), shown: null, raf: 0 };
+    const here = current && current !== BG ? Math.max(0, tickOfFrame(doc, current)) : 0;
+    const from = fromTick ?? (here < n ? here : 0);
+    playing = { start: performance.now(), from, shown: null, raf: 0, round: 0, there: true };
+    sound?.play(msAtTick(from, doc.settings().fps));
     show.hidden = false;
     inkHost.style.visibility = "hidden";
     fitCanvas(show);
@@ -279,8 +291,19 @@ export function mountAnimRoom(body, app, session) {
     const loop = (now) => {
       if (!playing || !alive) return;
       const { fps, loop: way } = doc.settings();
-      const tick = Math.floor(((now - playing.start) / 1000) * fps);
-      if (way === "once" && tick >= timeline(doc).length) return stopPlay();
+      const tick = playing.from + Math.floor(((now - playing.start) / 1000) * fps);
+      const len = timeline(doc).length;
+      if (way === "once" && tick >= len) return stopPlay();
+      const period = way === "pingpong" && len > 2 ? 2 * len - 2 : len;
+      const round = Math.floor(tick / period);
+      if (round !== playing.round) {
+        playing.round = round;
+        playing.there = true;
+        sound?.play(0);
+      } else if (playing.there && tick % period >= len) {
+        playing.there = false;
+        sound?.stop();
+      }
       const id = frameAt(doc, tick);
       if (id && id !== playing.shown) {
         const g = show.getContext("2d");
@@ -302,6 +325,7 @@ export function mountAnimRoom(body, app, session) {
     if (!playing) return;
     cancelAnimationFrame(playing.raf);
     playing = null;
+    sound?.stop();
     show.hidden = true;
     delete show.dataset.frame;
     inkHost.style.visibility = "";
@@ -408,6 +432,7 @@ export function mountAnimRoom(body, app, session) {
     if (!readOnly()) strip.append(addButton, copyButton);
     else { addButton.remove(); copyButton.remove(); }
     addButton.disabled = copyButton.disabled = list.length >= MAX_FRAMES;
+    sound?.draw();
     const on = cells.get(current)?.cell;
     if (on) {
       const r = on.getBoundingClientRect();
@@ -657,7 +682,7 @@ export function mountAnimRoom(body, app, session) {
     const menu = h("div", { class: "anim-menu", id: "anim-save-menu", role: "menu" },
       h("div", { class: "anim-menu-row", role: "group", "aria-label": "저장" },
         h("span", { class: "anim-menu-label", text: "저장" }),
-        h("button", { class: "chip", type: "button", id: "anim-save-gif", text: "GIF", title: clear ? "움짤로: 투명한 종이는 투명하게" : "움짤로: 대화창에서 저절로 돌아요", onclick: () => { close(); saveGif(); } }),
+        h("button", { class: "chip", type: "button", id: "anim-save-gif", text: sound?.has() ? "GIF · 소리 없이" : "GIF", title: clear ? "움짤로: 투명한 종이는 투명하게" : "움짤로: 대화창에서 저절로 돌아요", onclick: () => { close(); saveGif(); } }),
         h("button", { class: "chip", type: "button", id: "anim-save-video", text: "영상", title: "영상 파일로", onclick: () => { close(); saveVideo(); } })));
     const close = openMenu(saveButton, menu);
   }
@@ -793,8 +818,17 @@ export function mountAnimRoom(body, app, session) {
     const { fps } = doc.settings();
     const type = ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
     let rec;
+    let heard = null;
     try {
-      rec = new MediaRecorder(canvas.captureStream(fps), type ? { mimeType: type } : {});
+      // With sounds under the frames, the video takes them too (the sounds played into the recording).
+      const tracks = [...canvas.captureStream(fps).getVideoTracks()];
+      if (sound?.has()) {
+        const ctx = await audioContext();
+        heard = ctx ? ctx.createMediaStreamDestination() : null;
+        if (heard) tracks.push(...heard.stream.getAudioTracks());
+      }
+      rec = new MediaRecorder(new MediaStream(tracks), type ? { mimeType: type } : {});
+      toolbar.dataset.tracks = tracks.map((t) => t.kind).join(",");
     } catch {
       canvas.remove();
       saving = false;
@@ -806,6 +840,7 @@ export function mountAnimRoom(body, app, session) {
     saveButton.disabled = true;
     saveButton.dataset.cap = "저장 중…";
     rec.start(250);
+    if (heard) sound.playInto(0, heard);
     const start = performance.now();
     let shown = 0;
     await new Promise((resolve) => {
@@ -820,6 +855,7 @@ export function mountAnimRoom(body, app, session) {
     });
     setTimeout(() => rec.state !== "inactive" && rec.stop(), 1000 / fps + 150);
     await stopped;
+    if (heard) sound?.stop();
     canvas.remove();
     saving = false;
     if (!alive) return; // left the room part way: no half a video
@@ -858,11 +894,13 @@ export function mountAnimRoom(body, app, session) {
     }
     for (const [name, list] of byDoc) {
       if (name === "anim") session.commit("anim", invertAnimOps(doc, session.clock, list, dir));
+      else if (name === "song") session.commit("song", invertSongOps(session.doc("song"), session.clock, list, dir));
       else session.commit(name, invertInkOps(session.doc(name), session.clock, list, dir));
     }
     record([]);
     if (current !== BG && (!doc.frame(current) || doc.frame(current).removed)) select(doc.frames()[0]?.id);
     drawStrip();
+    sound?.draw();
     ink.render();
     paintOnion();
     paintBack();
@@ -888,6 +926,9 @@ export function mountAnimRoom(body, app, session) {
         drawTools();
         paintOnion();
         paintPaper();
+      } else if (name === "song") {
+        sound?.draw();
+        sound?.shareMine();
       } else if (name === frameDocOf(BG)) {
         // The background is under every frame: all of them change.
         for (const id of [BG, ...doc.frames().map((f) => f.id)]) thumbSoon(id);
@@ -925,6 +966,17 @@ export function mountAnimRoom(body, app, session) {
     drawTools();
     view.fit();
   });
+  sound = animSound({
+    app, session, root, anim: doc, strip,
+    cellOf: (id) => cells.get(id)?.cell || null,
+    tickNow: () => (current && current !== BG ? tickOfFrame(doc, current) : 0),
+    colorOf: (by) => { const m = session.room.member(by); return m ? personColor(m, currentTheme()) : "var(--tint)"; },
+    readOnly, alive: () => alive, openMenu, record,
+    // 여기서 녹음: the frames play from the frame being drawn while I speak or sing.
+    onPlayWith: (ms) => { stopPlay(); startPlay(tickAtMs(ms, doc.settings().fps)); },
+    onStopWith: () => stopPlay(),
+  });
+  session.load("song").then(() => { if (alive) { sound.draw(); sound.shareMine(); } });
   setTool(pen.tool);
   drawTools();
   drawStrip();
@@ -932,16 +984,23 @@ export function mountAnimRoom(body, app, session) {
   return {
     /** 비서's 바구니: drawings (from any room, a whiteboard's too) land on the frame being drawn. */
     takes(item) {
+      if (sound.takes(item)) return true;
       return !readOnly() && !!current && ((item.kind === "ink" && !!item.strokes?.length) || (item.kind === "board-items" && !!item.strokes?.length));
     },
     put(item) {
+      if (item.kind === "song-clip") return void sound.put(item);
       if (!current) return;
       setTool("lasso");
       landInk(inkKit, item.kind === "ink" ? item.strokes : boardStrokesCarried(item.strokes));
     },
+    /** 비서's 녹음 → 여기에 놓기: under the frame being drawn. */
+    insertSound(memo) {
+      sound.insertSound(memo);
+    },
     close() {
       alive = false;
       stopPlay();
+      sound.close();
       closeMenu?.();
       lasso?.hide();
       for (const off of offs) off();

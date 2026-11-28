@@ -7177,6 +7177,98 @@ scenario("애니메이션 방 저장 → GIF: each frame as drawn at the flipboo
   assert.deepEqual(await a.eval(`window.__shared[0]`), ["움짤-플립북.gif|image/gif"]);
 });
 
+// The owner (20 November): "애니메이션 방 다음: 소리 붙이기". specs/2026-11-28-anim-sound-design.md: a sound
+// under the frames it plays with (FlipaClip's sound track), the 노래 방's ways in, ▶ with it, in the video.
+scenario("애니메이션 방 소리 줄: a sound put in from a file stands under the frame being drawn, in my colour; ▶ plays it with the frames; held and moved it goes to another frame's start; a tap gives 듣기·지우기; a friend sees it; 여기서 녹음 records while the frames play; the video takes the sound, the GIF says it has none", async ({ open, out, fixtures }) => {
+  const a = await open({ dev: "a", width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "소리 플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && ${q("#anim-sound-add")}`);
+  assert.equal(await a.eval(`document.getElementById("anim-strip").classList.contains("with-sound")`), false, "no sound, no lane: only the small + 소리");
+  // Six frames, the third one chosen: the sound goes there.
+  for (let i = 0; i < 4; i++) await click(a, "#anim-add");
+  await a.waitFor(`window.__app.session.doc("anim").frames().length === 6`);
+  const frames = await a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  await click(a, `.anim-frame[data-frame="${frames[2]}"]`);
+  await a.waitFor(`${q(`.anim-frame[data-frame="${frames[2]}"]`)}.classList.contains("on")`);
+  await click(a, "#anim-sound-add");
+  await a.waitFor(q("#anim-sound-ways"), 3000);
+  await a.shot(out("anim-sound-ways.png"));
+  await a.setFiles("#anim-sound-file", [fixtures.doremi]);
+  await a.waitFor(`document.querySelectorAll("#anim-sound .anim-clip").length === 1`, 20000);
+  const song = `window.__app.session.doc("song")`;
+  assert.equal(await a.eval(`${song}.clips()[0].start`), 167, "at the third frame: two ticks at 12 a second");
+  assert.ok(await a.eval(`document.getElementById("anim-strip").classList.contains("with-sound")`));
+  // Under the third frame (its left edge lines up with that frame's).
+  const lineUp = await a.eval(`(() => { const c = document.querySelector("#anim-sound .anim-clip").getBoundingClientRect(); const f = document.querySelector('.anim-frame[data-frame="${frames[2]}"]').getBoundingClientRect(); return Math.abs(c.left - f.left); })()`);
+  assert.ok(lineUp <= 2, "under the frame it starts with: " + lineUp);
+  await a.shot(out("anim-sound-lane.png"));
+  // ▶: the frames play and the sound sounds (its clip lights while it plays).
+  await click(a, "#anim-play");
+  await a.waitFor(`${q("#anim-sound .anim-clip")}.classList.contains("playing")`, 4000);
+  await click(a, "#anim-play");
+  await a.waitFor(`!${q("#anim-sound .anim-clip")}.classList.contains("playing")`, 2000);
+  // Held and moved to the right: it goes to a later frame's start, one step back for 되돌리기.
+  // On its part in view (the strip's start keeps ‹ 1/6 › over whatever scrolls under it).
+  const clip = await a.eval(`(() => { const r = document.querySelector("#anim-sound .anim-clip").getBoundingClientRect(); const n = document.getElementById("anim-nav").getBoundingClientRect(); return [Math.max(r.left, n.right) + 8, r.top + r.height / 2]; })()`);
+  const step = await a.eval(`(() => { const a = document.querySelector('.anim-frame[data-frame="${frames[2]}"]').getBoundingClientRect(); const b = document.querySelector('.anim-frame[data-frame="${frames[4]}"]').getBoundingClientRect(); return b.left - a.left; })()`);
+  await a.front();
+  await a.touch("start", [clip]);
+  await pause(560);
+  for (let k = 1; k <= 8; k++) await a.touch("move", [[clip[0] + (step * k) / 8, clip[1]]]);
+  await a.touch("end");
+  await a.waitFor(`${song}.clips()[0].start === 333`, 3000);
+  await click(a, "#anim-undo");
+  await a.waitFor(`${song}.clips()[0].start === 167`, 3000);
+  // A tap: its menu (듣기, 피아노로, 지우기).
+  await pause(300);
+  await click(a, "#anim-sound .anim-clip");
+  await a.waitFor(q("#anim-sound-menu #anim-sound-hear") + " && " + q("#anim-sound-menu #anim-sound-remove"), 2000);
+  await a.shot(out("anim-sound-menu.png"));
+  await click(a, "#anim-sound-hear");
+  await a.waitFor(`${q("#anim-sound .anim-clip")}.classList.contains("playing")`, 4000);
+  // The friend sees the sound under the same frame.
+  const id = await a.eval(`location.hash.slice(3)`);
+  const b = await open({ dev: "b", hash: "r-" + id, width: 390, height: 844 });
+  await joinNew(b, { name: "나래" });
+  await b.waitFor(`document.querySelectorAll("#anim-sound .anim-clip").length === 1`, 8000);
+  // 여기서 녹음: the frames play from the frame being drawn while I sing (the fake microphone); the
+  // take goes under that frame, on a row of its own where the first sound already is.
+  await a.front(); // the friend's screen came in front; a screen behind draws no frames
+  await click(a, "#anim-prev"); // from the third frame to the second (‹ stands over the strip's start)
+  await a.waitFor(`${q(`.anim-frame[data-frame="${frames[1]}"]`)}.classList.contains("on")`, 2000);
+  await click(a, "#anim-sound-add");
+  await a.waitFor(q("#anim-sound-record"), 3000);
+  await click(a, "#anim-sound-record");
+  await a.waitFor(`${q("#anim-rec-stop")} && !!document.getElementById("anim-show")?.dataset.frame`, 6000);
+  await pause(1500);
+  await click(a, "#anim-rec-stop");
+  await a.waitFor(`${song}.clips().length === 2`, 20000);
+  const took = await a.eval(`${song}.clips().map((c) => c.start).sort((x, y) => x - y)`);
+  assert.ok(took[0] <= 83 && took[0] >= 0, "the take starts at the second frame (pulled back by the way in): " + took);
+  assert.equal(await a.eval(`!!document.getElementById("anim-show")?.dataset.frame`), false, "the frames stop with the take");
+  // 저장: the GIF says it has no sound; the video takes the sounds.
+  await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-gif"), 2000);
+  assert.match(await a.eval(`document.getElementById("anim-save-gif").textContent`), /소리 없이/);
+  await click(a, "#anim-save-video");
+  await a.waitFor(`Number(${q("#anim-tools")}.dataset.saved || 0) > 0`, 20000);
+  assert.equal(await a.eval(`${q("#anim-tools")}.dataset.tracks`), "video,audio", "the video has the sound");
+  // 지우기, and back with 되돌리기.
+  await click(a, "#anim-sound .anim-clip");
+  await a.waitFor(q("#anim-sound-remove"), 2000);
+  await click(a, "#anim-sound-remove");
+  await a.waitFor(`${song}.clips().length === 1 && document.querySelectorAll("#anim-sound .anim-clip").length === 1`, 3000);
+  await click(a, "#anim-undo");
+  await a.waitFor(`${song}.clips().length === 2 && document.querySelectorAll("#anim-sound .anim-clip").length === 2`, 3000);
+  await a.shot(out("anim-sound-two.png"));
+});
+
 scenario("애니메이션 방: two frames to start; the onion skin shows the frame before; 복제 copies a frame; ×3 holds it; ▶ plays the frames in turn; the friend sees the frames and where each one is", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 420, height: 880 });
   await click(a, "#add-creative");
@@ -8726,7 +8818,7 @@ scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing r
   await click(page, '[data-settings-part="gestures"]');
   await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
   const text = await page.eval(`document.getElementById("gestures").textContent`);
-  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기", "막대 끝 손잡이 꾹"]) assert.ok(text.includes(words), "it tells: " + words);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기", "막대 끝 손잡이 꾹", "소리 꾹 들어 끌기"]) assert.ok(text.includes(words), "it tells: " + words);
   await page.front();
   await page.shot(out("settings-gestures.png"));
   await page.key("Escape");
