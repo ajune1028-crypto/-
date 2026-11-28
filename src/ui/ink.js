@@ -33,6 +33,17 @@ const STEADY_PX = [0, 6, 14, 26];
 export const STEADY_NAMES = ["끔", "약", "중", "강"];
 /** How long a line is held still before it becomes a shape. */
 const SHAPE_HOLD_MS = 600;
+/** 채우는 정도: how long a fill is held still before its amount shows, and how much a pixel slid changes it. */
+const FILL_HOLD_MS = 450;
+const TOL_PER_PX = 0.85; // 255 × 1% / 3 px
+/** How alike a colour must be (0..255 a channel) to be filled: kept on this device (drawInkTools reads it). */
+let fillTol = 48;
+let keepTol = null;
+const clampTol = (v) => Math.max(0, Math.min(255, Math.round(Number(v)))) || 0;
+function setFillTol(v) {
+  fillTol = clampTol(v);
+  keepTol?.(fillTol);
+}
 
 export function inkColor(c, fixed = false) {
   if (c === "black") return fixed ? INK.light : INK[currentTheme()];
@@ -603,6 +614,7 @@ export class InkLayer {
   cancelTouch() {
     if (!this.live || this.live.kind === "pen") return;
     clearTimeout(this.live.timer);
+    this.live.hold?.end(false);
     if (this.live.pts && this.live.brush !== "erase") this.share?.end("ink", null);
     if (this.live.light && this.light) {
       this.light.ended = performance.now();
@@ -647,8 +659,12 @@ export class InkLayer {
         this.share?.grow("laser", this.light.pts);
         this.renderSoon();
       } else if (this.tool === "pen" && this.brush === "fill") {
-        // 채우기: a tap, not a line.
-        this.fillAt(e);
+        // 채우기: a tap fills where it is let go; held still, 채우는 정도 first (slide right for more,
+        // left for less), as the colour dropped from the bar does.
+        const live = (this.live = { pointer: e.pointerId, kind: e.pointerType, fill: [e.clientX, e.clientY], hold: null });
+        live.timer = setTimeout(() => {
+          if (this.live === live && !live.moved) live.hold = holdFill(this, live.fill[0], live.fill[1]);
+        }, FILL_HOLD_MS);
       } else {
         const first = this.point(e);
         const brush = this.tool === "eraser" ? "erase" : this.brush;
@@ -672,6 +688,11 @@ export class InkLayer {
       this.xrayAt(e.clientX, e.clientY);
       if (this.live.erase) return void this.eraseAt(e);
       const live = this.live;
+      if (live.fill) {
+        if (live.hold) live.hold.move(e.clientX);
+        else if (Math.hypot(e.clientX - live.fill[0], e.clientY - live.fill[1]) > 10) live.moved = true;
+        return;
+      }
       if (live.moving) {
         const [x, y] = this.point(e);
         this.shift = { dx: x - live.x0, dy: y - live.y0, ids: this.selection.ids };
@@ -712,6 +733,13 @@ export class InkLayer {
       if (!this.live || e.pointerId !== this.live.pointer) return;
       this.xrayEnd();
       const live = this.live;
+      if (live.fill) {
+        this.live = null;
+        clearTimeout(live.timer);
+        if (live.hold) live.hold.end(e.type === "pointerup");
+        else if (e.type === "pointerup") this.fillAt({ clientX: live.fill[0], clientY: live.fill[1] });
+        return;
+      }
       if (live.moving) {
         this.live = null;
         const { dx, dy } = this.shift || { dx: 0, dy: 0 };
@@ -783,18 +811,11 @@ export class InkLayer {
    * layers above or below), grown a little under the soft edges of its lines, kept as a shape (its
    * edge and its holes) in my colour. Too thin a sliver to see is not kept.
    */
-  fillAt(e) {
-    if (!this.kept) this.render();
-    const kept = this.kept;
-    if (!kept?.canvas || !kept.t) return;
-    const c = kept.canvas;
-    const box = this.canvas.getBoundingClientRect();
-    if (!box.width || !box.height) return;
-    const sx = c.width / box.width;
-    const sy = c.height / box.height;
-    const g = c.getContext("2d", { willReadFrequently: true });
-    const img = g.getImageData(0, 0, c.width, c.height);
-    const mask = fillMask(img.data, c.width, c.height, (e.clientX - box.left) * sx, (e.clientY - box.top) * sy, { tolerance: 48, grow: Math.max(1, Math.round(sx)) });
+  fillAt(e, tolerance = fillTol) {
+    const region = this.fillRegion(e.clientX, e.clientY, tolerance);
+    this.endFillPreview();
+    if (!region) return;
+    const { mask, c, sx, kept } = region;
     let eps = 0.75 * sx;
     let rings = maskRings(mask, c.width, c.height).map((r) => simplifyRing(r, eps));
     // A stroke holds at most 3000 points: a very ragged region is simplified more.
@@ -807,6 +828,73 @@ export class InkLayer {
     if (pts.length < 9) return;
     this.onStroke({ pts, color: this.color, width: this.width, brush: "fill", shape: true, opacity: this.opacity < 1 ? this.opacity : undefined, inside: !!this.inside() });
     this.render();
+  }
+
+  /**
+   * The region a fill at a point of the screen takes with this tolerance: { mask, c (the picture's
+   * canvas), sx, kept }, or null. The picture is read once while a fill is held in one place.
+   */
+  fillRegion(x, y, tolerance) {
+    if (!this.kept) this.render();
+    const kept = this.kept;
+    if (!kept?.canvas || !kept.t) return null;
+    const c = kept.canvas;
+    let src = this.fillSrc;
+    if (!src || src.kept !== kept || src.w !== c.width || src.h !== c.height) {
+      const box = this.canvas.getBoundingClientRect();
+      if (!box.width || !box.height) return null;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      src = this.fillSrc = { kept, w: c.width, h: c.height, box, sx: c.width / box.width, sy: c.height / box.height, data: g.getImageData(0, 0, c.width, c.height).data };
+    }
+    const mask = fillMask(src.data, c.width, c.height, (x - src.box.left) * src.sx, (y - src.box.top) * src.sy, { tolerance: clampTol(tolerance), grow: Math.max(1, Math.round(src.sx)) });
+    return { mask, c, sx: src.sx, kept };
+  }
+
+  /**
+   * 채우는 정도: what a fill at this point would take, shown on this layer in the colour (over this
+   * layer, under the layers above it: as it will look). Returns how many pixels it takes.
+   */
+  fillPreview(x, y, tolerance) {
+    const region = this.fillRegion(x, y, tolerance);
+    if (!region) return 0;
+    const { mask, c } = region;
+    let o = this.fillShow;
+    if (!o) {
+      o = this.fillShow = h("canvas", { class: "fill-preview", "aria-hidden": "true" });
+      this.canvas.after(o);
+    }
+    Object.assign(o.style, { left: this.canvas.offsetLeft + "px", top: this.canvas.offsetTop + "px", width: this.canvas.offsetWidth + "px", height: this.canvas.offsetHeight + "px" });
+    if (o.width !== c.width || o.height !== c.height) {
+      o.width = c.width;
+      o.height = c.height;
+      this.fillImg = null;
+    }
+    const g = o.getContext("2d");
+    if (!g) return 0;
+    const img = this.fillImg || (this.fillImg = g.createImageData(c.width, c.height));
+    const [r, gr, b] = rgbOfCss(inkColor(this.color, this.fixedInk));
+    const a = Math.round(235 * this.opacity);
+    const d = img.data;
+    let n = 0;
+    for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
+      if (mask[i]) {
+        d[p] = r;
+        d[p + 1] = gr;
+        d[p + 2] = b;
+        d[p + 3] = a;
+        n++;
+      } else d[p + 3] = 0;
+    }
+    g.putImageData(img, 0, 0);
+    o.dataset.filled = String(n);
+    return n;
+  }
+
+  endFillPreview() {
+    this.fillShow?.remove();
+    this.fillShow = null;
+    this.fillImg = null;
+    this.fillSrc = null;
   }
 
   /** The point of an event, a finger's pressure read from its speed. */
@@ -1466,6 +1554,9 @@ function brushPreview(brush, color, width) {
 export function drawInkTools(panel, { pen, setTool, store, layout = "rail", units = null, lasso = false, fixedInk: fixed = false, restyle = null, pieces = null, drop = null }) {
   // In 그림 방 and 애니메이션 방 black is shown as the black it draws (it never turns with 어둡게).
   const shown = (c) => inkColor(c, fixed);
+  // 채우는 정도, the same in every room's 채우기 and 컬러드롭: as this device last set it.
+  fillTol = clampTol(getSettings(store).fillTol ?? 48);
+  keepTol = (v) => setSetting(store, "fillTol", v);
   const drawn = (c) => (fixed ? fixedInk(c) : c);
   panel.hidden = !pen.tool;
   for (const el of railParts(panel)) el.hidden = !pen.tool;
@@ -1863,10 +1954,81 @@ function holdToSet(button, act, ms = 450) {
   button.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
+/** A colour as [r, g, b] (a "#rrggbb", or anything a canvas understands). */
+function rgbOfCss(css) {
+  let hex = /^#[0-9a-f]{6}$/i.test(css) ? css : null;
+  if (!hex) {
+    const g = document.createElement("canvas").getContext("2d");
+    if (g) {
+      g.fillStyle = "#000000";
+      g.fillStyle = css;
+      hex = g.fillStyle;
+    }
+  }
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
+}
+
+/** The bar at the top while a fill is held: 채우는 정도 and how much, in my colour. */
+function showFillAmount(tol) {
+  let bar = document.getElementById("fill-amount");
+  if (!bar) {
+    bar = h("div", { class: "fill-amount", id: "fill-amount", role: "status" },
+      h("span", { class: "fill-amount-name", text: "채우는 정도" }),
+      h("span", { class: "fill-amount-track", "aria-hidden": "true" }, h("span", { class: "fill-amount-level" })),
+      h("b", { class: "fill-amount-num" }));
+    document.body.append(bar);
+  }
+  const pct = Math.round((tol / 255) * 100);
+  bar.style.setProperty("--k", String(tol / 255));
+  bar.dataset.amount = String(pct);
+  bar.querySelector(".fill-amount-num").textContent = pct + "%";
+}
+
+/**
+ * 채우는 정도 (Procreate's ColorDrop Threshold): a fill held where it lands. What it would take shows
+ * on the layer in the colour and a bar at the top says how much; the finger slid right takes in more
+ * alike colours, left fewer; let go, it is filled there, and the amount is kept for the next fill.
+ */
+function holdFill(layer, x, y) {
+  const from = fillTol;
+  let tol = from;
+  let frame = 0;
+  const show = () => {
+    frame = 0;
+    showFillAmount(tol);
+    layer.fillPreview(x, y, tol);
+  };
+  show();
+  try { navigator.vibrate?.(8); } catch { /* not every device buzzes */ }
+  return {
+    at: [x, y],
+    move(cx) {
+      const next = clampTol(from + (cx - x) * TOL_PER_PX);
+      if (next === tol) return;
+      tol = next;
+      if (!frame) frame = requestAnimationFrame(show);
+    },
+    /** keep: fill (the finger let go); else only put it away. True when it filled. */
+    end(keep) {
+      cancelAnimationFrame(frame);
+      document.getElementById("fill-amount")?.remove();
+      if (!keep) {
+        layer.endFillPreview();
+        return false;
+      }
+      setFillTol(tol);
+      layer.fillAt({ clientX: x, clientY: y }, tol);
+      return true;
+    },
+  };
+}
+
 /**
  * 컬러드롭: the colour button held (a moment) and dragged: a drop of the colour follows the finger, its
- * tip where it will land; let go, drop(x, y) fills there (true when it did, and a ring spreads). A
- * short tap is still the colour window; let go off the drawing, nothing happens.
+ * tip where it will land; let go, it fills there (drop(x, y) gives the layer under it, or null) and a
+ * ring spreads. Held still on the drawing first, 채우는 정도 (holdFill). A short tap is still the
+ * colour window; let go off the drawing, nothing happens.
  */
 function wireColorDrop(btn, colourOf, drop) {
   let g = null;
@@ -1892,18 +2054,40 @@ function wireColorDrop(btn, colourOf, drop) {
       }
       return;
     }
+    if (g.hold) return void g.hold.move(e.clientX);
     g.bead.style.left = e.clientX + "px";
     g.bead.style.top = e.clientY + "px";
+    // Held still on the drawing: 채우는 정도 there.
+    if (g.still && Math.hypot(e.clientX - g.still[0], e.clientY - g.still[1]) <= 6) return;
+    const at = (g.still = [e.clientX, e.clientY]);
+    const mine = g;
+    clearTimeout(g.stillTimer);
+    g.stillTimer = setTimeout(() => {
+      if (g !== mine || g.hold || g.still !== at) return;
+      const layer = drop(at[0], at[1]);
+      if (!layer) return;
+      g.bead.classList.add("landed");
+      g.hold = holdFill(layer, at[0], at[1]);
+    }, FILL_HOLD_MS);
   });
   const end = (e, landed) => {
     if (!g || e.pointerId !== g.id) return;
     clearTimeout(g.timer);
-    const { bead, colour } = g;
+    clearTimeout(g.stillTimer);
+    const { bead, colour, hold } = g;
     g = null;
     if (!bead) return;
     bead.remove();
-    if (!landed || !drop(e.clientX, e.clientY)) return;
-    const ring = h("div", { class: "color-drop-ring", "aria-hidden": "true", style: { "--c": colour, left: e.clientX + "px", top: e.clientY + "px" } });
+    let at = [e.clientX, e.clientY];
+    if (hold) {
+      if (!hold.end(landed)) return;
+      at = hold.at;
+    } else {
+      const layer = landed ? drop(e.clientX, e.clientY) : null;
+      if (!layer) return;
+      layer.fillAt({ clientX: e.clientX, clientY: e.clientY });
+    }
+    const ring = h("div", { class: "color-drop-ring", "aria-hidden": "true", style: { "--c": colour, left: at[0] + "px", top: at[1] + "px" } });
     document.body.append(ring);
     setTimeout(() => ring.remove(), 600);
   };

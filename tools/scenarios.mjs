@@ -7454,6 +7454,81 @@ scenario("컬러드롭 and 빠른 굵기: the colour held and dragged into a dra
   assert.equal(last.z, Math.round(big * 10), "drawn at the size the button took: " + JSON.stringify(last));
 });
 
+// The owner (27 November): "컬러드롭… 프로크리에이트거 참고". Procreate's ColorDrop Threshold: the colour held
+// where it lands shows what it would fill and a bar at the top; slid right more, left less; let go, filled.
+scenario("컬러드롭 채우는 정도: held still where it lands, what it would fill shows and a bar at the top says how much; slid right more, left less; let go, it fills with that amount, kept for the next fill; the 채우기 brush held does the same", async ({ open, out }) => {
+  const a = await open({ width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-draw"]');
+  await fill(a, "#room-name", "채우는 정도");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#draw-page")} && window.__app.session.doc("draw").layers().length === 1`);
+  const fills = () => a.eval(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().filter((s) => (s.s || s.b) === "fill").length; })()`);
+  const box = await a.eval(`(() => { const r = document.getElementById("draw-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const cx = box.x + box.w * 0.55;
+  const cy = box.y + box.h * 0.4;
+  const rad = box.w * 0.22;
+  await a.press(cx + rad, cy);
+  for (let i = 1; i <= 40; i++) await a.moveTo(cx + rad * Math.cos((i / 40) * Math.PI * 2), cy + rad * Math.sin((i / 40) * Math.PI * 2));
+  await a.release(cx + rad, cy + 1);
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().length === 1; })()`);
+  await pickColor(a, "red");
+  await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  assert.equal(await a.eval(`window.__app.store.get("settings")?.fillTol ?? 48`), 48, "as it starts");
+  // Dragged into the ring and held still there.
+  const from = await a.eval(`(() => { const r = document.getElementById("ink-color-now").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [from]);
+  await pause(420);
+  for (let i = 1; i <= 12; i++) await a.touch("move", [[from[0] + ((cx - from[0]) * i) / 12, from[1] + ((cy - from[1]) * i) / 12]]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "19" && Number(document.querySelector("canvas.fill-preview")?.dataset.filled) > 1000`, 3000);
+  const inside = await a.eval(`Number(document.querySelector("canvas.fill-preview").dataset.filled)`);
+  assert.equal(await fills(), 0, "nothing is filled while it is held");
+  const bar = await a.eval(`(() => { const r = document.getElementById("fill-amount").getBoundingClientRect(); return { top: r.top, mid: r.left + r.width / 2 }; })()`);
+  assert.ok(bar.top < 120 && Math.abs(bar.mid - 195) < 4, "the bar at the top middle: " + JSON.stringify(bar));
+  await a.shot(out("fill-amount.png"));
+  // Slid right: more; far left: nothing but the very same colour; back a little: in between.
+  await a.touch("move", [[cx + 90, cy]]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "49"`, 2000);
+  await a.touch("move", [[cx - 200, cy]]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "0"`, 2000);
+  await a.touch("move", [[cx + 60, cy]]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "39"`, 2000);
+  assert.ok(await a.eval(`Number(document.querySelector("canvas.fill-preview").dataset.filled) >= ${inside} * 0.9`), "still the inside of the ring");
+  await a.touch("end");
+  await a.waitFor(`!document.getElementById("fill-amount") && !document.querySelector("canvas.fill-preview")`, 2000);
+  assert.equal(await fills(), 1, "let go: filled once");
+  assert.equal(await a.eval(`window.__app.store.get("settings").fillTol`), 99, "the amount is kept");
+  // The 채우기 brush: held on the page, the same bar from the kept amount; let go, filled.
+  await pickBrush(a, "fill");
+  await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  const spot = [box.x + box.w * 0.15, box.y + box.h * 0.85];
+  await a.touch("start", [spot]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "39"`, 2000);
+  await a.touch("move", [[spot[0] + 30, spot[1]]]);
+  await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "49"`, 2000);
+  await a.touch("end");
+  await a.waitFor(`!document.getElementById("fill-amount")`, 2000);
+  assert.equal(await fills(), 2, "the brush filled too");
+  assert.equal(await a.eval(`window.__app.store.get("settings").fillTol`), 125);
+  // A tap with it fills at once with the kept amount (no bar).
+  await a.touch("start", [[box.x + box.w * 0.85, box.y + box.h * 0.9]]);
+  await pause(80);
+  await a.touch("end");
+  await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().filter((s) => (s.s || s.b) === "fill").length === 3; })()`, 2000);
+  assert.equal(await a.eval(`!!document.getElementById("fill-amount")`), false);
+  // A second finger while one is held: the fill is let go (zoom comes first), nothing filled.
+  await a.touch("start", [spot]);
+  await a.waitFor(`!!document.getElementById("fill-amount")`, 2000);
+  await a.touch("move", [spot, [spot[0] + 120, spot[1] - 200]]);
+  await a.touch("end");
+  await a.waitFor(`!document.getElementById("fill-amount") && !document.querySelector("canvas.fill-preview")`, 2000);
+  assert.equal(await fills(), 3, "no fill from a pinch");
+});
+
 // The owner: "친구한테 미니게임 신청하기… 친구가 수락하면 전체가 조금 불투명하게 바뀌고 가운데 3, 2, 1…
 // 카운트가 끝났을 때 미니게임이 뜨게", "그거 끄는 기능도 홈 화면에서". From the reference study §4.
 // The owner (20 November): "인원수가 많아 질 수록 2인용 게임 말고도 다른것도… 갈틱폰의 느낌". 이어 그리기 for
@@ -8561,7 +8636,7 @@ scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing r
   await click(page, '[data-settings-part="gestures"]');
   await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
   const text = await page.eval(`document.getElementById("gestures").textContent`);
-  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹"]) assert.ok(text.includes(words), "it tells: " + words);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기"]) assert.ok(text.includes(words), "it tells: " + words);
   await page.front();
   await page.shot(out("settings-gestures.png"));
   await page.key("Escape");

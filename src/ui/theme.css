@@ -2476,6 +2476,15 @@ body img, body a, body svg, body canvas { -webkit-user-drag: none; }
 /* 컬러드롭: a drop of the colour, its tip where it lands; a ring spreads where it filled. */
 .ink-color-now { touch-action: none; -webkit-touch-callout: none; }
 .color-drop { position: fixed; z-index: 97; width: 2.2rem; height: 2.2rem; margin: -2.66rem 0 0 -1.1rem; border-radius: 50% 50% 50% 0; rotate: -45deg; background: var(--c); box-shadow: 0 0 0 2.5px #fff, 0 6px 16px rgb(0 0 0 / 0.3); pointer-events: none; }
+/* Held still where it landed, the drop gives way to what it would fill. */
+.color-drop.landed { opacity: 0; transition: opacity 0.18s var(--ease); }
+/* 채우는 정도: what the fill would take, over its layer (as it will look), and a bar at the top that
+   says how much, where gestures say their names (the finger never covers it). */
+canvas.fill-preview { position: absolute; z-index: 0; pointer-events: none; }
+.fill-amount { position: fixed; z-index: 96; top: calc(env(safe-area-inset-top) + 4.6rem); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.85rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--paper) 82%, transparent); box-shadow: var(--glass-shine), 0 6px 18px color-mix(in srgb, var(--tint) 22%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); pointer-events: none; white-space: nowrap; animation: rise 0.18s var(--ease); }
+.fill-amount-track { position: relative; width: 7.5rem; height: 0.4rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 14%, transparent); overflow: hidden; }
+.fill-amount-level { position: absolute; inset: 0 auto 0 0; width: calc(var(--k, 0.2) * 100%); border-radius: inherit; background: var(--accent-ink, var(--accent)); }
+.fill-amount-num { min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
 .color-drop-ring { position: fixed; z-index: 97; width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; border-radius: 50%; border: 3px solid var(--c); pointer-events: none; animation: drop-ring 0.55s var(--ease) forwards; }
 @keyframes drop-ring { from { scale: 0.4; opacity: 1; } to { scale: 5; opacity: 0; } }
 .ink-width { touch-action: manipulation; -webkit-touch-callout: none; }

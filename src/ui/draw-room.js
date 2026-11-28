@@ -178,18 +178,17 @@ export function mountDrawRoom(body, app, session, frame) {
     }
     drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => hosts.get(active)?.ink.unitsPerPx() || 1,
       restyle: () => { for (const { ink } of hosts.values()) ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }); },
-      pieces: "creative-draw", drop: (x, y) => dropFill(x, y) });
+      pieces: "creative-draw", drop: (x, y) => dropTarget(x, y) });
     if (!panel.hidden) drawPanel();
     layersButton.dataset.count = String(list.length);
   }
 
   /** 컬러드롭: the colour let go on the page fills there, on the layer being drawn (as 채우기 does). */
-  function dropFill(x, y) {
+  function dropTarget(x, y) {
     const r = page.getBoundingClientRect();
     const entry = hosts.get(active);
-    if (readOnly() || !entry || !doc.layer(active)?.visible || x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
-    entry.ink.fillAt({ clientX: x, clientY: y });
-    return true;
+    if (readOnly() || !entry || !doc.layer(active)?.visible || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    return entry.ink;
   }
 
   function setTool(tool) {

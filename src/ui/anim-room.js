@@ -161,15 +161,14 @@ export function mountAnimRoom(body, app, session) {
     ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null });
     drawInkTools(inkTools, { pen, setTool, store: app.store, lasso: true, fixedInk: true, units: () => ink.unitsPerPx(),
       restyle: () => ink.setStyle({ color: pen.color, width: pen.width, brush: pen.brush, size: pen.size || null }),
-      pieces: "creative-anim", drop: (x, y) => dropFill(x, y) });
+      pieces: "creative-anim", drop: (x, y) => dropTarget(x, y) });
   }
 
   /** 컬러드롭: the colour let go on the page fills there, on the frame being drawn (as 채우기 does). */
-  function dropFill(x, y) {
+  function dropTarget(x, y) {
     const r = page.getBoundingClientRect();
-    if (readOnly() || !current || playing || x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
-    ink.fillAt({ clientX: x, clientY: y });
-    return true;
+    if (readOnly() || !current || playing || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    return ink;
   }
 
   // ---- drawing a frame onto a canvas (onion skin, playing, thumbnails) --------------------------

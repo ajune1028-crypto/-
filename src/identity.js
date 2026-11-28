@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS = {
   metronome: false, snap: true, grid: 8,
   // Drawing: the brush, and whether the eraser rubs out an area or whole strokes.
   inkBrush: "pen", inkEraser: "area",
+  // 채우기 and 컬러드롭: how alike a colour must be to be filled (0..255 a channel; 채우는 정도, held and slid).
+  fillTol: 48,
   // 레퍼런스 (private notes) everywhere; off hides every way to it.
   reference: true,
 };
