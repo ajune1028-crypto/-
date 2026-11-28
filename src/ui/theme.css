@@ -673,6 +673,21 @@ a.btn { display: grid; place-items: center; text-decoration: none; }
 }
 /* Above the drawing tools or the chosen words' row while they are out. */
 #app:has(.sel-tools:not([hidden])) .toast { bottom: 11.4rem; }
+/* A notice with one thing to do: only its button takes a tap. */
+.toast.with-act { display: flex; align-items: center; gap: 0.7rem; padding: 0.35rem 0.4rem 0.35rem 0.95rem; white-space: nowrap; }
+.toast-act {
+  pointer-events: auto;
+  flex: none;
+  min-height: 2rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+}
+.toast-act:active { scale: 0.96; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }

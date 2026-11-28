@@ -19,6 +19,7 @@ import { PAGE_W, PAGE_H } from "./draw-room.js";
 import { addFrameOps, setFrameOps, removeFrameOps, moveFrameOps, setAnimOps, invertAnimOps, frameDocOf, frameAt, timeline, onePass, FPS_CHOICES, LOOPS, MAX_FRAMES, MAX_HOLD } from "../core/anim.js";
 import { strokeOps, eraseOps, invertInkOps, brushOf, widthOf, moveStrokesOps, opacityOf } from "../core/ink.js";
 import { PAPERS } from "../core/draw.js";
+import { ColourCount, GifWriter, gifDelays } from "../core/gif.js";
 import { UndoStack } from "../core/undo.js";
 import { getSettings, setSetting, roomEntry } from "../identity.js";
 import { buzz } from "./chime.js";
@@ -32,6 +33,9 @@ const MAX_PIXELS = 3.2e6;
 // frame as it is drawn, played, shown small and saved.
 const BG = "bg";
 const paperColour = (key) => (PAPERS.find(([k]) => k === key) || PAPERS[0])[1];
+// A GIF this wide: plenty for a chat (it shows a few hundred points wide there) and a small file.
+const GIF_W = 480;
+const canRecord = () => typeof HTMLCanvasElement !== "undefined" && typeof HTMLCanvasElement.prototype.captureStream === "function" && typeof window.MediaRecorder === "function";
 
 export function mountAnimRoom(body, app, session) {
   const root = app.root;
@@ -125,10 +129,11 @@ export function mountAnimRoom(body, app, session) {
   }, "양파");
   // 빠르기 and what happens at the end share one chip and one small menu (Procreate keeps them in its
   // Animation Assist settings), so the bar fits a 360-wide phone; the paper is held in the 배경 cell,
-  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 영상으로 저장 as the
-  // other drawing rooms save.
+  // the bottom of the stack, as 그림 방 keeps it at the bottom of its layers. 저장 gives GIF (a chat
+  // plays it by itself, over and over) or 영상, as FlipaClip and Procreate export both.
   const speedChip = h("button", { class: "chip anim-chip", id: "anim-speed", type: "button", "aria-haspopup": "menu", title: "재생: 빠르기와 끝나면", onclick: () => playMenu() });
-  const saveButton = iconButton("anim-save", "save", "영상으로 저장", () => saveVideo(), "저장");
+  const saveButton = iconButton("anim-save", "save", "저장: GIF나 영상으로", () => saveMenu(), "저장");
+  saveButton.setAttribute("aria-haspopup", "menu");
   const toolbar = h("div", { class: "toolbar draw-tools anim-tools", id: "anim-tools" }, undoButton, redoButton, playButton, onionButton, speedChip, saveButton);
   // The frames and what plays them are one thing at the room's foot, as Procreate's Animation Assist
   // and Dreams keep the timeline as one band under the canvas: one glass, the frames above their
@@ -644,6 +649,118 @@ export function mountAnimRoom(body, app, session) {
     openMenu(speedChip, menu);
   }
 
+  /** 저장: GIF or 영상 from one small menu; where a video cannot be made, the GIF straight away. */
+  function saveMenu() {
+    if (menuFor === saveButton) return void closeMenu?.();
+    if (saving) return;
+    if (!canRecord()) return void saveGif();
+    const clear = !paperColour(doc.settings().paper);
+    const menu = h("div", { class: "anim-menu", id: "anim-save-menu", role: "menu" },
+      h("div", { class: "anim-menu-row", role: "group", "aria-label": "저장" },
+        h("span", { class: "anim-menu-label", text: "저장" }),
+        h("button", { class: "chip", type: "button", id: "anim-save-gif", text: "GIF", title: clear ? "움짤로: 투명한 종이는 투명하게" : "움짤로: 대화창에서 저절로 돌아요", onclick: () => { close(); saveGif(); } }),
+        h("button", { class: "chip", type: "button", id: "anim-save-video", text: "영상", title: "영상 파일로", onclick: () => { close(); saveVideo(); } })));
+    const close = openMenu(saveButton, menu);
+  }
+
+  const fileName = () => String(session.room.meta("name") || "플립북").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+
+  /** The file handed to the browser to keep (on a phone, in its downloads). */
+  function handOver(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = h("a", { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+  }
+
+  /**
+   * GIF로 저장: once through as it plays (back and forth once for 왕복), at its own speed and holds;
+   * 반복·왕복 go round for ever, 한 번 plays once. On 투명 paper what is not drawn stays see-through, a
+   * sticker in a chat. Two goes over the frames: their colours (one table for all, so no colour
+   * flickers), then each frame written, a rest between frames so the screen never stalls.
+   */
+  async function saveGif() {
+    if (saving) return;
+    const pass = onePass(doc);
+    if (!pass.length) return;
+    saving = true;
+    if (playing) stopPlay();
+    const runs = [];
+    for (const id of pass) {
+      const last = runs[runs.length - 1];
+      if (last?.id === id) last.n++;
+      else runs.push({ id, n: 1 });
+    }
+    const { fps, loop, paper } = doc.settings();
+    const fill = paperColour(paper);
+    const W = GIF_W;
+    const H = Math.round((W * PAGE_H) / PAGE_W);
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const g = canvas.getContext("2d", { willReadFrequently: true });
+    const picture = (id) => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.clearRect(0, 0, W, H);
+      if (fill) {
+        g.fillStyle = fill;
+        g.fillRect(0, 0, W, H);
+      }
+      paintWhole(g, id, W, H);
+      return g.getImageData(0, 0, W, H).data;
+    };
+    const ids = [...new Set(pass)];
+    const steps = ids.length + runs.length;
+    let done = 0;
+    saveButton.disabled = true;
+    saveButton.dataset.cap = "GIF 0%";
+    const rest = async () => {
+      done++;
+      saveButton.dataset.cap = `GIF ${Math.round((done / steps) * 100)}%`;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return alive;
+    };
+    const end = () => {
+      saving = false;
+      if (!alive) return;
+      saveButton.disabled = false;
+      saveButton.dataset.cap = "저장";
+    };
+    let bytes = null;
+    try {
+      await Promise.all([...ids, BG].map((id) => session.load(frameDocOf(id))));
+      const count = new ColourCount();
+      for (const id of ids) {
+        count.add(picture(id), !fill);
+        if (!(await rest())) return end(); // left the room part way: no half a picture
+      }
+      const writer = new GifWriter({ width: W, height: H, palette: count.palette(fill ? 256 : 255), loop: loop !== "once", clear: !fill });
+      const delays = gifDelays(runs.map((r) => r.n), fps);
+      for (let i = 0; i < runs.length; i++) {
+        writer.frame(picture(runs[i].id), delays[i]);
+        if (!(await rest())) return end();
+      }
+      bytes = writer.finish();
+    } catch {
+      end();
+      return void toast(root, "GIF를 만들지 못했어요");
+    }
+    end();
+    const name = fileName();
+    const file = new File([bytes], `${name}.gif`, { type: "image/gif" });
+    toolbar.dataset.gif = String(file.size);
+    handOver(file, file.name);
+    // 보내기: the phone's share sheet (a chat app, a friend) with the GIF, from a tap of its own.
+    let canSend = false;
+    try {
+      canSend = !!navigator.canShare?.({ files: [file] });
+    } catch {}
+    toast(root, "GIF로 저장했어요", 2600, canSend ? { label: "보내기", run: () => navigator.share({ files: [file], title: name }).catch(() => {}) } : null);
+  }
+
   /**
    * 영상으로 저장 (FlipaClip's MP4): the flipbook once through at its own speed (back and forth once for
    * 왕복), each frame on its paper with the background beneath, recorded from a canvas.
@@ -711,13 +828,7 @@ export function mountAnimRoom(body, app, session) {
     saveButton.dataset.cap = "저장";
     const blob = new Blob(parts, { type: rec.mimeType || type || "video/webm" });
     toolbar.dataset.saved = String(blob.size);
-    const url = URL.createObjectURL(blob);
-    const title = session.room.meta("name") || "플립북";
-    const a = h("a", { href: url, download: `${title}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    handOver(blob, `${fileName()}.${(rec.mimeType || type).includes("mp4") ? "mp4" : "webm"}`);
     toast(root, "영상으로 저장했어요");
   }
 

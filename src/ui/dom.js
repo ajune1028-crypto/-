@@ -502,10 +502,16 @@ export function openFloat(root, { id, title, pos, dock = null }, build) {
 }
 
 let toastTimer = null;
-export function toast(root, text, ms = 2600) {
+/**
+ * A short notice at the foot that goes by itself. action { label, run }: one small button in it (a
+ * GIF just saved: 보내기); only that button takes a tap, the rest of the notice never stands in the way.
+ */
+export function toast(root, text, ms = 2600, action = null) {
   root.querySelector(".toast")?.remove();
   clearTimeout(toastTimer);
-  const el = h("div", { class: "toast", role: "status", text });
+  const el = action
+    ? h("div", { class: "toast with-act", role: "status" }, h("span", { text }), h("button", { class: "toast-act", type: "button", text: action.label, onclick: () => { el.remove(); action.run(); } }))
+    : h("div", { class: "toast", role: "status", text });
   root.append(el);
-  toastTimer = setTimeout(() => el.remove(), ms);
+  toastTimer = setTimeout(() => el.remove(), action ? Math.max(ms, 6000) : ms);
 }

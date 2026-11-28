@@ -205,3 +205,30 @@ https://github.com/storytold/artcraft 를 받아 `frontend/libs/components/paged
 ## Squoosh의 공유 받기 (Apache-2.0, 생각만)
 
 `src/sw.js`와 `src/ui/share-in.js`의 '공유로 받기'(녹음 앱의 '공유' → 이 앱, Web Share Target)는 Squoosh(GoogleChromeLabs/squoosh, Apache-2.0)가 공유받은 파일을 받는 방식을 따랐다: manifest의 `share_target`(POST, multipart), 서비스 워커가 그 POST를 받아 앱 주소로 돌려보냄(303). 코드는 옮기지 않았다. 우리는 파일을 메시지로 넘기지 않고 Cache Storage에 두었다가 `?shared=`로 연 앱이 꺼낸다(앱이 늦게 열려도 잃지 않게).
+
+## GIF로 저장 (gifenc, MIT: 쓰는 차례와 LZW 묶는 법을 읽고 새로 씀)
+
+`src/core/gif.js`는 gifenc(Matt DesLauriers, MIT)를 받아 읽고 우리 것으로 새로 썼다. 가져온 것: GIF89a 파일의 차례(머리, 색 표, NETSCAPE2.0 반복 블록, 장마다 그림 조절 확장과 그림 블록), LZW 부호를 255바이트 조각에 아래 비트부터 채우는 법과 부호 길이가 늘어나는 때(gifenc는 Kevin Weiner의 인코더와 옛 `compress` 프로그램에서 왔다). 사전은 우리 식으로(앞 부호와 다음 색으로 바로 찾는 표, 세대 번호로 비움). gifenc의 색 줄이기(PnnQuant)는 GPL 줄기(mtPaint)에서 왔다고 적혀 있어 옮기지 않았고, 색을 거친 칸으로 세는 생각만 썼다. 256색으로 줄이기는 메디안 컷(Heckbert 1982)을 오차가 가장 큰 상자부터, 두 쪽 오차가 가장 작아지는 자리에서 자르는 식으로 새로 썼다. 장마다 앞 장과 달라진 네모만 쓰는 것은 gifsicle의 최적화 생각이다(코드는 보지 않음).
+
+```
+The MIT License (MIT)
+Copyright (c) 2017 Matt DesLauriers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+```

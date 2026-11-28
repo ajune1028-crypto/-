@@ -6952,7 +6952,7 @@ scenario("애니메이션 방: drawing near the foot, its glass opens round the 
 // The owner (21 November): "애니도 다른 어플들 다 보라니까… 너무 비효율적… 다 연동이 되어야". The same 올가미 and
 // papers as 그림 방; ‹ › to the frame before and after (FlipaClip, RoughAnimator); a 배경 under every
 // frame (Procreate's background frame); 영상으로 저장 (FlipaClip's MP4).
-scenario("애니메이션 방 with the other rooms' tools: on a 360-wide phone the whole bar is in view; 올가미 holds a line and moves it; ‹ › step through the frames; 배경 lies under every frame and, held, gives the 종이 (투명 for everyone); the 재생 chip sets 1초에 and 끝나면 and closes when pressed again; 영상으로 저장 records it", async ({ open, out }) => {
+scenario("애니메이션 방 with the other rooms' tools: on a 360-wide phone the whole bar is in view; 올가미 holds a line and moves it; ‹ › step through the frames; 배경 lies under every frame and, held, gives the 종이 (투명 for everyone); the 재생 chip sets 1초에 and 끝나면 and closes when pressed again; 저장 → 영상 records it", async ({ open, out }) => {
   const a = await open({ dev: "a", width: 360, height: 780 });
   await click(a, "#add-creative");
   await click(a, '[data-kind="creative-anim"]');
@@ -7023,14 +7023,126 @@ scenario("애니메이션 방 with the other rooms' tools: on a 360-wide phone t
   // 영상으로 저장: recorded once through, and handed over as a file.
   await a.eval(`(() => { window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; })()`);
   await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-video"), 2000);
+  await click(a, "#anim-save-video");
   await a.waitFor(`Number(${q("#anim-tools")}.dataset.saved || 0) > 0 && window.__downloads.length === 1`, 15000);
   assert.match(await a.eval(`window.__downloads[0]`), /^연동 플립북\.(mp4|webm)$/);
   // Leaving the room part way through a save hands over no half a video.
   await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-video"), 2000);
+  await click(a, "#anim-save-video");
   await a.waitFor(`${q("#anim-save")}.dataset.cap === "저장 중…"`, 3000);
   await click(a, "#back");
   await pause(1500);
   assert.equal(await a.eval(`window.__downloads.length`), 1, "no second file");
+});
+
+// The owner (20 November): "애니메이션 방 다음: 소리 붙이기, 영상·GIF로 저장". The GIF is read back by the browser's
+// own decoder (ImageDecoder), frame by frame, as a chat app would show it.
+scenario("애니메이션 방 저장 → GIF: each frame as drawn at the flipbook's own pace, round for ever (한 번 = once), a held frame longer; on 투명 paper what is not drawn stays see-through; 보내기 where the phone can share", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 360, height: 780 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "움짤/플립북");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && window.__app.session.doc("anim").frames().length === 2 && ${q("#anim-where")}?.textContent === "1/2"`);
+  const [f1, f2] = await a.eval(`window.__app.session.doc("anim").frames().map((f) => f.id)`);
+  const box = await a.eval(`(() => { const r = document.getElementById("anim-page").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
+  const line = async (v) => {
+    await a.press(box.x + box.w * 0.35, box.y + box.h * v);
+    for (let k = 1; k <= 8; k++) await a.moveTo(box.x + box.w * (0.35 + k * 0.04), box.y + box.h * v);
+    await a.release(box.x + box.w * 0.67, box.y + box.h * v);
+  };
+  // Frame 1 a line high up, frame 2 a line low down.
+  await line(0.3);
+  await a.waitFor(`window.__app.session.doc("k:F${f1}").strokes().length === 1`);
+  await click(a, "#anim-next");
+  await a.waitFor(`${q("#anim-where")}.textContent === "2/2"`);
+  await line(0.6);
+  await a.waitFor(`window.__app.session.doc("k:F${f2}").strokes().length === 1`);
+  await a.eval(`(() => { window.__gifs = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__gifs.push({ name: this.download, href: this.href }); return click.call(this); }; return true; })()`);
+  // The browser's own GIF decoder: each frame as shown, its time, how often it goes round; dark and
+  // see-through pixels in the band of each line.
+  const read = (k) => a.eval(`(async () => {
+    const blob = await (await fetch(window.__gifs[${k}].href)).blob();
+    const dec = new ImageDecoder({ data: await blob.arrayBuffer(), type: "image/gif" });
+    await dec.tracks.ready;
+    const track = dec.tracks.selectedTrack;
+    const out = { type: blob.type, size: blob.size, count: track.frameCount, rounds: track.repetitionCount === Infinity ? "for ever" : track.repetitionCount, frames: [] };
+    for (let i = 0; i < track.frameCount; i++) {
+      const { image } = await dec.decode({ frameIndex: i });
+      const c = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+      const g = c.getContext("2d");
+      g.drawImage(image, 0, 0);
+      const band = (v) => { const y0 = Math.round(c.height * (v - 0.04)); const d = g.getImageData(0, y0, c.width, Math.round(c.height * 0.08)).data; let dark = 0; for (let p = 0; p < d.length; p += 4) if (d[p + 3] > 128 && d[p] + d[p + 1] + d[p + 2] < 300) dark++; return dark; };
+      const corner = g.getImageData(4, 4, 1, 1).data;
+      out.frames.push({ w: c.width, h: c.height, ms: image.duration / 1000, high: band(0.3), low: band(0.6), corner: [...corner] });
+      image.close();
+    }
+    return out;
+  })()`);
+  await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-gif"), 2000);
+  await a.shot(out("anim-save-menu.png"));
+  await click(a, "#anim-save-gif");
+  await a.waitFor(`window.__gifs.length === 1 && Number(${q("#anim-tools")}.dataset.gif || 0) > 0`, 20000);
+  assert.equal(await a.eval(`window.__gifs[0].name`), "움짤-플립북.gif", "named after the room (no slash in a file name)");
+  await a.waitFor(`${q(".toast")}?.textContent.includes("GIF로 저장했어요") && ${q("#anim-save")}.dataset.cap === "저장"`, 3000);
+  const one = await read(0);
+  assert.equal(one.type, "image/gif");
+  assert.equal(one.count, 2, "two frames");
+  assert.equal(one.rounds, "for ever", "반복: round for ever");
+  assert.deepEqual([one.frames[0].w, one.frames[0].h], [480, 640]);
+  assert.ok(Math.abs(one.frames[0].ms + one.frames[1].ms - 2000 / 12) <= 10, "12 a second: " + one.frames.map((f) => f.ms));
+  assert.ok(one.frames[0].high > 200 && one.frames[0].low === 0, "frame 1: the high line only " + JSON.stringify(one.frames[0]));
+  assert.ok(one.frames[1].low > 200 && one.frames[1].high === 0, "frame 2: the low line only " + JSON.stringify(one.frames[1]));
+  assert.equal(one.frames[0].corner[3], 255, "white paper is solid");
+  assert.ok(one.size < 60000, "small: " + one.size);
+  // 한 번, the first frame held ×3, on 투명 paper.
+  await click(a, "#anim-speed");
+  await a.waitFor(q('#anim-play-menu [data-loop="once"]'));
+  await click(a, '#anim-play-menu [data-loop="once"]');
+  await a.waitFor(`window.__app.session.doc("anim").settings().loop === "once"`);
+  await click(a, "#anim-speed");
+  await a.waitFor(`!${q("#anim-play-menu")}`, 2000);
+  const cell = await a.eval(`(() => { const r = document.querySelector('.anim-frame[data-frame="${f1}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [cell]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q('#anim-menu [data-hold="3"]'), 2000);
+  await click(a, '#anim-menu [data-hold="3"]');
+  await a.waitFor(`window.__app.session.doc("anim").frame("${f1}").hold === 3`);
+  const bg = await a.eval(`(() => { const r = document.getElementById("anim-bg").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.touch("start", [bg]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q('#anim-paper-menu [data-paper="clear"]'), 2000);
+  await click(a, '#anim-paper-menu [data-paper="clear"]');
+  await a.waitFor(`window.__app.session.doc("anim").settings().paper === "clear"`);
+  await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-gif"), 2000);
+  await click(a, "#anim-save-gif");
+  await a.waitFor(`window.__gifs.length === 2`, 20000);
+  const two = await read(1);
+  assert.equal(two.rounds, 0, "한 번: plays once");
+  assert.equal(two.count, 2);
+  assert.ok(Math.abs(two.frames[0].ms - 250) <= 10, "held ×3 at 12 a second: " + two.frames[0].ms);
+  assert.equal(two.frames[0].corner[3], 0, "투명: the paper stays see-through");
+  assert.ok(two.frames[0].high > 200 && two.frames[1].high === 0 && two.frames[1].low > 200, "the line of the frame before does not stay");
+  // 보내기: where the phone can share a file, the notice carries it (a tap of its own opens the share sheet).
+  await a.eval(`(() => { navigator.canShare = () => true; window.__shared = []; navigator.share = (d) => { window.__shared.push(d.files.map((f) => f.name + "|" + f.type)); return Promise.resolve(); }; return true; })()`);
+  await click(a, "#anim-save");
+  await a.waitFor(q("#anim-save-gif"), 2000);
+  await click(a, "#anim-save-gif");
+  await a.waitFor(`window.__gifs.length === 3 && ${q(".toast .toast-act")}`, 20000);
+  await a.shot(out("anim-gif-send.png"));
+  await click(a, ".toast .toast-act");
+  await a.waitFor(`window.__shared.length === 1`, 3000);
+  assert.deepEqual(await a.eval(`window.__shared[0]`), ["움짤-플립북.gif|image/gif"]);
 });
 
 scenario("애니메이션 방: two frames to start; the onion skin shows the frame before; 복제 copies a frame; ×3 holds it; ▶ plays the frames in turn; the friend sees the frames and where each one is", async ({ open, out }) => {
