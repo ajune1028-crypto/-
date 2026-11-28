@@ -82,7 +82,7 @@ export function mountTextRoom(body, app, session) {
     const made = attachOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, data: photo.data, w: photo.w, h: photo.h, by: session.memberId });
     session.commit(target.editor.doc, made.ops);
     record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
-    toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 2초 꾹 누르면 나와요", 3600);
+    toast(app.root, "사진을 숨겼어요. 반짝이는 글자를 1초 꾹 누르면 나와요", 3600);
   });
   const stopPhotoWatch = watchPickers([photoInput], () => toast(app.root, "사진 고르는 창이 열리지 않았어요. Claude 앱이라면 크롬에서 같은 방을 열어 주세요.", 4200));
   const readOnlyNow = () => !!session.transport.readOnly;
@@ -459,34 +459,55 @@ export function mountTextRoom(body, app, session) {
   let selFrame = null;
   const marksNow = () => (sel ? touching(sel.editor.sheet.marks(), sel) : []);
   const freeableNow = () => (sel ? touching(sel.editor.sheet.locks(), sel).filter((l) => l.by === session.memberId || isOwner()) : []);
+  // The row's first line says who wrote the chosen words and when (the owner, 28 November: who and when
+  // "더 효율적인 것"; and the phone's own menu over the words, ours under them, never on one spot). 섞기
+  // (the first description's 두 번 눌러 섞기, now that a double tap chooses the word as phones do) shows
+  // where it would change something: 섞기, then 한 색으로, then 처음 색으로.
   function buildSel() {
+    const mixName = h("span", { text: "섞기" });
     const row = {
+      who: h("p", { class: "sel-who", id: "sel-who" }),
+      mix: h("button", { class: "chip sel-mix", id: "sel-mix", type: "button", onclick: () => mixSel() }, icon("palette"), mixName),
+      mixName,
       unmark: h("button", { class: "chip", id: "sel-unmark", type: "button", text: "지우기", onclick: () => undoRanges("mark", marksNow()) }),
       unlock: h("button", { class: "chip", id: "sel-unlock", type: "button", onclick: () => undoRanges("lock", freeableNow()) }, icon("lock"), "잠금 풀기"),
       lock: h("button", { class: "chip", id: "sel-lock", type: "button", onclick: () => lockSel() }, icon("lock"), "잠금"),
       move: h("button", { class: "chip", id: "sel-move", type: "button", onclick: () => liftSel() }, icon("move"), "옮기기"),
     };
-    selTools.replaceChildren(
-      h("div", { class: "sel-row" },
-        h("span", { class: "sel-label", text: "표시" }),
-        ...MARK_COLORS.map((c) => h("button", { class: "sel-color", type: "button", data: { hl: c }, "aria-label": "표시 " + MARK_NAMES[c], onclick: () => markSel(c) })),
-        row.unmark),
-      h("div", { class: "sel-row" },
-        h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
-        h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
-        row.move, row.unlock, row.lock));
+    row.marks = h("div", { class: "sel-row" },
+      h("span", { class: "sel-label", text: "표시" }),
+      ...MARK_COLORS.map((c) => h("button", { class: "sel-color", type: "button", data: { hl: c }, "aria-label": "표시 " + MARK_NAMES[c], onclick: () => markSel(c) })),
+      row.unmark);
+    row.acts = h("div", { class: "sel-row" },
+      row.mix,
+      h("label", { class: "chip", id: "sel-photo", for: "photo-file", role: "button" }, icon("photo"), "사진"),
+      h("button", { class: "chip", id: "sel-sound", type: "button", onclick: () => openSoundSheet(sel) }, icon("record"), "녹음"),
+      row.move, row.unlock, row.lock);
+    selTools.replaceChildren(row.who, row.marks, row.acts);
     // The words stay chosen while a button here is pressed.
     for (const b of selTools.querySelectorAll("button, label")) b.addEventListener("pointerdown", (e) => e.preventDefault());
     return row;
   }
   function paintSel() {
-    const show = !!sel && !lifted && !readOnlyNow() && !pen.tool;
+    // Who and when, for everyone who chose words (one who may only look too); the rest for writers.
+    const show = !!sel && !lifted && !pen.tool;
     if (selTools.hidden === show) selTools.hidden = !show;
     if (!show) return;
     selRow ||= buildSel();
+    const set = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
+    const who = sel.editor.wroteOf(sel.ch, sel.to);
+    if (selRow.who.textContent !== who) selRow.who.textContent = who;
+    set(selRow.who, !who);
+    const looking = readOnlyNow();
+    set(selRow.marks, looking);
+    set(selRow.acts, looking);
+    if (looking) return;
+    const mix = sel.editor.mixFor(sel.ch, sel.to);
+    set(selRow.mix, !mix?.shows);
+    const mixWord = !mix ? "섞기" : mix.next === 1 ? "섞기" : mix.next === 2 ? "한 색으로" : "처음 색으로";
+    if (selRow.mixName.textContent !== mixWord) selRow.mixName.textContent = mixWord;
     const locks = touching(sel.editor.sheet.locks(), sel);
     const freeable = locks.filter((l) => l.by === session.memberId || isOwner());
-    const set = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
     set(selRow.unmark, !marksNow().length);
     set(selRow.lock, locks.length > 0);
     set(selRow.unlock, !(locks.length && freeable.length));
@@ -494,7 +515,7 @@ export function mountTextRoom(body, app, session) {
   }
   function drawSel() {
     // Shown or put away at once (a finger may go straight for a button); words moving within it, next frame.
-    if (selTools.hidden || !sel || lifted || readOnlyNow() || pen.tool) {
+    if (selTools.hidden || !sel || lifted || pen.tool) {
       selFrame?.();
       selFrame = null;
       return paintSel();
@@ -509,6 +530,11 @@ export function mountTextRoom(body, app, session) {
     record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
     if (done) toast(app.root, done, 2600);
     drawSel();
+  }
+
+  function mixSel() {
+    if (!sel || readOnlyNow()) return;
+    if (sel.editor.mixChosen(sel.ch, sel.to)) drawSel();
   }
 
   function markSel(c) {
@@ -646,7 +672,7 @@ export function mountTextRoom(body, app, session) {
     closeSound?.();
     closeSound = openSheet(app.root, "글자에 녹음 숨기기", (panel, close, onClose) => {
       const ways = h("div", { class: "form", id: "text-sound" },
-        h("p", { class: "help", text: "녹음이 고른 글자 속에 숨어요. 반짝이는 글자를 2초 꾹 누르면 들려요. 1분까지 돼요." }),
+        h("p", { class: "help", text: "녹음이 고른 글자 속에 숨어요. 반짝이는 글자를 1초 꾹 누르면 들려요. 1분까지 돼요." }),
         ...waysIn({ app, roomId: session.roomId, root: app.root, name: "text", prefix: "text-", mic, canRecord: !readOnlyNow(), onRecord: () => recordInto(target, ways, close) }));
       panel.append(ways);
       onClose(() => {
@@ -717,7 +743,7 @@ export function mountTextRoom(body, app, session) {
     const made = attachSoundOps(target.editor.sheet, session.clock, { ch: target.ch, to: target.to, file: file.id, dur: (kept.length / SOUND_RATE) * 1000, by: session.memberId });
     session.commit(target.editor.doc, made.ops);
     record(made.atoms.map((atom) => ({ ...atom, doc: target.editor.doc })), false);
-    toast(app.root, "녹음을 숨겼어요. 반짝이는 글자를 2초 꾹 누르면 들려요", 3600);
+    toast(app.root, "녹음을 숨겼어요. 반짝이는 글자를 1초 꾹 누르면 들려요", 3600);
   }
 
   /** Puts text at the end of today's sheet, as its own line (레퍼런스 → 이 방에 붙이기). */

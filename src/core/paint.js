@@ -270,6 +270,21 @@ export function paintFor(word, left, right, o) {
   return { k: "solid", c: all.length > 1 ? mixColors(all, o.theme) : all[0] };
 }
 
+/**
+ * What 섞기 does next to the k-th of `words` (splitWords) at mix `level`: the level it goes to (1 seep,
+ * 2 one colour, 0 back to its own) and whether that shows at all. It shows when another person's colour
+ * stands next to it on its line (or in it), or when there is a mix to come back from. colourOf(by).
+ */
+export function mixChoice(words, k, level, colourOf) {
+  const next = (level + 1) % 3;
+  const w = words[k];
+  if (!w) return { next, shows: false };
+  if (level) return { next, shows: true };
+  const side = [words[k - 1], words[k + 1]].filter((x) => x && x.line === w.line).map((x) => colourOf(x.authors[0]));
+  const all = new Set([...w.authors.map(colourOf), ...side]);
+  return { next, shows: side.length > 0 && all.size > 1 };
+}
+
 const SPLIT_SOFT = 8; // percent of the height over which top blends into bottom
 const SEEP_REACH = 46; // percent of the width a neighbour's colour reaches
 

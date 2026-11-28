@@ -83,6 +83,24 @@ export function mixOps(sheet, clock, anchorId) {
   };
 }
 
+/**
+ * 섞기 for chosen words (the bar under them): every word whose first letter is in `anchors` goes to level
+ * `lv` (0 its own colours, 1 the neighbours' seep in, 2 one mixed colour). Words already there are left
+ * as they are; each atom keeps the word's own level, so undo puts every word back where it was.
+ */
+export function mixToOps(sheet, clock, anchors, lv) {
+  clock.atLeast(sheet.maxN);
+  const ops = [];
+  const atoms = [];
+  for (const ch of new Set(anchors)) {
+    const prev = sheet.mixLevel(ch);
+    if (prev === lv) continue;
+    ops.push({ t: "mix", id: clock.next(), ch, lv });
+    atoms.push({ k: "mix", ch, prev, next: lv });
+  }
+  return { ops, atoms };
+}
+
 /** Ops that undo or redo a recorded step, judged against the sheet as it is now. */
 export function invertOps(sheet, clock, atoms, dir) {
   clock.atLeast(sheet.maxN);

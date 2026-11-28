@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Clock, Sheet } from "../src/core/crdt.js";
-import { diffText, spliceOps, mixOps, invertOps } from "../src/core/edit.js";
+import { diffText, spliceOps, mixOps, mixToOps, invertOps } from "../src/core/edit.js";
+import { splitWords, mixChoice } from "../src/core/paint.js";
 import { UndoStack } from "../src/core/undo.js";
 import { rng, shuffle } from "./helpers.js";
 
@@ -123,6 +124,45 @@ test("mix cycles 0 → 1 → 2 → 0", () => {
     levels.push(w.sheet.mixLevel(w.ids[0]));
   }
   assert.deepEqual(levels, [1, 2, 0]);
+});
+
+// 섞기 from the chosen words' bar (the owner, 28 November: a double tap selects in every room, colours on or
+// off; the first description's double-tap mixing moved to a button there).
+test("mixToOps takes every chosen word to one level, and undo puts each back to its own", () => {
+  const w = writer("a", "A");
+  w.splice(0, 0, "하나 둘 셋");
+  const words = splitWords(w.sheet.chars());
+  w.sheet.applyAll(mixOps(w.sheet, w.clock, words[1].anchor).ops);
+  const made = mixToOps(w.sheet, w.clock, words.map((x) => x.anchor), 2);
+  w.sheet.applyAll(made.ops);
+  assert.deepEqual(words.map((x) => w.sheet.mixLevel(x.anchor)), [2, 2, 2]);
+  w.sheet.applyAll(invertOps(w.sheet, w.clock, made.atoms, "undo"));
+  assert.deepEqual(words.map((x) => w.sheet.mixLevel(x.anchor)), [0, 1, 0]);
+  // A word already there is left alone (no op, nothing to undo).
+  assert.equal(mixToOps(w.sheet, w.clock, [words[1].anchor], 1).ops.length, 0);
+});
+
+test("mixChoice: what 섞기 does next and whether it shows", () => {
+  const sheet = new Sheet();
+  const a = writer("a", "A", sheet);
+  a.splice(0, 0, "하나 ");
+  const b = writer("b", "B", sheet);
+  b.pull();
+  b.splice(3, 0, "둘");
+  a.pull();
+  a.splice(4, 0, "\n셋");
+  const words = splitWords(sheet.chars());
+  const colour = (by) => (by === "A" ? "#c00" : "#00c");
+  // 둘 (B) beside 하나 (A) on one line: it shows; next is 1 (seep), then 2 (one colour), then back.
+  assert.deepEqual(mixChoice(words, 1, 0, colour), { next: 1, shows: true });
+  assert.deepEqual(mixChoice(words, 1, 1, colour), { next: 2, shows: true });
+  assert.deepEqual(mixChoice(words, 1, 2, colour), { next: 0, shows: true });
+  // 셋 (A) alone on the next line: nothing to mix with.
+  assert.deepEqual(mixChoice(words, 2, 0, colour), { next: 1, shows: false });
+  // One person's colour everywhere: nothing shows.
+  assert.equal(mixChoice(words, 1, 0, () => "#c00").shows, false);
+  // A mix to come back from always shows.
+  assert.equal(mixChoice(words, 2, 1, colour).shows, true);
 });
 
 test("undo removes only my typing and redo restores it", () => {

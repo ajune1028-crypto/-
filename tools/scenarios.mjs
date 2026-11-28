@@ -774,7 +774,20 @@ scenario("colours: one writer solid, two split, three a wheel", async ({ open, o
   await a.shot(out("room-wheel.png"));
 });
 
-scenario("mix: a double tap seeps, then blends, then resets, on both screens", async ({ open, out }) => {
+// A double tap chooses the word as phones do, colours on or off (the owner, 28 November: "색깔 없이랑 색깔
+// 있이랑… 두 번 누르면 누구는 선택이 되고 안 되고"); 섞기 (the first description's double-tap mixing) is
+// in the row under the chosen words, with who wrote them and when.
+const chosenText = (page) => page.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return ta.value.slice(ta.selectionStart, ta.selectionEnd); })()`);
+const touchTwice = async (page, x, y) => {
+  await page.front();
+  await page.touch("start", [[x, y]]);
+  await page.touch("end");
+  await pause(90);
+  await page.touch("start", [[x, y]]);
+  await page.touch("end");
+};
+
+scenario("mix: a double tap chooses the word (by touch and by mouse); 섞기 under it seeps, then blends, then resets, on both screens", async ({ open, out }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("하나 ");
@@ -790,26 +803,46 @@ scenario("mix: a double tap seeps, then blends, then resets, on both screens", a
   const expect = async (paint, level) => {
     for (const p of [a, b]) await p.waitFor(`(() => { const w = ${TODAY}.querySelectorAll(".draw .w")[1]; return w.dataset.paint === "${paint}" && w.dataset.level === "${level}"; })()`);
   };
-  let [x, y] = await wordCentre(a, "둘");
+  const [x, y] = await wordCentre(a, "둘");
   // 띠리링 and a swirl when the colours mix (the owner); counted where the sound is made.
   await a.eval(`(() => { const real = AudioContext.prototype.createOscillator; window.__bells = 0; AudioContext.prototype.createOscillator = function () { window.__bells++; return real.call(this); }; return true; })()`);
-  await a.front();
-  await a.dblTap(x, y);
+  await touchTwice(a, x, y);
+  await a.waitFor(`${TODAY}.querySelector("textarea").selectionEnd - ${TODAY}.querySelector("textarea").selectionStart === 1`, 2000);
+  assert.equal(await chosenText(a), "둘", "a double tap chose the word");
+  await a.waitFor(`!document.getElementById("sel-tools").hidden && !document.getElementById("sel-mix").hidden`, 2000);
+  assert.match(await text(a, "#sel-who"), /^나래 님이 \d+월 \d+일 (오전|오후) \d+:\d\d에 썼어요$/, "who wrote it and when, first in the row");
+  assert.equal(await text(a, "#sel-mix"), "섞기");
+  assert.equal(await a.eval(`window.__app.session.sheet(${TODAY}.dataset.day).mixLevel(${TODAY}.querySelectorAll(".draw .w")[1].dataset.anchor)`), 0, "choosing mixes nothing");
+  await click(a, "#sel-mix");
   await expect("seep", 1);
   await a.waitFor(`window.__bells >= 4`, 3000);
   assert.match((await words(b))[1].bg, /linear-gradient\(to right/);
+  await a.waitFor(`document.getElementById("sel-mix").textContent === "한 색으로"`, 2000);
+  assert.equal(await chosenText(a), "둘", "the word stays chosen");
   await a.shot(out("room-seep.png"));
-  await a.dblTap(x, y);
+  await click(a, "#sel-mix");
   await expect("solid", 2);
   const blended = (await words(b))[1];
   assert.notEqual(blended.color, base.color, "a new mixed colour");
-  await a.dblTap(x, y);
+  await a.waitFor(`document.getElementById("sel-mix").textContent === "처음 색으로"`, 2000);
+  await click(a, "#sel-mix");
   await expect("solid", 0);
   assert.equal((await words(b))[1].color, base.color);
-  assert.equal(await sheetText(a), "하나 둘 셋", "double taps never change the text");
+  // Undo takes the last mix back.
+  await click(a, "#undo");
+  await expect("solid", 2);
+  assert.equal(await sheetText(a), "하나 둘 셋", "mixing never changes the text");
+  // By mouse: a double click chooses the word too, and the same row comes.
+  await a.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.setSelectionRange(0, 0); ta.blur(); return true; })()`);
+  await a.waitFor(`document.getElementById("sel-tools").hidden`, 2000);
+  const [x2, y2] = await wordCentre(a, "하나");
+  await a.dblTap(x2, y2);
+  await a.waitFor(`!document.getElementById("sel-tools").hidden`, 2000);
+  assert.equal(await chosenText(a), "하나");
+  assert.match(await text(a, "#sel-who"), /^가람 님이 /);
 });
 
-scenario("mix: switched off, a mixed word shows one colour and a double tap does nothing", async ({ open }) => {
+scenario("mix: switched off or with colours off, a double tap still chooses the word, and no 섞기 shows", async ({ open }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("하나 ");
@@ -826,10 +859,20 @@ scenario("mix: switched off, a mixed word shows one colour and a double tap does
   await b.eval(`document.querySelector(".scrim").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))`);
   await b.waitFor(`${TODAY}.querySelectorAll(".draw .w")[1].dataset.paint === "solid"`);
   const [x, y] = await wordCentre(b, "둘이");
-  await b.dblTap(x, y);
-  await new Promise((r) => setTimeout(r, 200));
+  await touchTwice(b, x, y);
+  await b.waitFor(`!document.getElementById("sel-tools").hidden`, 2000);
+  assert.equal(await chosenText(b), "둘이", "chosen with mixing off");
+  assert.equal(await b.eval(`document.getElementById("sel-mix").hidden`), true, "no 섞기 while mixing is off");
   assert.equal(await b.eval(`window.__app.session.sheet(${TODAY}.dataset.day).mixLevel(${TODAY}.querySelectorAll(".draw .w")[1].dataset.anchor)`), 0);
   assert.equal((await words(a))[1].paint, "split", "the other screen keeps its own setting");
+  // Colours off on the other screen: the same double tap, the same choosing.
+  await click(a, "#toggle-colors");
+  await a.waitFor(`[...${TODAY}.querySelectorAll(".draw .w")].every((w) => w.dataset.paint === "ink")`);
+  const [ax, ay] = await wordCentre(a, "둘이");
+  await touchTwice(a, ax, ay);
+  await a.waitFor(`!document.getElementById("sel-tools").hidden`, 2000);
+  assert.equal(await chosenText(a), "둘이", "chosen with colours off");
+  assert.equal(await a.eval(`document.getElementById("sel-mix").hidden`), true, "no 섞기 without colours");
 });
 
 scenario("colours off: every word is ink, and the toolbar button brings colour back", async ({ open }) => {
@@ -918,7 +961,7 @@ scenario("layers: the drawn text and the input box always have the same height",
   }
 });
 
-scenario("time: no hour labels in the margin; a long press on a word says who wrote it, on which day and at what time", async ({ open }) => {
+scenario("time: no hour labels in the margin; a word chosen says who wrote it, on which day and at what time, in the row under it (nothing of ours over the words)", async ({ open }) => {
   const [a] = await together(open, []);
   const day = await a.eval(`${TODAY}.dataset.day`);
   const tz = await a.eval(`window.__app.session.room.meta("tz")`);
@@ -930,21 +973,30 @@ scenario("time: no hour labels in the margin; a long press on a word says who wr
   await writeAt(a, "\n점심에 쓴 글", local(12, 20));
   await a.waitFor(`${TODAY}.querySelectorAll(".draw .ln").length === 3`);
   assert.equal(await a.eval(`document.querySelectorAll(".stamp").length`), 0, "the margin stays clean");
-  // Press and hold on 점심에: who, which day, what time.
+  // 점심에 chosen (a double tap): the row under it says who, which day, what time.
   const date = dayLabel(day).split(" ").slice(0, 2).join(" ");
   const at = await a.eval(`(() => { const w = [...${TODAY}.querySelectorAll(".draw .w")].find((x) => x.textContent === "점심에"); const r = w.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-  await a.touch("start", [at]);
+  await touchTwice(a, at[0], at[1]);
+  await a.waitFor(`!document.getElementById("sel-tools")?.hidden && document.getElementById("sel-who")?.textContent === "가람 님이 ${date} 오후 12:20에 썼어요"`, 2000);
+  // A long press puts nothing of ours over the words (the phone's own menu goes there).
+  await a.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.setSelectionRange(0, 0); ta.blur(); return true; })()`);
+  await a.waitFor(`document.getElementById("sel-tools").hidden`, 2000);
+  const morning = await a.eval(`(() => { const w = [...${TODAY}.querySelectorAll(".draw .w")].find((x) => x.textContent === "아침에"); const r = w.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await a.front();
+  await a.touch("start", [morning]);
   await pause(700);
   await a.touch("end");
-  await a.waitFor(q(".toast"));
-  assert.equal(await text(a, ".toast"), `가람 님이 ${date} 오후 12:20에 썼어요`);
-  // A quick tap says nothing.
-  await a.waitFor(`!${q(".toast")}`, 6000);
-  const morning = await a.eval(`(() => { const w = [...${TODAY}.querySelectorAll(".draw .w")].find((x) => x.textContent === "아침에"); const r = w.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await pause(300);
+  assert.ok(!(await a.eval(q(".toast"))), "no bubble of ours on a long press");
+  // A quick tap says nothing: it only puts the caret there. (Well after the long press: the test browser
+  // makes a press and a quick tap soon after it one double click, which chooses the word.)
+  await a.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); ta.setSelectionRange(0, 0); ta.blur(); return true; })()`);
+  await pause(700);
   await a.touch("start", [morning]);
   await a.touch("end");
-  await pause(900);
+  await pause(500);
   assert.ok(!(await a.eval(q(".toast"))), "a tap only puts the caret there");
+  assert.equal(await a.eval(`document.getElementById("sel-tools").hidden`), true, "nothing chosen, no row: " + await a.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return JSON.stringify({ s: ta.selectionStart, e: ta.selectionEnd, focus: document.activeElement === ta, who: document.getElementById("sel-who")?.textContent }); })()`));
 });
 
 scenario("days: older sheets come first, only seven load until asked for more", async ({ open }) => {
@@ -2388,7 +2440,7 @@ scenario("text room: today's sheet runs to the bottom of the screen, and a tap l
   await page.waitFor(`window.__app.session.sheet(${TODAY}.dataset.day).text() === "첫 줄 이어서"`);
 });
 
-scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes out, for the friend too; it can be taken out", async ({ open, out, fixtures }) => {
+scenario("text room: a photo hidden in words sparkles; held 1 second it comes out (not before, nothing chosen meanwhile), for the friend too; a tap puts the caret there; it can be taken out", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("우리 바다 갔던 날");
@@ -2407,24 +2459,37 @@ scenario("text room: a photo hidden in words sparkles; held 2 seconds it comes o
     await pause(ms);
     await page.touch("end");
   };
-  await hold(b, 900);
-  assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 2 seconds");
-  await hold(b, 2300);
+  // The owner (28 November): "1초간 누르고 있으면… 여러 개랑 겹쳐서 안 나온다는 거였어". Not at 0.6 s; at
+  // 1 s it comes out, and nothing of the phone's (choosing the word) comes between.
+  await b.front();
+  await hold(b, 600);
+  assert.ok(!(await b.eval(q("#photo-reveal"))), "not before 1 second");
+  assert.equal(await b.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return ta.selectionEnd - ta.selectionStart; })()`), 0, "a hold on it chooses nothing");
+  await hold(b, 1250);
   await b.waitFor(`document.querySelector("#photo-reveal img")?.naturalWidth > 0`);
   assert.match(await text(b, ".reveal-who"), /가람 님이 숨겨 둔 사진/);
   await pause(800);
   await b.shot(out("text-photo-reveal.png"));
   await click(b, "#photo-close");
   await b.waitFor(`!${q("#photo-reveal")}`);
+  // A short tap on it puts the caret in it (where it touched), and no photo.
+  const word = await b.eval(`(() => { const r = ${TODAY}.querySelector(".draw .w.sparkle").getBoundingClientRect(); return [r.left + 2, r.top + r.height / 2]; })()`);
+  await b.touch("start", [word]);
+  await b.touch("end");
+  await pause(300);
+  assert.ok(!(await b.eval(q("#photo-reveal"))), "a tap brings out nothing");
+  const caret = await b.eval(`(() => { const ta = ${TODAY}.querySelector("textarea"); return [document.activeElement === ta, ta.selectionStart, ta.selectionEnd, ta.value.indexOf("바다")]; })()`);
+  assert.ok(caret[0] && caret[1] === caret[2] && caret[1] === caret[3], "the caret at the start of 바다: " + JSON.stringify(caret));
   // The one who hid it takes it out: no sparkle on either screen.
-  await hold(a, 2300);
+  await a.front();
+  await hold(a, 1250);
   await a.waitFor(q("#photo-remove"));
   await click(a, "#photo-remove");
   await a.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`);
   await b.waitFor(`!${TODAY}.querySelector(".draw .w.sparkle")`, 8000);
 });
 
-scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠금; a highlight and a lock reach the friend, who cannot change locked words; a recording hidden in words sparkles and a 2-second hold plays it in a round player", async ({ open, out, fixtures }) => {
+scenario("text room 선택 도구: chosen words get 표시·사진·녹음·잠금; a highlight and a lock reach the friend, who cannot change locked words; a recording hidden in words sparkles and a 1-second hold plays it in a round player", async ({ open, out, fixtures }) => {
   const [a, b] = await together(open);
   await focusEnd(a);
   await a.type("바다에 갔어 노을이 예뻤어");
@@ -6959,6 +7024,65 @@ scenario("애니메이션 방: a frame held and dragged along the strip goes whe
   await a.waitFor(q("#anim-menu-left"), 1500);
 });
 
+// The owner (28 November): "애니메이션 그거라든지… 그림의 분리해 놓은 거랑 위에 방이랑 뭐시기 있는 거랑 겹치고".
+// A piece put on the top bar slides down under it, one put on the frames rises above them; on a phone on
+// its side the size piece (kept at the right from the start) stands below the bar's buttons.
+scenario("그리기 막대 조각 stay between the bars: dropped on the room's top bar a piece slides under it, dropped on the frames it rises above them; on a phone on its side none lies on the top bar", async ({ open, out }) => {
+  const a = await open({ dev: "a", width: 390, height: 844 });
+  await click(a, "#add-creative");
+  await click(a, '[data-kind="creative-anim"]');
+  await fill(a, "#room-name", "막대 사이");
+  await fill(a, "#my-name", "가람");
+  await click(a, "#create-room");
+  await a.waitFor(`location.hash.startsWith("#r-") && ${q("#invite-done")}`);
+  await click(a, "#invite-done");
+  await a.waitFor(`${q("#anim-page")} && ${q("#anim-dock")} && ${q("#ink-tools .ink-tab")}`);
+  const centre = (sel) => a.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const drag = async (sel, to) => {
+    const at = await centre(sel);
+    await a.front();
+    await a.touch("start", [at]);
+    for (let i = 1; i <= 10; i++) await a.touch("move", [[at[0] + ((to[0] - at[0]) * i) / 10, at[1] + ((to[1] - at[1]) * i) / 10]]);
+    await pause(60);
+    await a.touch("end");
+  };
+  const bars = () => a.eval(`(() => { const bar = document.querySelector(".room > .bar").getBoundingClientRect(); const dock = document.getElementById("anim-dock").getBoundingClientRect(); return { bar: bar.bottom, dock: dock.top }; })()`);
+  const floating = () => a.eval(`[...document.querySelectorAll(".ink-tools.floating:not(.ink-ghost)")].filter((el) => !el.hidden).map((el) => { const r = el.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; })`);
+  const tabAt = await centre("#ink-tools > .ink-tab");
+  await a.front();
+  await a.touch("start", [tabAt]);
+  await pause(650);
+  await a.touch("end");
+  await a.waitFor(q("#ink-arrange"), 2000);
+  // The colour put right on the top bar.
+  await drag('#ink-tools .ink-piece[data-piece="color"]', [300, 12]);
+  await a.waitFor(`document.querySelectorAll(".ink-tools.floating:not(.ink-ghost)").length === 1`, 2000);
+  let b = await bars();
+  let f = await floating();
+  assert.ok(f[0][0] >= b.bar, "under the top bar: " + JSON.stringify({ f, b }));
+  // And on the frames at the foot.
+  await drag('.ink-tools.floating .ink-piece[data-piece="color"]', [300, b.dock + 30]);
+  await pause(200);
+  f = await floating();
+  assert.ok(f.length === 1 && f[0][1] <= b.dock, "above the frames: " + JSON.stringify({ f, b }));
+  await click(a, "#ink-arrange-done");
+  await a.shot(out("rail-pieces-between.png"));
+  // A phone on its side, as this kind of room starts: the size piece at the right, below the bar.
+  await a.eval(`window.__app.store.set("inkRail:creative-anim", null)`);
+  await a.resize?.(844, 390);
+  if (a.resize) {
+    await click(a, "#back");
+    await a.waitFor(q('.room-row[data-room-kind="creative-anim"]'));
+    await click(a, '.room-row[data-room-kind="creative-anim"]');
+    await a.waitFor(`${q("#anim-page")} && document.querySelectorAll(".ink-tools.floating:not(.ink-ghost)").length >= 1`, 4000);
+    await pause(300);
+    b = await bars();
+    f = await floating();
+    assert.ok(f.every(([top]) => top >= b.bar), "nothing on the top bar: " + JSON.stringify({ f, b }));
+    await a.shot(out("rail-pieces-between-landscape.png"));
+  }
+});
+
 // 애니메이션 방's foot is one glass (the frames and their buttons): drawing near it, that glass opens round
 // the pen (엑스레이, as every bar does), not the clear strip and bar inside it.
 scenario("애니메이션 방: drawing near the foot, its glass opens round the pen (not the strip or the buttons inside it)", async ({ open }) => {
@@ -7571,7 +7695,7 @@ scenario("그리기 막대 조각 in 글 방 and on the whiteboard too: the rail
 
 // The owner (27 November): "체우기는 색을 꾹 눌러서 어디다가 가져다 두면 되는거로… 프로크리에이트거 참고해봐"
 // (ColorDrop) and "브러쉬 크기 바꾸는 버튼 3개 나열되어있는거 꾹누르면. 그거 설치하기도".
-scenario("컬러드롭 and 빠른 굵기: the colour held and dragged into a drawn ring fills it (a short tap still opens the colours); a quick size held takes the brush's size, and a tap on it draws at that size", async ({ open, out }) => {
+scenario("컬러드롭, 바로 전 색 and 빠른 굵기: the colour held still turns into the colour before and back again (no window); dragged into a drawn ring at once, it fills it (a short tap still opens the colours); a quick size held takes the brush's size, and a tap on it draws at that size", async ({ open, out }) => {
   const a = await open({ width: 390, height: 844 });
   await click(a, "#add-creative");
   await click(a, '[data-kind="creative-draw"]');
@@ -7598,13 +7722,37 @@ scenario("컬러드롭 and 빠른 굵기: the colour held and dragged into a dra
   await a.waitFor(`document.querySelector('#ink-pop')?.dataset.kind === "color"`, 2000);
   await click(a, "#ink-color-now");
   await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  // 바로 전 색 (the owner, 28 November: "색깔 꾹 누르면 저번에 한 색깔이 뜨게… 와따가따"): blue chosen after
+  // red; the colour held still turns back into red, held again into blue; no colour window opens.
+  await pickColor(a, "blue");
+  await a.waitFor(`!document.getElementById("ink-pop")`, 2000);
+  const dotNow = () => a.eval(`document.getElementById("ink-color-now").style.getPropertyValue("--c")`);
+  const blueDot = await dotNow();
+  const holdColour = async () => {
+    const at = await a.eval(`(() => { const r = document.getElementById("ink-color-now").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await a.front();
+    await a.touch("start", [at]);
+    await pause(700);
+    await a.touch("end");
+    await pause(150);
+  };
+  await holdColour();
+  await a.waitFor(`window.__app.store.get("settings").inkLast === "red"`, 2000);
+  assert.ok((await a.eval(`document.getElementById("gesture-hint")?.textContent || ""`)).includes("바로 전 색"), "it says what happened");
+  assert.notEqual(await dotNow(), blueDot, "the dot shows red again");
+  assert.equal(await a.eval(`!!document.getElementById("ink-pop") || !!document.getElementById("color-drop")`), false, "held, no colour window and no drop");
+  await holdColour();
+  await a.waitFor(`window.__app.store.get("settings").inkLast === "blue"`, 2000);
+  assert.equal(await dotNow(), blueDot, "held again: back to blue");
+  await holdColour();
+  await a.waitFor(`window.__app.store.get("settings").inkLast === "red"`, 2000);
   // Held and dragged into the ring: a drop of red follows, and where it is let go is filled.
   const from = await a.eval(`(() => { const r = document.getElementById("ink-color-now").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
   await a.front();
   await a.touch("start", [from]);
-  await pause(420);
+  await pause(60);
   for (let i = 1; i <= 12; i++) await a.touch("move", [[from[0] + ((cx - from[0]) * i) / 12, from[1] + ((cy - from[1]) * i) / 12]]);
-  assert.ok(await a.eval(`!!document.getElementById("color-drop")`), "a drop of the colour follows the finger");
+  assert.ok(await a.eval(`!!document.getElementById("color-drop")`), "a drop of the colour follows the finger (dragged at once, no wait)");
   await a.touch("end");
   await a.waitFor(`(() => { const l = window.__app.session.doc("draw").layers()[0]; return window.__app.session.doc("k:L" + l.id).strokes().some((s) => (s.s || s.b) === "fill"); })()`, 3000);
   const filled = (await strokes()).find((s) => s.b === "fill");
@@ -7664,7 +7812,7 @@ scenario("컬러드롭 채우는 정도: held still where it lands, what it woul
   const from = await a.eval(`(() => { const r = document.getElementById("ink-color-now").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
   await a.front();
   await a.touch("start", [from]);
-  await pause(420);
+  await pause(60);
   for (let i = 1; i <= 12; i++) await a.touch("move", [[from[0] + ((cx - from[0]) * i) / 12, from[1] + ((cy - from[1]) * i) / 12]]);
   await a.waitFor(`document.getElementById("fill-amount")?.dataset.amount === "19" && Number(document.querySelector("canvas.fill-preview")?.dataset.filled) > 1000`, 3000);
   const inside = await a.eval(`Number(document.querySelector("canvas.fill-preview").dataset.filled)`);
@@ -8818,7 +8966,7 @@ scenario("몸짓: 설정 → 몸짓 lists what fingers do, by place; a drawing r
   await click(page, '[data-settings-part="gestures"]');
   await page.waitFor(`!document.querySelector('[data-settings-page="gestures"]').hidden`);
   const text = await page.eval(`document.getElementById("gestures").textContent`);
-  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기", "막대 끝 손잡이 꾹", "소리 꾹 들어 끌기"]) assert.ok(text.includes(words), "it tells: " + words);
+  for (const words of ["두 손가락 톡", "되돌리기", "네 손가락 톡", "두 손가락 꾹", "스포이트", "클립 꾹", "방 꾹", "햇살을 던지기", "일상·창작 사이 선 꾹", "보드: 방 꾹", "채우는 정도", "장 꾹 들어 끌기", "막대 끝 손잡이 꾹", "소리 꾹 들어 끌기", "바로 전 색", "종이로 끌어 놓기"]) assert.ok(text.includes(words), "it tells: " + words);
   await page.front();
   await page.shot(out("settings-gestures.png"));
   await page.key("Escape");
@@ -8965,3 +9113,4 @@ scenario("그림 방 and 애니메이션 방 on phone and tablet sizes: the draw
     }
   }
 });
+

@@ -13,7 +13,7 @@
 
 import { h, icon, iconButton, closeOnOutside, mount, flashHint } from "./dom.js";
 import { getSettings, setSetting } from "../identity.js";
-import { placePieces, railParts } from "./ink-pieces.js";
+import { placePieces, railParts, railBand, RAIL_TOP, RAIL_FOOT } from "./ink-pieces.js";
 import { INK_COLORS, thinPoints, brushOf, widthOf, opacityOf, WIDTH_PX, SIZE_MIN, SIZE_MAX, nearestWidth, strokesWithinLoop, copyStrokesOps, recolorStrokesOps, eraseOps, enclosedSpots, carryStrokes, landStrokesOps, BOARD_INK_UNIT } from "../core/ink.js";
 import { closeLoop, insideLoop as loopHas } from "../core/board.js";
 import { brushLook, strokePoints, outline, dabs, hasPressure, wobble, quickShape, adjustShape, LazyBrush, sketchLines, crayonMarks, chalkAlpha, chalkTurn, fingerFeel, fingerStep } from "../core/brush.js";
@@ -1562,6 +1562,7 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   for (const el of railParts(panel)) el.hidden = !pen.tool;
   if (pen.tool !== "pen") closeColorWheel();
   if (!pen.tool) return void closeInkPop();
+  notePenColor(store, pen.color);
   // A button of this rail wherever its piece is (the rail may be in pieces: ui/ink-pieces.js).
   const inRail = (sel) => railParts(panel).map((el) => el.querySelector(sel)).find(Boolean) || null;
   const rail = layout === "rail";
@@ -1584,11 +1585,23 @@ export function drawInkTools(panel, { pen, setTool, store, layout = "rail", unit
   // 올가미 (the text room, 그림 방): drawn round lines, it holds them to take anywhere, recolour, copy or rub out.
   const lassoButton = !lasso ? null : iconButton("ink-lasso", "lasso", "올가미 (그림을 둘러 골라 아무 데나 옮기기·색·복제·지우기)", () => setTool(pen.tool === "lasso" ? "pen" : "lasso"));
   lassoButton?.setAttribute("aria-pressed", String(pen.tool === "lasso"));
-  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button", "aria-label": "색 고르기 (지금 " + pen.color + ")" + (drop ? " · 꾹 눌러 끌어다 놓으면 채우기" : ""),
+  const colorNow = h("button", { class: "ink-tool ink-color-now" + (own ? " own" : ""), id: "ink-color-now", type: "button",
+    "aria-label": "색 고르기 (지금 " + pen.color + ") · 꾹 누르면 바로 전 색" + (drop ? " · 종이로 끌어 놓으면 채우기" : ""),
     "aria-expanded": String(inkPop?.kind === "color"), style: { "--c": shown(pen.color) }, onclick: () => togglePop("color", colorNow) }, h("span", { class: "ink-dot" }));
-  // 컬러드롭 (Procreate's ColorDrop; the owner, 27 November: "체우기는 색을 꾹 눌러서 어디다가 가져다 두면"):
-  // the colour held and dragged onto the drawing fills where it is let go.
-  if (drop) wireColorDrop(colorNow, () => shown(pen.color), drop);
+  // The colour button as Procreate's: held, 바로 전 색 (and held again, back: the owner, 28 November: "색깔
+  // 꾹 누르면 저번에 한 색깔이 뜨게… 와따가따를 빠르고 좋게"); dragged onto the drawing, 컬러드롭 fills where
+  // it is let go (the owner, 27 November: "체우기는 색을 꾹 눌러서 어디다가 가져다 두면").
+  wireColorButton(colorNow, {
+    colourOf: () => shown(pen.color),
+    drop,
+    swap: () => {
+      const before = getSettings(store).inkPrev;
+      if (!before || before === pen.color) return void flashHint("색을 한 번 바꾸면, 꾹 = 바로 전 색");
+      choose({ color: before });
+      inRail("#ink-color-now")?.classList.add("swapped");
+      flashHint("바로 전 색 · 다시 꾹 누르면 돌아가요");
+    },
+  });
   // 빠른 굵기: three sizes at a tap; held, a button takes the size the brush has now (the owner, 27
   // November: "브러쉬 크기 바꾸는 버튼 3개 나열되어있는거 꾹누르면 그거 설치하기도").
   const quick = quickSizes(store);
@@ -2029,35 +2042,64 @@ function holdFill(layer, x, y) {
   };
 }
 
+// 바로 전 색: the pen's colour as this device last saw it, and the one before (any room's; so it is the
+// colour last drawn with anywhere). Every change of colour comes back through drawInkTools.
+function notePenColor(store, c) {
+  if (!c) return;
+  const s = getSettings(store);
+  if (s.inkLast === c) return;
+  store.set("settings", { ...s, inkPrev: s.inkLast || null, inkLast: c });
+}
+
+const PREV_HOLD_MS = 450;
+const DRAG_PX = 10;
+// A hold's lift is no tap: the swap makes the rail again, so the click that ends the hold may come to
+// the new colour button (where the finger is), which would open the colours. Until a moment after
+// that lift, no colour button takes a click.
+let quietColourTap = 0;
+
 /**
- * 컬러드롭: the colour button held (a moment) and dragged: a drop of the colour follows the finger, its
- * tip where it will land; let go, it fills there (drop(x, y) gives the layer under it, or null) and a
- * ring spreads. Held still on the drawing first, 채우는 정도 (holdFill). A short tap is still the
- * colour window; let go off the drawing, nothing happens.
+ * The colour button's own touches, as Procreate's colour button. Held still a moment: swap() (바로 전
+ * 색); the tap that ends it opens nothing. Dragged out (no waiting first), 컬러드롭: a drop of the colour
+ * follows the finger, its tip where it will land; let go, it fills there (drop(x, y) gives the layer
+ * under it, or null) and a ring spreads; held still on the drawing first, 채우는 정도 (holdFill). A short
+ * tap is still the colour window; let go off the drawing, nothing happens. Without drop (a room that
+ * does not fill), a drag is nothing.
  */
-function wireColorDrop(btn, colourOf, drop) {
+function wireColorButton(btn, { colourOf, drop = null, swap = null }) {
   let g = null;
   btn.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     const id = e.pointerId;
-    g = { id, x0: e.clientX, y0: e.clientY, bead: null, colour: colourOf() };
+    g = { id, x0: e.clientX, y0: e.clientY, bead: null };
     g.timer = setTimeout(() => {
-      if (!g || g.id !== id) return;
-      g.bead = h("div", { class: "color-drop", id: "color-drop", "aria-hidden": "true", style: { "--c": g.colour, left: g.x0 + "px", top: g.y0 + "px" } });
-      document.body.append(g.bead);
+      if (!g || g.id !== id || g.bead) return;
+      g = null;
       btn.dataset.held = "1";
-      try { btn.setPointerCapture(id); } catch { /* fine */ }
+      quietColourTap = Infinity;
+      const lifted = () => {
+        quietColourTap = performance.now() + 450;
+        removeEventListener("pointerup", lifted, true);
+        removeEventListener("pointercancel", lifted, true);
+      };
+      addEventListener("pointerup", lifted, true);
+      addEventListener("pointercancel", lifted, true);
       try { navigator.vibrate?.(10); } catch { /* not every device buzzes */ }
-    }, 300);
+      swap?.();
+    }, PREV_HOLD_MS);
   });
   btn.addEventListener("pointermove", (e) => {
     if (!g || e.pointerId !== g.id) return;
     if (!g.bead) {
-      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > 10) {
-        clearTimeout(g.timer);
-        g = null;
-      }
-      return;
+      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) <= DRAG_PX) return;
+      clearTimeout(g.timer);
+      if (!drop) return void (g = null);
+      g.colour = colourOf();
+      g.bead = h("div", { class: "color-drop", id: "color-drop", "aria-hidden": "true", style: { "--c": g.colour, left: e.clientX + "px", top: e.clientY + "px" } });
+      document.body.append(g.bead);
+      btn.dataset.held = "1";
+      try { btn.setPointerCapture(g.id); } catch { /* fine */ }
+      try { navigator.vibrate?.(10); } catch { /* not every device buzzes */ }
     }
     if (g.hold) return void g.hold.move(e.clientX);
     g.bead.style.left = e.clientX + "px";
@@ -2100,7 +2142,7 @@ function wireColorDrop(btn, colourOf, drop) {
   btn.addEventListener("pointercancel", (e) => end(e, false));
   // The tap that ends a drop does not open the colour window.
   btn.addEventListener("click", (e) => {
-    if (!btn.dataset.held) return;
+    if (!btn.dataset.held && performance.now() >= quietColourTap) return;
     delete btn.dataset.held;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -2112,8 +2154,6 @@ function wireColorDrop(btn, colourOf, drop) {
 // buttons, a toolbar), centred in that band, never over them (the owner, 27 November: "애니메이션 방 ui
 // 겹친다": on a phone the rail stood in the middle of the whole screen and its foot lay over the
 // frames' ‹, so a tap meant for ‹ pressed the rail). The band is measured, as bars differ by room.
-const RAIL_TOP = ".bar, .banner";
-const RAIL_FOOT = ".toolbar, .anim-dock, .anim-strip";
 const RAIL_GAP = 8;
 
 /** Keeps a room's rail in the band between its bars; returns what stops it. */
@@ -2125,14 +2165,7 @@ export function keepRailBetween(panel) {
   const measure = () => {
     frame = 0;
     if (!panel.isConnected) return;
-    let top = 0;
-    let foot = innerHeight;
-    for (const el of room.children) {
-      if (el === panel || el.hidden || !el.getClientRects().length) continue;
-      const r = el.getBoundingClientRect();
-      if (el.matches(RAIL_TOP) && r.bottom < innerHeight / 2) top = Math.max(top, r.bottom);
-      else if (el.matches(RAIL_FOOT) && r.top > innerHeight / 2) foot = Math.min(foot, r.top);
-    }
+    const { top, foot } = railBand(room);
     const band = Math.max(80, foot - top - RAIL_GAP * 2);
     panel.style.setProperty("--rail-max", band + "px");
     // A short screen: the size bar gives way first, so every tool is in view without scrolling.

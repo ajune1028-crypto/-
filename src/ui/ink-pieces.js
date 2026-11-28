@@ -106,15 +106,43 @@ function build(el, stack, i, parts, hidden) {
   el.classList.toggle("empty", !shown.length);
 }
 
-/** Floating stacks where they were put (as shares of the screen), kept whole on it. */
+// The band the rail and its pieces keep to: below the room's top bar (and a banner, and what a room
+// puts under it), above what lies along its foot (the 애니메이션 방's frames and buttons, a toolbar).
+// Measured, as the bars differ by room and by screen.
+export const RAIL_TOP = ".bar, .banner, .room-top";
+export const RAIL_FOOT = ".toolbar, .anim-dock, .anim-strip";
+
+/** { top, foot } of the band in the room (screen pixels). */
+export function railBand(room) {
+  let top = 0;
+  let foot = innerHeight;
+  for (const el of room?.children || []) {
+    if (el.hidden || el.matches(".ink-tools") || !el.getClientRects().length) continue;
+    const r = el.getBoundingClientRect();
+    if (el.matches(RAIL_TOP) && r.bottom < innerHeight / 2) top = Math.max(top, r.bottom);
+    else if (el.matches(RAIL_FOOT) && r.top > innerHeight / 2) foot = Math.min(foot, r.top);
+  }
+  return { top, foot };
+}
+
+/**
+ * Floating stacks where they were put (as shares of the screen), kept whole in the band between the
+ * room's bars: a piece put on the top bar slides down under it (the owner, 28 November: "그림의 분리해
+ * 놓은 거랑 위에 방이랑 뭐시기 있는 거랑 겹치고"), one put on the frames rises above them.
+ */
 function placeFloats(st) {
   st.floats.forEach((el, k) => {
     const s = st.layout?.stacks[k + 1];
     if (!s || !el.isConnected) return;
+    const { top, foot } = railBand(el.parentElement);
+    // A stack standing up is never taller than the band (its tools scroll within it instead).
+    el.style.setProperty("--float-max", Math.max(80, Math.round(foot - top - EDGE * 2 - 18)) + "px");
     const w = el.offsetWidth;
     const hgt = el.offsetHeight;
+    const low = top + EDGE;
+    const high = Math.max(low, foot - hgt - EDGE);
     el.style.left = Math.round(Math.max(EDGE, Math.min(innerWidth - w - EDGE, s.x * innerWidth))) + "px";
-    el.style.top = Math.round(Math.max(EDGE, Math.min(innerHeight - hgt - EDGE, s.y * innerHeight))) + "px";
+    el.style.top = Math.round(Math.max(low, Math.min(high, s.y * innerHeight))) + "px";
   });
 }
 

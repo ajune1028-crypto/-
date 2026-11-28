@@ -10,19 +10,25 @@ import { h, icon, nextFrame } from "./dom.js";
 import { MOTTO } from "./motto.js";
 import { currentTheme, reducedMotion } from "./theme.js";
 import { ROOT } from "../core/crdt.js";
-import { diffText, spliceOps, mixOps, lockedEdit } from "../core/edit.js";
-import { memberColor, personColor, INK, splitWords, paintFor, paintCss } from "../core/paint.js";
+import { diffText, spliceOps, mixToOps, lockedEdit } from "../core/edit.js";
+import { memberColor, personColor, INK, splitWords, paintFor, paintCss, mixChoice } from "../core/paint.js";
 import { dayKey, dayLabel } from "../core/time.js";
 import { getSettings } from "../identity.js";
 
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 24;
-// A press held this long, without moving, asks who wrote the words under it (before the
-// phone's own long press at about 500 ms, which goes on to select the word as usual).
-const HOLD_MS = 450;
-// Holding a sparkling word this long brings out the photo hidden in it.
-const REVEAL_MS = 2000;
+// Holding a sparkling word this long brings out the photo or the recording hidden in it.
+const REVEAL_MS = 1000;
 const HOLD_SLOP_PX = 10;
+
+/** The nearest box around el that scrolls up and down (or the page). */
+function scrollerOf(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
 
 export class SheetEditor {
   constructor({ app, session, day, isToday, zone, record, onCaret, tell, onReveal = () => {}, onSelect = () => {}, onDay = null }) {
@@ -74,10 +80,19 @@ export class SheetEditor {
     });
     ta.addEventListener("input", (event) => this.onInput(event.isComposing || this.composing));
     for (const type of ["keyup", "focus", "blur", "select"]) ta.addEventListener(type, () => this.caretMoved());
-    ta.addEventListener("pointerup", (event) => { this.onTap(event); this.caretMoved(); });
-    // Written words carry no time labels; a press held on them tells who wrote them and when
-    // (and, on locked words, who locked them). On a sparkling word, a 2-second hold glows
-    // brighter and brings out its photo or its recording.
+    // Written words carry no time labels: chosen (a long press or a double tap, as the phone does),
+    // who wrote them and when is the first line of the row under them (text-room.js). A touch on
+    // locked words says who locked them.
+    //
+    // A sparkling word, held 1 second, brings out its photo or its recording (the owner, 28 November:
+    // "1초간 누르고 있으면… 여러 개랑 겹쳐서 안 나온다는 거였어"). A finger on it is ours from the start:
+    // otherwise the phone's own long press (half a second) chose the word, put its copy menu there and
+    // took the finger, and the hold never came to its end. So on it a tap puts the caret where it
+    // touched, a double tap chooses the word, and a drag moves the page, all done here.
+    ta.addEventListener("touchstart", (event) => {
+      const t = event.touches.length === 1 ? event.touches[0] : null;
+      if (t && this.sparkleAt(t.clientX, t.clientY)) event.preventDefault();
+    }, { passive: false });
     let hold = null;
     const letGo = () => {
       clearTimeout(hold?.timer);
@@ -87,23 +102,41 @@ export class SheetEditor {
     ta.addEventListener("pointerdown", (event) => {
       letGo();
       const { clientX: x, clientY: y } = event;
+      this.downAt = { t: performance.now(), x, y };
       const glow = this.sparkleAt(x, y);
       if (glow) {
         glow.classList.add("charging");
-        hold = { id: event.pointerId, x, y, glow, timer: setTimeout(() => {
-          letGo();
+        hold = { id: event.pointerId, x, y, last: y, glow, ours: event.pointerType !== "mouse", moved: false, shown: false, timer: setTimeout(() => {
           const att = this.sheet.attachments().find((a) => a.id === glow.dataset.att);
+          glow.classList.remove("charging");
+          if (hold) hold.shown = true;
           if (att) this.onReveal(att, glow.getBoundingClientRect());
         }, REVEAL_MS) };
-      } else hold = { id: event.pointerId, x, y, timer: setTimeout(() => { hold = null; this.whoWrote(x, y); }, HOLD_MS) };
+      }
       this.tellLock(x, y);
     });
     ta.addEventListener("pointermove", (event) => {
-      if (hold && event.pointerId === hold.id && Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP_PX) letGo();
+      if (!hold || event.pointerId !== hold.id) return;
+      if (!hold.moved && Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP_PX) {
+        clearTimeout(hold.timer);
+        hold.glow.classList.remove("charging");
+        hold.moved = true;
+      }
+      // The page moves with the finger (the phone does not, as the touch is ours).
+      if (hold.moved && hold.ours) {
+        scrollerOf(ta)?.scrollBy(0, hold.last - event.clientY);
+        hold.last = event.clientY;
+      }
     });
-    ta.addEventListener("pointerup", letGo);
+    ta.addEventListener("pointerup", (event) => {
+      if (!hold || event.pointerId !== hold.id) return;
+      const { ours, moved, shown, x, y } = hold;
+      letGo();
+      // A tap on a sparkling word: the caret goes where it touched (a second tap chooses the word: onTap).
+      if (ours && !moved && !shown) this.caretAt(x, y);
+    });
     ta.addEventListener("pointercancel", letGo);
-    ta.addEventListener("mousedown", (event) => { if (event.detail >= 2 && this.canMix()) event.preventDefault(); });
+    ta.addEventListener("pointerup", (event) => { this.onTap(event); this.caretMoved(); });
     this.onSelection = () => { if (document.activeElement === ta) this.caretMoved(); };
     document.addEventListener("selectionchange", this.onSelection);
   }
@@ -167,33 +200,140 @@ export class SheetEditor {
     return settings.colors && settings.mixing && !this.input.readOnly && String(this.session.room.meta("kind") || "").startsWith("daily");
   }
 
+  /**
+   * A double tap chooses the word under it, as phones do, with colours on or off (the owner, 28
+   * November: "색깔 없이랑 색깔 있이랑… 두 번 누르면 누구는 선택이 되고 안 되고"). Where the phone chose
+   * it already nothing more is done; where it did not (a sparkling word, a phone that only moves the
+   * caret), the word is chosen here. 섞기 is in the row under chosen words (mixChosen).
+   */
   onTap(event) {
     const now = performance.now();
+    // Only a tap counts: a press held (a long press chose a word, or a hold on a sparkle) or a drag is none.
+    const down = this.downAt;
+    if (!down || now - down.t > DOUBLE_TAP_MS || Math.hypot(event.clientX - down.x, event.clientY - down.y) > DOUBLE_TAP_PX) {
+      this.lastTap = null;
+      return;
+    }
     const last = this.lastTap;
     this.lastTap = { t: now, x: event.clientX, y: event.clientY };
     if (!last || now - last.t > DOUBLE_TAP_MS || Math.hypot(event.clientX - last.x, event.clientY - last.y) > DOUBLE_TAP_PX) return;
     this.lastTap = null;
-    if (!this.canMix()) return;
-    const word = document.elementsFromPoint(event.clientX, event.clientY).find((el) => el.classList?.contains("w") && this.draw.contains(el));
+    const word = this.wordAt(event.clientX, event.clientY);
     if (!word) return;
-    const anchor = word.dataset.anchor;
-    const { ops, atoms } = mixOps(this.sheet, this.session.clock, anchor);
+    const ta = this.input;
+    // Only while the caret still stands in that word (a tap elsewhere, or leaving the sheet, since
+    // then is the person's newer wish).
+    const choose = () => {
+      if (!ta.isConnected || document.activeElement !== ta || ta.selectionStart !== ta.selectionEnd) return;
+      if (ta.selectionStart < word.start || ta.selectionStart > word.end) return;
+      ta.setSelectionRange(word.start, word.end);
+      this.caretMoved();
+    };
+    requestAnimationFrame(choose);
+    setTimeout(choose, 140);
+  }
+
+  /** The written word under a point of the screen as { start, end, anchor } in the text, or null. */
+  wordAt(x, y) {
+    const span = document.elementsFromPoint(x, y).find((el) => el.classList?.contains("w") && this.draw.contains(el));
+    if (!span) return null;
+    const word = splitWords(this.sheet.chars()).find((w) => w.anchor === span.dataset.anchor);
+    return word ? { start: word.start, end: word.end, anchor: word.anchor, span } : null;
+  }
+
+  /** The caret where the screen was touched, within the written word there (letter by letter). */
+  caretAt(x, y) {
+    const word = this.wordAt(x, y);
+    if (!word) return;
+    const range = document.createRange();
+    const walk = document.createTreeWalker(word.span, NodeFilter.SHOW_TEXT);
+    let i = word.start;
+    let best = { d: Infinity, at: word.start };
+    for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+      for (let o = 0; o < node.length; o++, i++) {
+        range.setStart(node, o);
+        range.setEnd(node, o + 1);
+        const r = range.getBoundingClientRect();
+        if (y < r.top - 2 || y > r.bottom + 2) continue;
+        const dl = Math.abs(x - r.left);
+        const dr = Math.abs(x - r.right);
+        if (dl < best.d) best = { d: dl, at: i };
+        if (dr < best.d) best = { d: dr, at: i + 1 };
+      }
+    }
+    const ta = this.input;
+    if (document.activeElement !== ta) ta.focus({ preventScroll: true });
+    const at = Math.min(Math.max(best.at, word.start), word.end);
+    ta.setSelectionRange(at, at);
+    this.caretMoved();
+  }
+
+  /** "가람 님이 11월 28일 오후 3:12에 썼어요" for the letters from ch to to (when the first of them was written). */
+  wroteOf(ch, to) {
+    const pos = this.sheet.view().before;
+    const a = pos.get(ch);
+    const b = pos.get(to);
+    if (a === undefined || b === undefined) return "";
+    const letters = this.sheet.chars().slice(Math.min(a, b), Math.max(a, b) + 1).filter((c) => !/\s/.test(c.v));
+    const first = letters.reduce((p, c) => (!p || c.at < p.at ? c : p), null);
+    if (!first) return "";
+    const names = [...new Set(letters.map((c) => this.session.room.member(c.by)?.name || "누군가"))];
+    const zone = this.zone();
+    const date = dayLabel(dayKey(first.at, zone)).split(" ").slice(0, 2).join(" ");
+    const time = new Intl.DateTimeFormat("ko-KR", { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(first.at);
+    return `${names.join("·")} 님이 ${date} ${time}에 썼어요`;
+  }
+
+  /** The written words that share letters with ch..to (their first letters), in order. */
+  wordsIn(ch, to) {
+    const pos = this.sheet.view().before;
+    const a = Math.min(pos.get(ch) ?? 0, pos.get(to) ?? 0);
+    const b = Math.max(pos.get(ch) ?? 0, pos.get(to) ?? 0);
+    const words = splitWords(this.sheet.chars());
+    const ks = [];
+    words.forEach((w, k) => { if (w.start <= b && w.end > a) ks.push(k); });
+    return { words, ks };
+  }
+
+  /** What 섞기 would do to the chosen words now: { next, shows } (core/paint.js mixChoice), or null. */
+  mixFor(ch, to) {
+    if (!this.canMix()) return null;
+    const { words, ks } = this.wordsIn(ch, to);
+    if (!ks.length) return null;
+    const theme = currentTheme();
+    const colourOf = (by) => { const m = this.session.room.member(by); return m ? personColor(m, theme) : INK[theme]; };
+    const level = this.sheet.mixLevel(words[ks[0]].anchor);
+    const choice = mixChoice(words, ks[0], level, colourOf);
+    // Several words: it shows when any of them would.
+    if (!choice.shows) choice.shows = ks.slice(1).some((k) => mixChoice(words, k, this.sheet.mixLevel(words[k].anchor), colourOf).shows);
+    return choice;
+  }
+
+  /**
+   * 섞기 on the chosen words: each goes where the first goes next (the neighbours' colours seep in,
+   * then one mixed colour, then their own again), with 띠리링, a little buzz and a swirl.
+   */
+  mixChosen(ch, to) {
+    const choice = this.mixFor(ch, to);
+    if (!choice) return false;
+    const { words, ks } = this.wordsIn(ch, to);
+    const anchors = ks.map((k) => words[k].anchor);
+    const { ops, atoms } = mixToOps(this.sheet, this.session.clock, anchors, choice.next);
+    if (!ops.length) return false;
     this.session.commit(this.doc, ops);
     this.record(atoms.map((atom) => ({ ...atom, doc: this.doc })), false);
-    // 띠리링, a little buzz, and the colours swirl once in the word (the owner's "색이 섞이는 띠리링").
-    if (ops.length) {
-      chime(this.app);
-      buzz(this.app, 10);
-      requestAnimationFrame(() => {
+    // 띠리링, a little buzz, and the colours swirl once in the words (the owner's "색이 섞이는 띠리링").
+    chime(this.app);
+    buzz(this.app, 10);
+    requestAnimationFrame(() => {
+      for (const anchor of anchors) {
         const el = this.draw.querySelector(`.w[data-anchor="${CSS.escape(anchor)}"]`);
-        if (!el) return;
+        if (!el) continue;
         el.classList.add("swirl");
         setTimeout(() => el.classList.remove("swirl"), 750);
-      });
-    }
-    // A double tap normally selects the word; here it mixes instead.
-    const at = this.input.selectionStart;
-    this.input.setSelectionRange(at, at);
+      }
+    });
+    return true;
   }
 
   // ---- drawing ----------------------------------------------------------------
@@ -301,23 +441,6 @@ export class SheetEditor {
     this.toldLock = span.dataset.lock;
     const lock = this.sheet.locks().find((l) => l.id === span.dataset.lock);
     if (lock) this.tell(`${this.session.room.member(lock.by)?.name || "누군가"} 님이 잠근 글이에요`);
-  }
-
-  /** Who wrote the word at (x, y), and on which day and at what time (its first letter). */
-  whoWrote(x, y) {
-    const span = document.elementsFromPoint(x, y).find((el) => el.classList?.contains("w") && this.draw.contains(el));
-    if (!span) return;
-    const chars = this.sheet.chars();
-    const word = splitWords(chars).find((w) => w.anchor === span.dataset.anchor);
-    if (!word) return;
-    const letters = chars.slice(word.start, word.end);
-    const first = letters.reduce((a, c) => (!a || c.at < a.at ? c : a), null);
-    if (!first) return;
-    const names = [...new Set(letters.map((c) => this.session.room.member(c.by)?.name || "누군가"))];
-    const zone = this.zone();
-    const date = dayLabel(dayKey(first.at, zone)).split(" ").slice(0, 2).join(" ");
-    const time = new Intl.DateTimeFormat("ko-KR", { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(first.at);
-    this.tell(`${names.join("·")} 님이 ${date} ${time}에 썼어요`);
   }
 
   // ---- carets -----------------------------------------------------------------
