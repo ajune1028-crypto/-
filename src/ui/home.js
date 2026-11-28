@@ -934,7 +934,11 @@ export function showHome(app) {
       const was = hold;
       hold = null;
       wrapOf()?.classList.remove("splitting");
-      if (was.on && Number.isFinite(was.share)) setSetting(app.store, "homeSplit", Math.round(was.share * 1000) / 1000);
+      if (was.on && Number.isFinite(was.share)) {
+        setSetting(app.store, "homeSplit", Math.round(was.share * 1000) / 1000);
+        // A board counts its cells from its half's width: laid out again for the new width.
+        if (boardView()) draw();
+      }
     };
     grip.addEventListener("pointerup", done);
     grip.addEventListener("pointercancel", done);

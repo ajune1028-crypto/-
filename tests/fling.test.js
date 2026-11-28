@@ -48,11 +48,13 @@ test("a ball thrown straight on reaches the edge it really meets, even near a co
   const steep = edgeHit(365, 90, -1, 2, W, H);
   assert.equal(steep.edge, "left");
   near(steep.at, 820 / H, 1e-9, "where on the left side");
-  // ...and a little steeper, the bottom, near its left end (not the left side).
+  // ...and a little steeper, the bottom, near its left end (not the left side), kept a little inside
+  // that end (the light never goes into the corners).
   const steeper = edgeHit(365, 90, -1, 2.2, W, H);
   assert.equal(steeper.edge, "bottom");
-  near(steeper.at, (365 - (H - 90) / 2.2) / W, 1e-9, "where on the bottom");
-  near(steeper.dist, Math.hypot(365 - steeper.x, H - 90), 1e-6, "how far it flew");
+  const meets = 365 - (H - 90) / 2.2;
+  near(steeper.at, Math.max(24, meets) / W, 1e-9, "where on the bottom");
+  near(steeper.dist, Math.hypot(365 - meets, H - 90), 1e-6, "how far it flew");
   // From outside the screen (a finger past the edge), it starts at the edge.
   assert.equal(edgeHit(400, 100, 1, 0, W, H).edge, "right");
   assert.equal(edgeHit(195, 422, 0, 0, W, H), null, "no direction, no edge");
@@ -150,4 +152,20 @@ test("a throw toward a near edge counts with the room there was; a tap's slip ne
   // What the light shows while aiming is the same rule's distance.
   assert.ok(throwReach(throwOf({ ...sun, x1: 389, y1: 40 })) < 20, "toward the near right edge, a short way is enough");
   assert.equal(throwReach(throwOf({ ...sun, x1: 300, y1: 40 })), 28, "toward a far edge, as before");
+});
+
+// Thrown at a corner, it lands a little inside it (the light never goes into the corners: its ends
+// fade into the glass), so where the light shows while aiming and where it lights up are one place
+// (the corner throw's light stood 17 px from its aim at the very end of the edge).
+test("thrown at a corner, it lands a little inside the edge's end, the aim and the light at one spot", () => {
+  const W = 390;
+  const H = 844;
+  const down = throwOf({ x0: 364, y0: 38, x1: 386, y1: 170, vx: 0.2, vy: 1.4, w: W, h: H });
+  assert.equal(down.edge, "bottom");
+  assert.ok(down.x <= W - 20 && down.x >= W - 40, "inside the bottom edge's right end: " + down.x);
+  assert.ok(Math.abs(down.at * W - down.x) < 0.5, "at says the same place");
+  const left = throwOf({ x0: 200, y0: 400, x1: 10, y1: 398, vx: -2, vy: 0, w: W, h: H });
+  assert.ok(Math.abs(left.y - 400) < 20, "away from the corners nothing changes: " + left.y);
+  const up = throwOf({ x0: 364, y0: 38, x1: 120, y1: 30, vx: -2, vy: -0.2, w: W, h: H });
+  assert.ok(up.y >= 20, "a side edge keeps clear of its top end too: " + up.y);
 });

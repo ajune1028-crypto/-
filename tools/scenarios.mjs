@@ -5514,7 +5514,8 @@ scenario("햇살 thrown near a corner lights up exactly where it lands; thrown a
     return aim;
   };
   const aim = await throwDown();
-  assert.ok(aim && aim.edge === "bottom" && aim.x > 366, "aimed at the bottom edge's right end: " + JSON.stringify(aim));
+  // At the bottom edge's right end, a little inside it (the light never goes into the corners).
+  assert.ok(aim && aim.edge === "bottom" && aim.x > 356 && aim.x <= 370, "aimed at the bottom edge's right end: " + JSON.stringify(aim));
   await page.waitFor(`!!document.querySelector(".edge-glow[data-edge='bottom']")`, 1500);
   // Read once the ball has landed (it flies a moment first).
   const litNow = `(() => {

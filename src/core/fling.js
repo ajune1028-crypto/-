@@ -115,6 +115,9 @@ export class VelocityTracker {
   }
 }
 
+/** How far from a corner a throw lands at least, px (its light never goes into the corners). */
+export const CORNER = 24;
+
 /**
  * Where a ball from (x, y) flying (dx, dy) first meets the edge of a w × h screen: the edge, how
  * far along it (0..1, left to right or top to bottom), the point, and how far it flew.
@@ -133,9 +136,11 @@ export function edgeHit(x, y, dx, dy, w, h) {
   if (uy > 1e-9) meet("bottom", (h - sy) / uy);
   if (uy < -1e-9) meet("top", -sy / uy);
   if (!best) return null;
-  const px = sx + ux * best.t;
-  const py = sy + uy * best.t;
-  const along = best.edge === "left" || best.edge === "right" ? py / h : px / w;
+  // A little inside the edge's ends, as throwOf lands (the light never goes into the corners).
+  const side = best.edge === "left" || best.edge === "right";
+  const px = side ? sx + ux * best.t : clamp(sx + ux * best.t, Math.min(CORNER, w / 2), Math.max(w - CORNER, w / 2));
+  const py = side ? clamp(sy + uy * best.t, Math.min(CORNER, h / 2), Math.max(h - CORNER, h / 2)) : sy + uy * best.t;
+  const along = side ? py / h : px / w;
   return { edge: best.edge, at: clamp(along, 0, 1), x: px, y: py, dist: best.t };
 }
 
@@ -159,8 +164,10 @@ export function throwOf({ x0, y0, x1, y1, vx = 0, vy = 0, w, h, tap = 14 }) {
   const sx = clamp(x0, 0, w);
   const sy = clamp(y0, 0, h);
   const t = edge === "left" ? -sx / dx : edge === "right" ? (w - sx) / dx : edge === "top" ? -sy / dy : (h - sy) / dy;
-  const x = edge === "left" ? 0 : edge === "right" ? w : clamp(sx + dx * t, 0, w);
-  const y = edge === "top" ? 0 : edge === "bottom" ? h : clamp(sy + dy * t, 0, h);
+  // A little inside the edge's ends: the light never goes into the corners (its ends fade into the
+  // glass), so where it lands and where it lights up stay one place.
+  const x = edge === "left" ? 0 : edge === "right" ? w : clamp(sx + dx * t, Math.min(CORNER, w / 2), Math.max(w - CORNER, w / 2));
+  const y = edge === "top" ? 0 : edge === "bottom" ? h : clamp(sy + dy * t, Math.min(CORNER, h / 2), Math.max(h - CORNER, h / 2));
   const at = edge === "left" || edge === "right" ? y / h : x / w;
   const speed = Math.hypot(vx, vy);
   return { edge, at: clamp(at, 0, 1), x, y, dist: Math.hypot(x - sx, y - sy), speed, strength: strengthOf(speed, d) };
