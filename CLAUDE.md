@@ -136,7 +136,7 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
   - 다음(검토 10절): '같이'의 길(사용자가 Firebase 주소를 주면 바로) → 화면의 층(겹치는 버튼 덜기) → 이스터 에그(햇살 100번 던지기, 마지막). 컬러드롭의 '채우는 정도'(놓은 채 좌우).
 - **지금 바로 녹음 시험**: Claude 페이지에는 마이크가 없어서, 시험을 마친 한 파일 묶음본을 `site/index.html`에 두었다. 아무 브라우저에서 https로 열린다: https://raw.githack.com/ajune1028-crypto/-/main/site/index.html (앱 안 녹음이 된다; 방은 서버 전까지 그 기기에만). 앱을 바꾸면 묶음본을 다시 시험하고 `site/index.html`을 바꿔 `main`에 올린다.
 - **공개 주소와 서버 (11월 15일)**: `main`에 합쳤다(사용자 허락). `.github/workflows/pages.yml`이 테스트(단위 + 묶음 파일 화면 시나리오 전부) 뒤 GitHub Pages에 올린다. GitHub 러너에서 시나리오는 모두 통과했고, **저장소 주인이 Settings → Pages → Source를 "GitHub Actions"로 바꾸기만 하면** `https://ajune1028-crypto.github.io/-/`가 열린다(그 뒤 워크플로를 다시 돌린다). 방을 기기 사이에 나누는 서버는 **구글 Firebase Realtime Database**(`sync/firebase.js`, SDK 없음): 주인이 Firebase 프로젝트를 만들고 주소를 저장소 변수 `HAMKKE_SERVER`에 넣으면 된다(`docs/public-address.md`). 그 전까지 공개 주소의 방은 그 기기에만 있다.
-- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 26일 밤 판 v23: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
+- **시험판(Claude 안의 페이지)**: https://claude.ai/artifact/4yq52gq4c1xqse6saGkJ8n (11월 28일 판 v25: 위의 것 전부. 앱을 3분의 1쯤 바꿀 때마다 다시 올린다). 옛 주소 https://claude.ai/artifact/WjvZ92AeB5AvL1E7FWngef 는 11월 13일 판. db·room이 있어 Claude 편집자끼리 같이 쓰인다. **마이크는 없다**(11월 15일에 다시 확인: Claude 페이지 능력 목록에 마이크·카메라가 없고 받아쓰기는 글자만). Claude 폰 앱 화면은 파일 선택 창도 열지 않는다(사용자 확인). 녹음·사진은 크롬이나 공개 주소에서.
 - **GitHub**: 11월 15일부터 올리기가 된다(사용자가 GitHub를 연결함). 작업 브랜치를 올리고, 확인된 상태를 `main`에 합친다(허락받음).
 - **다음 (본질 순, 본질 문서 8절)**: ① 서버 켜기(사용자)와 실제 두 기기 시험 ② 노래 원본을 방으로(친구가 내 목소리를 듣는다: 방의 `files`, ADPCM) ③ 홈에 "새로 온 것"(서버가 방마다 마지막 변경을 알려 줘야 함) ④ 사진 방(셀로그), 통합 방 ⑤ 노래 잇기 창, 그림 필압 ⑥ 글쓰기 방(A4·스크롤) ⑦ 방 비밀번호. 실제 목소리 채점도 남아 있다.
 - **브랜치**: GitHub `ajune1028-crypto/-` (공개 저장소), 작업 브랜치 `claude/voice-piano-conversion-scaffold-fnjrk8`. 앞선 기록(`feat/text-room-phase1`)은 역사째 합쳐 두었다.
@@ -170,9 +170,9 @@ Claude Code는 이 파일을 세션마다 읽는다. 사람이 읽어도 된다.
 Node.js 22 이상이면 된다. 외부 패키지가 없어서 `npm install`이 필요 없다.
 
 ```
-npm test                                    # node --test. 단위 테스트 463개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
+npm test                                    # node --test. 단위 테스트 474개 (음 인식, SwiftF0·음 나누기·의도한 음·끊김 메우기, 이어 그리기, 채우기, 하루 잠금, 내 색, 노래·화이트보드·그림 문서, 박자, 피아노, 늘이기, 재생 예약, 올가미, 파일 조각, ADPCM, 표시·잠금, Firebase 전송 포함)
 npm run dev                                 # http://127.0.0.1:8000/index.html 에 소스를 띄운다 (npm run dev -- 8123 처럼 포트 지정)
-node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 217개(시나리오는 `dist`를 받아 묶음본에서만 도는 것도 있음: 공유로 받기). --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
+node tools/e2e.mjs [이름 일부…] [--dist]    # 헤드리스 Chrome 화면 시나리오 222개(시나리오는 `dist`를 받아 묶음본에서만 도는 것도 있음: 공유로 받기). --dist는 먼저 bundle을 돌려야 한다. E2E_PORT·E2E_CDP_PORT로 다른 체크아웃과 나란히
 node tools/bundle.mjs [--share-base=https://…] [--server=https://…firebasedatabase.app]   # dist/index.html 한 파일로 묶는다. 옆에 manifest.webmanifest·sw.js·아이콘 두 장(공유로 받기)도
 node tools/owner-take.mjs                   # 사용자 녹음(out/voices/owner/*.f32, 저장소에 없음)을 앱과 같은 길로: 음 개수, 피아노 음이 목소리와 맞는지(SwiftF0·YIN), 피아노를 다시 들어 본 일치
 ```
